@@ -1,0 +1,139 @@
+import http from 'http';
+import express from 'express';
+import { Server as SocketIOServer } from 'socket.io';
+import helmet from 'helmet';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import { sanitizeMiddleware } from './middleware/sanitize.js';
+import hpp from 'hpp';
+import jwt from 'jsonwebtoken';
+
+import { env } from './config/env.js';
+import { connectDB } from './config/db.js';
+import { logger } from './lib/logger.js';
+import { errorHandler } from './middleware/errorHandler.js';
+
+import statusRoutes from './modules/status/routes.js';
+import authRoutes from './modules/auth/routes.js';
+import accessRoutes from './modules/access/routes.js';
+import userRoutes from './modules/users/routes.js';
+
+const app = express();
+const server = http.createServer(app);
+
+// 1. Trust proxy for Render / Vercel proxy headers
+app.set('trust proxy', 1);
+
+// 2. Security headers
+app.use(
+  helmet({
+    contentSecurityPolicy: env.NODE_ENV === 'production' ? undefined : false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// 3. CORS configuration
+app.use(
+  cors({
+    origin: env.FRONTEND_URL,
+    credentials: true,
+  })
+);
+
+// 4. Request parsing & Sanitization
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
+app.use(sanitizeMiddleware);
+app.use(hpp());
+
+// 5. Socket.io setup
+export const io = new SocketIOServer(server, {
+  cors: {
+    origin: env.FRONTEND_URL,
+    credentials: true,
+  },
+});
+
+io.use((socket, next) => {
+  try {
+    const cookieHeader = socket.handshake.headers.cookie;
+    let token = null;
+
+    if (cookieHeader) {
+      const match = cookieHeader.match(/accessToken=([^;]+)/);
+      if (match) token = match[1];
+    }
+
+    if (!token && socket.handshake.auth?.token) {
+      token = socket.handshake.auth.token;
+    }
+
+    if (token) {
+      const decoded = jwt.verify(token, env.JWT_SECRET);
+      socket.user = decoded;
+      return next();
+    }
+    // Allow anonymous socket for public events if necessary, or reject
+    next();
+  } catch (err) {
+    logger.warn({ err: err.message }, 'Socket.io authentication warning');
+    next();
+  }
+});
+
+io.on('connection', (socket) => {
+  if (socket.user?.userId) {
+    socket.join(`user:${socket.user.userId}`);
+    logger.debug(`Socket joined personal room: user:${socket.user.userId}`);
+  }
+
+  socket.on('join_task', (taskId) => {
+    socket.join(`task:${taskId}`);
+  });
+
+  socket.on('leave_task', (taskId) => {
+    socket.leave(`task:${taskId}`);
+  });
+});
+
+// 6. API Routes
+app.use('/api', statusRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/admin/access-requests', accessRoutes);
+app.use('/api/admin/users', userRoutes);
+
+// 7. 404 Handler
+app.use((req, res) => {
+  return res.status(404).json({
+    error: {
+      code: 'NOT_FOUND',
+      message: `The requested path ${req.originalUrl} does not exist.`,
+    },
+  });
+});
+
+// 8. Central Error Handler
+app.use(errorHandler);
+
+// 9. Startup & Database
+export async function startServer() {
+  await connectDB();
+  return new Promise((resolve) => {
+    server.listen(env.PORT, () => {
+      logger.info(`🚀 API Server running on port ${env.PORT} [${env.NODE_ENV}]`);
+      logger.info(`🔗 Health check available at http://localhost:${env.PORT}/api/status`);
+      resolve(server);
+    });
+  });
+}
+
+// Automatically start if called directly
+if (process.env.NODE_ENV !== 'test') {
+  startServer().catch((err) => {
+    logger.error({ err }, 'Failed to start server');
+    process.exit(1);
+  });
+}
+
+export { app, server };
