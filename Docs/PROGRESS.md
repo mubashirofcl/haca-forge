@@ -23,21 +23,21 @@
 - **Infrastructure**: Added `docker-compose.yml` for local MongoDB & Redis, `.github/workflows/ci.yml` for CI automation, and `.gitignore`.
 - **API Foundations**: Pino structured logger, central error handler returning `{ error: { code, message, details? } }`, and health endpoint `GET /api/status`.
 
-### Phase 1: Authentication, RBAC & Request Access
+### Phase 1: Authentication, RBAC, Request Access & Frosted Glassmorphism UI
 - **User Model**: Mongoose model with full role set, active/suspended status, department, team, skills, weekly capacity, attendance tracking, and hashed refresh tokens.
 - **Request Access Model**: `AccessRequest` model with 48-hour hashed invite tokens, duplicate prevention, and rate-limiting.
 - **CASL RBAC Middleware**: `requirePermission(key)` middleware applied to administrative routes; `authenticate` middleware reading httpOnly secure cookies and generating CASL abilities.
 - **Audit Logging**: `AuditLog` records for access approvals, rejections, info requests, role changes, suspensions, and force logouts.
 - **Mail Adapter (`lib/mailer.js`)**: Provider-agnostic adapter supporting `console` (local development), `smtp` (Nodemailer), and `resend` (HTTPS API for Render compatibility). Rich HTML email templates for invites, rejections, and notifications.
-- **Admin Seeding**: `scripts/seed-admin.js` to securely create the first administrator from `ADMIN_SEED_EMAIL` and `ADMIN_SEED_PASSWORD`.
-- **Frontend Applications**:
-  - Unified `LoginPage` with common sign-in and "Request Access" modal.
-  - `SetPasswordPage` for token consumption and account activation.
-  - `ProtectedRoute` and `usePermission` hook guarding routes.
-  - Role-based redirector on login.
-  - `AccessRequestsPage` with status filters, approval modal (role, team, skills, capacity assignment), rejection modal, and info request modal.
-  - `UsersPage` with role updates, account suspension/reactivation, and force logout.
-  - Role dashboards for Admin, Lead, Worker, Requester, and Viewer.
+- **Admin Seeding**: `scripts/seed-admin.js` to securely create the first administrator from `ADMIN_SEED_EMAIL` (`admin@marketingportal.com`) and `ADMIN_SEED_PASSWORD` (`Admin1212`).
+- **Complete Frosted Glassmorphic Design System (Matching `Docs/ui_design_specification.md`)**:
+  - Unified `#7a6af6` accent glow, soft backdrop blurs (`backdrop-blur-xl`), `rgba(255,255,255,0.75)` frosted panels, and refined white border highlights.
+  - Sticky glass header (64px) with capsule navigation pills and `#0D0E12` dark pill active indicators.
+  - Left icon sidebar (72px) with quick navigation shortcuts and user profile access.
+  - `CasesOverview` component with multi-column Kanban board (Content, Graphics, Cinematography, Editor), connector node indicators, Customer Journey flow diagram, and bottom analytics widgets (Top Case Drivers, Case Metrics).
+  - `NewCaseModal` matching reference specifications with creator avatar picker, production team dropdown, dynamic linked budget range slider ($1k–$100k), and dark action button.
+  - All role views (Admin, Lead, Worker, Requester, Reports, Login, Set Password, Unauthorized) refactored into the unified frosted glass design system.
+  - Removed Docker dependency in favor of direct local execution.
 
 ---
 
