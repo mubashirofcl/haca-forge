@@ -7,6 +7,7 @@ import {
   UserCheck,
   LogOut,
   Edit2,
+  X,
 } from 'lucide-react';
 
 interface UserRecord {
@@ -106,31 +107,34 @@ export const UsersPage: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Header and Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Staff & Roles</h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Staff & Roles
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
             Manage organization members, security statuses, and RBAC permissions
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search staff..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 w-44 sm:w-56"
+              className="pl-9 pr-4 py-2 bg-white/80 border border-slate-200 rounded-full text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs w-44 sm:w-56"
             />
           </div>
 
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
-            className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
+            className="px-4 py-2 bg-white border border-slate-200 rounded-full text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
           >
             <option value="all">All Roles</option>
             {ROLE_KEYS.map((rk) => (
@@ -143,7 +147,7 @@ export const UsersPage: React.FC = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
+            className="px-4 py-2 bg-white border border-slate-200 rounded-full text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
@@ -152,84 +156,91 @@ export const UsersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Users Table */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+      {/* Glassmorphic Users Table */}
+      <div className="glass-panel rounded-[24px] border border-white shadow-glass overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800 uppercase text-[10px] tracking-wider font-semibold">
+            <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200/80 uppercase text-[10px] tracking-wider font-bold">
               <tr>
-                <th className="px-6 py-3.5">User</th>
-                <th className="px-6 py-3.5">Role</th>
-                <th className="px-6 py-3.5">Department / Team</th>
-                <th className="px-6 py-3.5">Status</th>
-                <th className="px-6 py-3.5">Last Login</th>
-                <th className="px-6 py-3.5 text-right">Actions</th>
+                <th className="px-6 py-4">User</th>
+                <th className="px-6 py-4">Role</th>
+                <th className="px-6 py-4">Department / Team</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Last Login</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+            <tbody className="divide-y divide-slate-100 text-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-16 text-center text-slate-400">
                     Loading users...
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-16 text-center text-slate-400">
                     No users matching criteria.
                   </td>
                 </tr>
               ) : (
                 filteredUsers.map((u) => (
-                  <tr key={u._id} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={u._id} className="hover:bg-white/80 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-100">{u.name}</div>
-                      <div className="text-[11px] text-slate-400">{u.email}</div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-900 text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
+                          {u.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900">{u.name}</div>
+                          <div className="text-[11px] text-slate-500">{u.email}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 border border-slate-700 text-slate-200 capitalize">
+                      <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 capitalize border border-slate-200/60">
                         {u.role.replace('_', ' ')}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-slate-200">{u.department || '—'}</div>
+                      <div className="font-medium text-slate-900">{u.department || '—'}</div>
                       {u.teamId && (
-                        <div className="text-[10px] text-blue-400 capitalize">Team: {u.teamId}</div>
+                        <div className="text-[10px] text-[#7a6af6] font-semibold capitalize">Team: {u.teamId}</div>
                       )}
                     </td>
                     <td className="px-6 py-4">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                           u.status === 'active'
-                            ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-800/60'
-                            : 'bg-red-950/50 text-red-400 border border-red-800/60'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}
                       >
                         {u.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-400 text-[11px]">
+                    <td className="px-6 py-4 text-slate-500 text-[11px]">
                       {u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : 'Never'}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => {
                             setEditingUser(u);
                             setNewRole(u.role);
                           }}
                           title="Change Role"
-                          className="p-1.5 bg-slate-800 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 rounded-lg border border-slate-700"
+                          className="p-2 bg-white hover:bg-slate-100 text-slate-600 rounded-full border border-slate-200 shadow-xs transition-colors"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleToggleStatus(u)}
                           title={u.status === 'active' ? 'Suspend User' : 'Reactivate User'}
-                          className={`p-1.5 rounded-lg border ${
+                          className={`p-2 rounded-full border shadow-xs transition-colors ${
                             u.status === 'active'
-                              ? 'bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border-slate-700'
-                              : 'bg-slate-800 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400 border-slate-700'
+                              ? 'bg-white hover:bg-rose-50 text-rose-600 border-slate-200'
+                              : 'bg-white hover:bg-emerald-50 text-emerald-600 border-slate-200'
                           }`}
                         >
                           {u.status === 'active' ? (
@@ -241,7 +252,7 @@ export const UsersPage: React.FC = () => {
                         <button
                           onClick={() => handleForceLogout(u)}
                           title="Force Logout"
-                          className="p-1.5 bg-slate-800 hover:bg-amber-500/20 text-slate-400 hover:text-amber-400 rounded-lg border border-slate-700"
+                          className="p-2 bg-white hover:bg-amber-50 text-amber-600 rounded-full border border-slate-200 shadow-xs transition-colors"
                         >
                           <LogOut className="w-3.5 h-3.5" />
                         </button>
@@ -255,24 +266,34 @@ export const UsersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Edit Role Modal */}
+      {/* Edit Role Modal (Glassmorphic) */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
-            <h3 className="text-base font-bold text-white mb-1">
-              Change Role: {editingUser.name}
-            </h3>
-            <p className="text-xs text-slate-400 mb-5">{editingUser.email}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
+          <div className="glass-modal max-w-sm w-full p-6 sm:p-8 shadow-modal-glass border border-white relative">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 mb-5">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Change Role
+                </h3>
+                <p className="text-xs text-slate-500">{editingUser.name}</p>
+              </div>
+              <button
+                onClick={() => setEditingUser(null)}
+                className="w-8 h-8 rounded-full hover:bg-slate-200/60 text-slate-500 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Select New Role
                 </label>
                 <select
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value as UserRole)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
                 >
                   {ROLE_KEYS.map((rk) => (
                     <option key={rk} value={rk}>
@@ -282,17 +303,17 @@ export const UsersPage: React.FC = () => {
                 </select>
               </div>
 
-              <div className="pt-3 flex justify-end gap-3 border-t border-slate-800">
+              <div className="pt-3 flex justify-end gap-3 border-t border-slate-200/80">
                 <button
                   onClick={() => setEditingUser(null)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl"
+                  className="px-5 py-2.5 rounded-full border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   disabled={isUpdating}
                   onClick={handleRoleChange}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl disabled:opacity-50"
+                  className="px-6 py-2.5 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-pill disabled:opacity-50"
                 >
                   {isUpdating ? 'Saving...' : 'Update Role'}
                 </button>

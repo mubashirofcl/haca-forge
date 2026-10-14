@@ -38,3 +38,4 @@ coverage/
 # Scratch and temp
 tmp/
 temp/
+.mongodb_data/

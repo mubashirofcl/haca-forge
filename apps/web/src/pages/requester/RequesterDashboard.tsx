@@ -4,59 +4,59 @@ import {
   FileText,
   Clock,
   CheckCircle2,
-  PlusCircle,
-  FolderOpen,
+  Plus,
 } from 'lucide-react';
 
 export const RequesterDashboard: React.FC = () => {
   const { user } = useAuth();
 
   const statuses = [
-    { label: 'Submitted / Triage', count: 0, icon: Clock, color: 'text-amber-400 bg-amber-500/10' },
-    { label: 'In Production', count: 0, icon: FileText, color: 'text-blue-400 bg-blue-500/10' },
-    { label: 'Awaiting My Confirmation', count: 0, icon: CheckCircle2, color: 'text-purple-400 bg-purple-500/10' },
-    { label: 'Completed Deliveries', count: 0, icon: CheckCircle2, color: 'text-emerald-400 bg-emerald-500/10' },
+    { label: 'Submitted / Triage', count: 1, icon: Clock, color: 'bg-amber-500/10 text-amber-600 border-amber-200' },
+    { label: 'In Production', count: 2, icon: FileText, color: 'bg-[#7a6af6]/10 text-[#7a6af6] border-[#7a6af6]/20' },
+    { label: 'Awaiting Confirmation', count: 1, icon: CheckCircle2, color: 'bg-purple-500/10 text-purple-600 border-purple-200' },
+    { label: 'Delivered / Live', count: 4, icon: CheckCircle2, color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200' },
   ];
 
   return (
     <div className="space-y-8">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight sm:text-3xl">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Department Request Portal
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Department: <span className="font-semibold text-slate-200">{user?.department || 'General Marketing'}</span> &bull; Logged as: <span className="capitalize text-blue-400 font-semibold">{user?.role?.replace('_', ' ')}</span>
+          <p className="text-xs text-slate-500 mt-1">
+            Department: <span className="font-bold text-slate-900">{user?.department || 'Performance & Growth'}</span> &bull; Role: <span className="capitalize text-[#7a6af6] font-bold">{user?.role?.replace('_', ' ')}</span>
           </p>
         </div>
 
         <button
-          onClick={() => alert('New Request wizard will be fully interactive in Phase 3!')}
-          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-blue-600/25 transition-all self-start sm:self-auto"
+          onClick={() => alert('New Request submission form will be fully connected to master data in Phase 3!')}
+          className="px-5 py-2.5 rounded-full bg-[#0d0e12] hover:bg-black text-white text-xs font-bold shadow-pill flex items-center gap-2 transition-transform hover:scale-105"
         >
-          <PlusCircle className="w-4 h-4" />
+          <Plus className="w-4 h-4" />
           <span>Raise New Request</span>
         </button>
       </div>
 
-      {/* Metrics */}
+      {/* KPI Status Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {statuses.map((st, i) => {
           const Icon = st.icon;
           return (
             <div
               key={i}
-              className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl flex flex-col justify-between"
+              className="glass-panel p-5 rounded-[22px] border border-white shadow-glass flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   {st.label}
                 </span>
-                <div className={`p-2 rounded-xl border border-slate-800 ${st.color}`}>
-                  <Icon className="w-5 h-5" />
+                <div className={`p-2 rounded-xl border ${st.color}`}>
+                  <Icon className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-3xl font-extrabold text-white tracking-tight">
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
                 {st.count}
               </div>
             </div>
@@ -64,20 +64,65 @@ export const RequesterDashboard: React.FC = () => {
         })}
       </div>
 
-      {/* Empty State / Intake Table */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-8 shadow-xl text-center">
-        <FolderOpen className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-        <h3 className="text-base font-semibold text-slate-200">No requests raised yet</h3>
-        <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 mb-5">
-          Submit creative, social media, ads, or sales collaterals to begin production tracking.
-        </p>
-        <button
-          onClick={() => alert('New Request intake will be enabled in Phase 3!')}
-          className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl inline-flex items-center gap-2 border border-slate-700/80"
-        >
-          <PlusCircle className="w-3.5 h-3.5" />
-          <span>Submit First Request</span>
-        </button>
+      {/* Requests Timeline / List */}
+      <div className="glass-panel p-6 sm:p-8 rounded-[24px] border border-white shadow-glass space-y-4">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-200/80">
+          <div>
+            <h3 className="font-bold text-base text-slate-900">Recent Requests</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Track deliverables moving through content pipelines</p>
+          </div>
+          <span className="text-xs font-bold text-slate-600">Showing 2 active</span>
+        </div>
+
+        <div className="space-y-3">
+          {[
+            {
+              id: 'MKT-2026-0012',
+              title: 'Fall 2026 Product Announcement Video',
+              type: 'Reel / Video',
+              stage: 'Editing (Stage 3)',
+              eta: '16 Oct 2026',
+              status: 'In Production',
+              statusColor: 'bg-blue-100 text-blue-700',
+            },
+            {
+              id: 'MKT-2026-0011',
+              title: 'Lead Generation Offer Carousel (Meta)',
+              type: 'Carousel Ad',
+              stage: 'Waiting for Final Requester Sign-off',
+              eta: 'Today',
+              status: 'Awaiting Confirmation',
+              statusColor: 'bg-purple-100 text-purple-700',
+            },
+          ].map((req) => (
+            <div
+              key={req.id}
+              className="glass-card p-4 border border-white/90 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            >
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-mono text-[10px] font-bold text-slate-400">{req.id}</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                    {req.type}
+                  </span>
+                </div>
+                <h4 className="font-bold text-sm text-slate-900">{req.title}</h4>
+                <div className="text-xs text-slate-500 mt-1">
+                  Current Pipeline Stage: <span className="font-semibold text-slate-700">{req.stage}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 sm:self-center">
+                <div className="text-right">
+                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${req.statusColor}`}>
+                    {req.status}
+                  </span>
+                  <span className="text-[11px] text-slate-400 block mt-1">Est. Delivery: {req.eta}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

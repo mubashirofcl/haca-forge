@@ -1,5 +1,4 @@
 import React from 'react';
-import { useAuth } from '../../context/AuthContext';
 import {
   Inbox,
   AlertTriangle,
@@ -7,108 +6,106 @@ import {
   Users,
   Video,
 } from 'lucide-react';
+import { CasesOverview } from '../../components/CasesOverview';
 
 export const LeadDashboard: React.FC = () => {
-  const { user } = useAuth();
 
   const widgets = [
     {
       label: 'Awaiting Triage',
-      count: '0',
-      description: 'Incoming department requests ready for triage',
+      count: '2',
+      description: 'Department requests ready for acceptance & conversion',
       icon: Inbox,
-      color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+      color: 'bg-blue-500/10 text-blue-600 border-blue-200',
     },
     {
       label: 'Waiting for Review',
-      count: '0',
-      description: 'Deliverables submitted by workers with pending feedback',
+      count: '1',
+      description: 'Deliverables with timestamped feedback pending',
       icon: FileCheck,
-      color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+      color: 'bg-amber-500/10 text-amber-600 border-amber-200',
     },
     {
       label: 'Blocked / On Hold',
       count: '0',
-      description: 'Pipeline tasks marked with impediment reason codes',
+      description: 'Pipeline tasks flagged with hold reason codes',
       icon: AlertTriangle,
-      color: 'text-red-400 bg-red-500/10 border-red-500/20',
+      color: 'bg-rose-500/10 text-rose-600 border-rose-200',
     },
     {
       label: 'Active Pipelines',
-      count: '0',
-      description: 'Content deliverables moving across production teams',
+      count: '5',
+      description: 'Content units moving across production teams',
       icon: Video,
-      color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+      color: 'bg-[#7a6af6]/10 text-[#7a6af6] border-[#7a6af6]/20',
     },
   ];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight sm:text-3xl">
-          Marketing Operations Dashboard
-        </h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Welcome back, {user?.name}. Overseeing request triage, cross-team handoffs, and deliverable approvals.
-        </p>
-      </div>
-
-      {/* Widget grid */}
+    <div className="space-y-10">
+      {/* Lead Operational Widgets */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {widgets.map((w, idx) => {
           const Icon = w.icon;
           return (
             <div
               key={idx}
-              className={`p-6 rounded-2xl bg-slate-900/80 border backdrop-blur-md shadow-xl flex flex-col justify-between ${w.color}`}
+              className="glass-panel p-5 rounded-[22px] border border-white shadow-glass flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   {w.label}
                 </span>
-                <div className="p-2 rounded-xl bg-slate-950/60 border border-slate-800">
-                  <Icon className="w-5 h-5" />
+                <div className={`p-2 rounded-xl border ${w.color}`}>
+                  <Icon className="w-4 h-4" />
                 </div>
               </div>
               <div>
-                <div className="text-3xl font-extrabold text-white tracking-tight">
+                <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
                   {w.count}
                 </div>
-                <div className="text-xs text-slate-400 mt-1">{w.description}</div>
+                <div className="text-xs text-slate-500 mt-1">{w.description}</div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Production Teams Status */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
-        <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-          <Users className="w-4 h-4 text-blue-400" />
-          <span>Production Team Capacity Overview</span>
+      {/* Production Team Capacity Grid */}
+      <div className="glass-panel p-6 rounded-[24px] border border-white shadow-glass">
+        <h2 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <Users className="w-4 h-4 text-[#7a6af6]" />
+          <span>Production Team Weekly Capacity & Allocations</span>
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
-            { name: 'Content', role: 'Scripts, Captions & Ad Copy', count: '40h default' },
-            { name: 'Graphics', role: 'Posters, Carousels & Creatives', count: '40h default' },
-            { name: 'Cinematography', role: 'Shoots & Footage Logging', count: '40h default' },
-            { name: 'Editor', role: 'Reels, Cuts & Final Exports', count: '40h default' },
+            { name: 'Content', role: 'Scripts, Captions & Copy', capacity: '40h / week', active: '2 tasks' },
+            { name: 'Graphics', role: 'Posters & Carousels', capacity: '40h / week', active: '1 task' },
+            { name: 'Cinematography', role: 'Shoots & Video Footage', capacity: '40h / week', active: '1 task' },
+            { name: 'Editor', role: 'Cuts, Reels & Motion Exports', capacity: '40h / week', active: '1 task' },
           ].map((t, i) => (
             <div
               key={i}
-              className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2"
+              className="glass-card p-4 border border-white/90 space-y-2"
             >
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-200 text-sm">{t.name}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
-                  {t.count}
+                <span className="font-bold text-slate-900 text-xs">{t.name}</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                  {t.capacity}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">{t.role}</p>
+              <p className="text-[11px] text-slate-500">{t.role}</p>
+              <div className="pt-2 border-t border-slate-100 flex justify-between text-[10px] text-slate-400">
+                <span>Active Workload:</span>
+                <span className="font-semibold text-slate-700">{t.active}</span>
+              </div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Cases Overview Component */}
+      <CasesOverview />
     </div>
   );
 };
