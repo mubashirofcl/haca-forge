@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { apiFetch, ApiError } from '../lib/api';
 import type { UserRole } from '@mmp/shared';
 import {
-  Sparkles,
   Lock,
   Mail,
   AlertCircle,
@@ -119,15 +118,14 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
       <div className="w-full max-w-[440px] z-10">
         {/* Branding header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#7a6af6] to-[#4f46e5] shadow-lg shadow-[#7a6af6]/25 mb-4 hover:scale-105 transition-transform">
-            <Sparkles className="w-7 h-7 text-white" />
-          </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
-            Marketing Portal
-          </h1>
-          <p className="mt-1.5 text-xs text-slate-500 font-medium">
-            Antigravity Workflow Engine & Pipeline Management
+        <div className="text-center mb-6 flex flex-col items-center">
+          <img
+            src="/haca-forge-logo.png"
+            alt="HACA FORGE"
+            className="h-8 sm:h-9 w-auto object-contain drop-shadow-xs transition-transform duration-200 hover:scale-[1.02]"
+          />
+          <p className="mt-2 text-xs text-slate-500 font-medium tracking-wide">
+            Marketing Operations & Request Triage Engine
           </p>
         </div>
 

@@ -17,6 +17,19 @@ import statusRoutes from './modules/status/routes.js';
 import authRoutes from './modules/auth/routes.js';
 import accessRoutes from './modules/access/routes.js';
 import userRoutes from './modules/users/routes.js';
+import auditRoutes from './modules/audit/routes.js';
+import departmentRoutes from './modules/departments/routes.js';
+import teamRoutes from './modules/teams/routes.js';
+import masterDataRoutes from './modules/masterData/routes.js';
+import requestRoutes from './modules/requests/routes.js';
+import notificationRoutes from './modules/notifications/routes.js';
+import contentRoutes from './modules/content/routes.js';
+import taskRoutes from './modules/tasks/routes.js';
+import commentRoutes from './modules/comments/routes.js';
+import calendarRoutes from './modules/calendar/routes.js';
+import shootRoutes from './modules/shoots/routes.js';
+import timeRoutes from './modules/time/routes.js';
+import leaveRoutes from './modules/leave/routes.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -102,6 +115,21 @@ app.use('/api', statusRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin/access-requests', accessRoutes);
 app.use('/api/admin/users', userRoutes);
+app.use('/api/admin/audit-log', auditRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/teams', teamRoutes);
+app.use('/api/master-data', masterDataRoutes);
+app.use('/api/requests', requestRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/content', contentRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/comments', commentRoutes);
+app.use('/api/calendar', calendarRoutes);
+app.use('/api/shoots', shootRoutes);
+app.use('/api/time', timeRoutes);
+app.use('/api/leave', leaveRoutes);
+
+app.set('io', io);
 
 // 7. 404 Handler
 app.use((req, res) => {
@@ -120,7 +148,7 @@ app.use(errorHandler);
 export async function startServer() {
   await connectDB();
   return new Promise((resolve) => {
-    server.listen(env.PORT, () => {
+    server.listen(env.PORT, '0.0.0.0', () => {
       logger.info(`🚀 API Server running on port ${env.PORT} [${env.NODE_ENV}]`);
       logger.info(`🔗 Health check available at http://localhost:${env.PORT}/api/status`);
       resolve(server);

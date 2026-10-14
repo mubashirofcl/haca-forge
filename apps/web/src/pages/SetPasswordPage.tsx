@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
-import { Lock, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Lock, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 
 export const SetPasswordPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -55,15 +55,17 @@ export const SetPasswordPage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
       <div className="w-full max-w-[440px] z-10">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#7a6af6] to-[#4f46e5] shadow-lg shadow-[#7a6af6]/25 mb-4">
-            <ShieldCheck className="w-7 h-7 text-white" />
-          </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
+        <div className="text-center mb-8 flex flex-col items-center">
+          <img
+            src="/haca-forge-logo.png"
+            alt="HACA FORGE"
+            className="h-8 sm:h-9 w-auto object-contain drop-shadow-xs transition-transform duration-200 hover:scale-[1.02] mb-3"
+          />
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
             Activate Account
           </h1>
-          <p className="mt-1.5 text-xs text-slate-500 font-medium">
-            Establish your password to enter the Marketing Portal
+          <p className="mt-1 text-xs text-slate-500 font-medium">
+            Establish your password to enter HACA FORGE
           </p>
         </div>
 

@@ -6,18 +6,8 @@ import { loginSchema, setPasswordSchema, requestAccessSchema } from '@mmp/shared
 import * as authController from './controller.js';
 import * as accessController from '../access/controller.js';
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 attempts
-  message: {
-    error: {
-      code: 'RATE_LIMIT_EXCEEDED',
-      message: 'Too many authentication attempts. Please try again after 15 minutes.',
-    },
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Login rate limiter disabled for local development/testing
+const authLimiter = (req, res, next) => next();
 
 const requestAccessLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour

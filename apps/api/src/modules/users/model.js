@@ -54,6 +54,14 @@ const userSchema = new mongoose.Schema(
       enum: ['present', 'on_leave'],
       default: 'present',
     },
+    onLeave: {
+      type: Boolean,
+      default: false,
+    },
+    leaveDates: {
+      start: Date,
+      end: Date,
+    },
     mustSetPassword: {
       type: Boolean,
       default: false,
@@ -68,7 +76,21 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
+
+userSchema.virtual('team').get(function () {
+  return this.teamId;
+}).set(function (val) {
+  this.teamId = val;
+});
+
+userSchema.virtual('weeklyCapacityHours').get(function () {
+  return this.capacity || 40;
+}).set(function (val) {
+  this.capacity = val;
+});
 
 export const User = mongoose.model('User', userSchema);

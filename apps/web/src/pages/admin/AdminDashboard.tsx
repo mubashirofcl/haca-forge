@@ -7,6 +7,10 @@ import {
   Activity,
   ArrowRight,
   TrendingUp,
+  Building2,
+  Layers,
+  FileText,
+  Settings,
 } from 'lucide-react';
 import { CasesOverview } from '../../components/CasesOverview';
 
@@ -110,6 +114,45 @@ export const AdminDashboard: React.FC = () => {
             </Link>
           );
         })}
+      </div>
+
+      {/* Quick Admin Tools Shortcuts */}
+      <div className="glass-panel p-4 rounded-[22px] border border-white shadow-glass flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+            Quick Management:
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Link
+            to="/admin/teams-departments"
+            className="px-3.5 py-1.5 bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 border border-slate-200 rounded-full text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all hover:scale-[1.02]"
+          >
+            <Building2 className="w-3.5 h-3.5 text-[#7a6af6]" />
+            <span>Teams & Depts</span>
+          </Link>
+          <Link
+            to="/admin/master-data"
+            className="px-3.5 py-1.5 bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 border border-slate-200 rounded-full text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all hover:scale-[1.02]"
+          >
+            <Layers className="w-3.5 h-3.5 text-blue-600" />
+            <span>Master Data & Schemas</span>
+          </Link>
+          <Link
+            to="/admin/audit-log"
+            className="px-3.5 py-1.5 bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 border border-slate-200 rounded-full text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all hover:scale-[1.02]"
+          >
+            <FileText className="w-3.5 h-3.5 text-amber-600" />
+            <span>Audit Trail</span>
+          </Link>
+          <Link
+            to="/admin/settings"
+            className="px-3.5 py-1.5 bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 border border-slate-200 rounded-full text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all hover:scale-[1.02]"
+          >
+            <Settings className="w-3.5 h-3.5 text-slate-700" />
+            <span>Settings</span>
+          </Link>
+        </div>
       </div>
 
       {/* Main Reference Cases Overview: Kanban, Flow Nodes, Bottom Analytics */}

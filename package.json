@@ -12,11 +12,14 @@
   },
   "scripts": {
     "dev": "concurrently -n \"api,web\" -c \"blue,green\" \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
+    "db:start": "powershell -Command \"Start-Process 'C:\\Program Files\\MongoDB\\Server\\8.3\\bin\\mongod.exe' -ArgumentList '--dbpath .mongodb_data --bind_ip 127.0.0.1 --port 27017' -NoNewWindow\"",
     "build": "npm run build --workspaces",
     "lint": "eslint .",
     "test": "npm run test --workspaces",
     "typecheck": "npm run typecheck --workspaces",
-    "seed:admin": "npm run seed:admin -w apps/api"
+    "seed:admin": "npm run seed:admin -w apps/api",
+    "seed": "npm run seed -w apps/api",
+    "seed:reset": "npm run seed:reset -w apps/api"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

@@ -764,7 +764,6 @@ DELIVERABLES
 Code, tests, docs/SECURITY_REVIEW.md, PROGRESS.md entry, manual checks.
 ```
 
-### Phase 11: Deployment (Vercel and Render)
 
 ```text
 CONTEXT

@@ -56,3 +56,22 @@ export async function forceLogout(req, res, next) {
     next(error);
   }
 }
+
+export async function updateAssignment(req, res, next) {
+  try {
+    const user = await userService.updateUserAssignment(
+      req.params.id,
+      req.body,
+      req.user,
+      req.ip
+    );
+    return res.status(200).json({
+      success: true,
+      message: 'User assignment updated successfully',
+      data: user,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

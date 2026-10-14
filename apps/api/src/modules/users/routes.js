@@ -11,6 +11,7 @@ router.use(requirePermission('user.manage'));
 router.get('/', userController.listUsers);
 router.patch('/:id/role', userController.updateRole);
 router.patch('/:id/status', userController.updateStatus);
+router.patch('/:id/assignment', userController.updateAssignment);
 router.post('/:id/force-logout', userController.forceLogout);
 
 export default router;

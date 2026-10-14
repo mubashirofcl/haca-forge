@@ -9,6 +9,7 @@ export interface User {
   role: UserRole;
   department?: string;
   teamId?: string;
+  team?: string;
   skills: string[];
   capacity: number;
   attendance: string;

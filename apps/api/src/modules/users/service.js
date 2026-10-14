@@ -106,3 +106,45 @@ export async function forceLogoutUser(userId, adminUser, ip) {
 
   return { success: true };
 }
+
+export async function updateUserAssignment(userId, { teamId, department, skills, capacity }, adminUser, ip) {
+  const user = await User.findById(userId);
+  if (!user) {
+    const error = new Error('User not found');
+    error.code = 'NOT_FOUND';
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const before = {
+    teamId: user.teamId,
+    department: user.department,
+    skills: user.skills,
+    capacity: user.capacity,
+  };
+
+  if (teamId !== undefined) user.teamId = teamId;
+  if (department !== undefined) user.department = department;
+  if (skills !== undefined) user.skills = skills;
+  if (capacity !== undefined) user.capacity = capacity;
+
+  await user.save();
+
+  await AuditLog.create({
+    actor: adminUser._id,
+    actorEmail: adminUser.email,
+    action: 'user.assignment_updated',
+    entity: 'User',
+    entityId: user._id.toString(),
+    before,
+    after: {
+      teamId: user.teamId,
+      department: user.department,
+      skills: user.skills,
+      capacity: user.capacity,
+    },
+    ip,
+  });
+
+  return user;
+}
