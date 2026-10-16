@@ -1,0 +1,87 @@
+services:
+  # 1. API Web Service
+  - type: web
+    name: mmp-api
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install && npm run build -w packages/shared
+    startCommand: npm run start -w apps/api
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: mmp-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: FRONTEND_URL
+        sync: false
+      - key: COOKIE_DOMAIN
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        value: Marketing Portal <no-reply@yourdomain.com>
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: ADMIN_SEED_EMAIL
+        sync: false
+      - key: ADMIN_SEED_PASSWORD
+        sync: false
+
+  # 2. Background Queue & Cron Worker
+  - type: worker
+    name: mmp-worker
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install && npm run build -w packages/shared
+    startCommand: npm run worker -w apps/api
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: mmp-redis
+          property: connectionString
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        value: Marketing Portal <no-reply@yourdomain.com>
+      - key: SENTRY_DSN
+        sync: false
+
+  # 3. Redis Instance for BullMQ
+  - type: redis
+    name: mmp-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # internal only within Render private network

@@ -3,7 +3,7 @@
 ### Marketing Workflow and Content Management Portal
 
 **Audit Date**: October 2026  
-**Target Repository**: `HACA/TECH/MMP`  
+**Target Repository**: `HACA/TECH/haca-forge`  
 **Status**: New clean-slate monorepo implementation based on `Marketing_Portal_Architecture_and_Specification.pdf` and `roles-and-features.md`.
 
 ---

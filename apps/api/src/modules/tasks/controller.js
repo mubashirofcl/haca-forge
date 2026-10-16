@@ -71,3 +71,60 @@ export async function getWorkloadSuggestionsHandler(req, res, next) {
     next(err);
   }
 }
+
+export async function toggleSubtaskHandler(req, res, next) {
+  try {
+    const updated = await taskService.toggleSubtask(
+      req.params.id,
+      req.params.subtaskId,
+      req.body.completed,
+      req.user
+    );
+    res.json({ data: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function addSubtaskHandler(req, res, next) {
+  try {
+    const updated = await taskService.addSubtask(
+      req.params.id,
+      req.body.title,
+      req.user
+    );
+    res.status(201).json({ data: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function requestDeadlineExtensionHandler(req, res, next) {
+  try {
+    const io = req.app.get('io');
+    const updated = await taskService.requestDeadlineExtension(
+      req.params.id,
+      req.body,
+      req.user,
+      io
+    );
+    res.json({ data: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function reviewDeadlineExtensionHandler(req, res, next) {
+  try {
+    const io = req.app.get('io');
+    const updated = await taskService.reviewDeadlineExtension(
+      req.params.id,
+      req.body,
+      req.user,
+      io
+    );
+    res.json({ data: updated });
+  } catch (err) {
+    next(err);
+  }
+}

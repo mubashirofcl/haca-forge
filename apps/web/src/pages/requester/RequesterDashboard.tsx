@@ -24,6 +24,8 @@ import {
   Layers,
   ChevronRight,
   ExternalLink,
+  Sparkles,
+  CheckCircle,
 } from 'lucide-react';
 
 interface RequestTypeItem {
@@ -109,6 +111,10 @@ export const RequesterDashboard: React.FC = () => {
 
   // Comment input
   const [newCommentText, setNewCommentText] = useState('');
+
+  // Requester Confirmation States
+  const [confirmAdjustmentsModalItem, setConfirmAdjustmentsModalItem] = useState<any | null>(null);
+  const [adjustmentFeedback, setAdjustmentFeedback] = useState('');
 
   // 1. Fetch Requests (Scoped per role & department)
   const { data: requestsResponse, isLoading: requestsLoading } = useQuery({
@@ -334,6 +340,49 @@ export const RequesterDashboard: React.FC = () => {
     },
   });
 
+  // Fetch Content Items awaiting Requester Confirmation
+  const { data: awaitingConfirmResponse } = useQuery({
+    queryKey: ['awaitingConfirmation'],
+    queryFn: async () => {
+      const res = await fetch('/api/content?status=needs_requester_confirm');
+      if (!res.ok) return { data: [] };
+      return res.json();
+    },
+    refetchInterval: 15000,
+  });
+
+  const awaitingConfirmItems: any[] = awaitingConfirmResponse?.data || [];
+
+  // Requester Confirm Mutation
+  const confirmDeliverableMutation = useMutation({
+    mutationFn: async ({
+      contentItemId,
+      decision,
+      feedback,
+    }: {
+      contentItemId: string;
+      decision: 'confirm' | 'request_changes';
+      feedback?: string;
+    }) => {
+      const res = await fetch(`/api/deliverables/confirm/${contentItemId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, feedback }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to submit confirmation');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['awaitingConfirmation'] });
+      queryClient.invalidateQueries({ queryKey: ['requests'] });
+      setConfirmAdjustmentsModalItem(null);
+      setAdjustmentFeedback('');
+    },
+  });
+
   const resetNewRequestForm = () => {
     setTitle('');
     setDynamicValues({});
@@ -480,6 +529,74 @@ export const RequesterDashboard: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Awaiting Requester Confirmation Banner */}
+      {awaitingConfirmItems.length > 0 && (
+        <div className="glass-panel p-6 rounded-[24px] border-2 border-emerald-400/80 bg-emerald-50/40 shadow-glass space-y-4 animate-in slide-in-from-top-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900">
+                  Final Deliverable Awaiting Your Sign-off ({awaitingConfirmItems.length})
+                </h3>
+                <p className="text-xs text-slate-600">
+                  Lead has reviewed and approved creative cuts for your request. Please review the final deliverable to confirm or request final adjustments.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {awaitingConfirmItems.map((item) => (
+              <div
+                key={item._id}
+                className="p-4 rounded-2xl bg-white border border-emerald-200 shadow-xs flex flex-col justify-between space-y-3"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                      {item.contentId}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">{item.format}</span>
+                  </div>
+                  <h4 className="font-extrabold text-sm text-slate-900 mt-1">{item.title}</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Target Publish Date: {item.publishDate ? new Date(item.publishDate).toLocaleDateString() : 'TBD'}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => {
+                      setConfirmAdjustmentsModalItem(item);
+                      setAdjustmentFeedback('');
+                    }}
+                    className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs"
+                  >
+                    Request Adjustments
+                  </button>
+                  <button
+                    onClick={() => {
+                      confirmDeliverableMutation.mutate({
+                        contentItemId: item._id,
+                        decision: 'confirm',
+                      });
+                    }}
+                    disabled={confirmDeliverableMutation.isPending}
+                    className="px-4 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Confirm & Schedule</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Table / List Container */}
       <div className="glass-panel p-6 sm:p-8 rounded-[24px] border border-white shadow-glass space-y-6">
@@ -1170,6 +1287,67 @@ export const RequesterDashboard: React.FC = () => {
                 className="px-6 py-2 rounded-full bg-[#7a6af6] hover:bg-[#6857ea] text-white text-xs font-bold shadow-sm"
               >
                 Resubmit Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Requester Adjustment Feedback Modal */}
+      {confirmAdjustmentsModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-white shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-extrabold text-slate-900 text-sm">
+                Request Adjustments for {confirmAdjustmentsModalItem.contentId}
+              </h3>
+              <button
+                onClick={() => setConfirmAdjustmentsModalItem(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Provide feedback for the Marketing Lead. This deliverable will be returned to the Lead with your adjustment notes.
+            </p>
+
+            <div>
+              <label className="font-bold text-slate-700 text-[10px] uppercase tracking-wider block mb-1">
+                Requested Adjustments / Feedback *
+              </label>
+              <textarea
+                rows={3}
+                required
+                placeholder="Specific changes needed on this cut or deliverable..."
+                value={adjustmentFeedback}
+                onChange={(e) => setAdjustmentFeedback(e.target.value)}
+                className="w-full p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500 font-medium"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setConfirmAdjustmentsModalItem(null)}
+                className="px-4 py-2 rounded-full border border-slate-200 text-slate-700 font-bold text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!adjustmentFeedback.trim() || confirmDeliverableMutation.isPending}
+                onClick={() => {
+                  confirmDeliverableMutation.mutate({
+                    contentItemId: confirmAdjustmentsModalItem._id,
+                    decision: 'request_changes',
+                    feedback: adjustmentFeedback,
+                  });
+                }}
+                className="px-5 py-2 rounded-full bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs disabled:opacity-40"
+              >
+                Submit Feedback
               </button>
             </div>
           </div>

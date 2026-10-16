@@ -41,6 +41,45 @@ export const AccessRequestsPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
+  // Bulk Selection State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkApproving, setIsBulkApproving] = useState(false);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const selectAllPending = () => {
+    const pending = filteredRequests.filter((r) => r.status === 'pending').map((r) => r._id);
+    if (selectedIds.length === pending.length && pending.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(pending);
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Bulk approve and generate onboarding invites for ${selectedIds.length} candidate(s)?`)) return;
+    setIsBulkApproving(true);
+    try {
+      const res = await apiFetch<{ message: string; data: { approvedCount: number } }>(
+        '/admin/access-requests/bulk-approve',
+        {
+          method: 'POST',
+          body: JSON.stringify({ requestIds: selectedIds }),
+        }
+      );
+      alert(res.message || `Successfully approved ${res.data?.approvedCount || selectedIds.length} access requests.`);
+      setSelectedIds([]);
+      await fetchRequests();
+    } catch (err: any) {
+      alert(err.message || 'Failed to bulk approve requests');
+    } finally {
+      setIsBulkApproving(false);
+    }
+  };
+
   const fetchRequests = async () => {
     setIsLoading(true);
     try {
@@ -160,8 +199,45 @@ export const AccessRequestsPage: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {pendingCount > 0 && (
+            <button
+              onClick={selectAllPending}
+              className="px-3.5 py-2 rounded-full border border-slate-200 bg-white/80 hover:bg-white text-xs font-semibold text-slate-700 shadow-xs transition-colors"
+            >
+              {selectedIds.length === pendingCount ? 'Deselect All' : 'Select All Pending'}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Floating / Sticky Bulk Action Bar */}
+      {selectedIds.length > 0 && (
+        <div className="glass-panel p-3.5 px-6 rounded-2xl border border-violet-200 bg-violet-50/90 shadow-glass flex items-center justify-between animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse"></span>
+            <span className="text-xs font-extrabold text-violet-900">
+              {selectedIds.length} candidate{selectedIds.length > 1 ? 's' : ''} selected for bulk onboarding
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedIds([])}
+              className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900 font-semibold"
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleBulkApprove}
+              disabled={isBulkApproving}
+              className="px-5 py-2 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-pill flex items-center gap-2 transition-transform hover:scale-105 disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>{isBulkApproving ? 'Approving Candidates...' : `Bulk Approve Selected (${selectedIds.length})`}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Grid of Request Cards */}
       {isLoading ? (
@@ -183,11 +259,22 @@ export const AccessRequestsPage: React.FC = () => {
           {filteredRequests.map((req) => (
             <div
               key={req._id}
-              className="glass-card p-6 flex flex-col justify-between shadow-glass hover:scale-[1.01]"
+              className={`glass-card p-6 flex flex-col justify-between shadow-glass hover:scale-[1.01] transition-all ${
+                selectedIds.includes(req._id) ? 'ring-2 ring-[#7a6af6] bg-violet-50/20' : ''
+              }`}
             >
               <div>
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-center gap-3">
+                    {req.status === 'pending' && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(req._id)}
+                        onChange={() => toggleSelect(req._id)}
+                        className="w-4 h-4 rounded text-[#7a6af6] focus:ring-[#7a6af6] cursor-pointer"
+                        title="Select for bulk approve"
+                      />
+                    )}
                     <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#7a6af6] to-[#4f46e5] text-white font-bold text-xs flex items-center justify-center shadow-xs">
                       {req.name.slice(0, 2).toUpperCase()}
                     </div>

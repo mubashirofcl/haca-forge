@@ -5,7 +5,7 @@ const statusHistorySchema = new mongoose.Schema(
   {
     entityType: {
       type: String,
-      enum: ['Request', 'ContentItem', 'Task', 'Shoot', 'LeaveRequest'],
+      enum: ['Request', 'ContentItem', 'Task', 'Shoot', 'LeaveRequest', 'Deliverable'],
       required: true,
       index: true,
     },
@@ -54,5 +54,8 @@ const statusHistorySchema = new mongoose.Schema(
 );
 
 statusHistorySchema.index({ entityType: 1, entityId: 1, timestamp: -1 });
+statusHistorySchema.index({ toStatus: 1, timestamp: -1 });
+statusHistorySchema.index({ reasonCode: 1, timestamp: -1 });
+statusHistorySchema.index({ entityType: 1, toStatus: 1, timestamp: -1 });
 
 export const StatusHistory = mongoose.model('StatusHistory', statusHistorySchema);

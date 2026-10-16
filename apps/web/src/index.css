@@ -91,3 +91,11 @@ input[type='range']::-webkit-slider-runnable-track {
   border-radius: 9999px;
   cursor: pointer;
 }
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

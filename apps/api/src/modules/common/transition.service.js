@@ -20,9 +20,9 @@ const CONTENT_VALID_TRANSITIONS = {
   null: ['planned', 'brief_ready', 'in_production'],
   planned: ['brief_ready', 'in_production', 'on_hold'],
   brief_ready: ['in_production', 'on_hold'],
-  in_production: ['in_review', 'on_hold'],
-  in_review: ['changes_requested', 'approved', 'on_hold'],
-  changes_requested: ['in_production', 'in_review', 'on_hold'],
+  in_production: ['in_review', 'approved', 'scheduled', 'live', 'on_hold'],
+  in_review: ['changes_requested', 'approved', 'scheduled', 'live', 'on_hold'],
+  changes_requested: ['in_production', 'in_review', 'approved', 'scheduled', 'on_hold'],
   approved: ['scheduled', 'published', 'live', 'on_hold'],
   scheduled: ['published', 'live', 'on_hold'],
   published: ['live', 'retired'],
@@ -35,14 +35,23 @@ const CONTENT_VALID_TRANSITIONS = {
 // State machine definition for Tasks
 const TASK_VALID_TRANSITIONS = {
   null: ['assigned', 'in_progress'],
-  assigned: ['in_progress', 'done', 'blocked', 'on_hold'],
+  assigned: ['in_progress', 'submitted', 'done', 'blocked', 'on_hold'],
   in_progress: ['submitted', 'done', 'approved', 'blocked', 'on_hold'],
   submitted: ['changes_requested', 'approved', 'done', 'blocked', 'on_hold'],
-  changes_requested: ['in_progress', 'blocked', 'on_hold'],
+  changes_requested: ['in_progress', 'submitted', 'blocked', 'on_hold'],
   approved: ['done'],
   done: [],
   blocked: ['in_progress', 'assigned'],
   on_hold: ['in_progress', 'assigned'],
+};
+
+// State machine definition for Deliverables
+const DELIVERABLE_VALID_TRANSITIONS = {
+  null: ['submitted'],
+  submitted: ['approved', 'changes_requested', 'rejected'],
+  changes_requested: ['submitted'],
+  approved: [],
+  rejected: ['submitted'],
 };
 
 /**
@@ -115,6 +124,16 @@ export async function transitionStatus({
     if (!allowed.includes(toStatus)) {
       const err = new Error(
         `Invalid status transition for Task ${entity.taskId || entity._id}: cannot move from '${fromStatus}' to '${toStatus}'.`
+      );
+      err.statusCode = 400;
+      err.code = 'INVALID_STATUS_TRANSITION';
+      throw err;
+    }
+  } else if (entityType === 'Deliverable') {
+    const allowed = DELIVERABLE_VALID_TRANSITIONS[fromStatus] || [];
+    if (!allowed.includes(toStatus)) {
+      const err = new Error(
+        `Invalid status transition for Deliverable ${entity._id}: cannot move from '${fromStatus}' to '${toStatus}'.`
       );
       err.statusCode = 400;
       err.code = 'INVALID_STATUS_TRANSITION';

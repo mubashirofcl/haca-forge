@@ -27,6 +27,8 @@ import {
   triageAskInfoHandler,
   triageMergeHandler,
   triageConvertHandler,
+  bulkTriageAcceptHandler,
+  bulkTriageRejectHandler,
 } from './controller.js';
 
 const router = Router();
@@ -74,6 +76,18 @@ router.post(
 );
 
 // 2. Marketing Lead & Admin Triage Endpoints
+router.post(
+  '/triage/bulk-accept',
+  requirePermission('request.triage'),
+  bulkTriageAcceptHandler
+);
+
+router.post(
+  '/triage/bulk-reject',
+  requirePermission('request.triage'),
+  bulkTriageRejectHandler
+);
+
 router.post(
   '/:id/triage/accept',
   requirePermission('request.triage'),

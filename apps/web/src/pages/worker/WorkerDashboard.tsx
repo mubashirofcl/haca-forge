@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -13,7 +14,10 @@ import {
   Play,
   Square,
   Calendar,
+  Upload,
+  Award,
 } from 'lucide-react';
+import { WorkerUploadModal } from '../../components/deliverables/WorkerUploadModal';
 
 interface TaskItem {
   _id: string;
@@ -41,6 +45,14 @@ interface TaskItem {
   };
   dependencies?: Array<{ _id: string; taskId: string; title: string; status: string }>;
   subtasks?: Array<{ _id: string; title: string; completed: boolean }>;
+  revisionCount?: number;
+  extensionRequest?: {
+    requestedDate?: string;
+    reason?: string;
+    status: 'none' | 'pending' | 'approved' | 'rejected';
+    requestedAt?: string;
+    responseNote?: string;
+  };
 }
 
 const HOLD_REASONS = [
@@ -64,6 +76,12 @@ export const WorkerDashboard: React.FC = () => {
   const [holdComment, setHoldComment] = useState<string>('');
   const [taskCommentText, setTaskCommentText] = useState<string>('');
   const [attendance, setAttendance] = useState<'present' | 'on_leave'>('present');
+  const [uploadTask, setUploadTask] = useState<TaskItem | null>(null);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState<string>('');
+  const [showExtensionModal, setShowExtensionModal] = useState<boolean>(false);
+  const [extensionTask, setExtensionTask] = useState<TaskItem | null>(null);
+  const [extensionDate, setExtensionDate] = useState<string>('');
+  const [extensionReason, setExtensionReason] = useState<string>('');
 
   // Active timer query
   const { data: activeTimer } = useQuery({
@@ -178,17 +196,27 @@ export const WorkerDashboard: React.FC = () => {
     enabled: activeTab === 'teamQueue',
   });
 
-  // Fetch Task Comments
+  // Fetch Task Comments & Reviewer Deliverable Feedback
   const { data: taskComments = [] } = useQuery({
     queryKey: ['taskComments', selectedTask?._id],
     queryFn: async () => {
       if (!selectedTask) return [];
-      const res = await fetch(`/api/comments?entityType=task&entityId=${selectedTask._id}`);
+      const res = await fetch(`/api/comments?entityType=task&entityId=${selectedTask._id}&includeDeliverables=true`);
       if (!res.ok) return [];
       const data = await res.json();
       return data.data || [];
     },
     enabled: !!selectedTask,
+  });
+
+  const { data: dashboardSummary } = useQuery({
+    queryKey: ['worker-dashboard-summary'],
+    queryFn: async () => {
+      const res = await fetch('/api/dashboard/summary', { credentials: 'include' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.data;
+    },
   });
 
   // Mutations
@@ -239,6 +267,68 @@ export const WorkerDashboard: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['taskComments', selectedTask?._id] });
       setTaskCommentText('');
+    },
+  });
+
+  const toggleSubtaskMutation = useMutation({
+    mutationFn: async ({ taskId, subtaskId, completed }: { taskId: string; subtaskId: string; completed?: boolean }) => {
+      const res = await fetch(`/api/tasks/${taskId}/subtasks/${subtaskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed }),
+      });
+      if (!res.ok) throw new Error('Failed to update subtask');
+      return res.json();
+    },
+    onSuccess: (resData) => {
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+      if (selectedTask && resData?.data) {
+        setSelectedTask(resData.data);
+      }
+    },
+  });
+
+  const addSubtaskMutation = useMutation({
+    mutationFn: async ({ taskId, title }: { taskId: string; title: string }) => {
+      const res = await fetch(`/api/tasks/${taskId}/subtasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) throw new Error('Failed to add subtask');
+      return res.json();
+    },
+    onSuccess: (resData) => {
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+      if (selectedTask && resData?.data) {
+        setSelectedTask(resData.data);
+      }
+      setNewSubtaskTitle('');
+    },
+  });
+
+  const requestExtensionMutation = useMutation({
+    mutationFn: async ({ taskId, requestedDate, reason }: { taskId: string; requestedDate: string; reason: string }) => {
+      const res = await fetch(`/api/tasks/${taskId}/extension-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestedDate, reason }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error?.message || 'Failed to submit extension request');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+      setShowExtensionModal(false);
+      setExtensionDate('');
+      setExtensionReason('');
+      alert('Deadline extension request submitted to Marketing Lead.');
+    },
+    onError: (err: any) => {
+      alert(err.message || 'Failed to submit extension request');
     },
   });
 
@@ -369,7 +459,7 @@ export const WorkerDashboard: React.FC = () => {
       )}
 
       {/* 2. KPI Summary Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="glass-panel p-4 border border-white/80">
           <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">In Progress</p>
           <p className="text-2xl font-black text-blue-700 mt-1">{inProgressCount}</p>
@@ -386,6 +476,22 @@ export const WorkerDashboard: React.FC = () => {
           <p className="text-[11px] font-bold text-[#7a6af6] uppercase tracking-wider">Total Est. Hours</p>
           <p className="text-2xl font-black text-[#7a6af6] mt-1">{totalPlannedHours}h</p>
         </div>
+        <Link
+          to="/reports"
+          className="glass-panel p-4 border border-purple-200/60 bg-gradient-to-br from-white to-purple-50/50 hover:border-purple-300 transition-all flex flex-col justify-between"
+          title="Inspect full worker performance & efficiency scorecard"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-[#7a6af6] uppercase tracking-wider">Efficiency</p>
+            <Award className="w-3.5 h-3.5 text-[#7a6af6]" />
+          </div>
+          <div className="flex items-baseline gap-1 mt-1">
+            <span className="text-2xl font-black text-[#7a6af6]">
+              {dashboardSummary?.widgets?.efficiencyScore ?? '—'}
+            </span>
+            <span className="text-xs text-slate-400 font-semibold">/ 100</span>
+          </div>
+        </Link>
       </div>
 
       {/* 3. Navigation Tabs */}
@@ -481,6 +587,30 @@ export const WorkerDashboard: React.FC = () => {
                       {task.holdComment && <p>{task.holdComment}</p>}
                     </div>
                   )}
+
+                  {/* Changes Requested Revision Banner */}
+                  {task.status === 'changes_requested' && (
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs space-y-1">
+                      <div className="flex items-center justify-between font-bold text-[10px] uppercase tracking-wider text-amber-800">
+                        <span className="flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                          Changes Requested {task.revisionCount ? `(Rev #${task.revisionCount})` : ''}
+                        </span>
+                        <span className="font-mono text-amber-700">v{(task.revisionCount || 1) + 1} Needed</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800">Reviewer left feedback on this deliverable. Please inspect comments and upload a revision.</p>
+                    </div>
+                  )}
+
+                  {/* Extension Status Banner */}
+                  {task.extensionRequest && task.extensionRequest.status === 'pending' && (
+                    <div className="p-2 rounded-lg bg-purple-50 border border-purple-200 text-purple-800 text-[11px] flex items-center justify-between">
+                      <span className="font-semibold">Extension Pending Review</span>
+                      <span className="font-mono text-[10px]">
+                        Target: {new Date(task.extensionRequest.requestedDate!).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-3 pt-3 border-t border-slate-100">
@@ -503,6 +633,21 @@ export const WorkerDashboard: React.FC = () => {
                       >
                         Details &rarr;
                       </button>
+
+                      {['assigned', 'in_progress', 'changes_requested'].includes(task.status) && (
+                        <button
+                          onClick={() => {
+                            setExtensionTask(task);
+                            setExtensionDate(task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '');
+                            setExtensionReason('');
+                            setShowExtensionModal(true);
+                          }}
+                          className="text-[11px] font-semibold text-slate-500 hover:text-purple-600 transition-colors"
+                          title="Request Deadline Extension"
+                        >
+                          +Extend
+                        </button>
+                      )}
 
                       {/* Timer Button */}
                       {activeTimer?.taskId?._id === task._id ? (
@@ -539,10 +684,17 @@ export const WorkerDashboard: React.FC = () => {
                       {task.status === 'in_progress' && (
                         <>
                           <button
-                            onClick={() => handleQuickStatusChange(task, 'done')}
-                            className="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                            onClick={() => setUploadTask(task)}
+                            className="px-3 py-1.5 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs"
                           >
-                            Mark Done
+                            <Upload className="w-3 h-3" />
+                            <span>Submit Cut</span>
+                          </button>
+                          <button
+                            onClick={() => handleQuickStatusChange(task, 'done')}
+                            className="px-2.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                          >
+                            Done
                           </button>
                           <button
                             onClick={() => handleQuickStatusChange(task, 'blocked')}
@@ -551,6 +703,16 @@ export const WorkerDashboard: React.FC = () => {
                             Block
                           </button>
                         </>
+                      )}
+
+                      {task.status === 'changes_requested' && (
+                        <button
+                          onClick={() => setUploadTask(task)}
+                          className="px-3.5 py-1.5 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs animate-bounce"
+                        >
+                          <Upload className="w-3 h-3" />
+                          <span>Upload Revision</span>
+                        </button>
                       )}
 
                       {task.status === 'blocked' && (
@@ -609,54 +771,111 @@ export const WorkerDashboard: React.FC = () => {
 
             {/* Subtasks Checklist */}
             <div className="space-y-2">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Subtasks Checklist
-              </h4>
-              <div className="space-y-1.5">
-                {(selectedTask.subtasks || [
-                  { _id: '1', title: 'Review requirements and draft assets', completed: false },
-                  { _id: '2', title: 'Finalize output deliverables and handoff', completed: false },
-                ]).map((st: any, i: number) => (
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Subtasks Checklist
+                </h4>
+                {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
+                  <span className="text-[10px] font-bold text-slate-400">
+                    {selectedTask.subtasks.filter((s: any) => s.completed).length} / {selectedTask.subtasks.length} done
+                  </span>
+                )}
+              </div>
+              <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
+                {(selectedTask.subtasks || []).map((st: any, i: number) => (
                   <div
                     key={st._id || i}
-                    className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs flex items-center gap-2"
+                    className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs flex items-center gap-2 hover:bg-slate-100/60 transition-colors"
                   >
                     <input
                       type="checkbox"
-                      defaultChecked={st.completed}
-                      className="rounded text-[#7a6af6] focus:ring-[#7a6af6]"
+                      checked={Boolean(st.completed)}
+                      onChange={(e) => {
+                        toggleSubtaskMutation.mutate({
+                          taskId: selectedTask._id,
+                          subtaskId: st._id,
+                          completed: e.target.checked,
+                        });
+                      }}
+                      className="rounded text-[#7a6af6] focus:ring-[#7a6af6] cursor-pointer"
                     />
-                    <span className="text-slate-700">{st.title}</span>
+                    <span className={`flex-1 text-slate-700 ${st.completed ? 'line-through text-slate-400' : ''}`}>
+                      {st.title}
+                    </span>
                   </div>
                 ))}
+                {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && (
+                  <p className="text-xs text-slate-400 italic">No subtasks defined yet.</p>
+                )}
               </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newSubtaskTitle.trim()) return;
+                  addSubtaskMutation.mutate({
+                    taskId: selectedTask._id,
+                    title: newSubtaskTitle.trim(),
+                  });
+                }}
+                className="flex gap-2 pt-1"
+              >
+                <input
+                  type="text"
+                  placeholder="Add a subtask step..."
+                  value={newSubtaskTitle}
+                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                  className="flex-1 px-3 py-1.5 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#7a6af6]"
+                />
+                <button
+                  type="submit"
+                  disabled={!newSubtaskTitle.trim() || addSubtaskMutation.isPending}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl disabled:opacity-40"
+                >
+                  Add
+                </button>
+              </form>
             </div>
 
-            {/* Status Change Bar */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500">Current Status:</span>
-              <div className="flex items-center gap-2">
+            {/* Status Change Bar & Deliverable Upload */}
+            <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500">Deliverable Upload:</span>
                 <button
                   type="button"
-                  onClick={() => handleQuickStatusChange(selectedTask, 'in_progress')}
-                  className="px-3 py-1.5 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs font-bold"
+                  onClick={() => setUploadTask(selectedTask)}
+                  className="px-4 py-1.5 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs"
                 >
-                  In Progress
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{selectedTask.status === 'changes_requested' ? 'Upload Revision' : 'Upload Deliverable'}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickStatusChange(selectedTask, 'done')}
-                  className="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
-                >
-                  Mark Done
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickStatusChange(selectedTask, 'on_hold')}
-                  className="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold"
-                >
-                  Hold
-                </button>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs font-bold text-slate-500">Quick Status:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickStatusChange(selectedTask, 'in_progress')}
+                    className="px-3 py-1.5 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs font-bold"
+                  >
+                    In Progress
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickStatusChange(selectedTask, 'done')}
+                    className="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                  >
+                    Mark Done
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickStatusChange(selectedTask, 'on_hold')}
+                    className="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold"
+                  >
+                    Hold
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -664,19 +883,31 @@ export const WorkerDashboard: React.FC = () => {
             <div className="space-y-3 pt-3 border-t border-slate-100">
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                 <MessageSquare className="w-3.5 h-3.5 text-[#7a6af6]" />
-                <span>Task Comments & Notes</span>
+                <span>Task Comments & Review Notes</span>
               </h4>
 
               <div className="space-y-2 max-h-[160px] overflow-y-auto">
                 {taskComments.map((c: any) => (
-                  <div key={c._id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-0.5">
+                  <div key={c._id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
                     <div className="flex items-center justify-between text-[10px]">
-                      <span className="font-bold text-slate-800">{c.author?.name}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-slate-800">{c.author?.name || 'Reviewer'}</span>
+                        {c.deliverableVersion && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-violet-100 text-violet-800">
+                            Cut v{c.deliverableVersion}
+                          </span>
+                        )}
+                        {typeof c.mediaTimestamp === 'number' && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-100 text-amber-800 flex items-center gap-0.5">
+                            ⏱️ {Math.floor(c.mediaTimestamp / 60)}:{(Math.floor(c.mediaTimestamp % 60)).toString().padStart(2, '0')}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-slate-400">
                         {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <p className="text-slate-700">{c.text}</p>
+                    <p className="text-slate-700 leading-relaxed">{c.text}</p>
                   </div>
                 ))}
                 {taskComments.length === 0 && (
@@ -876,6 +1107,97 @@ export const WorkerDashboard: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* 8. Extension Request Modal */}
+      {showExtensionModal && extensionTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-white/80 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-purple-600" />
+                Request Deadline Extension
+              </h3>
+              <button
+                onClick={() => setShowExtensionModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (extensionTask && extensionDate) {
+                  requestExtensionMutation.mutate({
+                    taskId: extensionTask._id,
+                    requestedDate: extensionDate,
+                    reason: extensionReason,
+                  });
+                }
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <p className="text-slate-500 text-xs mb-2">
+                  Task: <b className="text-slate-800">{extensionTask.taskId} - {extensionTask.title}</b>
+                </p>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Requested New Due Date *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={extensionDate}
+                  onChange={(e) => setExtensionDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 outline-none focus:ring-2 focus:ring-purple-400"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Reason for Extension Request *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Explain why extra time is required (e.g. assets delay, complex animation rework)..."
+                  value={extensionReason}
+                  onChange={(e) => setExtensionReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 outline-none focus:ring-2 focus:ring-purple-400"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowExtensionModal(false)}
+                  className="px-4 py-2 rounded-full border border-slate-200 text-slate-700 font-bold hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={requestExtensionMutation.isPending}
+                  className="px-5 py-2 rounded-full bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-50"
+                >
+                  {requestExtensionMutation.isPending ? 'Submitting...' : 'Submit Extension Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 9. Worker Upload Modal */}
+      {uploadTask && (
+        <WorkerUploadModal
+          isOpen={!!uploadTask}
+          onClose={() => setUploadTask(null)}
+          task={uploadTask}
+          latestVersion={uploadTask.revisionCount || 0}
+        />
       )}
     </div>
   );

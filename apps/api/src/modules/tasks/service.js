@@ -7,6 +7,7 @@ import { getNextSequenceId } from '../requests/counter.model.js';
 import { transitionStatus } from '../common/transition.service.js';
 import { advancePipelineHandoff } from '../pipelines/service.js';
 import { createNotification } from '../notifications/service.js';
+import { eventBus, EVENTS } from '../../lib/events.js';
 import { logger } from '../../lib/logger.js';
 
 export async function createTask(input, user, io) {
@@ -26,14 +27,13 @@ export async function createTask(input, user, io) {
   });
 
   if (task.assignee) {
-    await createNotification({
-      recipient: task.assignee,
-      type: 'task_assigned',
-      title: 'Task Assigned',
-      message: `You were assigned ${taskId}: ${task.title}`,
-      entityType: 'task',
-      entityId: task._id,
-      io,
+    eventBus.emit(EVENTS.TASK_ASSIGNED, {
+      taskId,
+      title: task.title,
+      assignee: task.assignee,
+      team: task.team,
+      dueDate: task.dueDate,
+      link: `/tasks?taskId=${taskId}`,
     });
   }
 
@@ -43,6 +43,11 @@ export async function createTask(input, user, io) {
 }
 
 export async function listTasks(query = {}, user) {
+  // Requesters never see internal production tasks
+  if (user && (user.role === 'dept_staff' || user.role === 'dept_lead')) {
+    return [];
+  }
+
   const filter = {};
 
   if (query.mine === 'true' || user.role === 'worker') {
@@ -65,6 +70,10 @@ export async function listTasks(query = {}, user) {
     filter.status = query.status;
   }
 
+  if (query.extensionStatus) {
+    filter['extensionRequest.status'] = query.extensionStatus;
+  }
+
   const tasks = await Task.find(filter)
     .populate('assignee', 'name email avatar team skills onLeave')
     .populate('collaborators', 'name email avatar')
@@ -76,6 +85,14 @@ export async function listTasks(query = {}, user) {
 }
 
 export async function getTaskById(id, user) {
+  // Requesters never see internal production tasks
+  if (user && (user.role === 'dept_staff' || user.role === 'dept_lead')) {
+    const err = new Error('Requesters do not have access to internal task pipelines');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
   const task = await Task.findById(id)
     .populate('assignee', 'name email avatar team skills onLeave weeklyCapacityHours')
     .populate('collaborators', 'name email avatar')
@@ -120,16 +137,15 @@ export async function updateTask(id, updates, user, io) {
   Object.assign(task, updates);
   await task.save();
 
-  // If assignee changed, send notification
+  // If assignee changed, send notification and event
   if (updates.assignee && updates.assignee.toString() !== previousAssignee) {
-    await createNotification({
-      recipient: updates.assignee,
-      type: 'task_assigned',
-      title: 'Task Reassigned',
-      message: `You were assigned ${task.taskId}: ${task.title}`,
-      entityType: 'task',
-      entityId: task._id,
-      io,
+    eventBus.emit(EVENTS.TASK_ASSIGNED, {
+      taskId: task.taskId,
+      title: task.title,
+      assignee: updates.assignee,
+      team: task.team,
+      dueDate: task.dueDate,
+      link: `/tasks?taskId=${task.taskId}`,
     });
   }
 
@@ -190,7 +206,26 @@ export async function transitionTaskStatus(id, { status, holdReason, holdComment
   task.holdComment = holdComment || undefined;
   await task.save();
 
-  // 4. Automated handoff trigger if task is done or approved
+  // 4. Emit domain events for blocked or completed
+  if (['blocked', 'on_hold'].includes(status)) {
+    eventBus.emit(EVENTS.TASK_BLOCKED, {
+      taskId: task.taskId,
+      title: task.title,
+      assignee: task.assignee,
+      team: task.team,
+      reason: holdComment || holdReason,
+      link: `/tasks?taskId=${task.taskId}`,
+    });
+  } else if (['done', 'approved', 'completed'].includes(status)) {
+    eventBus.emit(EVENTS.TASK_COMPLETED, {
+      taskId: task.taskId,
+      title: task.title,
+      assignee: task.assignee,
+      team: task.team,
+    });
+  }
+
+  // 5. Automated handoff trigger if task is done or approved
   if (['done', 'approved'].includes(status)) {
     await advancePipelineHandoff(task, user, io);
   }
@@ -287,4 +322,123 @@ export async function getWorkloadSuggestions(team, skills = []) {
   eligible.sort((a, b) => b.matchScore - a.matchScore);
 
   return eligible;
+}
+
+export async function toggleSubtask(taskId, subtaskId, completed, user) {
+  const task = await Task.findById(taskId);
+  if (!task) {
+    const err = new Error('Task not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const subtask = task.subtasks.id(subtaskId);
+  if (!subtask) {
+    const err = new Error('Subtask not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  subtask.completed = completed !== undefined ? Boolean(completed) : !subtask.completed;
+  if (subtask.completed) {
+    subtask.completedAt = new Date();
+  } else {
+    subtask.completedAt = undefined;
+  }
+
+  await task.save();
+  return task;
+}
+
+export async function addSubtask(taskId, title, user) {
+  const task = await Task.findById(taskId);
+  if (!task) {
+    const err = new Error('Task not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  task.subtasks.push({
+    title,
+    completed: false,
+    assignee: user._id,
+  });
+
+  await task.save();
+  return task;
+}
+
+export async function requestDeadlineExtension(taskId, { requestedDate, reason }, user, io) {
+  const task = await Task.findById(taskId);
+  if (!task) {
+    const err = new Error('Task not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  task.extensionRequest = {
+    requestedDate: new Date(requestedDate),
+    reason: reason || '',
+    status: 'pending',
+    requestedAt: new Date(),
+  };
+
+  await task.save();
+
+  // Notify Leads & Admins
+  const leads = await User.find({ role: { $in: ['lead', 'admin'] } });
+  for (const lead of leads) {
+    await createNotification({
+      recipient: lead._id,
+      type: 'deadline_extension_requested',
+      title: 'Deadline Extension Requested',
+      message: `${user.name} requested an extension until ${new Date(requestedDate).toLocaleDateString()} for "${task.title}": "${reason || 'No reason provided'}"`,
+      entityType: 'task',
+      entityId: task._id,
+      io,
+    });
+  }
+
+  return task;
+}
+
+export async function reviewDeadlineExtension(taskId, { decision, responseNote }, user, io) {
+  const task = await Task.findById(taskId);
+  if (!task) {
+    const err = new Error('Task not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (!task.extensionRequest || task.extensionRequest.status !== 'pending') {
+    const err = new Error('No pending extension request found for this task');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  task.extensionRequest.status = decision;
+  task.extensionRequest.decidedAt = new Date();
+  task.extensionRequest.decidedBy = user._id;
+  task.extensionRequest.responseNote = responseNote || '';
+
+  if (decision === 'approved' && task.extensionRequest.requestedDate) {
+    task.dueDate = task.extensionRequest.requestedDate;
+  }
+
+  await task.save();
+
+  // Notify Assignee
+  if (task.assignee) {
+    await createNotification({
+      recipient: task.assignee,
+      type: 'deadline_extension_reviewed',
+      title: `Deadline Extension ${decision === 'approved' ? 'Approved' : 'Declined'}`,
+      message: `Your extension request for "${task.title}" was ${decision}. ${responseNote ? `Note: "${responseNote}"` : ''}`,
+      entityType: 'task',
+      entityId: task._id,
+      io,
+    });
+  }
+
+  return task;
 }

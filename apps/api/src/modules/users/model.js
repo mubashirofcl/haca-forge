@@ -73,6 +73,32 @@ const userSchema = new mongoose.Schema(
       type: String,
       select: false,
     },
+    resetPasswordTokenHash: {
+      type: String,
+      select: false,
+    },
+    resetPasswordExpiresAt: {
+      type: Date,
+    },
+    notificationPreferences: {
+      email: {
+        requestUpdates: { type: Boolean, default: true },
+        taskAssigned: { type: Boolean, default: true },
+        taskBlocked: { type: Boolean, default: true },
+        reviewDecisions: { type: Boolean, default: true },
+        deadlineReminders: { type: Boolean, default: true },
+        dailyDigest: { type: Boolean, default: true },
+      },
+      inApp: {
+        requestUpdates: { type: Boolean, default: true },
+        taskAssigned: { type: Boolean, default: true },
+        taskBlocked: { type: Boolean, default: true },
+        reviewDecisions: { type: Boolean, default: true },
+        deadlineReminders: { type: Boolean, default: true },
+        mentions: { type: Boolean, default: true },
+      },
+      dailyDigest: { type: Boolean, default: true },
+    },
   },
   {
     timestamps: true,

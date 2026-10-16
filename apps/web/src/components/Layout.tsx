@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
   BarChart3,
   Settings,
   HelpCircle,
-  Bell,
   Search,
   LogOut,
   ShieldCheck,
@@ -17,141 +15,296 @@ import {
   FileText,
   Inbox,
   Send,
-  ExternalLink,
   Film,
   Calendar,
   Video,
   Clock,
+  CheckSquare,
+  TrendingUp,
+  FolderArchive,
+  ChevronDown,
+  Menu,
+  X,
 } from 'lucide-react';
+import { NotificationCenter } from './NotificationCenter';
+import { NotificationToastContainer } from './NotificationToast';
 
 interface LayoutProps {
   children: React.ReactNode;
+}
+
+interface NavItem {
+  id: string;
+  label: string;
+  path: string;
+  description: string;
+  icon: React.ElementType;
+  show: boolean;
+  activeMatcher: (pathname: string) => boolean;
+}
+
+interface NavCategory {
+  id: string;
+  label: string;
+  items: NavItem[];
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  const navRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-  // Fetch Notifications
-  const { data: notificationsData } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: async () => {
-      const res = await fetch('/api/notifications?limit=8');
-      if (!res.ok) return { data: [], unreadCount: 0 };
-      return res.json();
-    },
-    refetchInterval: 15000,
-  });
+  // Close dropdowns on outside click or escape key
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(event.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
 
-  const notifications = notificationsData?.data || [];
-  const unreadCount = notificationsData?.unreadCount || 0;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenDropdown(null);
+        setShowSearchModal(false);
+        setShowMobileMenu(false);
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setShowSearchModal((prev) => !prev);
+      }
+    };
 
-  const markAllReadMutation = useMutation({
-    mutationFn: async () => {
-      await fetch('/api/notifications/read-all', { method: 'PATCH' });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    },
-  });
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
-  // Top navigation tabs per role
-  const topNavTabs = [
+  // Close menus on page route change
+  useEffect(() => {
+    setOpenDropdown(null);
+    setShowMobileMenu(false);
+  }, [location.pathname]);
+
+  // Pipelines direct tab path
+  const pipelinesPath =
+    user?.role === 'admin'
+      ? '/admin'
+      : user?.role === 'lead'
+      ? '/lead'
+      : user?.role === 'worker'
+      ? '/worker'
+      : '/requester';
+
+  const isPipelinesActive = ['/admin', '/lead', '/worker', '/requester', '/'].includes(location.pathname);
+
+  // Grouped Navigation Categories
+  const navCategories: NavCategory[] = [
     {
-      label: 'Pipelines',
-      path: user?.role === 'admin' ? '/admin' : user?.role === 'lead' ? '/lead' : user?.role === 'worker' ? '/worker' : '/requester',
-      show: true,
-      activeMatcher: (p: string) => ['/admin', '/lead', '/worker', '/'].includes(p),
+      id: 'creative',
+      label: 'Creative Studio',
+      items: [
+        {
+          id: 'content-hub',
+          label: 'Content Hub',
+          path: '/lead/content',
+          description: 'Campaigns & asset pipelines',
+          icon: Film,
+          show: ['admin', 'lead'].includes(user?.role || ''),
+          activeMatcher: (p) => p.startsWith('/lead/content'),
+        },
+        {
+          id: 'content-calendar',
+          label: 'Content Calendar',
+          path: '/calendar',
+          description: 'Multi-channel social scheduling',
+          icon: Calendar,
+          show: ['admin', 'lead', 'sm_manager'].includes(user?.role || ''),
+          activeMatcher: (p) => p.startsWith('/calendar') || p.startsWith('/sm'),
+        },
+        {
+          id: 'shoot-planner',
+          label: 'Shoot Planner',
+          path: '/shoots',
+          description: 'Call sheets, locations & shoot crews',
+          icon: Video,
+          show: ['admin', 'lead', 'team_lead', 'worker'].includes(user?.role || ''),
+          activeMatcher: (p) => p.startsWith('/shoots'),
+        },
+        {
+          id: 'review-studio',
+          label: 'Review Studio',
+          path: '/lead/reviews',
+          description: 'Proofing & stakeholder approvals',
+          icon: CheckSquare,
+          show: ['admin', 'lead'].includes(user?.role || ''),
+          activeMatcher: (p) => p.startsWith('/lead/reviews'),
+        },
+        {
+          id: 'asset-library',
+          label: 'Asset Library',
+          path: '/library',
+          description: 'Centralized digital brand library',
+          icon: FolderArchive,
+          show: true,
+          activeMatcher: (p) => p.startsWith('/library'),
+        },
+      ],
     },
     {
-      label: 'Content Hub',
-      path: '/lead/content',
-      show: ['admin', 'lead'].includes(user?.role || ''),
-      activeMatcher: (p: string) => p.startsWith('/lead/content'),
+      id: 'operations',
+      label: 'Operations',
+      items: [
+        {
+          id: 'team-ops',
+          label: 'Team Operations',
+          path: '/teams',
+          description: 'Staff capacity & department rosters',
+          icon: Users,
+          show: ['admin', 'lead', 'team_lead'].includes(user?.role || ''),
+          activeMatcher: (p) => p.startsWith('/teams') && !p.startsWith('/admin/teams-departments'),
+        },
+        {
+          id: 'timesheets',
+          label: 'Timesheets',
+          path: '/timesheets',
+          description: 'Time tracking, logs & attendance',
+          icon: Clock,
+          show: ['admin', 'lead', 'team_lead', 'worker'].includes(user?.role || ''),
+          activeMatcher: (p) => p.startsWith('/timesheets'),
+        },
+        {
+          id: 'performance',
+          label: 'Performance Ads',
+          path: '/performance',
+          description: 'Paid ad analytics & ROAS tracking',
+          icon: TrendingUp,
+          show: ['admin', 'lead', 'dept_lead'].includes(user?.role || ''),
+          activeMatcher: (p) => p.startsWith('/performance'),
+        },
+        {
+          id: 'triage',
+          label: 'Triage Inbox',
+          path: '/lead/inbox',
+          description: 'Incoming ticket queue & triage',
+          icon: Inbox,
+          show: hasPermission('request.triage'),
+          activeMatcher: (p) => p.startsWith('/lead/inbox'),
+        },
+        {
+          id: 'requests',
+          label: 'Requests Portal',
+          path: '/requester',
+          description: 'Submit & track marketing requests',
+          icon: Send,
+          show: true,
+          activeMatcher: (p) => p.startsWith('/requester'),
+        },
+      ],
     },
     {
-      label: 'Content Calendar',
-      path: '/calendar',
-      show: ['admin', 'lead', 'sm_manager'].includes(user?.role || ''),
-      activeMatcher: (p: string) => p.startsWith('/calendar') || p.startsWith('/sm'),
-    },
-    {
-      label: 'Shoot Planner',
-      path: '/shoots',
-      show: ['admin', 'lead', 'team_lead', 'worker'].includes(user?.role || ''),
-      activeMatcher: (p: string) => p.startsWith('/shoots'),
-    },
-    {
-      label: 'Team Ops',
-      path: '/teams',
-      show: ['admin', 'lead', 'team_lead'].includes(user?.role || ''),
-      activeMatcher: (p: string) => p.startsWith('/teams') && !p.startsWith('/admin/teams-departments'),
-    },
-    {
-      label: 'Timesheets',
-      path: '/timesheets',
-      show: ['admin', 'lead', 'team_lead', 'worker'].includes(user?.role || ''),
-      activeMatcher: (p: string) => p.startsWith('/timesheets'),
-    },
-    {
-      label: 'Triage Inbox',
-      path: '/lead/inbox',
-      show: hasPermission('request.triage'),
-      activeMatcher: (p: string) => p.startsWith('/lead/inbox'),
-    },
-    {
-      label: 'Requests Portal',
-      path: '/requester',
-      show: true,
-      activeMatcher: (p: string) => p.startsWith('/requester'),
-    },
-    {
-      label: 'Access Requests',
-      path: '/admin/access-requests',
-      show: hasPermission('user.approve'),
-      activeMatcher: (p: string) => p.startsWith('/admin/access-requests'),
-    },
-    {
-      label: 'Staff & Roles',
-      path: '/admin/users',
-      show: hasPermission('user.manage'),
-      activeMatcher: (p: string) => p.startsWith('/admin/users'),
-    },
-    {
-      label: 'Teams & Depts',
-      path: '/admin/teams-departments',
-      show: hasPermission('settings.manage'),
-      activeMatcher: (p: string) => p.startsWith('/admin/teams-departments'),
-    },
-    {
-      label: 'Master Data',
-      path: '/admin/master-data',
-      show: hasPermission('settings.manage'),
-      activeMatcher: (p: string) => p.startsWith('/admin/master-data'),
-    },
-    {
-      label: 'Audit Log',
-      path: '/admin/audit-log',
-      show: hasPermission('audit.view'),
-      activeMatcher: (p: string) => p.startsWith('/admin/audit-log'),
-    },
-    {
-      label: 'Reports & Analytics',
-      path: '/reports',
-      show: hasPermission('report.view'),
-      activeMatcher: (p: string) => p.startsWith('/reports'),
+      id: 'admin',
+      label: 'Administration',
+      items: [
+        {
+          id: 'users',
+          label: 'Staff & Roles',
+          path: '/admin/users',
+          description: 'User accounts & RBAC management',
+          icon: Users,
+          show: hasPermission('user.manage'),
+          activeMatcher: (p) => p.startsWith('/admin/users'),
+        },
+        {
+          id: 'teams-depts',
+          label: 'Teams & Depts',
+          path: '/admin/teams-departments',
+          description: 'Department structures & leads',
+          icon: Building2,
+          show: hasPermission('settings.manage'),
+          activeMatcher: (p) => p.startsWith('/admin/teams-departments'),
+        },
+        {
+          id: 'access-reqs',
+          label: 'Access Requests',
+          path: '/admin/access-requests',
+          description: 'Pending user access & onboarding',
+          icon: ShieldCheck,
+          show: hasPermission('user.approve'),
+          activeMatcher: (p) => p.startsWith('/admin/access-requests'),
+        },
+        {
+          id: 'master-data',
+          label: 'Master Data',
+          path: '/admin/master-data',
+          description: 'System schemas & custom taxonomies',
+          icon: Layers,
+          show: hasPermission('settings.manage'),
+          activeMatcher: (p) => p.startsWith('/admin/master-data'),
+        },
+        {
+          id: 'reports',
+          label: 'Reports & Analytics',
+          path: '/reports',
+          description: 'Executive KPIs & SLA performance',
+          icon: BarChart3,
+          show: hasPermission('report.view'),
+          activeMatcher: (p) => p.startsWith('/reports'),
+        },
+        {
+          id: 'audit',
+          label: 'Audit Trail',
+          path: '/admin/audit-log',
+          description: 'System security & access history',
+          icon: FileText,
+          show: hasPermission('audit.view'),
+          activeMatcher: (p) => p.startsWith('/admin/audit-log'),
+        },
+      ],
     },
   ];
+
+  // Flatten accessible items for quick search jump
+  const allSearchableItems = [
+    {
+      id: 'pipelines',
+      label: 'Pipelines Dashboard',
+      path: pipelinesPath,
+      description: 'Main case workflow and board overview',
+      icon: LayoutDashboard,
+      category: 'Workflows',
+    },
+    ...navCategories.flatMap((cat) =>
+      cat.items
+        .filter((it) => it.show)
+        .map((it) => ({
+          ...it,
+          category: cat.label,
+        }))
+    ),
+  ];
+
+  const filteredSearchItems = searchQuery.trim()
+    ? allSearchableItems.filter(
+        (it) =>
+          it.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          it.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          it.category.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : allSearchableItems.slice(0, 6);
 
   // Left sidebar icons
   const sidebarItems = [
@@ -159,8 +312,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       id: 'dashboard',
       icon: LayoutDashboard,
       label: 'Pipelines',
-      path: user?.role === 'admin' ? '/admin' : user?.role === 'lead' ? '/lead' : user?.role === 'worker' ? '/worker' : '/requester',
-      active: ['/admin', '/lead', '/worker', '/'].includes(location.pathname),
+      path: pipelinesPath,
+      active: isPipelinesActive,
     },
     {
       id: 'content',
@@ -187,6 +340,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       show: ['admin', 'lead', 'team_lead', 'worker'].includes(user?.role || ''),
     },
     {
+      id: 'reviews',
+      icon: CheckSquare,
+      label: 'Review Studio',
+      path: '/lead/reviews',
+      active: location.pathname.startsWith('/lead/reviews'),
+      show: ['admin', 'lead'].includes(user?.role || ''),
+    },
+    {
       id: 'team-ops',
       icon: Users,
       label: 'Team Operations',
@@ -201,6 +362,22 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       path: '/timesheets',
       active: location.pathname.startsWith('/timesheets'),
       show: ['admin', 'lead', 'team_lead', 'worker'].includes(user?.role || ''),
+    },
+    {
+      id: 'performance',
+      icon: TrendingUp,
+      label: 'Performance Ads',
+      path: '/performance',
+      active: location.pathname.startsWith('/performance'),
+      show: ['admin', 'lead', 'dept_lead'].includes(user?.role || ''),
+    },
+    {
+      id: 'library',
+      icon: FolderArchive,
+      label: 'Asset Library',
+      path: '/library',
+      active: location.pathname.startsWith('/library'),
+      show: true,
     },
     {
       id: 'triage',
@@ -272,126 +449,171 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     <div className="min-h-screen flex flex-col text-slate-800">
       {/* 1. Top Navigation Bar (64px) */}
       <header className="sticky top-0 z-40 h-16 glass-panel border-b border-white/80 transition-all">
-        <div className="max-w-[1520px] mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4">
-          {/* Left: Brand Logo */}
-          <div className="flex items-center">
-            <Link to="/" className="flex items-center group" title="HACA FORGE">
+        <div className="max-w-[1520px] mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-3 md:gap-4">
+          {/* Left: Mobile Menu Toggle & Brand Logo */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Mobile hamburger button */}
+            <button
+              onClick={() => setShowMobileMenu((prev) => !prev)}
+              aria-label="Toggle navigation menu"
+              className="p-1 rounded-lg md:hidden text-slate-600 hover:text-slate-900 hover:bg-white/80 transition-colors"
+            >
+              {showMobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+
+            <Link to="/" className="flex items-center group py-0.5" title="HACA FORGE">
               <img
                 src="/haca-forge-logo.png"
                 alt="HACA FORGE"
-                className="h-6 md:h-6.5 w-auto object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+                className="h-[18px] sm:h-[19px] w-auto max-w-[110px] object-contain transition-opacity duration-200 group-hover:opacity-80"
               />
             </Link>
           </div>
 
-          {/* Center: Capsule Tab Switcher */}
-          <nav className="hidden md:flex items-center p-1 glass-pill-container border border-white/90">
-            {topNavTabs
-              .filter((tab) => tab.show)
-              .map((tab) => {
-                const isActive = tab.activeMatcher(location.pathname);
+          {/* Center: Capsule Tab Switcher with Dropdowns */}
+          <nav
+            ref={navRef}
+            className="hidden md:flex items-center p-1 glass-pill-container border border-white/90 relative shrink-0"
+          >
+            {/* Pipelines Direct Tab */}
+            <Link
+              to={pipelinesPath}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 ${
+                isPipelinesActive
+                  ? 'pill-active'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+            >
+              Pipelines
+            </Link>
+
+            {/* Categorized Dropdowns / Direct Tabs */}
+            {navCategories.map((category) => {
+              const visibleItems = category.items.filter((item) => item.show);
+              if (visibleItems.length === 0) return null;
+
+              // If only 1 item in category (e.g. for worker/requester), render direct tab
+              if (visibleItems.length === 1) {
+                const singleItem = visibleItems[0];
+                const isActive = singleItem.activeMatcher(location.pathname);
                 return (
                   <Link
-                    key={tab.label}
-                    to={tab.path}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-all duration-200 ${
+                    key={singleItem.id}
+                    to={singleItem.path}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 ${
                       isActive
                         ? 'pill-active'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                     }`}
                   >
-                    {tab.label}
+                    {singleItem.label}
                   </Link>
                 );
-              })}
+              }
+
+              // Otherwise render category dropdown
+              const isCategoryActive = visibleItems.some((item) => item.activeMatcher(location.pathname));
+              const isOpen = openDropdown === category.id;
+
+              return (
+                <div key={category.id} className="relative">
+                  <button
+                    onClick={() => setOpenDropdown((prev) => (prev === category.id ? null : category.id))}
+                    className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 ${
+                      isCategoryActive || isOpen
+                        ? 'pill-active'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                    }`}
+                  >
+                    <span>{category.label}</span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        isOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {/* Dropdown Menu Popover */}
+                  {isOpen && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2.5 w-72 sm:w-80 glass-panel border border-white shadow-2xl rounded-2xl p-2 bg-white/95 backdrop-blur-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase text-slate-400 border-b border-slate-100 mb-1 flex items-center justify-between">
+                        <span>{category.label}</span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-500 font-mono">
+                          {visibleItems.length}
+                        </span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {visibleItems.map((item) => {
+                          const Icon = item.icon;
+                          const isItemActive = item.activeMatcher(location.pathname);
+                          return (
+                            <Link
+                              key={item.id}
+                              to={item.path}
+                              onClick={() => setOpenDropdown(null)}
+                              className={`flex items-start gap-3 p-2.5 rounded-xl transition-all ${
+                                isItemActive
+                                  ? 'bg-[#7a6af6]/10 text-[#7a6af6]'
+                                  : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'
+                              }`}
+                            >
+                              <div
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                                  isItemActive
+                                    ? 'bg-[#7a6af6] text-white shadow-sm'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                <Icon className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold leading-tight truncate">
+                                    {item.label}
+                                  </span>
+                                  {isItemActive && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#7a6af6]"></span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-500 leading-tight mt-0.5 truncate">
+                                  {item.description}
+                                </p>
+                              </div>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </nav>
 
           {/* Right: Actions, Search, Notifications, Avatar */}
-          <div className="flex items-center gap-3">
-            {/* Search Pill */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Search Pill (Full on XL, Compact icon on < XL) */}
             <button
               onClick={() => setShowSearchModal(true)}
-              className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/70 hover:bg-white border border-white/90 text-xs text-slate-500 shadow-sm transition-all"
+              title="Search cases & requests (⌘K)"
+              className="hidden xl:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/70 hover:bg-white border border-white/90 text-xs text-slate-500 shadow-sm transition-all whitespace-nowrap"
             >
               <Search className="w-3.5 h-3.5 text-slate-400" />
               <span>Search cases & requests...</span>
-              <kbd className="hidden lg:inline text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 rounded text-slate-500">
+              <kbd className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 rounded text-slate-500">
                 ⌘K
               </kbd>
             </button>
+            <button
+              onClick={() => setShowSearchModal(true)}
+              title="Search (⌘K)"
+              className="flex xl:hidden p-2 rounded-full bg-white/70 hover:bg-white border border-white/90 text-slate-600 shadow-sm transition-all"
+            >
+              <Search className="w-4 h-4" />
+            </button>
 
-            {/* Notification Bell */}
-            <div className="relative">
-              <button
-                onClick={() => setShowNotifications((prev) => !prev)}
-                title="Notifications"
-                className="relative p-2 rounded-full bg-white/70 hover:bg-white border border-white/90 text-slate-600 shadow-sm transition-all"
-              >
-                <Bell className="w-4 h-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 px-1.5 py-0.2 text-[9px] font-extrabold bg-[#7a6af6] text-white rounded-full ring-2 ring-white">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Notification Popover Dropdown */}
-              {showNotifications && (
-                <div className="absolute right-0 mt-3 w-80 sm:w-96 rounded-2xl glass-panel border border-white shadow-2xl p-4 bg-white/95 z-50 animate-in fade-in slide-in-from-top-2 text-xs">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900">Notifications</span>
-                      {unreadCount > 0 && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#7a6af6]/10 text-[#7a6af6]">
-                          {unreadCount} new
-                        </span>
-                      )}
-                    </div>
-                    {unreadCount > 0 && (
-                      <button
-                        onClick={() => markAllReadMutation.mutate()}
-                        className="text-[11px] font-semibold text-[#7a6af6] hover:underline"
-                      >
-                        Mark all read
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 my-2">
-                    {notifications.length === 0 ? (
-                      <div className="py-8 text-center text-slate-400 text-xs">No notifications yet.</div>
-                    ) : (
-                      notifications.map((n: any) => (
-                        <div
-                          key={n._id}
-                          className={`py-2.5 px-1 space-y-1 transition-colors ${
-                            !n.read ? 'bg-indigo-50/40 rounded-xl' : ''
-                          }`}
-                        >
-                          <div className="flex justify-between items-start gap-1">
-                            <strong className="text-slate-800 text-xs">{n.title}</strong>
-                            <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                              {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <p className="text-slate-600 text-[11px]">{n.message}</p>
-                          {n.link && (
-                            <Link
-                              to={n.link}
-                              onClick={() => setShowNotifications(false)}
-                              className="text-[10px] font-bold text-[#7a6af6] flex items-center gap-1 hover:underline mt-1"
-                            >
-                              <span>Open request</span>
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </Link>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Notification Center */}
+            <NotificationCenter />
 
             {/* User Avatar & Menu */}
             <div className="flex items-center gap-2.5 pl-2 border-l border-slate-300/60">
@@ -421,14 +643,63 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer Dropdown */}
+        {showMobileMenu && (
+          <div className="md:hidden glass-panel border-b border-white bg-white/95 px-4 py-4 space-y-4 animate-in slide-in-from-top duration-200 shadow-xl max-h-[calc(100vh-70px)] overflow-y-auto">
+            <div className="space-y-1">
+              <Link
+                to={pipelinesPath}
+                onClick={() => setShowMobileMenu(false)}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold ${
+                  isPipelinesActive ? 'bg-[#0d0e12] text-white' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                <span>Pipelines</span>
+              </Link>
+            </div>
+
+            {navCategories.map((cat) => {
+              const visible = cat.items.filter((it) => it.show);
+              if (visible.length === 0) return null;
+              return (
+                <div key={cat.id} className="space-y-1 pt-2 border-t border-slate-100">
+                  <div className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    {cat.label}
+                  </div>
+                  {visible.map((it) => {
+                    const Icon = it.icon;
+                    const isActive = it.activeMatcher(location.pathname);
+                    return (
+                      <Link
+                        key={it.id}
+                        to={it.path}
+                        onClick={() => setShowMobileMenu(false)}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold ${
+                          isActive
+                            ? 'bg-[#7a6af6]/10 text-[#7a6af6] font-bold'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{it.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </header>
 
       {/* 2. Main Body with Fixed Left Icon Sidebar (72px) & Content Area */}
       <div className="flex-1 max-w-[1520px] w-full mx-auto px-4 sm:px-6 flex gap-6 pt-6 pb-12">
         {/* Fixed Left Sidebar (72px) */}
-        <aside className="hidden lg:flex flex-col justify-between items-center w-[72px] py-6 px-2 glass-panel rounded-[24px] border border-white/80 self-start sticky top-24 min-h-[calc(100vh-120px)] shadow-glass">
+        <aside className="hidden lg:flex flex-col justify-between items-center w-[72px] py-6 px-2 glass-panel rounded-[24px] border border-white/80 self-start sticky top-24 max-h-[calc(100vh-120px)] shadow-glass">
           {/* Top module items */}
-          <div className="flex flex-col items-center gap-4 w-full">
+          <div className="flex flex-col items-center gap-3.5 w-full overflow-y-auto no-scrollbar py-1">
             {sidebarItems
               .filter((item) => item.show !== false)
               .map((item) => {
@@ -438,10 +709,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     key={item.id}
                     to={item.path}
                     title={item.label}
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                    className={`w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center transition-all ${
                       item.active
-                        ? 'bg-[#0d0e12] text-white shadow-md shadow-[#0d0e12]/20'
-                        : 'text-slate-500 hover:text-slate-900 hover:bg-white/70'
+                        ? 'bg-[#0d0e12] text-white shadow-md shadow-[#0d0e12]/20 scale-105'
+                        : 'text-slate-500 hover:text-slate-900 hover:bg-white/70 hover:scale-105'
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -451,7 +722,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
 
           {/* Bottom helper icons */}
-          <div className="flex flex-col items-center gap-3 w-full border-t border-slate-200/80 pt-4">
+          <div className="flex flex-col items-center gap-2.5 w-full border-t border-slate-200/80 pt-3 shrink-0">
             <Link
               to="/admin/settings"
               title="System Settings"
@@ -480,23 +751,67 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Global Quick Search Modal */}
       {showSearchModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-slate-900/30 backdrop-blur-md animate-in fade-in">
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-slate-900/30 backdrop-blur-md animate-in fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowSearchModal(false);
+          }}
+        >
           <div className="glass-modal max-w-lg w-full p-4 shadow-modal-glass border border-white">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 autoFocus
-                placeholder="Type to search workflows, cases, tasks..."
+                placeholder="Type to jump to any page or feature..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 bg-white/80 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] transition-all"
               />
             </div>
-            <div className="p-3 text-[11px] text-slate-400 flex justify-between items-center mt-2">
+
+            {/* Quick Results */}
+            <div className="mt-3 space-y-1 max-h-64 overflow-y-auto divide-y divide-slate-100">
+              {filteredSearchItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      navigate(item.path);
+                      setShowSearchModal(false);
+                      setSearchQuery('');
+                    }}
+                    className="w-full text-left flex items-center gap-3 p-2 rounded-xl hover:bg-indigo-50/50 transition-colors group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-[#7a6af6] group-hover:text-white flex items-center justify-center text-slate-500 transition-colors shrink-0">
+                      <Icon className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-800 group-hover:text-slate-900">
+                          {item.label}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {item.category}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 truncate">
+                        {item.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="p-3 text-[11px] text-slate-400 flex justify-between items-center mt-2 border-t border-slate-100">
               <span>Press ESC to close</span>
               <button
-                onClick={() => setShowSearchModal(false)}
+                onClick={() => {
+                  setShowSearchModal(false);
+                  setSearchQuery('');
+                }}
                 className="text-xs font-semibold text-slate-600 hover:text-slate-900"
               >
                 Close
@@ -505,6 +820,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </div>
       )}
+
+      {/* Real-time Toast Notifications */}
+      <NotificationToastContainer />
     </div>
   );
 };

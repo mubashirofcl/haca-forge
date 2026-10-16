@@ -15,28 +15,36 @@ const queryClient = new QueryClient({
   },
 });
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { PageSkeleton } from './components/Skeleton';
+
 import { LoginPage } from './pages/LoginPage';
 import { SetPasswordPage } from './pages/SetPasswordPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 
-import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { AccessRequestsPage } from './pages/admin/AccessRequestsPage';
-import { UsersPage } from './pages/admin/UsersPage';
-import { TeamsDepartmentsPage } from './pages/admin/TeamsDepartmentsPage';
-import { MasterDataPage } from './pages/admin/MasterDataPage';
-import { AuditLogPage } from './pages/admin/AuditLogPage';
-import { SettingsPage } from './pages/admin/SettingsPage';
+// Lazy-loaded role dashboards and application pages for code splitting
+const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
+const AccessRequestsPage = React.lazy(() => import('./pages/admin/AccessRequestsPage').then((m) => ({ default: m.AccessRequestsPage })));
+const UsersPage = React.lazy(() => import('./pages/admin/UsersPage').then((m) => ({ default: m.UsersPage })));
+const TeamsDepartmentsPage = React.lazy(() => import('./pages/admin/TeamsDepartmentsPage').then((m) => ({ default: m.TeamsDepartmentsPage })));
+const MasterDataPage = React.lazy(() => import('./pages/admin/MasterDataPage').then((m) => ({ default: m.MasterDataPage })));
+const AuditLogPage = React.lazy(() => import('./pages/admin/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
+const SettingsPage = React.lazy(() => import('./pages/admin/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 
-import { LeadDashboard } from './pages/lead/LeadDashboard';
-import { ContentHubPage } from './pages/lead/ContentHubPage';
-import { WorkerDashboard } from './pages/worker/WorkerDashboard';
-import { RequesterDashboard } from './pages/requester/RequesterDashboard';
-import { ReportsPage } from './pages/reports/ReportsPage';
-import { CalendarPage } from './pages/calendar/CalendarPage';
-import { SmDashboard } from './pages/calendar/SmDashboard';
-import { ShootPlannerPage } from './pages/shoots/ShootPlannerPage';
-import { TeamManagementPage } from './pages/team/TeamManagementPage';
-import { TimesheetsPage } from './pages/time/TimesheetsPage';
+const LeadDashboard = React.lazy(() => import('./pages/lead/LeadDashboard').then((m) => ({ default: m.LeadDashboard })));
+const ContentHubPage = React.lazy(() => import('./pages/lead/ContentHubPage').then((m) => ({ default: m.ContentHubPage })));
+const WorkerDashboard = React.lazy(() => import('./pages/worker/WorkerDashboard').then((m) => ({ default: m.WorkerDashboard })));
+const RequesterDashboard = React.lazy(() => import('./pages/requester/RequesterDashboard').then((m) => ({ default: m.RequesterDashboard })));
+const ReportsPage = React.lazy(() => import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const CalendarPage = React.lazy(() => import('./pages/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })));
+const SmDashboard = React.lazy(() => import('./pages/calendar/SmDashboard').then((m) => ({ default: m.SmDashboard })));
+const ShootPlannerPage = React.lazy(() => import('./pages/shoots/ShootPlannerPage').then((m) => ({ default: m.ShootPlannerPage })));
+const TeamManagementPage = React.lazy(() => import('./pages/team/TeamManagementPage').then((m) => ({ default: m.TeamManagementPage })));
+const TimesheetsPage = React.lazy(() => import('./pages/time/TimesheetsPage').then((m) => ({ default: m.TimesheetsPage })));
+const LeadReviewQueuePage = React.lazy(() => import('./pages/lead/LeadReviewQueuePage').then((m) => ({ default: m.LeadReviewQueuePage })));
+const PerformanceDashboard = React.lazy(() => import('./pages/performance/PerformanceDashboard').then((m) => ({ default: m.PerformanceDashboard })));
+const FileLibraryPage = React.lazy(() => import('./pages/library/FileLibraryPage').then((m) => ({ default: m.FileLibraryPage })));
+const NotificationsPage = React.lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 
 const RootRedirect: React.FC = () => {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -77,9 +85,11 @@ export const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<LoginPage />} />
+          <ErrorBoundary>
+            <React.Suspense fallback={<PageSkeleton />}>
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/login" element={<LoginPage />} />
           <Route path="/set-password" element={<SetPasswordPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
@@ -189,6 +199,16 @@ export const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/lead/reviews"
+            element={
+              <ProtectedRoute allowedRoles={['lead', 'admin']}>
+                <Layout>
+                  <LeadReviewQueuePage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
 
           {/* Worker Routes */}
           <Route
@@ -278,6 +298,28 @@ export const App: React.FC = () => {
             }
           />
 
+          {/* Phase 7 Routes: Review Studio, Performance Marketing & DAM Library */}
+          <Route
+            path="/performance"
+            element={
+              <ProtectedRoute allowedRoles={['admin', 'lead', 'dept_lead']}>
+                <Layout>
+                  <PerformanceDashboard />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/library"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <FileLibraryPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
           {/* Reports Routes */}
           <Route
             path="/reports"
@@ -290,12 +332,26 @@ export const App: React.FC = () => {
             }
           />
 
+          {/* Notifications Center Page */}
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <NotificationsPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </AuthProvider>
-    </BrowserRouter>
-  </QueryClientProvider>
+            </React.Suspense>
+          </ErrorBoundary>
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 };
 

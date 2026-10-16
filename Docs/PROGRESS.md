@@ -2,7 +2,7 @@
 
 ### HACA FORGE: Marketing Operations & Workflow Engine
 
-**Current State**: Phase 0 (Foundation), Phase 1 (Auth & RBAC), Phase 2 (Master Data & Org Setup), Phase 3 (Requests, Scoping & Lead Triage), Phase 4 (Content Core, Pipelines & Handoffs), Phase 5 (Content Calendar, Bulk Import, Capacity & Publishing), and Phase 6 (Team Management, Shoots, Attendance & Time Tracking) Complete.  
+**Current State**: Phase 0 (Foundation), Phase 1 (Auth & RBAC), Phase 2 (Master Data & Org Setup), Phase 3 (Requests, Scoping & Lead Triage), Phase 4 (Content Core, Pipelines & Handoffs), Phase 5 (Content Calendar, Bulk Import, Capacity & Publishing), Phase 6 (Team Management, Shoots, Attendance & Time Tracking), Phase 7 (Deliverable Review Studio, Revisions & Asset Library), Phase 8 (Notifications, Socket.io & Background Jobs), and Phase 9 (Reports & Analytics) Complete.  
 **Branch**: `portal-v1`  
 **Date**: October 2026
 
@@ -171,6 +171,32 @@
   - `TimesheetsPage.tsx`: Worker weekly timesheet grid with Monday–Sunday breakdown, day-by-day manual entry dialog, live active timer controls, weekly submit action, and Lead approval queue.
   - `WorkerDashboard.tsx`: Integrated live timer ticker bar, task card play/stop buttons with actual hours logged, and "Request Planned Leave" modal.
 
+### Phase 7: Review Queue, Direct Uploads, Video Review & Asset Library
+- **Deliverable Model & Idempotent Migration**:
+  - Unified `Deliverable` collection (`apps/api/src/modules/deliverables/model.js`) replacing legacy `Submission` and `Content` collections. Tracks semantic versions (`v1`, `v2`, etc.), deliverable types (`video`, `image`, `document`, `audio`, `copy`, `link`, `other`), direct `fileUrl` and `externalLink`, thumbnails, uploadedBy, notes, and approval status trails.
+  - Idempotent migration script (`apps/api/src/modules/deliverables/migration.js` & `apps/api/scripts/migrate-deliverables.js`) mapping prior submissions and feedback into `Deliverable` and `Comment` models with automatic backup collections `backup_submissions` and `backup_feedbacks`.
+- **Signed Direct Cloudinary Streaming**:
+  - `POST /api/uploads/sign`: Enforces strict type categorization and maximum upload size limits (e.g., video files up to 500 MB). Returns Cloudinary HMAC-SHA1 signatures and folder paths so browsers stream files directly to cloud storage without burdening the API server.
+- **Lead Review Studio & Timestamped Feedback**:
+  - `LeadReviewQueuePage.tsx` (`/lead/reviews`): Full-featured review studio sorted by urgency and deadline.
+  - HTML5 & Video.js media player with custom time scrubbers, pin-to-timestamp feedback button, and clickable timestamp badges (`[00:42]`) that automatically seek video playback to exact frames.
+  - Side-by-side comparison modal (`GET /api/deliverables/compare?v1=...&v2=...`) for comparing revisions (e.g. `v1` vs `v2`) with notes diff.
+  - Review decisions (`POST /api/deliverables/:id/review`):
+    - `approved`: transitions task to approved and content item to `needs_requester_confirm` (or `scheduled` if originating from calendar).
+    - `changes_requested`: automatically increments `revisionCount`, routes task back to assignee with reviewer notes and timestamped feedback.
+    - `rejected`: marks deliverable rejected with mandatory explanation notes.
+- **Worker Direct Upload & Revision Flow**:
+  - `WorkerUploadModal.tsx`: React-Dropzone drag-and-drop modal with live upload progress bar (0–100%), direct signed Cloudinary upload, external link alternatives (Figma/Canva/Frame.io), and auto-calculated semantic versioning.
+  - `WorkerDashboard.tsx`: Integrated changes-requested feedback banners with reviewer notes and "Upload Revision (v{N+1})" action.
+- **Requester Sign-Off & Confirmation**:
+  - `RequesterDashboard.tsx`: Dedicated "Final Deliverable Awaiting Your Sign-off" banner for department requests.
+  - Allows department requesters to inspect final approved deliverables, provide one-click "Confirm & Schedule" sign-off, or "Request Adjustments" with feedback returned to the Marketing Lead.
+- **Performance Marketing & Ad Creative Pipeline**:
+  - `PerformanceDashboard.tsx` (`/performance`): Command center for ad creatives across Meta, Google, LinkedIn, and TikTok.
+  - Actions: "Hand to Performance" (`POST /api/deliverables/performance/:contentItemId/hand`) and "Launch Live" (`POST /api/deliverables/performance/:contentItemId/live`) capturing live URLs and launch dates.
+- **Digital Asset Management (DAM) File Library**:
+  - `FileLibraryPage.tsx` (`/library`): Global asset repository supporting media filtering (Videos, Images, Documents, Audio, External Links), status filtering (Approved vs All), full-text search, grid and table views, asset preview modal, download, and copy link.
+
 ### Brand Rebranding & Asset Overhaul: HACA FORGE
 - **Official Name**: **HACA FORGE**
 - **Brand Assets (`apps/web/public/` & `apps/web/src/assets/`)**:
@@ -180,7 +206,153 @@
   - `favicon-32x32.png`: High-contrast 32x32 favicon optimized for crisp visibility in all light/dark browser tabs.
 - **Application Integration**:
   - Updated `<title>` to `HACA FORGE | Marketing Operations & Workflow Engine`.
-  - Calibrated logo sizes across `Layout.tsx` (`h-6 md:h-6.5`), `LoginPage.tsx` (`h-8 sm:h-9`), and `SetPasswordPage.tsx` (`h-8 sm:h-9`).
+### Phase 8: Notifications, Socket.io & Background Jobs
+- **Central Domain Event Bus (`apps/api/src/lib/events.js`)**:
+  - Centralized, singleton `eventBus` (EventEmitter) decoupled from HTTP handlers, publishing domain lifecycle events:
+    - `request.created`, `request.decided`
+    - `task.assigned`, `task.blocked`, `task.completed`
+    - `stage.handoff`
+    - `review.submitted`, `review.decided`
+    - `content.published`
+    - `comment.created`, `comment.mention`
+    - `deadline.approaching`, `deadline.overdue`
+    - `capacity.gap`
+    - `access.requested`
+- **Recipient Mapping & Notification Service (`apps/api/src/modules/notifications/service.js`)**:
+  - Implemented Section 14.3 recipient routing rules:
+    - Automatically routes `request.created` to Marketing Leads & Admin.
+    - Routes `task.assigned` to assignee with direct link.
+    - Routes `task.blocked` to assignee and Team Lead.
+    - Routes `review.submitted` to lead reviewers, and `review.decided` to assignee and team.
+    - Routes `deadline.approaching` to assignee within 24 hours of due date.
+    - Routes `deadline.overdue` to assignee, Team Lead, and Marketing Lead.
+    - Routes `capacity.gap` overload alerts to Team Leads and Admin.
+  - Automatically filters delivery through user notification preferences (in-app vs email).
+- **User Notification Preferences (`apps/api/src/modules/users/model.js` & `/api/notifications/preferences`)**:
+  - User model schema with nested preferences for email and in-app toggles across:
+    - `requestUpdates`, `taskAssigned`, `taskBlocked`, `reviewDecisions`, `deadlineReminders`, `mentions`, and `dailyDigest`.
+  - Exposed via `GET /api/notifications/preferences` and `PUT /api/notifications/preferences`.
+- **Resilient Background Queues & BullMQ Worker (`apps/api/src/worker.js`, `apps/api/src/lib/queue.js`)**:
+  - Standalone worker service entry (`node src/worker.js`) capable of running as an independent background service on Render.
+  - Workers for `emailQueue` (concurrency 5 with exponential backoff retries) and `scheduledJobsQueue` (repeatable cron triggers).
+  - Four core idempotent background jobs (`apps/api/src/modules/jobs/processors.js`):
+    - `runDeadlineRemindersJob`: Idempotently scans tasks & content due in <= 24h, setting `reminderSentAt` timestamp so restarts NEVER send duplicate alerts.
+    - `runRecurringRequestsJob`: Instantiates new child requests for active recurring templates when `nextRunAt <= now` and calculates the next run date (+7d / +1mo).
+    - `runDailyDigestJob`: Prepares and dispatches morning operational summary for Leads (pending triage, blocked tasks, pending reviews, overdue items).
+    - `runCapacityGapJob`: Weekly forecast checking upcoming team assigned estimate hours against available present capacity.
+  - Resilient local execution: In development without a local Redis server, cleanly falls back to direct email dispatching and lightweight interval scheduling without crashes or unhandled rejections.
+- **Socket.io Handshake & Multi-Room Subscriptions (`apps/api/src/server.js`, `apps/web/src/hooks/useSocket.ts`)**:
+  - Authenticated handshake supporting cookies, `auth.token`, `Bearer` authorization headers, and query tokens.
+  - Automated room joining: `user:<userId>`, `role:<role>`, and `team:<teamKey>`.
+  - Client events for `join_task`, `leave_task`, `join_request`, `leave_request`, and live typing broadcasts (`task:typing`).
+- **Glassmorphic Frontend Notification Center & Toast Alerts**:
+  - `NotificationCenter.tsx`: Soft-glass popover dropdown on the header bell icon with live unread badge, pulse dot animation, filter tabs (`All`, `Unread`, `Tasks`, `Requests`, `Mentions`), "Mark All as Read", individual check/delete actions, and direct navigation links.
+  - `NotificationToast.tsx`: Floating corner toast container displaying instant real-time alerts when `notification:new` arrives via Socket.io.
+  - `NotificationPreferencesModal.tsx`: Soft-glass modal allowing users to toggle email and in-app notifications per category.
+  - `NotificationsPage.tsx` (`/notifications`): Full-page notifications command center with search, filter tabs, and pagination.
+- **Automated Verification**:
+  - `test/phase8.test.js`: 14 comprehensive unit & integration tests covering domain event bus, recipient routing, preferences filtering, REST APIs, deadline reminder idempotency, recurring request generation, and digest generation.
+  - **Full test suite passing: 9 test files, 73/73 tests passing with 100% green status.**
+  - **Vite + TypeScript production build: Clean with 0 errors.**
+
+### Phase 9: Reports & Analytics
+- **Central Metrics Engine (`apps/api/src/modules/reports/metrics.js` & `docs/METRICS.md`)**:
+  - Canonical calculation formulas defined once with complete documentation and edge case handling:
+    - **On-Time Rate**: `(onTimeCount / totalCount) * 100` (defaults to 100% if 0 items).
+    - **First-Pass Approval Rate**: `(firstPassCount / totalReviewed) * 100` (disqualifies items entering `changes_requested`).
+    - **Speed vs. Estimate Score**: `min(100, (estimatedHours / actualHours) * 100)` (caps at 100% if delivered within estimate).
+    - **Capacity Utilization / Volume Score**: Logged hours against net capacity (`40h/week - (leaveDays * 8h)`).
+    - **Worker Efficiency Score**: Weighted composite index:
+      $$\text{Efficiency} = (0.40 \times \text{onTime}) + (0.30 \times \text{firstPass}) + (0.20 \times \text{speed}) + (0.10 \times \text{volume})$$
+      Driven dynamically by configured weights in `Settings` (`/admin/settings`).
+    - **Aging Buckets**: Grouping open requests and overdue items into `< 3 days`, `3-7 days`, `7-14 days`, and `> 14 days`.
+- **Database Index Optimization**:
+  - Added compound indexes to `StatusHistory`, `Task`, and `ContentItem` for sub-2-second aggregation query performance over large datasets without in-memory buffering.
+- **Reporting Services & Endpoints (`/api/reports/...`)**:
+  - `GET /api/reports/department`: Filterable by timeframe and department. Returns requests and content summary, on-time delivery rate, average turnaround time (days), aging distribution, and production hours consumed grouped by department, team, and format.
+  - `GET /api/reports/team`: Filterable by team (`graphics`, `editor`, `content`, `cinematography`). Returns throughput, open backlog, queue wait latency vs active work hours, team utilization %, and rework/revision rate.
+  - `GET /api/reports/individual/:userId`: Individual performance scorecard featuring the 4-pillar efficiency breakdown, estimated vs actual hours, total logged hours, approved leave days impact, and recent task evaluations.
+  - `GET /api/reports/content`: Content output volume grouped by format and platform, planned vs published ratios, on-time publish rate, stage pipeline distribution, and late asset aging.
+  - `GET /api/reports/bottlenecks`: Hold and block analysis grouped by reason code (`waiting_for_content`, `approval_delay`, `resource_shortage`, etc.), stage transition frequencies, and active blocked tasks live feed.
+  - `GET /api/reports/scorecard`: Executive monthly scorecard with Month-over-Month (MoM) delta percentages, and weekly demand vs production capacity forecast.
+- **Strict Role Scoping & Access Control**:
+  - `admin`, `lead`, and `viewer`: Global visibility across all teams and departments.
+  - `team_lead`: Strictly scoped to their assigned production team.
+  - `dept_lead`: Strictly locked to their own department (attempts to query other departments are clamped to own).
+  - `worker`: Strictly restricted to their own individual report; querying other workers returns `403 Forbidden`.
+  - `dept_staff`: Scoped strictly to their own created requests.
+- **Streaming Exports & Scheduled Recurring Reports**:
+  - Streaming Excel spreadsheets (`.xlsx`) via ExcelJS and CSV data (`.csv`) via `GET /api/reports/export`.
+  - `ScheduledReport` model (`apps/api/src/modules/reports/model.js`) and REST APIs (`GET`, `POST`, `DELETE /api/reports/scheduled`).
+  - Automated background processor `runScheduledReportsJob` in `apps/api/src/modules/jobs/processors.js` generating and dispatching recurring reports via email with next run date advancement (+1d, +7d, +1mo).
+- **Role Dashboard Summaries (`/api/dashboard/...`)**:
+  - Dynamic `/api/dashboard/summary` auto-resolving role-specific widgets for the logged-in user, plus dedicated `/api/dashboard/:role` endpoints.
+- **Interactive Frosted Glass Frontend (`ReportsPage.tsx`)**:
+  - Tabbed report picker (`Management Scorecard`, `Department Usage`, `Team Velocity`, `Bottlenecks & Holds`, `Content Pipeline`, `Worker Performance`).
+  - Shared Filter Bar with timeframe presets (Last 7 Days, Last 30 Days, Q3 2026, Year to Date, Custom Date Range), department/team/worker selectors, and saved filter profiles stored in localStorage.
+  - Rich interactive Recharts visualizations (AreaCharts, BarCharts, PieCharts, Donut, Custom Tooltips) and TanStack Data Tables.
+  - Segment drill-down modal for inspecting underlying raw item payloads.
+  - One-click streaming Excel/CSV export and print-friendly styling.
+  - "Schedule Email" modal for configuring automated recurring reports.
+- **Worker Dashboard Integration (`WorkerDashboard.tsx`)**:
+  - Integrated 5th KPI card on the worker workspace displaying live efficiency score (`/ 100`) with direct link to the personal performance scorecard.
+- **Automated Verification**:
+  - `test/phase9.test.js`: 24 automated unit and integration tests verifying all 6 report types, calculation formulas, scoping isolation, Excel/CSV streaming exports, scheduled reports, and sub-2-second response performance.
+  - **Full test suite passing: 10 test files, 97/97 tests passing with 100% green status.**
+  - **Vite + TypeScript production build: Clean with 0 errors.**
+
+### Phase 10: Hardening, QA, and Polish
+- **Comprehensive Security Review (`docs/SECURITY_REVIEW.md`)**:
+  - Remediated Broken Object Level Authorization (BOLA) and IDOR vectors on `/api/tasks/:id` and `/api/content/:id` by restricting departmental requesters from accessing internal production pipelines or cross-department content items.
+  - Restricted leave approval (`/api/leave/:id/review`) strictly to `admin`, `lead`, and `team_lead`.
+  - Restricted Ad Creative live launch (`/api/deliverables/live/:contentItemId`) strictly to Performance team members and Leads.
+  - Configured Pino secret redaction for `req.headers.authorization`, `req.headers.cookie`, `password`, `token`, `secret`, and `refreshToken`.
+  - Enforced production rate limiting: 10 attempts per 15 minutes on auth routes (`authLimiter`), and 1,500 requests per 15 minutes globally on `/api`.
+  - Validated query sanitization (`sanitizeMiddleware`), HPP parameter pollution protection, and Helmet security headers with strict CSP.
+- **Observability & Diagnostics**:
+  - Request Correlation ID middleware (`apps/api/src/middleware/requestId.js`) generating UUID v4 and setting `X-Request-Id` response header.
+  - Health & Readiness Probes (`/api/health` and `/api/ready` verifying live MongoDB connection state).
+  - Dual-Stack Sentry error monitoring integration (`apps/api/src/config/sentry.js` and `apps/web/src/lib/sentry.ts`) activated only when `SENTRY_DSN` is configured.
+- **OpenAPI 3.0 & Interactive API Documentation (`/api/docs`)**:
+  - Complete OpenAPI 3.0 specification (`apps/api/src/modules/docs/openapi.js`) covering System, Auth, Requests, Content, Tasks, and Reports.
+  - Dark obsidian styled Swagger UI mounted at `/api/docs` and schema endpoint at `/api/docs/openapi.json`.
+- **UX Polish & Performance Optimization**:
+  - Reusable obsidian loading skeleton primitives (`apps/web/src/components/Skeleton.tsx`): `<Skeleton>`, `<CardSkeleton>`, `<TableSkeleton>`, `<PageSkeleton>`.
+  - Global obsidian Error Boundary (`apps/web/src/components/ErrorBoundary.tsx`) with automatic Sentry error capture and user retry actions.
+  - Standardized obsidian Empty State component (`apps/web/src/components/EmptyState.tsx`) with dynamic iconography and call-to-action triggers.
+  - Code splitting and lazy loading via `React.lazy` across all 21 feature pages with `<Suspense fallback={<PageSkeleton />}>`.
+  - Optimized Vite Rollup chunking (`manualChunks` in `vite.config.ts`) splitting React core, Recharts, and Lucide icons.
+  - **Performance Result**: Main JS bundle reduced from 1.38 MB to 63 kB (22x reduction in initial payload size!).
+- **Realistic Demo Dataset Seed Script (`npm run seed:demo -w apps/api`)**:
+  - `apps/api/scripts/seed-demo.js` generates 8 core role personas, 30 days of calendar entries, requests in all 6 statuses, content items in all 9 stages, deliverables v1/v2 with timestamped review comments, scheduled shoots, and timesheets.
+  - Guarded against production: immediately throws if `NODE_ENV === 'production'`.
+- **End-to-End Integration Test Suite (`apps/api/test/phase10_e2e.test.js`)**:
+  - 32 end-to-end integration tests covering:
+    1. System & Health Probes (`/api/health`, `/api/ready`, `/api/docs/openapi.json`).
+    2. Journey A: Onboarding, Access Request, Admin Approval, Activation Link & Token, Password Setting, and Login.
+    3. Journey B: Full Content Intake-to-Publishing Lifecycle (Request -> Triage -> Reel Conversion -> Task Assignment -> Deliverable v1 -> Changes Requested -> Deliverable v2 -> Lead Approval -> Requester Sign-off Confirmation -> Social Media Publish).
+    4. Journey C: Social Media Calendar Planning, Capacity Warning, and Batch Content Generation.
+    5. Journey D: Shoot Planner Lifecycle, Script-ready validation, Shoot Done transition, and Raw Footage Cloud Release.
+    6. Journey E: RBAC & Scoping Violation Rejections (Workers cannot approve deliverables, Requesters cannot access task pipelines, Department Staff cannot view other departments, Non-leads cannot review leave, Non-performance cannot mark ad creative live).
+    7. Journey F: Reports Scoping & Streaming Data Exports (Worker self-query vs other rejection, Department Lead automatic scoping, and Admin streaming binary Excel export).
+- **Full Verification Status**:
+  - **11 test suites passing: 129/129 tests passing with 100% green status.**
+  - **TypeScript check: Clean across all workspaces (`packages/shared`, `apps/api`, `apps/web`) with 0 errors.**
+  - **Vite production build: Clean with 0 warnings in 13.18s.**
+
+### Phase 11: Deployment Configuration & Runbooks
+- **Infrastructure as Code (Render Blueprint - `render.yaml`)**:
+  - Full declared topology for Render cloud services:
+    - `mmp-api`: Express.js web service running Node.js 22, configured with `/api/health` check path and production environment group.
+    - `mmp-worker`: Background BullMQ queue and cron worker service running `apps/api/src/worker.js`.
+    - `mmp-redis`: Managed Redis instance with `noeviction` maxmemory policy for queue state consistency.
+- **Frontend Vercel Configuration (`vercel.json` & `apps/web/vercel.json`)**:
+  - Configured SPA rewrites (`/(.*) -> /index.html`), monorepo build command (`npm run build -w packages/shared && npm run build -w apps/web`), and output directory (`apps/web/dist`).
+  - Implemented immutable caching headers (`Cache-Control: public, max-age=31536000, immutable`) for `/assets/*` and no-cache for `/index.html`.
+- **Environment Specifications**:
+  - Verified and enhanced `apps/api/.env.example` and `apps/web/.env.example` with complete descriptions, production requirements, and defaults for MongoDB Atlas, Redis, Cloudinary HMAC signing, Resend transactional mail, and Sentry monitoring.
+- **Production Operations Runbook (`docs/DEPLOYMENT.md`)**:
+  - Authored comprehensive deployment guide covering architecture topology with Mermaid diagrams, Atlas replica set provisioning, Cloudinary direct upload presets, Resend domain verification, Render Blueprint deployment, Vercel SPA configuration, smoke testing verification commands, and disaster recovery/incident response runbooks (PITR database recovery, instant rollback, and emergency admin credential reset).
 
 ---
 
@@ -190,6 +362,8 @@
 2. **CASL Permissions Over Hardcoded Roles**: Routes and UI controls verify specific capability keys rather than arbitrary strings.
 3. **No Direct Registration in Production**: Public signup is completely replaced by Request Access + Admin Approval + 48h activation link.
 4. **Token Security**: JWT stored in httpOnly, Secure, SameSite cookies with short-lived access token + rotated refresh token.
+5. **Direct Signed Storage Streaming**: 500 MB video files stream directly from the browser to cloud object storage (Cloudinary) via HMAC signed upload signatures, eliminating API memory pressure.
+6. **Semantic Versioning & Frame-Accurate Feedback**: Deliverables retain immutable version histories (`v1`, `v2`, etc.) with media timestamp seek points.
 
 ---
 
@@ -238,4 +412,22 @@
 - [ ] **Workload Reassignment Warnings**: Reassign a task to a member who is either overloaded or on leave, verifying the confirmation warning modal.
 - [ ] **Leave Request & Capacity Discounting**: Log in as a worker, submit a leave request via `/worker` or `/timesheets`. As lead, approve the leave in `/teams`. Verify the worker is discounted in `/calendar` capacity and excluded from auto-assignments.
 - [ ] **Live Timer & Timesheets**: On `/worker`, start the live timer on a task, let it run, and stop it. Navigate to `/timesheets` to review the weekly grid, submit the timesheet, and approve it as lead. Verify `Task.actualHours` updates.
+- [ ] **Worker Deliverable Upload**: On `/worker`, click "Submit Cut" on an active task. Drag and drop a video file, watch progress bar, enter version notes, and submit.
+- [ ] **Lead Review Studio**: Visit `/lead/reviews`. Open the submitted deliverable, play the video, pin a timestamp comment at `0:15`, and click the comment to verify it seeks playback to that exact second.
+- [ ] **Request Changes Flow**: From the review studio, click "Request Changes" with feedback. Verify `Task.revisionCount` increments and the task returns to the worker with an amber banner.
+- [ ] **Upload Revision v2 & Side-by-Side Compare**: On `/worker`, click "Upload Revision", submit v2. In `/lead/reviews`, open "Compare Versions" and inspect the side-by-side player.
+- [ ] **Lead Approval & Requester Confirmation**: In `/lead/reviews`, click "Approve Cut". Log in as the requester on `/requester`, verify the "Final Deliverable Awaiting Your Sign-off" banner, and click "Confirm & Schedule".
+- [ ] **Performance Marketing Pipeline**: Visit `/performance`. Find an approved ad creative, click "Hand to Performance", and click "Launch Live" to enter live campaign URLs.
+- [ ] **Asset & File Library**: Visit `/library`. Filter assets by Category (Videos, Images, Documents), search by title, preview in modal, and download approved files.
+- [ ] **Management Scorecard & Demand Forecast**: Visit `/reports` as Admin or Lead. Inspect the Executive Scorecard tab to view Month-over-Month (MoM) delta percentages for ingested requests, delivered units, on-time rate, and turnaround time. Review the Demand vs Capacity forecast panel.
+- [ ] **Department Usage & Aging Buckets**: On `/reports`, switch to the "Department Usage" tab. Toggle departments, verify request breakdown by type, inspect the aging distribution bar chart (`<3d`, `3-7d`, `7-14d`, `>14d`), and review hours consumed by production team and format.
+- [ ] **Team Velocity & Queue Latency**: Switch to "Team Velocity". Inspect throughput, current backlog, rework rate, team utilization percentage, and the Queue Latency vs Active Work Hours comparison chart.
+- [ ] **Bottlenecks & Hold Reason Radar**: Switch to "Bottlenecks & Holds". Inspect the pie chart breakdown of hold reason codes, workflow stage transition frequencies, and the active blocked tasks live feed.
+- [ ] **Content Pipeline Performance**: Switch to "Content Pipeline". Review output volume grouped by format and platform, on-time publish rate, and late asset aging.
+- [ ] **Worker Performance & 4-Pillar Scorecard**: Switch to "Worker Performance" (or log in as a worker to view `/reports`). Inspect the composite Efficiency Score (`/ 100`) and the 4 weighted pillar progress bars (On-Time 40%, First-Pass Approval 30%, Speed vs Estimate 20%, Capacity Utilization 10%). Inspect recent task evaluations with estimated vs actual hours and revision count.
+- [ ] **Worker Privacy & Isolation**: Log in as a worker and verify you can only inspect your own performance report; verifying that direct API queries for other workers return `403 Forbidden`.
+- [ ] **Department Lead Isolation**: Log in as a `dept_lead` and verify all department reports and exports are strictly constrained to your assigned department.
+- [ ] **Excel & CSV Streaming Export**: Click "Export Excel (.xlsx)" and "Export CSV" to trigger streaming file downloads. Open the generated spreadsheet to verify multi-tab summary and hours data.
+- [ ] **Automated Report Scheduling**: Click "Schedule Email", configure a recurring weekly scorecard report, and verify it appears in the active scheduled reports list.
+- [ ] **Worker Dashboard Efficiency Link**: Navigate to `/worker` and observe the 5th KPI card displaying your live Efficiency Score with direct click-through to the personal scorecard.
 

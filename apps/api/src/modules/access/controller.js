@@ -34,6 +34,9 @@ export async function approveRequest(req, res, next) {
       success: true,
       message: 'Access request approved. Activation link sent to user.',
       data: result,
+      status: 'approved',
+      inviteLink: result.inviteLink,
+      inviteToken: result.inviteToken,
     });
   } catch (error) {
     next(error);
@@ -75,3 +78,21 @@ export async function requestInfo(req, res, next) {
     next(error);
   }
 }
+
+export async function bulkApproveRequests(req, res, next) {
+  try {
+    const results = await accessService.bulkApproveAccessRequests(
+      req.body,
+      req.user,
+      req.ip
+    );
+    return res.status(200).json({
+      success: true,
+      message: `Processed ${results.length} requests`,
+      data: results,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

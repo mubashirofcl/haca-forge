@@ -105,6 +105,13 @@ export async function listLeaveRequests(query = {}, user) {
 }
 
 export async function reviewLeaveRequest(id, { status, reviewComment }, reviewer, io) {
+  if (!reviewer || !['admin', 'lead', 'team_lead'].includes(reviewer.role)) {
+    const err = new Error('Only Leads or Admins can review leave requests');
+    err.statusCode = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
   const leave = await LeaveRequest.findById(id).populate('userId');
   if (!leave) {
     const err = new Error('Leave request not found');

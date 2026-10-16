@@ -4,6 +4,7 @@ import type { UserRole, PermissionKey } from '@mmp/shared';
 
 export interface User {
   id: string;
+  userId?: string;
   name: string;
   email: string;
   role: UserRole;

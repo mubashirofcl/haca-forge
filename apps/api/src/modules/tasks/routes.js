@@ -38,4 +38,16 @@ router.post(
   taskController.transitionTaskStatusHandler
 );
 
+// Subtasks
+router.patch('/:id/subtasks/:subtaskId', taskController.toggleSubtaskHandler);
+router.post('/:id/subtasks', taskController.addSubtaskHandler);
+
+// Deadline extension requests
+router.post('/:id/extension-request', taskController.requestDeadlineExtensionHandler);
+router.post(
+  '/:id/extension-review',
+  requirePermission('task.assign'),
+  taskController.reviewDeadlineExtensionHandler
+);
+
 export default router;

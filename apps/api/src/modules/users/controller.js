@@ -75,3 +75,17 @@ export async function updateAssignment(req, res, next) {
   }
 }
 
+export async function resetPassword(req, res, next) {
+  try {
+    const result = await userService.resetUserPasswordByAdmin(
+      req.params.id,
+      req.user,
+      req.ip
+    );
+    return res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+

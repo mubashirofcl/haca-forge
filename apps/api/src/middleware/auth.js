@@ -61,6 +61,7 @@ export async function authenticate(req, res, next) {
     }
 
     req.user = user;
+    req.user.userId = user._id.toString();
     req.ability = defineAbilityForUser(user);
     next();
   } catch (error) {

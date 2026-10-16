@@ -6,6 +6,7 @@ import { detectDuplicateRequests } from './duplicate.service.js';
 import { transitionStatus } from '../common/transition.service.js';
 import { createNotification } from '../notifications/service.js';
 import { StatusHistory } from '../statusHistory/model.js';
+import { eventBus, EVENTS } from '../../lib/events.js';
 
 /**
  * Validates dynamic fields against the RequestType schema definition
@@ -129,19 +130,9 @@ export async function createRequest(payload, user, io) {
     io,
   });
 
-  // Notify leads/admins if submitted
+  // Notify leads/admins via domain event if submitted
   if (!payload.isDraft) {
-    const leadUsers = await User.find({ role: { $in: ['lead', 'admin'] }, status: 'active' }).select('_id');
-    for (const lead of leadUsers) {
-      await createNotification({
-        recipient: lead._id,
-        type: 'request_created',
-        title: `New Request: ${newRequest.requestId}`,
-        message: `${user.name} from ${payload.sourceDepartment} submitted: "${payload.title}"`,
-        link: `/lead/inbox?requestId=${newRequest._id}`,
-        io,
-      });
-    }
+    eventBus.emit(EVENTS.REQUEST_CREATED, newRequest);
   }
 
   return {
@@ -472,13 +463,13 @@ export async function triageAccept(id, { priority, deadline, comment }, user, io
     io,
   });
 
-  await createNotification({
-    recipient: reqDoc.requester,
-    type: 'request_accepted',
-    title: `Request Accepted: ${reqDoc.requestId}`,
-    message: `Your request "${reqDoc.title}" has been accepted. Production scheduling will begin shortly.`,
-    link: `/requester/dashboard?requestId=${reqDoc._id}`,
-    io,
+  eventBus.emit(EVENTS.REQUEST_DECIDED, {
+    _id: reqDoc._id,
+    requestId: reqDoc.requestId,
+    title: reqDoc.title,
+    decision: 'accepted',
+    reason: comment || 'Request accepted by Marketing Lead',
+    requester: reqDoc.requester,
   });
 
   return reqDoc;
@@ -503,13 +494,13 @@ export async function triageReject(id, { reason }, user, io) {
     io,
   });
 
-  await createNotification({
-    recipient: reqDoc.requester,
-    type: 'request_rejected',
-    title: `Request Declined: ${reqDoc.requestId}`,
-    message: `Your request "${reqDoc.title}" was declined: ${reason}`,
-    link: `/requester/dashboard?requestId=${reqDoc._id}`,
-    io,
+  eventBus.emit(EVENTS.REQUEST_DECIDED, {
+    _id: reqDoc._id,
+    requestId: reqDoc.requestId,
+    title: reqDoc.title,
+    decision: 'rejected',
+    reason,
+    requester: reqDoc.requester,
   });
 
   return reqDoc;
@@ -540,13 +531,13 @@ export async function triageAskInfo(id, { message }, user, io) {
     io,
   });
 
-  await createNotification({
-    recipient: reqDoc.requester,
-    type: 'request_needs_info',
-    title: `Clarification Needed: ${reqDoc.requestId}`,
-    message: `Marketing Lead requested more information: "${message}"`,
-    link: `/requester/dashboard?requestId=${reqDoc._id}`,
-    io,
+  eventBus.emit(EVENTS.REQUEST_DECIDED, {
+    _id: reqDoc._id,
+    requestId: reqDoc.requestId,
+    title: reqDoc.title,
+    decision: 'needs_info',
+    reason: message,
+    requester: reqDoc.requester,
   });
 
   return reqDoc;
@@ -625,3 +616,50 @@ export async function convertRequestStub(id, user, io) {
     status: reqDoc.status,
   };
 }
+
+export async function bulkTriageAccept({ requestIds, priority, comment }, user, io) {
+  if (!Array.isArray(requestIds) || requestIds.length === 0) {
+    const err = new Error('requestIds array is required and must not be empty.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const results = [];
+  for (const id of requestIds) {
+    try {
+      const res = await triageAccept(id, { priority, comment }, user, io);
+      results.push({ id, success: true, requestId: res.requestId });
+    } catch (err) {
+      results.push({ id, success: false, error: err.message });
+    }
+  }
+
+  return results;
+}
+
+export async function bulkTriageReject({ requestIds, reason }, user, io) {
+  if (!Array.isArray(requestIds) || requestIds.length === 0) {
+    const err = new Error('requestIds array is required and must not be empty.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (!reason) {
+    const err = new Error('A rejection reason is mandatory for bulk rejection.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const results = [];
+  for (const id of requestIds) {
+    try {
+      const res = await triageReject(id, { reason }, user, io);
+      results.push({ id, success: true, requestId: res.requestId });
+    } catch (err) {
+      results.push({ id, success: false, error: err.message });
+    }
+  }
+
+  return results;
+}
+

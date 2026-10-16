@@ -13,5 +13,6 @@ router.patch('/:id/role', userController.updateRole);
 router.patch('/:id/status', userController.updateStatus);
 router.patch('/:id/assignment', userController.updateAssignment);
 router.post('/:id/force-logout', userController.forceLogout);
+router.post('/:id/reset-password', userController.resetPassword);
 
 export default router;

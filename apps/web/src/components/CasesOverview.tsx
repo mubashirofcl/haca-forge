@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { apiFetch } from '../lib/api';
 import {
   Plus,
   Clock,
@@ -101,6 +102,51 @@ export const CasesOverview: React.FC = () => {
       tags: ['Instagram', 'Published'],
     },
   ]);
+
+  useEffect(() => {
+    const loadContentItems = async () => {
+      try {
+        const res = await apiFetch<{ data: any[] }>('/content');
+        if (res && Array.isArray(res.data) && res.data.length > 0) {
+          const liveCases: CaseItem[] = res.data.map((item) => {
+            let column: 'new' | 'progress' | 'pending' | 'closed' = 'new';
+            if (item.status === 'in_production') column = 'progress';
+            else if (['review_pending', 'changes_requested'].includes(item.status)) column = 'pending';
+            else if (['approved', 'scheduled', 'published', 'archived'].includes(item.status)) column = 'closed';
+
+            const initials = item.requester?.name
+              ? item.requester.name
+                  .split(' ')
+                  .map((n: string) => n[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase()
+              : 'HQ';
+
+            return {
+              id: item._id,
+              title: item.title || item.contentId || 'Production Asset',
+              column,
+              duration: item.publishDate
+                ? `Target: ${new Date(item.publishDate).toLocaleDateString()}`
+                : `Status: ${(item.status || 'draft').replace('_', ' ')}`,
+              creator: item.requester?.name ? `${item.requester.name} - Requester` : 'Production Staff',
+              team: item.sourceDepartment?.name || item.format || 'Marketing Operations',
+              budget: item.estimatedBudget || 25000,
+              avatars: [
+                { initials, bg: 'bg-[#7a6af6]' },
+              ],
+              tags: [item.format, item.priority].filter(Boolean),
+            };
+          });
+          setCases(liveCases);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch live content items, keeping fallback mock cases:', err);
+      }
+    };
+    loadContentItems();
+  }, []);
 
   const handleAddNewCase = (newCaseData: any) => {
     const newCase: CaseItem = {

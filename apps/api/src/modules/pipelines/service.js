@@ -5,6 +5,7 @@ import { User } from '../users/model.js';
 import { getNextSequenceId } from '../requests/counter.model.js';
 import { transitionStatus } from '../common/transition.service.js';
 import { createNotification } from '../notifications/service.js';
+import { eventBus, EVENTS } from '../../lib/events.js';
 import { logger } from '../../lib/logger.js';
 
 export const DEFAULT_PIPELINE_TEMPLATES = [
@@ -499,6 +500,15 @@ export async function advancePipelineHandoff(task, user, io) {
       contentItem.status = 'in_production';
     }
     await contentItem.save();
+
+    eventBus.emit(EVENTS.STAGE_HANDOFF, {
+      stageKey: nextStage.key,
+      title: nextTask ? nextTask.title : contentItem.title,
+      taskId: nextTask ? nextTask.taskId : null,
+      assignee: nextTask ? nextTask.assignee : null,
+      team: nextStage.team,
+      link: nextTask ? `/tasks?taskId=${nextTask.taskId}` : `/content?contentId=${contentItem.contentId}`,
+    });
   } else {
     // All stages complete!
     if (contentItem.status !== 'approved' && contentItem.status !== 'published') {

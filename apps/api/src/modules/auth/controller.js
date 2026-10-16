@@ -107,3 +107,13 @@ export async function setPassword(req, res, next) {
     next(error);
   }
 }
+
+export async function forgotPassword(req, res, next) {
+  try {
+    const result = await authService.requestPasswordReset(req.body.email);
+    return res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+

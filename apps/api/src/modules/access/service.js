@@ -4,6 +4,7 @@ import { User } from '../users/model.js';
 import { AuditLog } from '../audit/model.js';
 import { sendMail, templates } from '../../lib/mailer.js';
 import { env } from '../../config/env.js';
+import { eventBus, EVENTS } from '../../lib/events.js';
 
 export async function submitAccessRequest(data) {
   const normalizedEmail = data.email.toLowerCase().trim();
@@ -35,7 +36,14 @@ export async function submitAccessRequest(data) {
     status: 'pending',
   });
 
-  // Notify admin if email is configured
+  // Notify admin via domain event bus and email
+  eventBus.emit(EVENTS.ACCESS_REQUESTED, {
+    name: data.name,
+    email: normalizedEmail,
+    department: data.department,
+    requestedRole: data.requestedRole,
+  });
+
   if (env.ADMIN_SEED_EMAIL) {
     const template = templates().accessRequestSubmitted({
       name: data.name,
@@ -145,7 +153,7 @@ export async function approveAccessRequest(id, reviewData, adminUser, ip) {
     ip,
   });
 
-  return { accessRequest: accessReq, user, inviteSent: true };
+  return { accessRequest: accessReq, user, inviteSent: true, inviteLink: setPasswordUrl, inviteToken: rawToken };
 }
 
 export async function rejectAccessRequest(id, reason, adminUser, ip) {
@@ -224,3 +232,32 @@ export async function requestInfoForAccess(id, question, adminUser, ip) {
 
   return accessReq;
 }
+
+export async function bulkApproveAccessRequests({ requestIds, defaultRole, defaultTeam }, adminUser, ip) {
+  if (!Array.isArray(requestIds) || requestIds.length === 0) {
+    const error = new Error('requestIds array is required and must not be empty');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const results = [];
+  for (const id of requestIds) {
+    try {
+      const res = await approveAccessRequest(
+        id,
+        {
+          assignedRole: defaultRole,
+          teamId: defaultTeam,
+        },
+        adminUser,
+        ip
+      );
+      results.push({ id, success: true, email: res.accessRequest.email });
+    } catch (err) {
+      results.push({ id, success: false, error: err.message });
+    }
+  }
+
+  return results;
+}
+

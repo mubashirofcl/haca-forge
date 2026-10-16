@@ -12,13 +12,17 @@ export async function createCommentHandler(req, res, next) {
 
 export async function listCommentsHandler(req, res, next) {
   try {
-    const { entityType, entityId } = req.query;
+    const { entityType, entityId, includeDeliverables } = req.query;
     if (!entityType || !entityId) {
       const err = new Error('entityType and entityId query params are required');
       err.statusCode = 400;
       throw err;
     }
-    const comments = await commentService.listComments(entityType, entityId);
+    const comments = await commentService.listComments(
+      entityType,
+      entityId,
+      includeDeliverables === 'true' || includeDeliverables === true
+    );
     res.json({ data: comments });
   } catch (err) {
     next(err);

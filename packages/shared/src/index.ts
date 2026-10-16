@@ -565,9 +565,10 @@ export const taskTransitionSchema = z.object({
 export type TaskTransitionInput = z.infer<typeof taskTransitionSchema>;
 
 export const createCommentSchema = z.object({
-  entityType: z.enum(['request', 'content', 'task']),
+  entityType: z.enum(['request', 'content', 'task', 'deliverable']),
   entityId: z.string().min(1, 'Entity ID is required'),
   text: z.string().min(1, 'Comment text cannot be empty'),
+  mediaTimestamp: z.number().min(0).optional(),
   mentions: z.array(z.string()).default([]),
   attachments: z.array(z.string()).default([]),
 });
@@ -702,6 +703,76 @@ export const approveTimesheetSchema = z.object({
   comment: z.string().optional(),
 });
 export type ApproveTimesheetInput = z.infer<typeof approveTimesheetSchema>;
+
+// ==========================================
+// 10. Phase 7: Deliverables, Direct Uploads, Video Review & Publishing Flow
+// ==========================================
+
+export const DELIVERABLE_TYPES = [
+  'video',
+  'image',
+  'document',
+  'audio',
+  'copy',
+  'link',
+  'other',
+] as const;
+export type DeliverableType = (typeof DELIVERABLE_TYPES)[number];
+
+export const MAX_UPLOAD_SIZES = {
+  video: 500 * 1024 * 1024, // 500 MB
+  image: 50 * 1024 * 1024, // 50 MB
+  audio: 100 * 1024 * 1024, // 100 MB
+  document: 50 * 1024 * 1024, // 50 MB
+  other: 50 * 1024 * 1024, // 50 MB
+} as const;
+
+export const signUploadSchema = z.object({
+  fileName: z.string().min(1, 'File name is required'),
+  fileSize: z.number().positive('File size must be positive'),
+  fileType: z.string().min(1, 'File type is required'),
+  deliverableType: z.enum(DELIVERABLE_TYPES).optional(),
+  folder: z.string().optional(),
+});
+export type SignUploadInput = z.infer<typeof signUploadSchema>;
+
+export const createDeliverableSchema = z.object({
+  taskId: z.string().min(1, 'Task ID is required'),
+  contentItemId: z.string().optional(),
+  type: z.enum(DELIVERABLE_TYPES).default('video'),
+  fileUrl: z.string().optional(),
+  externalLink: z.string().optional(),
+  thumbnail: z.string().optional(),
+  notes: z.string().optional(),
+});
+export type CreateDeliverableInput = z.infer<typeof createDeliverableSchema>;
+
+export const reviewDeliverableSchema = z.object({
+  decision: z.enum(['approved', 'changes_requested', 'rejected']),
+  notes: z.string().optional(),
+  comments: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        mediaTimestamp: z.number().min(0).optional(),
+      })
+    )
+    .optional(),
+});
+export type ReviewDeliverableInput = z.infer<typeof reviewDeliverableSchema>;
+
+export const requesterConfirmSchema = z.object({
+  decision: z.enum(['confirm', 'request_changes']),
+  feedback: z.string().optional(),
+});
+export type RequesterConfirmInput = z.infer<typeof requesterConfirmSchema>;
+
+export const performanceLiveSchema = z.object({
+  liveUrl: z.string().url('A valid live URL is required'),
+  liveDate: z.string().or(z.date()).optional(),
+  notes: z.string().optional(),
+});
+export type PerformanceLiveInput = z.infer<typeof performanceLiveSchema>;
 
 
 

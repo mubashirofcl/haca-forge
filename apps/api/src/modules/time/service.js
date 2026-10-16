@@ -134,6 +134,11 @@ export async function logManualTime({ taskId, date, minutes, note }, user) {
 }
 
 export async function listTimeEntries(query = {}, user) {
+  // Requesters do not manage or view internal worker timesheets
+  if (user && (user.role === 'dept_staff' || user.role === 'dept_lead')) {
+    return [];
+  }
+
   const filter = {};
 
   if (user.role === 'worker') {

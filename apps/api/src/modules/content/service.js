@@ -114,6 +114,29 @@ export async function getContentItemById(id, user) {
     throw err;
   }
 
+  // Scoping check for departmental requesters
+  if (user && user.role === 'dept_staff') {
+    const requesterId = item.requester?._id || item.requester;
+    if (String(requesterId) !== String(user._id)) {
+      const err = new Error('Access denied to content item from another requester');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
+  } else if (user && user.role === 'dept_lead' && user.department) {
+    const deptDoc = item.sourceDepartment;
+    const deptMatches =
+      deptDoc &&
+      (String(deptDoc._id || deptDoc) === String(user.department) ||
+        (deptDoc.name && String(deptDoc.name).toLowerCase() === String(user.department).toLowerCase()));
+    if (item.sourceDepartment && !deptMatches) {
+      const err = new Error('Access denied to content item outside your department');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
+  }
+
   // Load comments
   const comments = await Comment.find({
     entityType: 'content',

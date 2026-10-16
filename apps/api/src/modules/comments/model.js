@@ -4,7 +4,7 @@ const commentSchema = new mongoose.Schema(
   {
     entityType: {
       type: String,
-      enum: ['request', 'content', 'task'],
+      enum: ['request', 'content', 'task', 'deliverable'],
       required: true,
       index: true,
     },
@@ -22,6 +22,10 @@ const commentSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+    },
+    mediaTimestamp: {
+      type: Number,
+      min: 0,
     },
     mentions: [
       {

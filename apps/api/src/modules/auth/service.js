@@ -5,6 +5,7 @@ import { env } from '../../config/env.js';
 import { User } from '../users/model.js';
 import { AccessRequest } from '../access/model.js';
 import { ROLE_PERMISSIONS } from '@mmp/shared';
+import { sendMail, templates } from '../../lib/mailer.js';
 
 function generateTokens(user) {
   const payload = {
@@ -162,6 +163,23 @@ export async function refreshTokens(refreshToken) {
 export async function setPasswordWithToken({ token, password }) {
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
+  // 1. Check if token matches a direct User reset token
+  let user = await User.findOne({
+    resetPasswordTokenHash: tokenHash,
+    resetPasswordExpiresAt: { $gt: new Date() },
+  });
+
+  if (user) {
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(password, salt);
+    user.mustSetPassword = false;
+    user.resetPasswordTokenHash = undefined;
+    user.resetPasswordExpiresAt = undefined;
+    await user.save();
+    return { success: true, email: user.email };
+  }
+
+  // 2. Check if token matches an initial AccessRequest invite
   const accessRequest = await AccessRequest.findOne({
     inviteTokenHash: tokenHash,
     inviteExpiresAt: { $gt: new Date() },
@@ -169,13 +187,13 @@ export async function setPasswordWithToken({ token, password }) {
   });
 
   if (!accessRequest) {
-    const error = new Error('Invite token is invalid or has expired (valid for 48 hours). Please request a new invite.');
+    const error = new Error('Invite or reset token is invalid or has expired (valid for 48 hours). Please request a new link.');
     error.code = 'INVALID_OR_EXPIRED_TOKEN';
     error.statusCode = 400;
     throw error;
   }
 
-  const user = await User.findOne({ email: accessRequest.email });
+  user = await User.findOne({ email: accessRequest.email });
   if (!user) {
     const error = new Error('User account not found for this invite.');
     error.code = 'USER_NOT_FOUND';
@@ -194,3 +212,46 @@ export async function setPasswordWithToken({ token, password }) {
 
   return { success: true, email: user.email };
 }
+
+export async function requestPasswordReset(email) {
+  const normalizedEmail = (email || '').toLowerCase().trim();
+  const user = await User.findOne({ email: normalizedEmail });
+
+  if (!user || user.status === 'suspended') {
+    // Return success to avoid email enumeration
+    return {
+      success: true,
+      message: 'If an active account exists with that email, a password reset link has been dispatched.',
+    };
+  }
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48h
+
+  user.resetPasswordTokenHash = tokenHash;
+  user.resetPasswordExpiresAt = expiresAt;
+  await user.save();
+
+  const resetUrl = `${env.FRONTEND_URL}/set-password?token=${rawToken}`;
+
+  const template = templates().inviteUser({
+    name: user.name,
+    email: user.email,
+    inviteUrl: resetUrl,
+  });
+
+  await sendMail({
+    to: user.email,
+    subject: 'HACA FORGE - Password Reset Request',
+    text: `Hello ${user.name},\n\nA password reset was requested for your account. Please click the following link to set your password (valid for 48 hours):\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,
+    html: template.html,
+  }).catch(() => {});
+
+  return {
+    success: true,
+    message: 'If an active account exists with that email, a password reset link has been dispatched.',
+    resetLink: env.NODE_ENV === 'development' ? resetUrl : undefined,
+  };
+}
+

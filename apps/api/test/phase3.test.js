@@ -5,6 +5,7 @@ import { connectDB, disconnectDB } from '../src/config/db.js';
 import { getNextSequenceId } from '../src/modules/requests/counter.model.js';
 import { Request } from '../src/modules/requests/model.js';
 import { RequestType } from '../src/modules/masterData/models.js';
+import { User } from '../src/modules/users/model.js';
 
 let adminCookie = '';
 let leadCookie = '';
@@ -15,9 +16,15 @@ let adsStaffCookie = '';
 
 let createdSalesRequestId = '';
 let testRequestType = null;
+let targetSalesDept = 'Sales & Business Development';
 
 beforeAll(async () => {
   await connectDB();
+
+  const vic = await User.findOne({ email: 'victoria.sales@marketingportal.com' });
+  if (vic?.department) {
+    targetSalesDept = vic.department;
+  }
 
   // 1. Log in all roles concurrently
   const login = async (email, password = 'Password123!') => {
@@ -75,7 +82,7 @@ describe('Phase 3: Requests, Scoping & Triage Engine', () => {
       .set('Cookie', salesStaffCookie)
       .send({
         title: 'Test Request: Missing Fields',
-        sourceDepartment: 'Sales & Business Development',
+        sourceDepartment: targetSalesDept,
         requestType: testRequestType?.name || 'Sales Collateral & Product One-Pager',
         priority: 'medium',
         deadline: new Date(Date.now() + 86400000 * 5).toISOString(),
@@ -96,7 +103,7 @@ describe('Phase 3: Requests, Scoping & Triage Engine', () => {
       .set('Cookie', salesStaffCookie)
       .send({
         title: 'Test Request: Q4 Enterprise Pitch Deck Collateral',
-        sourceDepartment: 'Sales & Business Development',
+        sourceDepartment: targetSalesDept,
         requestType: testRequestType?.name || 'Sales Collateral & Product One-Pager',
         priority: 'high',
         deadline: new Date(Date.now() + 86400000 * 7).toISOString(),
@@ -131,7 +138,7 @@ describe('Phase 3: Requests, Scoping & Triage Engine', () => {
       .set('Cookie', salesStaffCookie)
       .send({
         title: 'Test Request: Q4 Enterprise Pitch Deck Collateral (Duplicate)',
-        sourceDepartment: 'Sales & Business Development',
+        sourceDepartment: targetSalesDept,
         requestType: testRequestType?.name || 'Sales Collateral & Product One-Pager',
         priority: 'medium',
         deadline: new Date(Date.now() + 86400000 * 7).toISOString(),

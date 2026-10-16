@@ -170,3 +170,32 @@ export async function triageConvertHandler(req, res, next) {
     next(err);
   }
 }
+
+export async function bulkTriageAcceptHandler(req, res, next) {
+  try {
+    const ioInstance = req.app.get('io') || io;
+    const results = await requestService.bulkTriageAccept(
+      req.body,
+      req.user,
+      ioInstance
+    );
+    return res.status(200).json({ success: true, results });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function bulkTriageRejectHandler(req, res, next) {
+  try {
+    const ioInstance = req.app.get('io') || io;
+    const results = await requestService.bulkTriageReject(
+      req.body,
+      req.user,
+      ioInstance
+    );
+    return res.status(200).json({ success: true, results });
+  } catch (err) {
+    next(err);
+  }
+}
+

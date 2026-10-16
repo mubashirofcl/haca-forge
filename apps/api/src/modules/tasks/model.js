@@ -108,7 +108,26 @@ const taskSchema = new mongoose.Schema(
       type: Date,
       index: true,
     },
+    reminderSentAt: {
+      type: Date,
+    },
+    overdueAlertSentAt: {
+      type: Date,
+    },
     subtasks: [subtaskSchema],
+    extensionRequest: {
+      requestedDate: { type: Date },
+      reason: { type: String, trim: true },
+      status: {
+        type: String,
+        enum: ['none', 'pending', 'approved', 'rejected'],
+        default: 'none',
+      },
+      requestedAt: { type: Date },
+      decidedAt: { type: Date },
+      decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      responseNote: { type: String, trim: true },
+    },
   },
   { timestamps: true }
 );
@@ -117,5 +136,8 @@ const taskSchema = new mongoose.Schema(
 taskSchema.index({ assignee: 1, status: 1 });
 taskSchema.index({ team: 1, status: 1 });
 taskSchema.index({ contentItemId: 1, stageOrder: 1 });
+taskSchema.index({ assignee: 1, updatedAt: -1 });
+taskSchema.index({ team: 1, updatedAt: -1 });
+taskSchema.index({ status: 1, dueDate: 1 });
 
 export const Task = mongoose.model('Task', taskSchema);

@@ -10,6 +10,9 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  Key,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface UserRecord {
@@ -71,6 +74,11 @@ export const UsersPage: React.FC = () => {
   const [editSkills, setEditSkills] = useState<string[]>([]);
   const [customSkillInput, setCustomSkillInput] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Reset Password modal state
+  const [resetModalData, setResetModalData] = useState<{ user: UserRecord; resetLink: string; expiresAt: string } | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -168,6 +176,28 @@ export const UsersPage: React.FC = () => {
       setTimeout(() => setFeedback(null), 4000);
     } catch (err: any) {
       alert(err.message || 'Failed to force logout');
+    }
+  };
+
+  const handleResetPassword = async (user: UserRecord) => {
+    if (!confirm(`Generate a secure password reset link for ${user.name}?`)) return;
+    setIsResetting(true);
+    try {
+      const res = await apiFetch<{ success: boolean; data: { resetLink: string; expiresAt: string } }>(
+        `/admin/users/${user._id}/reset-password`,
+        { method: 'POST' }
+      );
+      setResetModalData({
+        user,
+        resetLink: res.data?.resetLink || '',
+        expiresAt: res.data?.expiresAt || '',
+      });
+      setFeedback({ type: 'success', message: `Password reset link generated for ${user.name}.` });
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate password reset link');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -392,6 +422,15 @@ export const UsersPage: React.FC = () => {
                           </button>
 
                           <button
+                            onClick={() => handleResetPassword(u)}
+                            title="Reset Password / Generate Link"
+                            disabled={isResetting}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-violet-700 hover:bg-violet-50 transition-colors"
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
                             onClick={() => handleToggleStatus(u)}
                             title={u.status === 'active' ? 'Suspend User' : 'Activate User'}
                             className={`p-1.5 rounded-lg transition-colors ${
@@ -568,6 +607,73 @@ export const UsersPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Password Reset Confirmation Modal */}
+      {resetModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
+          <div className="glass-modal max-w-md w-full p-6 shadow-modal-glass border border-white relative space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    Password Reset Link
+                  </h3>
+                  <p className="text-xs text-slate-500">{resetModalData.user.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setResetModalData(null); setCopiedLink(false); }}
+                className="w-8 h-8 rounded-full hover:bg-slate-200/60 text-slate-500 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              A temporary password reset token has been generated. If an email service is active, an email was dispatched to <b>{resetModalData.user.email}</b>. You can also copy the direct link below:
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Secure Reset URL (Valid for 48 hours)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={resetModalData.resetLink}
+                  className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(resetModalData.resetLink);
+                    setCopiedLink(true);
+                    setTimeout(() => setCopiedLink(false), 2500);
+                  }}
+                  className="px-3 py-2 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
+                >
+                  {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedLink ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-3 flex justify-end border-t border-slate-200/80">
+              <button
+                type="button"
+                onClick={() => { setResetModalData(null); setCopiedLink(false); }}
+                className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-full transition-colors"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

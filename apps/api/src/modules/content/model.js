@@ -68,6 +68,12 @@ const contentItemSchema = new mongoose.Schema(
       type: Date,
       index: true,
     },
+    reminderSentAt: {
+      type: Date,
+    },
+    overdueAlertSentAt: {
+      type: Date,
+    },
     priority: {
       type: String,
       enum: PRIORITY_LEVELS,
@@ -109,6 +115,39 @@ const contentItemSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    requesterConfirmation: {
+      status: {
+        type: String,
+        enum: ['not_required', 'pending', 'confirmed', 'changes_requested'],
+        default: 'not_required',
+      },
+      confirmedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+      confirmedAt: {
+        type: Date,
+      },
+      feedback: {
+        type: String,
+        trim: true,
+      },
+      requestedAt: {
+        type: Date,
+      },
+    },
+    performanceStatus: {
+      type: String,
+      enum: ['none', 'handed_to_performance', 'live'],
+      default: 'none',
+    },
+    liveUrl: {
+      type: String,
+      trim: true,
+    },
+    liveDate: {
+      type: Date,
+    },
     tasks: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -122,5 +161,7 @@ const contentItemSchema = new mongoose.Schema(
 // Compound indexes for high-frequency queries
 contentItemSchema.index({ status: 1, publishDate: 1 });
 contentItemSchema.index({ sourceDepartment: 1, status: 1 });
+contentItemSchema.index({ format: 1, platform: 1 });
+contentItemSchema.index({ campaignId: 1, status: 1 });
 
 export const ContentItem = mongoose.model('ContentItem', contentItemSchema);

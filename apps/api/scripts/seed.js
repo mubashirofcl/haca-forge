@@ -15,6 +15,12 @@ import {
   RequestType,
   Settings,
 } from '../src/modules/masterData/models.js';
+import { Request } from '../src/modules/requests/model.js';
+import { ContentItem } from '../src/modules/content/model.js';
+import { Task } from '../src/modules/tasks/model.js';
+import { Shoot } from '../src/modules/shoots/model.js';
+import { Deliverable } from '../src/modules/deliverables/model.js';
+import { Counter } from '../src/modules/requests/counter.model.js';
 import { seedPipelineTemplates } from '../src/modules/pipelines/service.js';
 import { logger } from '../src/lib/logger.js';
 
@@ -47,6 +53,12 @@ async function seed() {
       ContentFormat.deleteMany({}),
       RequestType.deleteMany({}),
       Settings.deleteMany({}),
+      Request.deleteMany({}),
+      ContentItem.deleteMany({}),
+      Task.deleteMany({}),
+      Shoot.deleteMany({}),
+      Deliverable.deleteMany({}),
+      Counter.deleteMany({}),
     ]);
 
     const defaultPassword = 'Password123!';
@@ -776,6 +788,358 @@ async function seed() {
     logger.info('⚙️ Seeding standard pipeline templates (7 media formats)...');
     await seedPipelineTemplates();
 
+    // ----------------------------------------------------
+    // 11. Seed Sample Operational Workflow Data (Requests, Content, Tasks, Shoots, Deliverables)
+    // ----------------------------------------------------
+    logger.info('📝 Seeding sample marketing requests across departments and triage states...');
+    const smDept = departments.find((d) => d.name === 'Social Media Marketing') || departments[0];
+    const perfDept = departments.find((d) => d.name === 'Performance & Paid Media') || departments[1];
+    const salesDept = departments.find((d) => d.name === 'Sales & Business Development') || departments[2];
+    const acadDept = departments.find((d) => d.name === 'Academic Affairs & Research') || departments[3];
+
+    const req1 = await Request.create({
+      requestId: 'MKT-2026-0001',
+      title: 'Fall 2026 Admissions Campaign Reel',
+      sourceDepartment: 'Social Media Marketing',
+      requester: deptStaff[0]._id, // Hannah Abbott
+      requestTypeName: 'Social Video Reel',
+      dynamicFields: {
+        targetPillars: 'Student Life, Admissions',
+        audioTrack: 'Trending Audio #4',
+      },
+      priority: 'urgent',
+      deadline: new Date(Date.now() + 10 * 86400000),
+      status: 'submitted',
+      attachments: [{ url: 'https://example.com/admissions-brief.pdf', name: 'admissions-brief.pdf', size: 1024000, type: 'application/pdf' }],
+      createdAt: new Date(Date.now() - 2 * 86400000),
+    });
+
+    const req2 = await Request.create({
+      requestId: 'MKT-2026-0002',
+      title: 'Executive MBA Program Carousel',
+      sourceDepartment: 'Sales & Business Development',
+      requester: deptLeads[2]._id, // Victoria Stone
+      requestTypeName: 'Executive Collateral & Deck',
+      dynamicFields: {
+        keyTakeaways: 'Curriculum, Global Faculty, Network',
+        slidesCount: 6,
+      },
+      priority: 'high',
+      deadline: new Date(Date.now() + 14 * 86400000),
+      status: 'submitted',
+      attachments: [{ url: 'https://example.com/mba-spec.pdf', name: 'mba-spec.pdf', size: 512000, type: 'application/pdf' }],
+      createdAt: new Date(Date.now() - 1 * 86400000),
+    });
+
+    const req3 = await Request.create({
+      requestId: 'MKT-2026-0003',
+      title: 'Campus Life & Student Stories',
+      sourceDepartment: 'Social Media Marketing',
+      requester: deptLeads[0]._id, // Rachel Adams
+      requestTypeName: 'Social Video Reel',
+      dynamicFields: {
+        focus: 'Student Ambassadors',
+      },
+      priority: 'medium',
+      deadline: new Date(Date.now() + 8 * 86400000),
+      status: 'under_triage',
+      attachments: [],
+      createdAt: new Date(Date.now() - 3 * 86400000),
+    });
+
+    const req4 = await Request.create({
+      requestId: 'MKT-2026-0004',
+      title: 'Q4 Performance Ad Variations',
+      sourceDepartment: 'Performance & Paid Media',
+      requester: deptStaff[1]._id, // Carlos Mendez
+      requestTypeName: 'Performance Ad Campaign Creative',
+      dynamicFields: {
+        campaignObjective: 'Direct Conversions / Sales',
+        adDimensions: 'All Dimensions Pack',
+      },
+      priority: 'high',
+      deadline: new Date(Date.now() + 12 * 86400000),
+      status: 'needs_info',
+      triage: {
+        decision: 'needs_info',
+        reason: 'Please specify the exact target CPA and approved landing page UTMs.',
+        decidedBy: leadSarah._id,
+        decidedAt: new Date(Date.now() - 12 * 3600000),
+      },
+      createdAt: new Date(Date.now() - 4 * 86400000),
+    });
+
+    const req5 = await Request.create({
+      requestId: 'MKT-2026-0005',
+      title: 'Annual Research Symposium Brochure',
+      sourceDepartment: 'Academic Affairs & Research',
+      requester: deptLeads[3]._id, // Arthur Pendelton
+      requestTypeName: 'Academic Brochure & Course Guide',
+      dynamicFields: {
+        pageCount: 12,
+        keySpeakers: 'Nobel Laureates and Faculty Fellows',
+      },
+      priority: 'medium',
+      deadline: new Date(Date.now() + 18 * 86400000),
+      status: 'accepted',
+      triage: {
+        decision: 'accepted',
+        decidedBy: leadSarah._id,
+        decidedAt: new Date(Date.now() - 1 * 86400000),
+      },
+      createdAt: new Date(Date.now() - 5 * 86400000),
+    });
+
+    logger.info('🎬 Seeding sample production content items...');
+    const content1 = await ContentItem.create({
+      contentId: 'CNT-2026-0001',
+      title: 'Fall 2026 Admissions Hero Reel',
+      format: 'reel',
+      sourceDepartment: smDept._id,
+      requester: deptStaff[0]._id,
+      requestId: req1._id,
+      pillar: 'Admissions & Campus',
+      platforms: ['Instagram', 'TikTok', 'YouTube'],
+      publishDate: new Date(Date.now() + 12 * 86400000),
+      productionDeadline: new Date(Date.now() + 7 * 86400000),
+      status: 'in_production',
+      priority: 'urgent',
+      estimatedBudget: 45000,
+    });
+
+    const content2 = await ContentItem.create({
+      contentId: 'CNT-2026-0002',
+      title: 'Tech Innovation Summit Ad Creatives',
+      format: 'ad_creative',
+      sourceDepartment: perfDept._id,
+      requester: deptStaff[1]._id,
+      pillar: 'Brand Awareness & Paid',
+      platforms: ['Facebook', 'Instagram'],
+      publishDate: new Date(Date.now() + 7 * 86400000),
+      productionDeadline: new Date(Date.now() + 3 * 86400000),
+      status: 'in_review',
+      priority: 'high',
+      estimatedBudget: 28000,
+    });
+
+    const content3 = await ContentItem.create({
+      contentId: 'CNT-2026-0003',
+      title: 'Executive MBA Program Carousel',
+      format: 'carousel',
+      sourceDepartment: salesDept._id,
+      requester: deptLeads[2]._id,
+      requestId: req2._id,
+      pillar: 'Academics & Careers',
+      platforms: ['LinkedIn', 'Instagram'],
+      publishDate: new Date(Date.now() + 5 * 86400000),
+      productionDeadline: new Date(Date.now() + 2 * 86400000),
+      status: 'approved',
+      priority: 'medium',
+      estimatedBudget: 18000,
+    });
+
+    const content4 = await ContentItem.create({
+      contentId: 'CNT-2026-0004',
+      title: 'Campus Life & Student Stories Cut',
+      format: 'reel',
+      sourceDepartment: smDept._id,
+      requester: deptLeads[0]._id,
+      pillar: 'Student Life',
+      platforms: ['Instagram'],
+      publishDate: new Date(Date.now() + 8 * 86400000),
+      productionDeadline: new Date(Date.now() + 4 * 86400000),
+      status: 'changes_requested',
+      priority: 'high',
+      estimatedBudget: 32000,
+    });
+
+    const content5 = await ContentItem.create({
+      contentId: 'CNT-2026-0005',
+      title: 'Research Symposium Brochure',
+      format: 'brochure',
+      sourceDepartment: acadDept._id,
+      requester: deptLeads[3]._id,
+      pillar: 'Research',
+      platforms: ['LinkedIn'],
+      publishDate: new Date(Date.now() - 2 * 86400000),
+      productionDeadline: new Date(Date.now() - 5 * 86400000),
+      status: 'published',
+      priority: 'medium',
+      estimatedBudget: 15000,
+    });
+
+    logger.info('📌 Seeding sample tasks across production teams...');
+    const task1 = await Task.create({
+      taskId: 'TSK-2026-0001',
+      contentItemId: content1._id,
+      stageKey: 'script',
+      stageOrder: 1,
+      title: 'Draft Reel Hook & Script Outline',
+      team: 'content',
+      assignee: workers[0]._id, // Chloe Bennett
+      dueDate: new Date(Date.now() - 1 * 86400000),
+      status: 'done',
+      estimateHours: 6,
+      actualHours: 5.5,
+      subtasks: [
+        { title: 'Research viral hooks & campus trends', completed: true },
+        { title: 'Write 30-sec spoken script', completed: true },
+        { title: 'Finalize audio beat markers', completed: true },
+      ],
+    });
+
+    const task2 = await Task.create({
+      taskId: 'TSK-2026-0002',
+      contentItemId: content1._id,
+      stageKey: 'shoot',
+      stageOrder: 2,
+      title: 'Studio Shoot & B-Roll Capture',
+      team: 'cinematography',
+      assignee: workers[10]._id, // Ethan Hunt
+      dueDate: new Date(Date.now() + 3 * 86400000),
+      status: 'in_progress',
+      estimateHours: 12,
+      dependencies: [task1._id],
+      subtasks: [
+        { title: 'Book soundstage & lighting rig', completed: true },
+        { title: 'Conduct student interviews', completed: false },
+        { title: 'Offload footage to shared SAN storage', completed: false },
+      ],
+    });
+
+    const task3 = await Task.create({
+      taskId: 'TSK-2026-0003',
+      contentItemId: content1._id,
+      stageKey: 'edit',
+      stageOrder: 3,
+      title: 'Assemble Rough Cut & Motion Titles',
+      team: 'editor',
+      assignee: workers[14]._id, // Lucas Rivera
+      dueDate: new Date(Date.now() + 6 * 86400000),
+      status: 'blocked',
+      holdReason: 'waiting_for_content',
+      holdComment: 'Awaiting raw camera footage release from Cinematography crew.',
+      estimateHours: 16,
+      dependencies: [task2._id],
+      subtasks: [
+        { title: 'Ingest raw media & sync audio', completed: false },
+        { title: 'Assembly edit to music track', completed: false },
+        { title: 'Add kinetic captions & motion gfx', completed: false },
+      ],
+    });
+
+    const task4 = await Task.create({
+      taskId: 'TSK-2026-0004',
+      contentItemId: content2._id,
+      stageKey: 'graphics',
+      stageOrder: 1,
+      title: 'Design High-CTR Ad Variations',
+      team: 'graphics',
+      assignee: workers[5]._id, // Leo Sterling
+      dueDate: new Date(Date.now() + 2 * 86400000),
+      status: 'in_progress',
+      estimateHours: 8,
+      extensionRequest: {
+        status: 'pending',
+        requestedDate: new Date(Date.now() + 5 * 86400000),
+        reason: 'Client provided low-res logos; waiting on vector SVG package from brand team.',
+        requestedAt: new Date(Date.now() - 4 * 3600000),
+      },
+      subtasks: [
+        { title: 'Generate 1:1 square master design', completed: true },
+        { title: 'Adapt to 9:16 vertical format', completed: false },
+        { title: 'Export clean web-optimized PNG assets', completed: false },
+      ],
+    });
+
+    const task5 = await Task.create({
+      taskId: 'TSK-2026-0005',
+      contentItemId: content4._id,
+      stageKey: 'edit',
+      stageOrder: 2,
+      title: 'Color Grade & Sound Polish',
+      team: 'editor',
+      assignee: workers[14]._id, // Lucas Rivera
+      dueDate: new Date(Date.now() + 3 * 86400000),
+      status: 'changes_requested',
+      revisionCount: 1,
+      estimateHours: 10,
+      subtasks: [
+        { title: 'Trim second hook to 2.5 seconds', completed: false },
+        { title: 'Apply LUT and fix exposure in interview cut', completed: false },
+      ],
+    });
+
+    const task6 = await Task.create({
+      taskId: 'TSK-2026-0006',
+      contentItemId: content3._id,
+      stageKey: 'content',
+      stageOrder: 1,
+      title: 'Copywriting & Carousel Slide Sequencing',
+      team: 'content',
+      assignee: workers[1]._id, // Liam
+      dueDate: new Date(Date.now() - 2 * 86400000),
+      status: 'approved',
+      estimateHours: 5,
+      actualHours: 4.5,
+      subtasks: [
+        { title: 'Slide outline', completed: true },
+        { title: 'Final copy review', completed: true },
+      ],
+    });
+
+    await ContentItem.findByIdAndUpdate(content1._id, { tasks: [task1._id, task2._id, task3._id] });
+    await ContentItem.findByIdAndUpdate(content2._id, { tasks: [task4._id] });
+    await ContentItem.findByIdAndUpdate(content3._id, { tasks: [task6._id] });
+    await ContentItem.findByIdAndUpdate(content4._id, { tasks: [task5._id] });
+
+    logger.info('📦 Seeding sample deliverables...');
+    await Deliverable.create({
+      taskId: task4._id,
+      contentItemId: content2._id,
+      version: 1,
+      type: 'image',
+      fileUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200',
+      uploadedBy: workers[5]._id,
+      notes: 'Initial high-CTR variant concepts for feed and stories.',
+      status: 'submitted',
+      createdAt: new Date(Date.now() - 6 * 3600000),
+    });
+
+    await Deliverable.create({
+      taskId: task5._id,
+      contentItemId: content4._id,
+      version: 1,
+      type: 'video',
+      fileUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      uploadedBy: workers[14]._id,
+      notes: 'First cut of Campus Stories with background music and initial captions.',
+      status: 'changes_requested',
+      decidedBy: leadSarah._id,
+      decidedAt: new Date(Date.now() - 10 * 3600000),
+      decisionNotes: 'Cut at 0:15 needs quicker pacing. Brighten the shadows in shot 3.',
+      createdAt: new Date(Date.now() - 24 * 3600000),
+    });
+
+    logger.info('🎥 Seeding sample studio shoot...');
+    await Shoot.create({
+      shootId: 'SHT-2026-0001',
+      title: 'Fall Admissions Studio Video Shoot',
+      date: new Date(Date.now() + 3 * 86400000),
+      location: 'Main Studio B - Soundstage 3 (Building A)',
+      crew: [workers[10]._id, workers[11]._id],
+      equipment: ['Sony FX3 Cinema Rig', 'Aputure 600d Pro', 'Sennheiser Wireless Lav Kit', 'Teleprompter'],
+      talentNotes: 'Student Ambassador Marcus and Professor Miller scheduled for 10:00 AM and 11:30 AM.',
+      contentItems: [content1._id],
+      status: 'scheduled',
+      notes: 'Call sheet distributed to talent and crew. Script approved and loaded on prompter.',
+    });
+
+    await Counter.create({ name: 'MKT-2026', seq: 5 });
+    await Counter.create({ name: 'CNT-2026', seq: 5 });
+    await Counter.create({ name: 'TSK-2026', seq: 6 });
+    await Counter.create({ name: 'SHT-2026', seq: 1 });
+
     logger.info('====================================================');
     logger.info('🎉 SEEDING COMPLETED SUCCESSFULLY!');
     logger.info(`   - Admin: ${adminUser.email} / ${env.ADMIN_SEED_PASSWORD || 'Admin1212'}`);
@@ -785,6 +1149,11 @@ async function seed() {
     logger.info(`   - Teams: ${await Team.countDocuments()}`);
     logger.info(`   - Content Formats: ${await ContentFormat.countDocuments()}`);
     logger.info(`   - Request Types: ${await RequestType.countDocuments()}`);
+    logger.info(`   - Requests: ${await Request.countDocuments()}`);
+    logger.info(`   - Content Items: ${await ContentItem.countDocuments()}`);
+    logger.info(`   - Tasks: ${await Task.countDocuments()}`);
+    logger.info(`   - Shoots: ${await Shoot.countDocuments()}`);
+    logger.info(`   - Deliverables: ${await Deliverable.countDocuments()}`);
     logger.info(`   - Access Requests: ${await AccessRequest.countDocuments()}`);
     logger.info(`   - Audit Logs: ${await AuditLog.countDocuments()}`);
     logger.info('====================================================');
