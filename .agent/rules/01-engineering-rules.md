@@ -5,7 +5,7 @@
 - Backend: Express 5, MongoDB with Mongoose, JavaScript (ESM). Do not convert the backend to TypeScript.
 - Frontend: React 18, Vite, TypeScript (strict), Tailwind, existing glass UI components, TanStack Query and Table,
   React Hook Form + Zod, React Router, Recharts, FullCalendar.
-- packages/shared (@mmp/shared): role keys, permission keys and the role-to-permission map, enums, Zod schemas, shared
+- packages/shared (@mmp/shared): role keys (admin, marketing_head, team_lead, team_member), permission keys and the role-to-permission map (admin has all permission keys derived from PERMISSION_KEYS), enums, Zod schemas, shared
   metric formulas. Built with tsup.
 - Validation: Zod on every body, query and params. Permissions: CASL. Jobs: BullMQ + Redis. Realtime: Socket.io.
 - Email only through lib/mailer.js (smtp, resend, console). Files: Cloudinary signed direct upload.
@@ -14,11 +14,12 @@
 ## Architecture
 - API modules under apps/api/src/modules/<name>/ with routes, controller, service, model, schema. Thin controllers.
 - ALL data access goes through resolveScope(user, filters). It returns allowed profileIds and the person scope (all, team or
-  self). Every list, aggregate, report and export uses it. No route builds its own profile or team filter.
+  self). For admin, resolveScope returns all profiles and all people. Every list, aggregate, report and export uses it.
+- Admin is excluded from auto-assignment candidates, workload calculations, and performance reports.
 - Every route: authentication + requirePermission('key') + Zod validation. Scoping is enforced in database queries, not only in
   the UI. A route is never 'authenticated only' unless it touches the caller's own profile.
 - One shared filter schema (profile, department, owner, campaign, date or month, status) parsed once and used by all list endpoints.
-- One transition service for work item status. Every change writes an ActivityEvent.
+- One transition service for work item status. Every change writes an ActivityEvent (admin actions recorded with actingAs: 'admin').
 - Metric formulas are defined once in shared or in modules/<name>/metrics.js with comments, and documented in docs/METRICS.md.
 - Leads are read-only: no endpoint may change a lead's LSQ fields. Use idempotent upserts keyed by lsqLeadId.
 - Scheduled and event jobs read their AutomationRule.active flag, record lastRunAt and use idempotency keys so restarts
@@ -31,6 +32,7 @@
 - helmet, rate limits on login, mongo sanitize, hpp, strict CORS with credentials.
 - No default passwords or secrets in code or docs. Config through validated env (apps/api/src/config/env.js), committed
   .env.example. Invite and reset tokens stored hashed, single use, 48 hours.
+- The first user is seeded as admin via scripts/seed-admin.js from ADMIN_SEED_EMAIL and ADMIN_SEED_PASSWORD (refuses if an admin exists).
 - No seed or debug endpoints in production builds. Logs never contain secrets or tokens.
 
 ## Frontend conventions

@@ -8,6 +8,7 @@ If this file and the specification disagree, stop and ask.
 Build ONLY what the specification defines. Do not re-add retired HACA FORGE modules (request intake and triage,
 requester roles, pipeline templates and handoffs, shoot planner, time tracking, leave, file library, performance ads,
 video review studio, calendar import, master-data editor, audit log screens). They live in git tag forge-v1-final.
+Keep the public Request Access flow and access-request admin as an Admin-only enabler.
 Ignore docs/archive/. It describes the retired FORGE product.
 Out of scope for V1: leaderboard, content repurposing, campaign templates and auto task structure, dependency
 mapping, Weekly Marketing Meeting Mode. Do not add features, screens or fields that the specification does not need.
@@ -17,16 +18,24 @@ One centralized system. Profile (brand) is a FILTER dimension on shared data, ne
 Every core document carries profileId. Permissions are enforced at the QUERY layer using the user's profileAccess[].
 
 ## Roles (exact keys)
-marketing_head, team_lead, team_member. Role sets breadth; profileAccess[] sets which brands it applies to.
+admin, marketing_head, team_lead, team_member. Role sets breadth; profileAccess[] sets which brands it applies to.
+- admin: system owner outside the marketing hierarchy. Has EVERY permission key (derived from PERMISSION_KEYS so future
+  keys are included automatically), all profiles, everyone, every screen. ONLY admin: adds and invites users, approves
+  or rejects access requests, sets or changes any role (only admin may grant admin or marketing_head), suspends, reactivates,
+  resets passwords, forces logout. Admin needs no department, job role or capacity, is never a candidate for auto-assignment,
+  and is excluded from workload and performance reports. Admin may perform any work action; each is recorded in
+  ActivityEvent with actingAs 'admin'.
 - marketing_head: all profiles by default, everyone, org-wide dashboard, creates and assigns work in any profile in
   scope, overrides auto-assignment, approves and gives feedback, classifies revision root cause, full analytics, full
-  Lead Funnel and Data Center, full Reports and Automation, enters OKR and Targets, manages people and reference data.
+  Lead Funnel and Data Center, full Reports and Automation, enters OKR and Targets. Manages operating fields of people
+  (department, job role, profileAccess, reportsToIds, weeklyCapacityHours) for team_lead and team_member, but cannot create,
+  suspend or change roles, and cannot touch admin or marketing_head accounts.
 - team_lead: assigned profiles, own team (direct reports via reportsToIds plus same department), team KPIs, creates
   and assigns work for own team, overrides auto-assignment, approves own team's work, classifies root cause, own-team
   analytics, Lead Funnel and Data Center view only for own profiles, views own team's scheduled reports, views targets.
 - team_member: assigned profiles, self only, personal priorities, cannot create or assign (can request work via a Team
   Lead), responds to feedback, own stats only, Lead Funnel/Data Center/Reports/Targets hidden.
-- No Admin role. CEO and Business Head are report recipients by email, not users.
+- CEO and Business Head are report recipients by email, not users.
 - A team_member may report to several team leads (reportsToIds[]). Any of them may assign to, review and see that member.
 
 ## Reference data (fixed, seeded)

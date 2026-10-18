@@ -26,7 +26,7 @@ system) is reused. The product model, data model, roles and screens are replaced
 | Purpose | Intake and production pipeline for requests from other departments | Team workspace to plan, assign, produce, approve and report marketing work, plus lead analytics |
 | Core unit | ContentItem with a multi-stage pipeline of tasks | Work Item (one owner), always inside a Campaign |
 | Organizing dimension | Requesting department and 4 production teams | 7 brand Profiles as a filter on shared data, 7 departments |
-| Roles | 8 | 3 (Marketing Head, Team Lead, Team Member) |
+| Roles | 8 | 4 (Admin, Marketing Head, Team Lead, Team Member) |
 | Link to business goals | None | Business target, then Campaign, then Work Item (enforced) |
 
 | Aspect | HACA FORGE (current) | HACA Marketing OS (target) |
@@ -122,41 +122,38 @@ incentives.
 
 | Role key | Spec name | Typical people | Breadth |
 | --- | --- | --- | --- |
-| marketing head _ | Marketing Head | Head of Marketing | Org-wide, all profiles by default |
-
-| Role key | Spec name | Typical people | Breadth |
-| --- | --- | --- | --- |
-| team lead _ | Team Lead | Creative Manager, Design Lead and other leads | Own team (direct reports and department), within assigned profiles |
-| team member _ | Team Member | Designers, writers, editors, specialists | Self only, within assigned profiles |
+| admin | System Owner / Admin | IT / System Owner | Every permission, all profiles, everyone, every screen |
+| marketing_head | Marketing Head | Head of Marketing | Org-wide, all profiles by default (creative & operating leadership) |
+| team_lead | Team Lead | Creative Manager, Design Lead and other leads | Own team (direct reports and department), within assigned profiles |
+| team_member | Team Member | Designers, writers, editors, specialists | Self only, within assigned profiles |
 
 Role sets breadth. Profile access sets which brands that breadth applies to. Example: a
 Team Lead scoped to HACA Design School has Team Lead breadth for that profile only.
+Admin sits outside the creative hierarchy, holds all permissions, and manages user accounts and access requests.
 
 ### 5.2 Capability matrix (from the specification)
 
-| Capability | Marketing Head | Team Lead | Team Member |
-| --- | --- | --- | --- |
-| Profiles visible | All by default | Assigned profiles | Assigned profiles |
-| People visible | Everyone | Own team (direct reports and department) | Self only |
-| Dashboard scope | Org-wide KPIs, all campaigns | Team KPIs, team's campaigns | Personal priorities only |
-| Create and assign work | Yes, any profile in scope | Yes, own team | No, can request via Team Lead |
-| Override auto- assignment | Yes | Yes | No |
-| Approve and give feedback | Yes | Yes, own team's work | No, can respond to feedback |
-| Classify revision root cause | Yes | Yes | No |
-| Team performance analytics | Full | Own team only | Own stats only |
-| Lead Funnel, LSQ, Data Center | Full | View only, own profiles | Hidden |
-| Reports and Automation config | Full | View own team's scheduled reports | Hidden |
-
-| Capability | Marketing Head | Team Lead | Team Member |
-| --- | --- | --- | --- |
-| OKR and Targets entry | Yes | View only | Hidden |
+| Capability | Admin | Marketing Head | Team Lead | Team Member |
+| --- | --- | --- | --- | --- |
+| User administration & role changes | Yes | No | No | No |
+| Approve / reject access requests | Yes | No | No | No |
+| Manage people operating fields | Yes | Yes (TL & Member only) | No | No |
+| Profiles visible | All | All by default | Assigned profiles | Assigned profiles |
+| People visible | Everyone | Everyone | Own team (direct reports and department) | Self only |
+| Dashboard scope | Org-wide | Org-wide KPIs, all campaigns | Team KPIs, team's campaigns | Personal priorities only |
+| Create and assign work | Yes | Yes, any profile in scope | Yes, own team | No, can request via Team Lead |
+| Override auto-assignment | Yes | Yes | Yes | No |
+| Approve and give feedback | Yes | Yes | Yes, own team's work | No, can respond to feedback |
+| Classify revision root cause | Yes | Yes | Yes | No |
+| Team performance analytics | Full | Full | Own team only | Own stats only |
+| Lead Funnel, LSQ, Data Center | Full | Full | View only, own profiles | Hidden |
+| Reports and Automation config | Full | Full | View own team's scheduled reports | Hidden |
+| OKR and Targets entry | Yes | Yes | View only | Hidden |
 
 ### 5.3 Profile access
 
-profileAccess[]  is a list on each Person. The Marketing Head defaults to all profiles.
-
+profileAccess[] is a list on each Person. Admin and the Marketing Head default to all profiles.
 A person with several profiles lands on All or on their last-used profile.
-
 Changing the Profile filter changes every section of the screen at once.
 
 ### 5.4 Team membership
@@ -164,20 +161,15 @@ Changing the Profile filter changes every section of the screen at once.
 A Team Lead sees direct reports plus their department, within profile access. Carried
 over from the earlier role plan: a Team Member can report to more than one Team Lead
 ( reportsToIds[] ), set by the Marketing Head. Any of a member's leads can assign work
-
 to, review and see that member.
 
 ### 5.5 Enablers (needed to run the system, not product features)
 
-People setup: the Marketing Head creates people and sets department, job role,
-access role, profile access, weekly capacity and reporting leads. Login reuses the
-existing invite and set-password flow.
-
-No separate Admin role in V1. The Marketing Head holds setup powers. Decision
-pending (section 17).
-
-CEO and Business Head are report recipients by email, not users, unless the Head
-decides otherwise.
+People setup and access administration:
+- The Admin creates and invites users, approves/rejects access requests, sets roles (including granting admin or marketing_head), suspends users, and forces logouts.
+- The Marketing Head manages operational fields of team leads and team members (department, job role, profileAccess, reportsToIds, weeklyCapacityHours) via `people.assign`.
+- The Request Access flow is kept from FORGE as an Admin-only onboarding enabler: public request form (rate-limited, duplicate-protected) + Admin approval interface.
+- CEO and Business Head are report recipients by email, not users.
 
 ## 6. Architecture
 
@@ -245,12 +237,12 @@ Person
 | Field | Notes |
 | --- | --- |
 | name, email, status | status: invited, active, suspended |
-| jobRole | One of 13 fixed job titles (section 14) |
-| departmentId | FK to Department |
-| role | marketing head, team lead, team member. Team _ _ _ Lead breadth is granted by isTL (role is team lead) _ |
-| profileAccess[] | List of Profile ids. Drives all scoping |
-| reportsToIds[] (S) | Team Leads this person reports to |
-| weeklyCapacityHours | Used for workload % |
+| jobRole | One of 13 fixed job titles (section 14). Optional for admin |
+| departmentId | FK to Department. Optional for admin |
+| role | admin, marketing_head, team_lead, team_member. Admin holds all permissions; team_lead breadth granted by isTL |
+| profileAccess[] | List of Profile ids. Drives all scoping. Admin defaults to all profiles |
+| reportsToIds[] (S) | Team Leads this person reports to (empty for admin and marketing_head) |
+| weeklyCapacityHours | Used for workload %. Optional for admin (admin excluded from workload/assignment) |
 | lastProfileId (S) | Last-used profile filter |
 | workloadPct | Derived: sum of estimatedEffortHrs of open owned work items divided by weeklyCapacityHours |
 | avgRevisions | Derived, rolling 90 days. Feeds the revision flag and auto-assignment |
@@ -561,7 +553,7 @@ The Reports and Automation screen lists these with a manual Generate Now.
 | # | Screen | Route | Who | What it does |
 | --- | --- | --- | --- | --- |
 | 1 | Login and Profile selection | /login | All | Sign in, resolve role, set default profile from profileAccess (All or last used) |
-| 2 | Team Dashboard | /dashboard | Head, Team Lead | Sections in 12.2. Every card is clickable |
+| 2 | Team Dashboard | /dashboard | Admin, Head, Team Lead | Sections in 12.2. Every card is clickable |
 
 | # | Screen | Route | Who | What it does |
 | --- | --- | --- | --- | --- |
@@ -581,7 +573,7 @@ The Reports and Automation screen lists these with a manual Generate Now.
 | 13 | Data Center / LSQ | /data-center | Head, Team Lead (view) | Health score and issue list |
 | 14 | Reports and Automation | /reports | Head (Team Lead views own team's scheduled reports) | Scheduled reports with Generate Now, automation rules with active or paused switch |
 
-After login: Head and Team Lead land on /dashboard , Team Member on /my-work .
+After login (RootRedirect): Admin, Marketing Head and Team Lead land on /dashboard, Team Member on /my-work.
 
 ### 12.2 Team Dashboard sections (top to bottom)
 
@@ -622,35 +614,40 @@ step.
 
 ### 13.1 Permission keys
 
-| Key | Head | Team Lead | Member |
-| --- | --- | --- | --- |
-| work.create (any profile in scope / own team) | Yes | Yes | No |
-| work.request (ask a Team Lead for work) | Yes | Yes | Yes |
-| work.update.own | Yes | Yes | Yes |
-| assignment.override | Yes | Yes | No |
-| feedback.give (approve, request revision) | Yes | Own team | No |
-| feedback.respond | Yes | Yes | Yes |
-| revision.classify | Yes | Yes | No |
-| campaign.manage | Yes | Own team | No |
-| target.manage | Yes | No | No |
-| target.view | Yes | Yes | No |
-| lead.view | Full | Own profiles | No |
-| datacenter.view | Yes | Yes (view) | No |
-| analytics.team | Full | Own team | Own stats |
-| report.view | Yes | Own team | No |
-| report.configure , automation.manage | Yes | No | No |
+| Key | Admin | Marketing Head | Team Lead | Team Member |
+| --- | --- | --- | --- | --- |
+| work.create (any profile in scope / own team) | Yes | Yes | Yes | No |
+| work.request (ask a Team Lead for work) | Yes | Yes | Yes | Yes |
+| work.update.own | Yes | Yes | Yes | Yes |
+| assignment.override | Yes | Yes | Yes | No |
+| feedback.give (approve, request revision) | Yes | Yes | Own team | No |
+| feedback.respond | Yes | Yes | Yes | Yes |
+| revision.classify | Yes | Yes | Yes | No |
+| campaign.manage | Yes | Yes | Own team | No |
+| target.manage | Yes | Yes | No | No |
+| target.view | Yes | Yes | Yes | No |
+| lead.view | Yes | Full | Own profiles | No |
+| datacenter.view | Yes | Yes | Yes (view) | No |
+| analytics.team | Yes | Full | Own team | Own stats |
+| report.view | Yes | Yes | Own team | No |
+| report.configure , automation.manage | Yes | Yes | No | No |
+| user.approve (approve/reject access requests) | Yes | No | No | No |
+| user.manage (create, invite, suspend, reactivate, set roles, reset pwd) | Yes | No | No | No |
+| people.assign (edit dept, jobRole, profileAccess, reportsTo, capacity) | Yes | Yes (TL & Member only) | No | No |
+| reference.manage (manage reference data) | Yes | No | No | No |
 
-| Key | Head | Team Lead | Member |
-| --- | --- | --- | --- |
-| people.manage , reference.manage (enablers) | Yes | No | No |
+Admin has all permission keys (derived from PERMISSION_KEYS array, so future keys are included automatically).
+Work actions taken by Admin are recorded in ActivityEvent with actingAs: 'admin'. Admin is excluded from
+auto-assignment, workload % calculations, and performance reports.
 
 ### 13.2 API catalog (all routes scoped by resolveScope )
 
 | Module | Routes |
 | --- | --- |
-| auth | login, logout, refresh, me, set-password, switch profile |
-| people | list, create (invite), update, suspend |
-| referenceData | profiles, departments, job roles, enums |
+| auth | login, logout, refresh, me, set-password, switch profile, force-logout |
+| accessRequests | submit (public), list (admin), approve (admin), reject (admin) |
+| people | list, create/invite (admin), update (admin / head for TL & member operational fields), suspend (admin), reactivate (admin), reset-password (admin) |
+| referenceData | profiles, departments, job roles, enums (admin manage) |
 | targets | list by month, create or update |
 | campaigns | list, detail, create, update, tasks, creatives, leads |
 | workItems | list, detail, create, update, recommend-owner, assign, transition, block, unblock, submit, files, calendar |
@@ -723,7 +720,7 @@ components, Vitest setup, CI.
 
 | FORGE | Becomes |
 | --- | --- |
-| User and 8 role keys | Person with 3 roles, job role, department, profileAccess[], reportsToIds[], capacity |
+| User and 8 role keys | Person with 4 roles (admin, marketing_head, team_lead, team_member), job role, department, profileAccess[], reportsToIds[], capacity (jobRole/dept/capacity optional for admin) |
 | CASL abilities and permission keys | New permission keys (13.1) plus profile scoping through resolveScope |
 | Campaign (optional, basic) | Campaign with goal, budget, spend, target link, status, progress |
 | Task and ContentItem | Work Item (one owner, campaign required, 14 types, brief, effort, timeline) |
@@ -742,10 +739,9 @@ components, Vitest setup, CI.
 
 ### 15.3 Retire from the product (not in the specification)
 
-Request intake, triage and dynamic request forms. Requester roles ( dept_lead ,
-
-dept_staff ), sm_manager , viewer , admin . Public Request Access flow. Calendar bulk
-import and clash detection. Content publishing queue. Pipeline templates and automatic
+Request intake, triage and dynamic request forms. Requester roles (dept_lead, dept_staff), sm_manager, viewer.
+(NOTE: `admin` role, the public Request Access flow, and the admin Users and Access Requests pages are KEPT as Admin-only onboarding enablers and adapted in Phase 1).
+Calendar bulk import and clash detection. Content publishing queue. Pipeline templates and automatic
 stage handoffs. Shoot planner. Time tracking, timesheets and leave. File library (DAM) and
 Performance Ads dashboard. Video review studio and version compare. Master data
 editor and audit log screens (reference data is fixed and seeded).
@@ -756,7 +752,7 @@ Code stays in the tagged branch, not in the new build.
 
 | Data | Plan |
 | --- | --- |
-| Users | Map to Person: admin and lead to marketing head, team lead to team lead, _ _ _ worker and sm manager to team member. _ _ Requester and viewer accounts are not migrated unless the Head decides otherwise |
+| Users | Map to Person (10 keys): admin to admin; head and lead to marketing_head; team_lead to team_lead; worker and sm_manager to team_member; management, dept_lead, dept_staff, viewer to suspended and printed in the report. Applied to all 36 existing users. Active TeamAssignment records converted to Person.reportsToIds[]. Overrides supported via scripts/migration-overrides.json by email. |
 | Teams and departments | Map graphics to Design, cinematography and editor to Video Production, content to SEO & Content. Add Social Media, WhatsApp, Performance Marketing, Tech |
 | Requests, ContentItems, Tasks, Deliverables | Recommended: do not migrate. Export to an archive and start with a clean operational database, because the old model has no profile, campaign or target |
 
@@ -817,7 +813,7 @@ Phase 8 depends on LSQ access, so start that conversation in parallel with Phase
 | How an LSQ lead is attributed to a specific work item | Key undefined (for example a campaign tag or UTM). Needed before leadsGenerated can be filled |
 | Inbound lead task has no work type, and a work item needs a campaign | Needs a follow-up work type and a rule for the campaign (lead's own campaign, or a standing inbound campaign) |
 | Who may log in: CEO and Business Head | Email recipients only |
-| Is there an Admin role | No. Marketing Head holds people and reference setup |
+| Is there an Admin role | Yes. 4-role model: Admin is the system owner outside marketing hierarchy. Admin holds all permissions (derived), manages user accounts, invites, access requests, role assignments, passwords, and reference data. Marketing Head manages operational fields only (people.assign). |
 
 | Gap | Proposed handling |
 | --- | --- |

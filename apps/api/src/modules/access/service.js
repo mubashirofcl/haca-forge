@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import { AccessRequest } from './model.js';
 import { User } from '../users/model.js';
-import { AuditLog } from '../audit/model.js';
 import { sendMail, templates } from '../../lib/mailer.js';
 import { env } from '../../config/env.js';
 import { eventBus, EVENTS } from '../../lib/events.js';
@@ -68,7 +67,7 @@ export async function listAccessRequests(query = {}) {
   return AccessRequest.find(filter).sort({ createdAt: -1 });
 }
 
-export async function approveAccessRequest(id, reviewData, adminUser, ip) {
+export async function approveAccessRequest(id, reviewData, adminUser) {
   const accessReq = await AccessRequest.findById(id);
   if (!accessReq) {
     const error = new Error('Access request not found');
@@ -139,24 +138,12 @@ export async function approveAccessRequest(id, reviewData, adminUser, ip) {
   await sendMail({
     to: accessReq.email,
     ...inviteTemplate,
-  });
-
-  // Write AuditLog
-  await AuditLog.create({
-    actor: adminUser._id,
-    actorEmail: adminUser.email,
-    action: 'access_request.approved',
-    entity: 'AccessRequest',
-    entityId: accessReq._id.toString(),
-    before: { status: 'pending' },
-    after: { status: 'approved', assignedRole, userId: user._id },
-    ip,
-  });
+  }).catch(() => {});
 
   return { accessRequest: accessReq, user, inviteSent: true, inviteLink: setPasswordUrl, inviteToken: rawToken };
 }
 
-export async function rejectAccessRequest(id, reason, adminUser, ip) {
+export async function rejectAccessRequest(id, reason, adminUser) {
   const accessReq = await AccessRequest.findById(id);
   if (!accessReq) {
     const error = new Error('Access request not found');
@@ -181,22 +168,10 @@ export async function rejectAccessRequest(id, reason, adminUser, ip) {
     ...template,
   }).catch(() => {});
 
-  // Write AuditLog
-  await AuditLog.create({
-    actor: adminUser._id,
-    actorEmail: adminUser.email,
-    action: 'access_request.rejected',
-    entity: 'AccessRequest',
-    entityId: accessReq._id.toString(),
-    before: { status: 'pending' },
-    after: { status: 'rejected', rejectReason: reason },
-    ip,
-  });
-
   return accessReq;
 }
 
-export async function requestInfoForAccess(id, question, adminUser, ip) {
+export async function requestInfoForAccess(id, question, adminUser) {
   const accessReq = await AccessRequest.findById(id);
   if (!accessReq) {
     const error = new Error('Access request not found');
@@ -218,17 +193,6 @@ export async function requestInfoForAccess(id, question, adminUser, ip) {
     to: accessReq.email,
     ...template,
   }).catch(() => {});
-
-  await AuditLog.create({
-    actor: adminUser._id,
-    actorEmail: adminUser.email,
-    action: 'access_request.info_needed',
-    entity: 'AccessRequest',
-    entityId: accessReq._id.toString(),
-    before: { status: accessReq.status },
-    after: { status: 'info_needed', question },
-    ip,
-  });
 
   return accessReq;
 }
@@ -260,4 +224,3 @@ export async function bulkApproveAccessRequests({ requestIds, defaultRole, defau
 
   return results;
 }
-

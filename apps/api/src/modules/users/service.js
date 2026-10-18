@@ -1,9 +1,7 @@
 import crypto from 'crypto';
 import { User } from './model.js';
-import { AuditLog } from '../audit/model.js';
 import { env } from '../../config/env.js';
 import { sendMail, templates } from '../../lib/mailer.js';
-import { deactivateAssignmentsForUser } from '../teamAssignments/service.js';
 
 export async function listUsers(query = {}) {
   const filter = {};
@@ -21,7 +19,7 @@ export async function listUsers(query = {}) {
   return User.find(filter).sort({ createdAt: -1 });
 }
 
-export async function updateUserRole(userId, newRole, adminUser, ip) {
+export async function updateUserRole(userId, newRole) {
   const user = await User.findById(userId);
   if (!user) {
     const error = new Error('User not found');
@@ -30,33 +28,12 @@ export async function updateUserRole(userId, newRole, adminUser, ip) {
     throw error;
   }
 
-  const oldRole = user.role;
   user.role = newRole;
   await user.save();
-
-  // If changing role away from worker or team_lead, automatically soft-end active TeamAssignments
-  if (
-    (oldRole === 'worker' && newRole !== 'worker') ||
-    (oldRole === 'team_lead' && newRole !== 'team_lead')
-  ) {
-    await deactivateAssignmentsForUser(user._id, 'role_changed', adminUser);
-  }
-
-  await AuditLog.create({
-    actor: adminUser._id,
-    actorEmail: adminUser.email,
-    action: 'user.role_changed',
-    entity: 'User',
-    entityId: user._id.toString(),
-    before: { role: oldRole },
-    after: { role: newRole },
-    ip,
-  });
-
   return user;
 }
 
-export async function updateUserStatus(userId, newStatus, adminUser, ip) {
+export async function updateUserStatus(userId, newStatus, adminUser) {
   const user = await User.findById(userId);
   if (!user) {
     const error = new Error('User not found');
@@ -73,28 +50,16 @@ export async function updateUserStatus(userId, newStatus, adminUser, ip) {
     throw error;
   }
 
-  const oldStatus = user.status;
   user.status = newStatus;
   if (newStatus === 'suspended') {
     user.refreshTokenHash = null; // Invalidate current session
   }
   await user.save();
 
-  await AuditLog.create({
-    actor: adminUser._id,
-    actorEmail: adminUser.email,
-    action: `user.${newStatus}`,
-    entity: 'User',
-    entityId: user._id.toString(),
-    before: { status: oldStatus },
-    after: { status: newStatus },
-    ip,
-  });
-
   return user;
 }
 
-export async function forceLogoutUser(userId, adminUser, ip) {
+export async function forceLogoutUser(userId) {
   const user = await User.findById(userId);
   if (!user) {
     const error = new Error('User not found');
@@ -106,19 +71,10 @@ export async function forceLogoutUser(userId, adminUser, ip) {
   user.refreshTokenHash = null;
   await user.save();
 
-  await AuditLog.create({
-    actor: adminUser._id,
-    actorEmail: adminUser.email,
-    action: 'user.forced_logout',
-    entity: 'User',
-    entityId: user._id.toString(),
-    ip,
-  });
-
   return { success: true };
 }
 
-export async function updateUserAssignment(userId, { teamId, department, skills, capacity }, adminUser, ip) {
+export async function updateUserAssignment(userId, { teamId, department, skills, capacity }) {
   const user = await User.findById(userId);
   if (!user) {
     const error = new Error('User not found');
@@ -127,40 +83,16 @@ export async function updateUserAssignment(userId, { teamId, department, skills,
     throw error;
   }
 
-  const before = {
-    teamId: user.teamId,
-    department: user.department,
-    skills: user.skills,
-    capacity: user.capacity,
-  };
-
   if (teamId !== undefined) user.teamId = teamId;
   if (department !== undefined) user.department = department;
   if (skills !== undefined) user.skills = skills;
   if (capacity !== undefined) user.capacity = capacity;
 
   await user.save();
-
-  await AuditLog.create({
-    actor: adminUser._id,
-    actorEmail: adminUser.email,
-    action: 'user.assignment_updated',
-    entity: 'User',
-    entityId: user._id.toString(),
-    before,
-    after: {
-      teamId: user.teamId,
-      department: user.department,
-      skills: user.skills,
-      capacity: user.capacity,
-    },
-    ip,
-  });
-
   return user;
 }
 
-export async function resetUserPasswordByAdmin(userId, adminUser, ip) {
+export async function resetUserPasswordByAdmin(userId) {
   const user = await User.findById(userId);
   if (!user) {
     const error = new Error('User not found');
@@ -177,15 +109,6 @@ export async function resetUserPasswordByAdmin(userId, adminUser, ip) {
   user.resetPasswordExpiresAt = expiresAt;
   user.refreshTokenHash = null; // Revoke current session
   await user.save();
-
-  await AuditLog.create({
-    actor: adminUser._id,
-    actorEmail: adminUser.email,
-    action: 'user.password_reset_triggered',
-    entity: 'User',
-    entityId: user._id.toString(),
-    ip,
-  });
 
   const resetUrl = `${env.FRONTEND_URL}/set-password?token=${rawToken}`;
 
@@ -208,4 +131,3 @@ export async function resetUserPasswordByAdmin(userId, adminUser, ip) {
     resetLink: resetUrl,
   };
 }
-

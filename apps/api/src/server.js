@@ -21,25 +21,13 @@ import statusRoutes from './modules/status/routes.js';
 import authRoutes from './modules/auth/routes.js';
 import accessRoutes from './modules/access/routes.js';
 import userRoutes from './modules/users/routes.js';
-import auditRoutes from './modules/audit/routes.js';
 import departmentRoutes from './modules/departments/routes.js';
-import teamRoutes from './modules/teams/routes.js';
-import masterDataRoutes from './modules/masterData/routes.js';
-import requestRoutes from './modules/requests/routes.js';
 import notificationRoutes from './modules/notifications/routes.js';
-import contentRoutes from './modules/content/routes.js';
-import taskRoutes from './modules/tasks/routes.js';
-import commentRoutes from './modules/comments/routes.js';
 import calendarRoutes from './modules/calendar/routes.js';
-import shootRoutes from './modules/shoots/routes.js';
-import timeRoutes from './modules/time/routes.js';
-import leaveRoutes from './modules/leave/routes.js';
 import uploadRoutes from './modules/uploads/routes.js';
-import deliverableRoutes from './modules/deliverables/routes.js';
 import reportRoutes from './modules/reports/routes.js';
 import dashboardRoutes from './modules/reports/dashboard.routes.js';
 import docsRoutes from './modules/docs/routes.js';
-import teamAssignmentRoutes from './modules/teamAssignments/routes.js';
 import { initQueues } from './lib/queue.js';
 import { initDomainEventListeners } from './modules/notifications/service.js';
 
@@ -155,49 +143,7 @@ io.on('connection', (socket) => {
       const normalizedRole = normalizeRole(socket.user.role);
       socket.join(`role:${normalizedRole}`);
     }
-
-    const teamKey = socket.user.team || socket.user.teamId;
-    if (teamKey) {
-      socket.join(`team:${teamKey}`);
-    }
   }
-
-  socket.on('join_task', (taskId) => {
-    if (taskId) socket.join(`task:${taskId}`);
-  });
-
-  socket.on('leave_task', (taskId) => {
-    if (taskId) socket.leave(`task:${taskId}`);
-  });
-
-  socket.on('join_request', (requestId) => {
-    if (requestId) socket.join(`request:${requestId}`);
-  });
-
-  socket.on('leave_request', (requestId) => {
-    if (requestId) socket.leave(`request:${requestId}`);
-  });
-
-  socket.on('task:typing', ({ taskId, isTyping }) => {
-    if (taskId) {
-      socket.to(`task:${taskId}`).emit('task:typing', {
-        userId: socket.user?.userId,
-        name: socket.user?.name,
-        isTyping,
-      });
-    }
-  });
-
-  socket.on('task:comment', (payload) => {
-    if (payload?.taskId) {
-      io.to(`task:${payload.taskId}`).emit('task:comment', {
-        ...payload,
-        userId: socket.user?.userId,
-        name: socket.user?.name,
-        timestamp: new Date(),
-      });
-    }
-  });
 });
 
 // 6. API Routes
@@ -205,29 +151,13 @@ app.use('/api', statusRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin/access-requests', accessRoutes);
 app.use('/api/admin/users', userRoutes);
-app.use('/api/admin/audit-log', auditRoutes);
 app.use('/api/departments', departmentRoutes);
-app.use('/api/teams', teamRoutes);
-app.use('/api/master-data', masterDataRoutes);
-app.use('/api/requests', requestRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/content', contentRoutes);
-app.use('/api/tasks', taskRoutes);
-app.use('/api/comments', commentRoutes);
 app.use('/api/calendar', calendarRoutes);
-app.use('/api/shoots', shootRoutes);
-app.use('/api/time', timeRoutes);
-app.use('/api/leave', leaveRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/uploads', uploadRoutes);
-app.use('/api/deliverables', deliverableRoutes);
-app.use('/api/files', (req, res, next) => {
-  req.url = '/files' + (req.url === '/' ? '' : req.url);
-  deliverableRoutes(req, res, next);
-});
 app.use('/api/reports', reportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/team-assignments', teamAssignmentRoutes);
 app.use('/api/docs', docsRoutes);
 
 app.set('io', io);

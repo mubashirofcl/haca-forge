@@ -84,9 +84,9 @@ export const UsersPage: React.FC = () => {
     setIsLoading(true);
     try {
       const [usersRes, teamsRes, deptsRes] = await Promise.all([
-        apiFetch<{ data: UserRecord[] }>('/admin/users'),
-        apiFetch<{ teams: TeamOption[] }>('/teams'),
-        apiFetch<{ departments: DeptOption[] }>('/departments'),
+        apiFetch<{ data: UserRecord[] }>('/admin/users').catch(() => ({ data: [] })),
+        apiFetch<{ teams: TeamOption[] }>('/teams').catch(() => ({ teams: [] })),
+        apiFetch<{ departments: DeptOption[] }>('/departments').catch(() => ({ departments: [] })),
       ]);
       setUsers(usersRes.data || []);
       setTeams(teamsRes.teams || []);

@@ -13,18 +13,15 @@ import {
   Building2,
   Layers,
   FileText,
-  Inbox,
-  Send,
   Film,
   Calendar,
-  Video,
   Clock,
   CheckSquare,
   TrendingUp,
-  FolderArchive,
   ChevronDown,
   Menu,
   X,
+  AlertCircle,
 } from 'lucide-react';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationToastContainer } from './NotificationToast';
@@ -99,179 +96,159 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     setShowMobileMenu(false);
   }, [location.pathname]);
 
-  // Pipelines direct tab path
-  const pipelinesPath =
-    user?.role === 'admin'
-      ? '/admin'
-      : user?.role === 'head'
-      ? '/lead'
-      : user?.role === 'worker'
-      ? '/worker'
-      : '/requester';
+  // Dashboard direct tab path
+  const dashboardPath = '/dashboard';
+  const isDashboardActive = ['/dashboard', '/'].includes(location.pathname);
 
-  const isPipelinesActive = ['/admin', '/lead', '/worker', '/requester', '/'].includes(location.pathname);
-
-  // Grouped Navigation Categories
+  // Grouped Navigation Categories for HACA Marketing OS
   const navCategories: NavCategory[] = [
     {
-      id: 'creative',
-      label: 'Creative Studio',
+      id: 'workspace',
+      label: 'Workspace',
       items: [
         {
-          id: 'content-hub',
-          label: 'Content Hub',
-          path: '/lead/content',
-          description: 'Campaigns & asset pipelines',
-          icon: Film,
-          show: ['admin', 'head'].includes(user?.role || ''),
-          activeMatcher: (p) => p.startsWith('/lead/content'),
+          id: 'dashboard',
+          label: 'Team Dashboard',
+          path: '/dashboard',
+          description: 'Monthly targets, KPIs & creative output',
+          icon: LayoutDashboard,
+          show: true,
+          activeMatcher: (p) => p === '/dashboard' || p === '/',
         },
         {
-          id: 'content-calendar',
-          label: 'Content Calendar',
-          path: '/calendar',
-          description: 'Multi-channel social scheduling',
-          icon: Calendar,
-          show: ['admin', 'head', 'sm_manager'].includes(user?.role || ''),
-          activeMatcher: (p) => p.startsWith('/calendar') || p.startsWith('/sm'),
-        },
-        {
-          id: 'shoot-planner',
-          label: 'Shoot Planner',
-          path: '/shoots',
-          description: 'Call sheets, locations & shoot crews',
-          icon: Video,
-          show: ['admin', 'head', 'team_lead', 'worker'].includes(user?.role || ''),
-          activeMatcher: (p) => p.startsWith('/shoots'),
-        },
-        {
-          id: 'review-studio',
-          label: 'Review Studio',
-          path: '/lead/reviews',
-          description: 'Proofing & stakeholder approvals',
+          id: 'my-work',
+          label: 'My Work',
+          path: '/my-work',
+          description: 'Personal priority queue & actions',
           icon: CheckSquare,
-          show: ['admin', 'head', 'team_lead'].includes(user?.role || ''),
-          activeMatcher: (p) => p.startsWith('/lead/reviews'),
-        },
-        {
-          id: 'asset-library',
-          label: 'Asset Library',
-          path: '/library',
-          description: 'Centralized digital brand library',
-          icon: FolderArchive,
           show: true,
-          activeMatcher: (p) => p.startsWith('/library'),
-        },
-      ],
-    },
-    {
-      id: 'operations',
-      label: 'Operations',
-      items: [
-        {
-          id: 'team-ops',
-          label: 'Team Operations',
-          path: '/teams',
-          description: 'Staff capacity & department rosters',
-          icon: Users,
-          show: ['admin', 'head', 'team_lead'].includes(user?.role || ''),
-          activeMatcher: (p) => p.startsWith('/teams') && !p.startsWith('/admin/teams-departments'),
+          activeMatcher: (p) => p.startsWith('/my-work'),
         },
         {
-          id: 'timesheets',
-          label: 'Timesheets',
-          path: '/timesheets',
-          description: 'Time tracking, logs & attendance',
+          id: 'calendar',
+          label: 'Calendar',
+          path: '/calendar',
+          description: 'Monthly marketing campaign schedule',
+          icon: Calendar,
+          show: true,
+          activeMatcher: (p) => p.startsWith('/calendar'),
+        },
+        {
+          id: 'todo',
+          label: 'Todo & Priorities',
+          path: '/todo',
+          description: 'Overdue, Today & Upcoming tasks',
           icon: Clock,
-          show: ['admin', 'head', 'team_lead', 'worker'].includes(user?.role || ''),
-          activeMatcher: (p) => p.startsWith('/timesheets'),
-        },
-        {
-          id: 'performance',
-          label: 'Performance Ads',
-          path: '/performance',
-          description: 'Paid ad analytics & ROAS tracking',
-          icon: TrendingUp,
-          show: ['admin', 'head', 'dept_lead'].includes(user?.role || ''),
-          activeMatcher: (p) => p.startsWith('/performance'),
-        },
-        {
-          id: 'triage',
-          label: 'Triage Inbox',
-          path: '/lead/inbox',
-          description: 'Incoming ticket queue & triage',
-          icon: Inbox,
-          show: hasPermission('request.triage'),
-          activeMatcher: (p) => p.startsWith('/lead/inbox'),
-        },
-        {
-          id: 'requests',
-          label: 'Requests Portal',
-          path: '/requester',
-          description: 'Submit & track marketing requests',
-          icon: Send,
           show: true,
-          activeMatcher: (p) => p.startsWith('/requester'),
+          activeMatcher: (p) => p.startsWith('/todo'),
         },
       ],
     },
     {
-      id: 'admin',
-      label: 'Administration',
+      id: 'campaigns-work',
+      label: 'Campaigns & Work',
       items: [
         {
-          id: 'users',
-          label: 'Staff & Roles',
-          path: '/admin/users',
-          description: 'User accounts & RBAC management',
-          icon: Users,
-          show: hasPermission('user.manage'),
-          activeMatcher: (p) => p.startsWith('/admin/users'),
-        },
-        {
-          id: 'teams-depts',
-          label: 'Teams & Depts',
-          path: '/admin/teams-departments',
-          description: 'Department structures & leads',
-          icon: Building2,
-          show: hasPermission('settings.manage'),
-          activeMatcher: (p) => p.startsWith('/admin/teams-departments'),
-        },
-        {
-          id: 'access-reqs',
-          label: 'Access Requests',
-          path: '/admin/access-requests',
-          description: 'Pending user access & onboarding',
-          icon: ShieldCheck,
-          show: hasPermission('user.approve'),
-          activeMatcher: (p) => p.startsWith('/admin/access-requests'),
-        },
-        {
-          id: 'master-data',
-          label: 'Master Data',
-          path: '/admin/master-data',
-          description: 'System schemas & custom taxonomies',
+          id: 'campaigns',
+          label: 'Campaigns',
+          path: '/campaigns',
+          description: 'Goals, budgets, pace & creatives',
           icon: Layers,
-          show: hasPermission('settings.manage'),
-          activeMatcher: (p) => p.startsWith('/admin/master-data'),
+          show: true,
+          activeMatcher: (p) => p.startsWith('/campaigns'),
+        },
+        {
+          id: 'work-items',
+          label: 'Work Items',
+          path: '/work',
+          description: 'Production deliverables across 7 profiles',
+          icon: Film,
+          show: true,
+          activeMatcher: (p) => p.startsWith('/work'),
+        },
+        {
+          id: 'feedback',
+          label: 'Feedback & Revisions',
+          path: '/feedback',
+          description: 'Review threads & revision history',
+          icon: FileText,
+          show: true,
+          activeMatcher: (p) => p.startsWith('/feedback'),
+        },
+        {
+          id: 'issues',
+          label: 'Issues & Blockers',
+          path: '/issues',
+          description: 'Active blockers & revision flags',
+          icon: AlertCircle,
+          show: true,
+          activeMatcher: (p) => p.startsWith('/issues'),
+        },
+      ],
+    },
+    {
+      id: 'analytics-ops',
+      label: 'Analytics & Ops',
+      items: [
+        {
+          id: 'workload',
+          label: 'Team Workload',
+          path: '/workload',
+          description: 'Capacity rollups & workload bands',
+          icon: Users,
+          show: true,
+          activeMatcher: (p) => p.startsWith('/workload'),
+        },
+        {
+          id: 'leads',
+          label: 'Lead Funnel',
+          path: '/leads',
+          description: '12-stage LSQ funnel & CPL metrics',
+          icon: TrendingUp,
+          show: true,
+          activeMatcher: (p) => p.startsWith('/leads'),
+        },
+        {
+          id: 'data-center',
+          label: 'Data Center / LSQ',
+          path: '/data-center',
+          description: 'LeadSquared sync health & discrepancy log',
+          icon: Building2,
+          show: true,
+          activeMatcher: (p) => p.startsWith('/data-center'),
         },
         {
           id: 'reports',
-          label: 'Reports & Analytics',
+          label: 'Reports & Automation',
           path: '/reports',
-          description: 'Executive KPIs & SLA performance',
+          description: '6 Report definitions & 7 automation rules',
           icon: BarChart3,
-          show: hasPermission('report.view'),
+          show: true,
           activeMatcher: (p) => p.startsWith('/reports'),
         },
+      ],
+    },
+    {
+      id: 'people-access',
+      label: 'People & Access',
+      items: [
         {
-          id: 'audit',
-          label: 'Audit Trail',
-          path: '/admin/audit-log',
-          description: 'System security & access history',
-          icon: FileText,
-          show: hasPermission('audit.view'),
-          activeMatcher: (p) => p.startsWith('/admin/audit-log'),
+          id: 'people',
+          label: 'People Setup',
+          path: '/people',
+          description: 'User accounts & operational assignments',
+          icon: Users,
+          show: true,
+          activeMatcher: (p) => p.startsWith('/people') || p.startsWith('/admin/users'),
+        },
+        {
+          id: 'access-requests',
+          label: 'Access Requests',
+          path: '/admin/access-requests',
+          description: 'Pending user access & onboarding invites',
+          icon: ShieldCheck,
+          show: hasPermission('user.approve'),
+          activeMatcher: (p) => p.startsWith('/admin/access-requests'),
         },
       ],
     },
@@ -280,12 +257,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Flatten accessible items for quick search jump
   const allSearchableItems = [
     {
-      id: 'pipelines',
-      label: 'Pipelines Dashboard',
-      path: pipelinesPath,
-      description: 'Main case workflow and board overview',
+      id: 'dashboard',
+      label: 'Team Dashboard',
+      path: dashboardPath,
+      description: 'Monthly marketing targets & creative overview',
       icon: LayoutDashboard,
-      category: 'Workflows',
+      category: 'Workspace',
     },
     ...navCategories.flatMap((cat) =>
       cat.items
@@ -311,89 +288,93 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     {
       id: 'dashboard',
       icon: LayoutDashboard,
-      label: 'Pipelines',
-      path: pipelinesPath,
-      active: isPipelinesActive,
+      label: 'Dashboard',
+      path: dashboardPath,
+      active: isDashboardActive,
     },
     {
-      id: 'content',
+      id: 'my-work',
+      icon: CheckSquare,
+      label: 'My Work',
+      path: '/my-work',
+      active: location.pathname.startsWith('/my-work'),
+    },
+    {
+      id: 'campaigns',
+      icon: Layers,
+      label: 'Campaigns',
+      path: '/campaigns',
+      active: location.pathname.startsWith('/campaigns'),
+    },
+    {
+      id: 'work',
       icon: Film,
-      label: 'Content Hub',
-      path: '/lead/content',
-      active: location.pathname.startsWith('/lead/content'),
-      show: ['admin', 'head'].includes(user?.role || ''),
+      label: 'Work Items',
+      path: '/work',
+      active: location.pathname.startsWith('/work'),
     },
     {
       id: 'calendar',
       icon: Calendar,
-      label: 'Content Calendar',
+      label: 'Calendar',
       path: '/calendar',
-      active: location.pathname.startsWith('/calendar') || location.pathname.startsWith('/sm'),
-      show: ['admin', 'head', 'sm_manager'].includes(user?.role || ''),
+      active: location.pathname.startsWith('/calendar'),
     },
     {
-      id: 'shoots',
-      icon: Video,
-      label: 'Shoot Planner',
-      path: '/shoots',
-      active: location.pathname.startsWith('/shoots'),
-      show: ['admin', 'head', 'team_lead', 'worker'].includes(user?.role || ''),
+      id: 'feedback',
+      icon: FileText,
+      label: 'Feedback',
+      path: '/feedback',
+      active: location.pathname.startsWith('/feedback'),
     },
     {
-      id: 'reviews',
-      icon: CheckSquare,
-      label: 'Review Studio',
-      path: '/lead/reviews',
-      active: location.pathname.startsWith('/lead/reviews'),
-      show: ['admin', 'head', 'team_lead'].includes(user?.role || ''),
-    },
-    {
-      id: 'team-ops',
+      id: 'workload',
       icon: Users,
-      label: 'Team Operations',
-      path: '/teams',
-      active: location.pathname.startsWith('/teams') && !location.pathname.startsWith('/admin/teams-departments'),
-      show: ['admin', 'head', 'team_lead'].includes(user?.role || ''),
+      label: 'Workload',
+      path: '/workload',
+      active: location.pathname.startsWith('/workload'),
     },
     {
-      id: 'timesheets',
+      id: 'todo',
       icon: Clock,
-      label: 'Timesheets',
-      path: '/timesheets',
-      active: location.pathname.startsWith('/timesheets'),
-      show: ['admin', 'head', 'team_lead', 'worker'].includes(user?.role || ''),
+      label: 'Todo',
+      path: '/todo',
+      active: location.pathname.startsWith('/todo'),
     },
     {
-      id: 'performance',
+      id: 'issues',
+      icon: AlertCircle,
+      label: 'Issues',
+      path: '/issues',
+      active: location.pathname.startsWith('/issues'),
+    },
+    {
+      id: 'leads',
       icon: TrendingUp,
-      label: 'Performance Ads',
-      path: '/performance',
-      active: location.pathname.startsWith('/performance'),
-      show: ['admin', 'head', 'dept_lead'].includes(user?.role || ''),
+      label: 'Leads',
+      path: '/leads',
+      active: location.pathname.startsWith('/leads'),
     },
     {
-      id: 'library',
-      icon: FolderArchive,
-      label: 'Asset Library',
-      path: '/library',
-      active: location.pathname.startsWith('/library'),
-      show: true,
+      id: 'data-center',
+      icon: Building2,
+      label: 'Data Center',
+      path: '/data-center',
+      active: location.pathname.startsWith('/data-center'),
     },
     {
-      id: 'triage',
-      icon: Inbox,
-      label: 'Triage Inbox',
-      path: '/lead/inbox',
-      active: location.pathname.startsWith('/lead/inbox'),
-      show: hasPermission('request.triage'),
+      id: 'reports',
+      icon: BarChart3,
+      label: 'Reports',
+      path: '/reports',
+      active: location.pathname.startsWith('/reports'),
     },
     {
-      id: 'requests',
-      icon: Send,
-      label: 'Requests Portal',
-      path: '/requester',
-      active: location.pathname.startsWith('/requester'),
-      show: true,
+      id: 'people',
+      icon: Users,
+      label: 'People',
+      path: '/people',
+      active: location.pathname.startsWith('/people') || location.pathname.startsWith('/admin/users'),
     },
     {
       id: 'access',
@@ -402,46 +383,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       path: '/admin/access-requests',
       active: location.pathname.startsWith('/admin/access-requests'),
       show: hasPermission('user.approve'),
-    },
-    {
-      id: 'users',
-      icon: Users,
-      label: 'Users & Roles',
-      path: '/admin/users',
-      active: location.pathname.startsWith('/admin/users'),
-      show: hasPermission('user.manage'),
-    },
-    {
-      id: 'teams',
-      icon: Building2,
-      label: 'Teams & Departments',
-      path: '/admin/teams-departments',
-      active: location.pathname.startsWith('/admin/teams-departments'),
-      show: hasPermission('settings.manage'),
-    },
-    {
-      id: 'master-data',
-      icon: Layers,
-      label: 'Master Data',
-      path: '/admin/master-data',
-      active: location.pathname.startsWith('/admin/master-data'),
-      show: hasPermission('settings.manage'),
-    },
-    {
-      id: 'audit',
-      icon: FileText,
-      label: 'Audit Log',
-      path: '/admin/audit-log',
-      active: location.pathname.startsWith('/admin/audit-log'),
-      show: hasPermission('audit.view'),
-    },
-    {
-      id: 'reports',
-      icon: BarChart3,
-      label: 'Analytics',
-      path: '/reports',
-      active: location.pathname.startsWith('/reports'),
-      show: hasPermission('report.view'),
     },
   ];
 
@@ -475,16 +416,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             ref={navRef}
             className="hidden md:flex items-center p-1 glass-pill-container border border-white/90 relative shrink-0"
           >
-            {/* Pipelines Direct Tab */}
+            {/* Dashboard Direct Tab */}
             <Link
-              to={pipelinesPath}
+              to={dashboardPath}
               className={`px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 ${
-                isPipelinesActive
+                isDashboardActive
                   ? 'pill-active'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
               }`}
             >
-              Pipelines
+              Dashboard
             </Link>
 
             {/* Categorized Dropdowns / Direct Tabs */}
@@ -649,14 +590,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="md:hidden glass-panel border-b border-white bg-white/95 px-4 py-4 space-y-4 animate-in slide-in-from-top duration-200 shadow-xl max-h-[calc(100vh-70px)] overflow-y-auto">
             <div className="space-y-1">
               <Link
-                to={pipelinesPath}
+                to={dashboardPath}
                 onClick={() => setShowMobileMenu(false)}
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold ${
-                  isPipelinesActive ? 'bg-[#0d0e12] text-white' : 'text-slate-700 hover:bg-slate-100'
+                  isDashboardActive ? 'bg-[#0d0e12] text-white' : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <LayoutDashboard className="w-4 h-4" />
-                <span>Pipelines</span>
+                <span>Dashboard</span>
               </Link>
             </div>
 
