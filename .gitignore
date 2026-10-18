@@ -41,3 +41,4 @@ temp/
 .mongodb_data/
 .agent/
 .agents/
+backup-before-marketing-os/
