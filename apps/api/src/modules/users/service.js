@@ -3,6 +3,7 @@ import { User } from './model.js';
 import { AuditLog } from '../audit/model.js';
 import { env } from '../../config/env.js';
 import { sendMail, templates } from '../../lib/mailer.js';
+import { deactivateAssignmentsForUser } from '../teamAssignments/service.js';
 
 export async function listUsers(query = {}) {
   const filter = {};
@@ -32,6 +33,14 @@ export async function updateUserRole(userId, newRole, adminUser, ip) {
   const oldRole = user.role;
   user.role = newRole;
   await user.save();
+
+  // If changing role away from worker or team_lead, automatically soft-end active TeamAssignments
+  if (
+    (oldRole === 'worker' && newRole !== 'worker') ||
+    (oldRole === 'team_lead' && newRole !== 'team_lead')
+  ) {
+    await deactivateAssignmentsForUser(user._id, 'role_changed', adminUser);
+  }
 
   await AuditLog.create({
     actor: adminUser._id,

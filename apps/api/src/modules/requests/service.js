@@ -47,8 +47,8 @@ function validateDynamicFields(schema, values) {
 export function buildScopingFilter(user) {
   if (!user) return { _id: null };
 
-  // 1. Admin and Marketing Lead see all requests
-  if (user.role === 'admin' || user.role === 'lead') {
+  // 1. Admin and Marketing Head see all requests
+  if (['admin', 'head', 'lead'].includes(user.role)) {
     return {};
   }
 
@@ -253,7 +253,7 @@ export async function editRequest(id, payload, user, io) {
 
   // Verify ownership or lead/admin
   const isOwner = String(reqDoc.requester) === String(user._id);
-  const isPrivileged = ['admin', 'lead'].includes(user.role);
+  const isPrivileged = ['admin', 'head', 'lead'].includes(user.role);
   if (!isOwner && !isPrivileged) {
     const err = new Error('You are not authorized to edit this request.');
     err.statusCode = 403;
@@ -289,8 +289,8 @@ export async function editRequest(id, payload, user, io) {
       io,
     });
 
-    // Notify lead
-    const leadUsers = await User.find({ role: { $in: ['lead', 'admin'] }, status: 'active' }).select('_id');
+    // Notify head/lead/admin
+    const leadUsers = await User.find({ role: { $in: ['head', 'lead', 'admin'] }, status: 'active' }).select('_id');
     for (const lead of leadUsers) {
       await createNotification({
         recipient: lead._id,
@@ -319,7 +319,7 @@ export async function cancelRequest(id, user, reason, io) {
   }
 
   const isOwner = String(reqDoc.requester) === String(user._id);
-  const isPrivileged = ['admin', 'lead'].includes(user.role);
+  const isPrivileged = ['admin', 'head', 'lead'].includes(user.role);
   if (!isOwner && !isPrivileged) {
     const err = new Error('You are not authorized to cancel this request.');
     err.statusCode = 403;
@@ -369,7 +369,7 @@ export async function addComment(id, text, user, io) {
   // Notify other party
   const isOwner = String(reqDoc.requester) === String(user._id);
   if (isOwner) {
-    const leads = await User.find({ role: { $in: ['lead', 'admin'] } }).select('_id');
+    const leads = await User.find({ role: { $in: ['head', 'lead', 'admin'] } }).select('_id');
     for (const lead of leads) {
       await createNotification({
         recipient: lead._id,

@@ -154,7 +154,7 @@ async function seedDemoData() {
       {
         name: 'Sarah Jenkins',
         email: 'sarah.lead@marketingportal.com',
-        role: 'lead',
+        role: 'head',
         passwordHash: sharedPasswordHash,
         status: 'active',
         capacity: 40,

@@ -1,5 +1,6 @@
 import { Notification } from './model.js';
 import { User } from '../users/model.js';
+import { TeamAssignment } from '../teamAssignments/model.js';
 import { logger } from '../../lib/logger.js';
 import { enqueueEmail } from '../../lib/queue.js';
 import { eventBus, EVENTS } from '../../lib/events.js';
@@ -189,7 +190,7 @@ export async function handleDomainEvent(eventName, payload, io = ioInstance) {
       case EVENTS.REQUEST_CREATED: {
         preferenceKey = 'requestUpdates';
         const leads = await User.find({
-          role: { $in: ['marketing_lead', 'admin'] },
+          role: { $in: ['head', 'lead', 'marketing_lead', 'admin'] },
           status: 'active',
         }).select('_id email name notificationPreferences');
 
@@ -245,10 +246,20 @@ export async function handleDomainEvent(eventName, payload, io = ioInstance) {
         if (payload.assignee) {
           const user = await User.findById(payload.assignee).select('_id email name notificationPreferences');
           if (user) recipients.add(user);
+
+          const assignments = await TeamAssignment.find({ workerId: payload.assignee, active: true }).populate(
+            'teamLeadId',
+            '_id email name notificationPreferences status'
+          );
+          for (const a of assignments) {
+            if (a.teamLeadId && a.teamLeadId.status !== 'inactive') {
+              recipients.add(a.teamLeadId);
+            }
+          }
         }
         if (payload.team) {
           const teamLeads = await User.find({
-            role: { $in: ['marketing_lead', `${payload.team}_lead`, 'creative_lead', 'video_lead', 'copy_lead'] },
+            role: { $in: ['head', 'lead', 'marketing_lead', 'team_lead', `${payload.team}_lead`] },
             status: 'active',
           }).select('_id email name notificationPreferences');
           for (const tl of teamLeads) recipients.add(tl);
@@ -290,8 +301,20 @@ export async function handleDomainEvent(eventName, payload, io = ioInstance) {
           const user = await User.findById(payload.reviewer).select('_id email name notificationPreferences');
           if (user) recipients.add(user);
         } else {
+          if (payload.assignee || payload.uploadedBy) {
+            const workerId = payload.assignee || payload.uploadedBy;
+            const assignments = await TeamAssignment.find({ workerId, active: true }).populate(
+              'teamLeadId',
+              '_id email name notificationPreferences status'
+            );
+            for (const a of assignments) {
+              if (a.teamLeadId && a.teamLeadId.status !== 'inactive') {
+                recipients.add(a.teamLeadId);
+              }
+            }
+          }
           const leads = await User.find({
-            role: { $in: ['marketing_lead', 'creative_lead', 'video_lead'] },
+            role: { $in: ['head', 'lead', 'marketing_lead', 'team_lead', 'admin'] },
             status: 'active',
           }).select('_id email name notificationPreferences');
           for (const l of leads) recipients.add(l);
@@ -356,6 +379,16 @@ export async function handleDomainEvent(eventName, payload, io = ioInstance) {
         if (payload.assignee) {
           const user = await User.findById(payload.assignee).select('_id email name notificationPreferences');
           if (user) recipients.add(user);
+
+          const assignments = await TeamAssignment.find({ workerId: payload.assignee, active: true }).populate(
+            'teamLeadId',
+            '_id email name notificationPreferences status'
+          );
+          for (const a of assignments) {
+            if (a.teamLeadId && a.teamLeadId.status !== 'inactive') {
+              recipients.add(a.teamLeadId);
+            }
+          }
         }
         notificationTitle = `Upcoming Deadline: ${payload.title || 'Task'}`;
         notificationMessage = `Deadline in ~${payload.hoursLeft || 24} hours on ${new Date(payload.dueDate).toLocaleDateString()}`;
@@ -376,9 +409,19 @@ export async function handleDomainEvent(eventName, payload, io = ioInstance) {
         if (payload.assignee) {
           const user = await User.findById(payload.assignee).select('_id email name notificationPreferences');
           if (user) recipients.add(user);
+
+          const assignments = await TeamAssignment.find({ workerId: payload.assignee, active: true }).populate(
+            'teamLeadId',
+            '_id email name notificationPreferences status'
+          );
+          for (const a of assignments) {
+            if (a.teamLeadId && a.teamLeadId.status !== 'inactive') {
+              recipients.add(a.teamLeadId);
+            }
+          }
         }
         const leads = await User.find({
-          role: { $in: ['marketing_lead', 'admin'] },
+          role: { $in: ['head', 'lead', 'marketing_lead', 'admin'] },
           status: 'active',
         }).select('_id email name notificationPreferences');
         for (const l of leads) recipients.add(l);

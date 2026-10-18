@@ -73,8 +73,11 @@ export const LoginPage: React.FC = () => {
         case 'admin':
           navigate('/admin');
           break;
-        case 'lead':
+        case 'head':
           navigate('/lead');
+          break;
+        case 'team_lead':
+          navigate('/teams');
           break;
         case 'worker':
           navigate('/worker');
@@ -84,7 +87,7 @@ export const LoginPage: React.FC = () => {
         case 'dept_staff':
           navigate('/requester');
           break;
-        case 'viewer':
+        case 'management':
           navigate('/reports');
           break;
         default:
@@ -394,8 +397,9 @@ export const LoginPage: React.FC = () => {
                       <option value="dept_lead">Department Lead</option>
                       <option value="sm_manager">Social Media Manager</option>
                       <option value="worker">Production Worker (Designer/Editor/Writer)</option>
-                      <option value="lead">Marketing Manager / Lead</option>
-                      <option value="viewer">Management Viewer</option>
+                      <option value="team_lead">Team Lead</option>
+                      <option value="head">Marketing Head</option>
+                      <option value="management">Management</option>
                     </select>
                   </div>
                   <div>

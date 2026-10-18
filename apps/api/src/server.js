@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import { sanitizeMiddleware } from './middleware/sanitize.js';
 import hpp from 'hpp';
 import jwt from 'jsonwebtoken';
+import { normalizeRole } from '@mmp/shared';
 
 import { env } from './config/env.js';
 import { connectDB } from './config/db.js';
@@ -38,6 +39,7 @@ import deliverableRoutes from './modules/deliverables/routes.js';
 import reportRoutes from './modules/reports/routes.js';
 import dashboardRoutes from './modules/reports/dashboard.routes.js';
 import docsRoutes from './modules/docs/routes.js';
+import teamAssignmentRoutes from './modules/teamAssignments/routes.js';
 import { initQueues } from './lib/queue.js';
 import { initDomainEventListeners } from './modules/notifications/service.js';
 
@@ -130,6 +132,9 @@ io.use((socket, next) => {
 
     if (token) {
       const decoded = jwt.verify(token, env.JWT_SECRET);
+      if (decoded.role) {
+        decoded.role = normalizeRole(decoded.role);
+      }
       socket.user = decoded;
       return next();
     }
@@ -147,7 +152,8 @@ io.on('connection', (socket) => {
     logger.debug(`Socket joined personal room: user:${socket.user.userId}`);
 
     if (socket.user.role) {
-      socket.join(`role:${socket.user.role}`);
+      const normalizedRole = normalizeRole(socket.user.role);
+      socket.join(`role:${normalizedRole}`);
     }
 
     const teamKey = socket.user.team || socket.user.teamId;
@@ -221,6 +227,7 @@ app.use('/api/files', (req, res, next) => {
 });
 app.use('/api/reports', reportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/team-assignments', teamAssignmentRoutes);
 app.use('/api/docs', docsRoutes);
 
 app.set('io', io);

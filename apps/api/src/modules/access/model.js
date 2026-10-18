@@ -27,7 +27,7 @@ const accessRequestSchema = new mongoose.Schema(
     },
     requestedRole: {
       type: String,
-      enum: ROLE_KEYS,
+      enum: [...ROLE_KEYS, 'lead', 'viewer'],
       required: true,
     },
     skills: {
@@ -53,7 +53,7 @@ const accessRequestSchema = new mongoose.Schema(
     },
     assignedRole: {
       type: String,
-      enum: ROLE_KEYS,
+      enum: [...ROLE_KEYS, 'lead', 'viewer'],
     },
     assignedTeam: {
       type: String,

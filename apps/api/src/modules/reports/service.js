@@ -19,27 +19,35 @@ import {
   categorizeAgingBuckets,
   DEFAULT_EFFICIENCY_WEIGHTS,
 } from './metrics.js';
+import { getManagedWorkerIds, isWorkerManagedBy } from '../../lib/teamAccess.js';
+import { normalizeRole } from '@mmp/shared';
 
 // ==========================================
 // Scoping & Access Control Helper
 // ==========================================
-export function getScopingFilter(user, entityType) {
+export async function getScopingFilter(user, entityType) {
   if (!user) return {};
-  const { role, department, teamId, team, userId } = user;
-  const userTeam = teamId || team;
+  const role = normalizeRole(user.role);
+  const { department, userId, _id } = user;
+  const uid = userId || _id;
 
-  // Admin, Lead, and Viewer can view all organizations & teams
-  if (['admin', 'lead', 'viewer'].includes(role)) {
+  // Admin, Head, Management (and legacy Lead/Viewer) can view all organizations & teams
+  if (['admin', 'head', 'lead', 'management', 'viewer'].includes(role)) {
     return {};
   }
 
-  // Team Lead: scoped strictly to their production team
+  // Team Lead: scoped dynamically to workers they manage
   if (role === 'team_lead') {
+    const managedIds = await getManagedWorkerIds(user);
+    const idArray = Array.isArray(managedIds) ? managedIds : [];
     if (entityType === 'task') {
-      return { team: userTeam };
+      return { assignee: { $in: idArray } };
     }
     if (entityType === 'user') {
-      return { teamId: userTeam };
+      return { _id: { $in: idArray } };
+    }
+    if (entityType === 'time') {
+      return { userId: { $in: idArray } };
     }
     return {};
   }
@@ -55,13 +63,13 @@ export function getScopingFilter(user, entityType) {
   // Worker: scoped strictly to their own assigned work
   if (role === 'worker') {
     if (entityType === 'task') {
-      return { assignee: new mongoose.Types.ObjectId(userId) };
+      return { assignee: new mongoose.Types.ObjectId(uid) };
     }
     if (entityType === 'user') {
-      return { _id: new mongoose.Types.ObjectId(userId) };
+      return { _id: new mongoose.Types.ObjectId(uid) };
     }
     if (entityType === 'time') {
-      return { userId: new mongoose.Types.ObjectId(userId) };
+      return { userId: new mongoose.Types.ObjectId(uid) };
     }
     return { _id: null }; // block others
   }
@@ -71,7 +79,7 @@ export function getScopingFilter(user, entityType) {
     if (entityType === 'request') {
       return {
         $or: [
-          { requester: new mongoose.Types.ObjectId(userId) },
+          { requester: new mongoose.Types.ObjectId(uid) },
           { sourceDepartment: department },
         ],
       };
@@ -102,7 +110,7 @@ export function parseDateRange(startDate, endDate, defaultDays = 30) {
 // ==========================================
 export async function getDepartmentReport(filters = {}, user) {
   const { start, end } = parseDateRange(filters.startDate, filters.endDate);
-  const scoping = getScopingFilter(user, 'request');
+  const scoping = await getScopingFilter(user, 'request');
 
   const matchQuery = {
     createdAt: { $gte: start, $lte: end },
@@ -271,7 +279,7 @@ export async function getDepartmentReport(filters = {}, user) {
 // ==========================================
 export async function getTeamReport(filters = {}, user) {
   const { start, end } = parseDateRange(filters.startDate, filters.endDate);
-  const scoping = getScopingFilter(user, 'task');
+  const scoping = await getScopingFilter(user, 'task');
 
   const matchQuery = {
     updatedAt: { $gte: start, $lte: end },
@@ -279,12 +287,7 @@ export async function getTeamReport(filters = {}, user) {
   };
 
   if (filters.team) {
-    if (user?.role === 'team_lead') {
-      const userTeam = user.teamId || user.team;
-      matchQuery.team = userTeam;
-    } else {
-      matchQuery.team = filters.team;
-    }
+    matchQuery.team = filters.team;
   }
 
   // 1. Throughput & Status Counts
@@ -352,10 +355,12 @@ export async function getTeamReport(filters = {}, user) {
   const avgWorkHours = workCount > 0 ? Math.round((totalWorkHours / workCount) * 10) / 10 : 0;
 
   // 4. Team Capacity & Utilization
+  const managedWorkerIds = user?.role === 'team_lead' ? await getManagedWorkerIds(user) : null;
   const teamUsers = await User.find({
     role: 'worker',
     status: 'active',
     ...(matchQuery.team ? { teamId: matchQuery.team } : {}),
+    ...(managedWorkerIds ? { _id: { $in: managedWorkerIds } } : {}),
   })
     .select('_id name capacity teamId')
     .lean();
@@ -419,11 +424,11 @@ export async function getIndividualReport(targetUserId, filters = {}, user) {
     throw Object.assign(new Error('Worker not found'), { statusCode: 404, code: 'NOT_FOUND' });
   }
 
-  // If team_lead, ensure worker belongs to their team
+  // If team_lead, ensure worker is managed by them
   if (user?.role === 'team_lead') {
-    const userTeam = user.teamId || user.team;
-    if (worker.teamId !== userTeam) {
-      throw Object.assign(new Error('Access Denied: Worker is not in your assigned team.'), {
+    const isManaged = await isWorkerManagedBy(user, targetUserId);
+    if (!isManaged) {
+      throw Object.assign(new Error('Access Denied: Worker is not assigned to you.'), {
         statusCode: 403,
         code: 'FORBIDDEN',
       });
@@ -535,7 +540,7 @@ export async function getIndividualReport(targetUserId, filters = {}, user) {
 // ==========================================
 export async function getContentReport(filters = {}, user) {
   const { start, end } = parseDateRange(filters.startDate, filters.endDate);
-  const scoping = getScopingFilter(user, 'content');
+  const scoping = await getScopingFilter(user, 'content');
 
   const matchQuery = {
     createdAt: { $gte: start, $lte: end },
@@ -894,7 +899,7 @@ export async function createScheduledReport(body, user) {
 
 export async function getScheduledReports(user) {
   const userId = user?.userId || user?._id || user?.id;
-  const scoping = ['admin', 'lead'].includes(user.role)
+  const scoping = ['admin', 'head', 'lead'].includes(user.role)
     ? {}
     : { createdBy: userId };
 
@@ -903,7 +908,7 @@ export async function getScheduledReports(user) {
 
 export async function deleteScheduledReport(id, user) {
   const userId = user?.userId || user?._id || user?.id;
-  const scoping = ['admin', 'lead'].includes(user.role)
+  const scoping = ['admin', 'head', 'lead'].includes(user.role)
     ? { _id: id }
     : { _id: id, createdBy: userId };
 

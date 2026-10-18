@@ -3,6 +3,7 @@ import { User } from '../users/model.js';
 import { createNotification } from '../notifications/service.js';
 import { recordAuditLog } from '../audit/service.js';
 import { logger } from '../../lib/logger.js';
+import { getManagedWorkerIds, isWorkerManagedBy } from '../../lib/teamAccess.js';
 
 export async function createLeaveRequest({ startDate, endDate, type, reason }, user, io) {
   const start = new Date(startDate);
@@ -47,7 +48,7 @@ export async function createLeaveRequest({ startDate, endDate, type, reason }, u
   });
 
   // Notify leads
-  const leads = await User.find({ role: { $in: ['lead', 'admin'] } });
+  const leads = await User.find({ role: { $in: ['head', 'lead', 'admin'] } });
   for (const lead of leads) {
     await createNotification({
       recipient: lead._id,
@@ -74,18 +75,14 @@ export async function listLeaveRequests(query = {}, user) {
   if (user.role === 'worker') {
     filter.userId = user._id;
   } else if (user.role === 'team_lead') {
-    // team_lead sees their team's requests + own
-    const teamName = user.team || user.teamId;
-    const teamMembers = await User.find({
-      $or: [{ teamId: teamName }, { _id: user._id }],
-    }).select('_id');
-    const memberIds = teamMembers.map((m) => m._id);
-    filter.userId = { $in: memberIds };
+    // team_lead sees their managed workers' requests + own
+    const managedIds = await getManagedWorkerIds(user);
+    filter.userId = { $in: managedIds };
   } else if (query.userId) {
     filter.userId = query.userId;
   }
 
-  if (query.team && ['admin', 'lead'].includes(user.role)) {
+  if (query.team && ['admin', 'head', 'lead'].includes(user.role)) {
     const teamUsers = await User.find({ teamId: query.team }).select('_id');
     filter.userId = { $in: teamUsers.map((u) => u._id) };
   }
@@ -105,7 +102,7 @@ export async function listLeaveRequests(query = {}, user) {
 }
 
 export async function reviewLeaveRequest(id, { status, reviewComment }, reviewer, io) {
-  if (!reviewer || !['admin', 'lead', 'team_lead'].includes(reviewer.role)) {
+  if (!reviewer || !['admin', 'head', 'lead', 'team_lead'].includes(reviewer.role)) {
     const err = new Error('Only Leads or Admins can review leave requests');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
@@ -122,10 +119,9 @@ export async function reviewLeaveRequest(id, { status, reviewComment }, reviewer
 
   // Team lead scoping check
   if (reviewer.role === 'team_lead') {
-    const reviewerTeam = reviewer.team || reviewer.teamId;
-    const leaveUserTeam = leave.userId?.team || leave.userId?.teamId;
-    if (reviewerTeam && leaveUserTeam && reviewerTeam !== leaveUserTeam) {
-      const err = new Error('Team leads can only approve or reject leave requests for their own team');
+    const isManaged = await isWorkerManagedBy(reviewer, leave.userId?._id || leave.userId);
+    if (!isManaged) {
+      const err = new Error('Team leads can only approve or reject leave requests for workers they manage');
       err.statusCode = 403;
       err.code = 'FORBIDDEN';
       throw err;
@@ -191,7 +187,7 @@ export async function cancelLeaveRequest(id, user) {
     throw err;
   }
 
-  if (leave.userId.toString() !== user._id.toString() && !['admin', 'lead'].includes(user.role)) {
+  if (leave.userId.toString() !== user._id.toString() && !['admin', 'head', 'lead'].includes(user.role)) {
     const err = new Error('You can only cancel your own leave requests');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';

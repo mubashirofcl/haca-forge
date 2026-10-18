@@ -1,5 +1,5 @@
 import { AbilityBuilder, createMongoAbility } from '@casl/ability';
-import { ROLE_PERMISSIONS } from '@mmp/shared';
+import { ROLE_PERMISSIONS, normalizeRole } from '@mmp/shared';
 
 export function defineAbilityForUser(user) {
   const { can, cannot, build } = new AbilityBuilder(createMongoAbility);
@@ -8,11 +8,13 @@ export function defineAbilityForUser(user) {
     return build();
   }
 
-  if (user.role === 'admin') {
+  const role = normalizeRole(user.role);
+
+  if (role === 'admin') {
     can('manage', 'all');
   }
 
-  const permissions = ROLE_PERMISSIONS[user.role] || [];
+  const permissions = ROLE_PERMISSIONS[role] || [];
   for (const perm of permissions) {
     can(perm, 'all');
   }

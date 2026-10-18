@@ -55,13 +55,19 @@ const taskSchema = new mongoose.Schema(
     },
     team: {
       type: String,
-      enum: [...TEAM_KEYS, 'lead'],
+      enum: [...TEAM_KEYS, 'lead', 'head'],
       required: true,
       index: true,
     },
     assignee: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
+      index: true,
+    },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
       index: true,
     },
     collaborators: [

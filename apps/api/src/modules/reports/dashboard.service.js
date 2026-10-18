@@ -4,9 +4,13 @@ import { ContentItem } from '../content/model.js';
 import { Task } from '../tasks/model.js';
 import { TimeEntry } from '../time/model.js';
 import { Deliverable } from '../deliverables/model.js';
+import { User } from '../users/model.js';
 import { getScorecardReport, getIndividualReport } from './service.js';
+import { getManagedWorkerIds } from '../../lib/teamAccess.js';
+import { normalizeRole } from '@mmp/shared';
 
 export async function getDashboardSummaryByRole(role, user) {
+  const effectiveRole = normalizeRole(role || user?.role);
   const now = new Date();
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - now.getDay());
@@ -16,7 +20,7 @@ export async function getDashboardSummaryByRole(role, user) {
   endOfWeek.setDate(startOfWeek.getDate() + 7);
 
   // 1. Worker Dashboard
-  if (role === 'worker') {
+  if (effectiveRole === 'worker') {
     let targetWorker = user.role === 'worker' ? user : await User.findOne({ role: 'worker', status: 'active' });
     if (!targetWorker) targetWorker = user;
     const workerId = new mongoose.Types.ObjectId(targetWorker._id);
@@ -84,7 +88,7 @@ export async function getDashboardSummaryByRole(role, user) {
   }
 
   // 2. SM Manager Dashboard
-  if (role === 'sm_manager') {
+  if (effectiveRole === 'sm_manager') {
     const [scheduledPosts, publishedThisWeek, awaitingConfirmation, platformBreakdown] = await Promise.all([
       ContentItem.find({
         status: 'scheduled',
@@ -122,7 +126,7 @@ export async function getDashboardSummaryByRole(role, user) {
   }
 
   // 3. Department Lead / Staff Dashboard
-  if (role === 'dept_lead' || role === 'dept_staff') {
+  if (effectiveRole === 'dept_lead' || effectiveRole === 'dept_staff') {
     const department = user.department;
     const [openRequests, completedRequests, awaitingReviewDeliverables] = await Promise.all([
       Request.find({
@@ -158,38 +162,40 @@ export async function getDashboardSummaryByRole(role, user) {
   }
 
   // 4. Team Lead Dashboard
-  if (role === 'team_lead') {
+  if (effectiveRole === 'team_lead') {
     const userTeam = user.teamId || user.team;
+    const managedWorkerIds = await getManagedWorkerIds(user);
+    const idArray = Array.isArray(managedWorkerIds) ? managedWorkerIds : [];
     const [teamTasks, completedThisWeek, blockedTasks, teamMembers] = await Promise.all([
       Task.find({
-        team: userTeam,
+        assignee: { $in: idArray },
         status: { $in: ['assigned', 'in_progress', 'submitted', 'changes_requested'] },
       })
         .populate('assignee', 'name email attendance')
         .lean(),
       Task.countDocuments({
-        team: userTeam,
+        assignee: { $in: idArray },
         status: 'done',
         updatedAt: { $gte: startOfWeek, $lte: endOfWeek },
       }),
       Task.find({
-        team: userTeam,
+        assignee: { $in: idArray },
         status: { $in: ['blocked', 'on_hold'] },
       })
         .populate('assignee', 'name email')
         .lean(),
       User.find({
         role: 'worker',
-        teamId: userTeam,
+        _id: { $in: idArray },
         status: 'active',
       })
-        .select('name email attendance onLeave capacity')
+        .select('name email attendance onLeave capacity teamId')
         .lean(),
     ]);
 
     return {
       role: 'team_lead',
-      team: userTeam,
+      team: userTeam || 'Managed Team',
       widgets: {
         activeTasksCount: teamTasks.length,
         completedThisWeek,
@@ -202,7 +208,7 @@ export async function getDashboardSummaryByRole(role, user) {
     };
   }
 
-  // 5. Admin, Lead, Viewer Dashboard (Default Executive View)
+  // 5. Admin, Head, Management Dashboard (Default Executive View)
   const [scorecard, awaitingTriage, awaitingReview, blockedTasks, pipelinesByStage] = await Promise.all([
     getScorecardReport({ startDate: startOfWeek, endDate: endOfWeek }, user),
     Request.find({ status: { $in: ['submitted', 'under_triage'] } })

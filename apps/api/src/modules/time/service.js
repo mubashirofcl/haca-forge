@@ -4,6 +4,7 @@ import { User } from '../users/model.js';
 import { createNotification } from '../notifications/service.js';
 import { recordAuditLog } from '../audit/service.js';
 import { logger } from '../../lib/logger.js';
+import { getManagedWorkerIds, isWorkerManagedBy } from '../../lib/teamAccess.js';
 
 /**
  * Recalculates actualHours for a task from approved & submitted entries
@@ -144,12 +145,13 @@ export async function listTimeEntries(query = {}, user) {
   if (user.role === 'worker') {
     filter.userId = user._id;
   } else if (user.role === 'team_lead') {
-    // team_lead sees their team's entries + own
-    const teamName = user.team || user.teamId;
-    const teamMembers = await User.find({
-      $or: [{ teamId: teamName }, { _id: user._id }],
-    }).select('_id');
-    filter.userId = { $in: teamMembers.map((m) => m._id) };
+    const managedWorkerIds = await getManagedWorkerIds(user);
+    if (query.userId) {
+      const isManaged = managedWorkerIds.some((id) => id.toString() === query.userId.toString());
+      filter.userId = isManaged ? query.userId : { $in: [] };
+    } else {
+      filter.userId = { $in: managedWorkerIds };
+    }
   } else if (query.userId) {
     filter.userId = query.userId;
   }
@@ -242,17 +244,15 @@ export async function approveTimesheet({ entryIds, status, comment }, reviewer, 
 
   // Team lead scoping check
   if (reviewer.role === 'team_lead') {
-    const reviewerTeam = reviewer.team || reviewer.teamId;
-    const invalidEntry = entries.find((e) => {
-      const entryUserTeam = e.userId?.team || e.userId?.teamId;
-      return reviewerTeam && entryUserTeam && reviewerTeam !== entryUserTeam;
-    });
-
-    if (invalidEntry) {
-      const err = new Error('Team leads can only approve timesheets for their own team members');
-      err.statusCode = 403;
-      err.code = 'FORBIDDEN';
-      throw err;
+    for (const entry of entries) {
+      const entryUserId = entry.userId?._id || entry.userId;
+      const isManaged = await isWorkerManagedBy(reviewer, entryUserId);
+      if (!isManaged) {
+        const err = new Error('Team leads can only approve timesheets for workers they manage');
+        err.statusCode = 403;
+        err.code = 'FORBIDDEN';
+        throw err;
+      }
     }
   }
 

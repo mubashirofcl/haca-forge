@@ -64,8 +64,10 @@ const RootRedirect: React.FC = () => {
   switch (user.role) {
     case 'admin':
       return <Navigate to="/admin" replace />;
-    case 'lead':
+    case 'head':
       return <Navigate to="/lead" replace />;
+    case 'team_lead':
+      return <Navigate to="/teams" replace />;
     case 'worker':
       return <Navigate to="/worker" replace />;
     case 'sm_manager':
@@ -73,7 +75,7 @@ const RootRedirect: React.FC = () => {
     case 'dept_lead':
     case 'dept_staff':
       return <Navigate to="/requester" replace />;
-    case 'viewer':
+    case 'management':
       return <Navigate to="/reports" replace />;
     default:
       return <Navigate to="/requester" replace />;
@@ -172,7 +174,7 @@ export const App: React.FC = () => {
           <Route
             path="/lead"
             element={
-              <ProtectedRoute allowedRoles={['lead', 'admin']}>
+              <ProtectedRoute allowedRoles={['head', 'admin']}>
                 <Layout>
                   <LeadDashboard />
                 </Layout>
@@ -192,7 +194,7 @@ export const App: React.FC = () => {
           <Route
             path="/lead/content"
             element={
-              <ProtectedRoute allowedRoles={['lead', 'admin']}>
+              <ProtectedRoute allowedRoles={['head', 'admin']}>
                 <Layout>
                   <ContentHubPage />
                 </Layout>
@@ -202,7 +204,7 @@ export const App: React.FC = () => {
           <Route
             path="/lead/reviews"
             element={
-              <ProtectedRoute allowedRoles={['lead', 'admin']}>
+              <ProtectedRoute allowedRoles={['head', 'admin', 'team_lead']}>
                 <Layout>
                   <LeadReviewQueuePage />
                 </Layout>
@@ -214,7 +216,7 @@ export const App: React.FC = () => {
           <Route
             path="/worker"
             element={
-              <ProtectedRoute allowedRoles={['worker', 'lead', 'admin']}>
+              <ProtectedRoute allowedRoles={['worker', 'head', 'admin']}>
                 <Layout>
                   <WorkerDashboard />
                 </Layout>
@@ -248,7 +250,7 @@ export const App: React.FC = () => {
           <Route
             path="/calendar"
             element={
-              <ProtectedRoute allowedRoles={['admin', 'lead', 'sm_manager']}>
+              <ProtectedRoute allowedRoles={['admin', 'head', 'sm_manager']}>
                 <Layout>
                   <CalendarPage />
                 </Layout>
@@ -270,7 +272,7 @@ export const App: React.FC = () => {
           <Route
             path="/shoots"
             element={
-              <ProtectedRoute allowedRoles={['admin', 'lead', 'team_lead', 'worker']}>
+              <ProtectedRoute allowedRoles={['admin', 'head', 'team_lead', 'worker']}>
                 <Layout>
                   <ShootPlannerPage />
                 </Layout>
@@ -280,7 +282,7 @@ export const App: React.FC = () => {
           <Route
             path="/teams"
             element={
-              <ProtectedRoute allowedRoles={['admin', 'lead', 'team_lead']}>
+              <ProtectedRoute allowedRoles={['admin', 'head', 'team_lead']}>
                 <Layout>
                   <TeamManagementPage />
                 </Layout>
@@ -290,7 +292,7 @@ export const App: React.FC = () => {
           <Route
             path="/timesheets"
             element={
-              <ProtectedRoute allowedRoles={['admin', 'lead', 'team_lead', 'worker']}>
+              <ProtectedRoute allowedRoles={['admin', 'head', 'team_lead', 'worker']}>
                 <Layout>
                   <TimesheetsPage />
                 </Layout>
@@ -302,7 +304,7 @@ export const App: React.FC = () => {
           <Route
             path="/performance"
             element={
-              <ProtectedRoute allowedRoles={['admin', 'lead', 'dept_lead']}>
+              <ProtectedRoute allowedRoles={['admin', 'head', 'dept_lead']}>
                 <Layout>
                   <PerformanceDashboard />
                 </Layout>

@@ -84,6 +84,7 @@ describe('Phase 10: Hardening, QA, and End-to-End Core Journeys', () => {
         });
       } else {
         u.passwordHash = passwordHash;
+        u.role = role;
         await u.save();
       }
       const res = await request(app)
@@ -96,7 +97,7 @@ describe('Phase 10: Hardening, QA, and End-to-End Core Journeys', () => {
     adminCookie = adminAuth.cookie;
     adminUser = adminAuth.user;
 
-    const leadAuth = await getAuthCookie('lead.p10@example.com', 'Password123!', 'lead');
+    const leadAuth = await getAuthCookie('lead.p10@example.com', 'Password123!', 'head');
     leadCookie = leadAuth.cookie;
     leadUser = leadAuth.user;
 

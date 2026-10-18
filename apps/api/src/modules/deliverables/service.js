@@ -7,6 +7,8 @@ import { advancePipelineHandoff } from '../pipelines/service.js';
 import { createNotification } from '../notifications/service.js';
 import { User } from '../users/model.js';
 import { eventBus, EVENTS } from '../../lib/events.js';
+import { isWorkerManagedBy } from '../../lib/teamAccess.js';
+import { normalizeRole } from '@mmp/shared';
 
 /**
  * Worker uploads a deliverable and submits for review
@@ -99,6 +101,33 @@ export async function reviewDeliverable(deliverableId, { decision, notes, commen
 
   const task = await Task.findById(deliverable.taskId);
   const contentItem = await ContentItem.findById(deliverable.contentItemId);
+
+  // Review governance check
+  const role = normalizeRole(user.role);
+  if (role === 'team_lead') {
+    if (task && task.assignee) {
+      const isManaged = await isWorkerManagedBy(user, task.assignee);
+      if (!isManaged) {
+        const err = new Error('You can only review deliverables for workers you manage');
+        err.statusCode = 403;
+        err.code = 'FORBIDDEN';
+        throw err;
+      }
+    }
+
+    const assignedById = task?.assignedBy?._id || task?.assignedBy;
+    if (assignedById && assignedById.toString() !== (user._id || user.userId).toString()) {
+      const assigner = await User.findById(assignedById).select('role');
+      if (assigner && normalizeRole(assigner.role) === 'team_lead') {
+        const err = new Error(
+          'This task was assigned by another team lead and can only be reviewed by them, the Marketing Head, or an Admin'
+        );
+        err.statusCode = 403;
+        err.code = 'FORBIDDEN';
+        throw err;
+      }
+    }
+  }
 
   // 1. Approved Decision
   if (decision === 'approved') {
@@ -327,8 +356,8 @@ export async function confirmDeliverable(contentItemId, { decision, feedback }, 
       io,
     });
 
-    // Notify Leads & SM Managers
-    const managers = await User.find({ role: { $in: ['lead', 'admin', 'sm_manager'] } });
+    // Notify Heads, Leads & SM Managers
+    const managers = await User.find({ role: { $in: ['head', 'lead', 'admin', 'sm_manager'] } });
     for (const mgr of managers) {
       await createNotification({
         recipient: mgr._id,
@@ -367,8 +396,8 @@ export async function confirmDeliverable(contentItemId, { decision, feedback }, 
       });
     }
 
-    // Notify Leads
-    const leads = await User.find({ role: { $in: ['lead', 'admin'] } });
+    // Notify Heads/Leads
+    const leads = await User.find({ role: { $in: ['head', 'lead', 'admin'] } });
     for (const lead of leads) {
       await createNotification({
         recipient: lead._id,
@@ -391,7 +420,7 @@ export async function confirmDeliverable(contentItemId, { decision, feedback }, 
  * Hand an approved ad creative to Performance Marketing
  */
 export async function handToPerformance(contentItemId, user, io) {
-  if (user && !['admin', 'lead', 'team_lead'].includes(user.role)) {
+  if (user && !['admin', 'head', 'lead', 'team_lead'].includes(user.role)) {
     const err = new Error('Only Leads or Admins can hand deliverables to Performance');
     err.statusCode = 403;
     err.code = 'FORBIDDEN';
@@ -418,7 +447,7 @@ export async function handToPerformance(contentItemId, user, io) {
 export async function setPerformanceLive(contentItemId, { liveUrl, liveDate, notes }, user, io) {
   const isPerformanceAuthorized =
     user &&
-    (['admin', 'lead'].includes(user.role) ||
+    (['admin', 'head', 'lead'].includes(user.role) ||
       (user.department && user.department.toLowerCase() === 'performance') ||
       (user.team && user.team.toLowerCase() === 'performance'));
 

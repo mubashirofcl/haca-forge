@@ -6,16 +6,31 @@ import { z } from 'zod';
 
 export const ROLE_KEYS = [
   'admin',
-  'lead',
+  'management',
+  'head',
   'team_lead',
   'worker',
   'sm_manager',
   'dept_lead',
   'dept_staff',
-  'viewer',
 ] as const;
 
 export type UserRole = (typeof ROLE_KEYS)[number];
+
+export const LEGACY_ROLE_ALIASES = {
+  lead: 'head',
+  viewer: 'management',
+} as const;
+
+export type LegacyRoleAlias = keyof typeof LEGACY_ROLE_ALIASES;
+
+export function normalizeRole(role: string | null | undefined): UserRole | string {
+  if (!role) return role as string;
+  if (role in LEGACY_ROLE_ALIASES) {
+    return LEGACY_ROLE_ALIASES[role as LegacyRoleAlias];
+  }
+  return role;
+}
 
 export const TEAM_KEYS = [
   'content',
@@ -147,35 +162,15 @@ export const PERMISSION_KEYS = [
   'time.log',
   'timesheet.approve',
   'report.view',
+  'assignment.manage',
+  'assignment.view',
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 
 export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
-  admin: [
-    'user.approve',
-    'user.manage',
-    'settings.manage',
-    'audit.view',
-    'request.create',
-    'request.view.department',
-    'request.triage',
-    'calendar.manage',
-    'calendar.import',
-    'content.create',
-    'content.update',
-    'content.publish',
-    'task.assign',
-    'task.update.own',
-    'task.upload',
-    'review.approve',
-    'request.confirm',
-    'shoot.manage',
-    'time.log',
-    'timesheet.approve',
-    'report.view',
-  ],
-  lead: [
+  admin: [...PERMISSION_KEYS],
+  head: [
     'request.create',
     'request.view.department',
     'request.triage',
@@ -191,6 +186,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'time.log',
     'timesheet.approve',
     'report.view',
+    'assignment.view',
   ],
   team_lead: [
     'content.create',
@@ -198,10 +194,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'task.assign',
     'task.update.own',
     'task.upload',
+    'review.approve',
     'shoot.manage',
     'time.log',
     'timesheet.approve',
     'report.view',
+    'assignment.view',
   ],
   worker: [
     'task.update.own',
@@ -209,6 +207,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'time.log',
     'shoot.manage',
     'report.view',
+    'assignment.view',
   ],
   sm_manager: [
     'request.create',
@@ -232,7 +231,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'request.confirm',
     'report.view',
   ],
-  viewer: [
+  management: [
     'report.view',
   ],
 };

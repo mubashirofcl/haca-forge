@@ -48,7 +48,7 @@ beforeAll(async () => {
   };
 
   adminUser = await User.findOne({ email: 'admin@marketingportal.com' });
-  leadUser = await User.findOne({ role: { $in: ['lead', 'marketing_lead'] }, status: 'active' });
+  leadUser = await User.findOne({ role: { $in: ['head', 'lead', 'marketing_lead'] }, status: 'active' });
   workerUser = await User.findOne({ role: 'worker', status: 'active' });
   workerUser2 = await User.findOne({ role: 'worker', _id: { $ne: workerUser?._id }, status: 'active' });
   deptLeadUser = await User.findOne({ role: 'dept_lead', status: 'active' });

@@ -103,7 +103,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const pipelinesPath =
     user?.role === 'admin'
       ? '/admin'
-      : user?.role === 'lead'
+      : user?.role === 'head'
       ? '/lead'
       : user?.role === 'worker'
       ? '/worker'
@@ -123,7 +123,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           path: '/lead/content',
           description: 'Campaigns & asset pipelines',
           icon: Film,
-          show: ['admin', 'lead'].includes(user?.role || ''),
+          show: ['admin', 'head'].includes(user?.role || ''),
           activeMatcher: (p) => p.startsWith('/lead/content'),
         },
         {
@@ -132,7 +132,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           path: '/calendar',
           description: 'Multi-channel social scheduling',
           icon: Calendar,
-          show: ['admin', 'lead', 'sm_manager'].includes(user?.role || ''),
+          show: ['admin', 'head', 'sm_manager'].includes(user?.role || ''),
           activeMatcher: (p) => p.startsWith('/calendar') || p.startsWith('/sm'),
         },
         {
@@ -141,7 +141,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           path: '/shoots',
           description: 'Call sheets, locations & shoot crews',
           icon: Video,
-          show: ['admin', 'lead', 'team_lead', 'worker'].includes(user?.role || ''),
+          show: ['admin', 'head', 'team_lead', 'worker'].includes(user?.role || ''),
           activeMatcher: (p) => p.startsWith('/shoots'),
         },
         {
@@ -150,7 +150,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           path: '/lead/reviews',
           description: 'Proofing & stakeholder approvals',
           icon: CheckSquare,
-          show: ['admin', 'lead'].includes(user?.role || ''),
+          show: ['admin', 'head', 'team_lead'].includes(user?.role || ''),
           activeMatcher: (p) => p.startsWith('/lead/reviews'),
         },
         {
@@ -174,7 +174,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           path: '/teams',
           description: 'Staff capacity & department rosters',
           icon: Users,
-          show: ['admin', 'lead', 'team_lead'].includes(user?.role || ''),
+          show: ['admin', 'head', 'team_lead'].includes(user?.role || ''),
           activeMatcher: (p) => p.startsWith('/teams') && !p.startsWith('/admin/teams-departments'),
         },
         {
@@ -183,7 +183,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           path: '/timesheets',
           description: 'Time tracking, logs & attendance',
           icon: Clock,
-          show: ['admin', 'lead', 'team_lead', 'worker'].includes(user?.role || ''),
+          show: ['admin', 'head', 'team_lead', 'worker'].includes(user?.role || ''),
           activeMatcher: (p) => p.startsWith('/timesheets'),
         },
         {
@@ -192,7 +192,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           path: '/performance',
           description: 'Paid ad analytics & ROAS tracking',
           icon: TrendingUp,
-          show: ['admin', 'lead', 'dept_lead'].includes(user?.role || ''),
+          show: ['admin', 'head', 'dept_lead'].includes(user?.role || ''),
           activeMatcher: (p) => p.startsWith('/performance'),
         },
         {
@@ -321,7 +321,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       label: 'Content Hub',
       path: '/lead/content',
       active: location.pathname.startsWith('/lead/content'),
-      show: ['admin', 'lead'].includes(user?.role || ''),
+      show: ['admin', 'head'].includes(user?.role || ''),
     },
     {
       id: 'calendar',
@@ -329,7 +329,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       label: 'Content Calendar',
       path: '/calendar',
       active: location.pathname.startsWith('/calendar') || location.pathname.startsWith('/sm'),
-      show: ['admin', 'lead', 'sm_manager'].includes(user?.role || ''),
+      show: ['admin', 'head', 'sm_manager'].includes(user?.role || ''),
     },
     {
       id: 'shoots',
@@ -337,7 +337,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       label: 'Shoot Planner',
       path: '/shoots',
       active: location.pathname.startsWith('/shoots'),
-      show: ['admin', 'lead', 'team_lead', 'worker'].includes(user?.role || ''),
+      show: ['admin', 'head', 'team_lead', 'worker'].includes(user?.role || ''),
     },
     {
       id: 'reviews',
@@ -345,7 +345,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       label: 'Review Studio',
       path: '/lead/reviews',
       active: location.pathname.startsWith('/lead/reviews'),
-      show: ['admin', 'lead'].includes(user?.role || ''),
+      show: ['admin', 'head', 'team_lead'].includes(user?.role || ''),
     },
     {
       id: 'team-ops',
@@ -353,7 +353,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       label: 'Team Operations',
       path: '/teams',
       active: location.pathname.startsWith('/teams') && !location.pathname.startsWith('/admin/teams-departments'),
-      show: ['admin', 'lead', 'team_lead'].includes(user?.role || ''),
+      show: ['admin', 'head', 'team_lead'].includes(user?.role || ''),
     },
     {
       id: 'timesheets',
@@ -361,7 +361,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       label: 'Timesheets',
       path: '/timesheets',
       active: location.pathname.startsWith('/timesheets'),
-      show: ['admin', 'lead', 'team_lead', 'worker'].includes(user?.role || ''),
+      show: ['admin', 'head', 'team_lead', 'worker'].includes(user?.role || ''),
     },
     {
       id: 'performance',
@@ -369,7 +369,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       label: 'Performance Ads',
       path: '/performance',
       active: location.pathname.startsWith('/performance'),
-      show: ['admin', 'lead', 'dept_lead'].includes(user?.role || ''),
+      show: ['admin', 'head', 'dept_lead'].includes(user?.role || ''),
     },
     {
       id: 'library',

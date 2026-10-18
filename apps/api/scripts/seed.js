@@ -449,12 +449,26 @@ async function seed() {
       mustSetPassword: false,
     });
 
-    // 7.2 Marketing Leads
+    if (adminUser.email !== 'admin@marketingportal.com') {
+      await User.create({
+        name: 'Portal Administrator',
+        email: 'admin@marketingportal.com',
+        passwordHash: adminPasswordHash,
+        role: 'admin',
+        department: 'Marketing Leadership',
+        status: 'active',
+        capacity: 40,
+        attendance: 'present',
+        mustSetPassword: false,
+      });
+    }
+
+    // 7.2 Marketing Heads
     const leadSarah = await User.create({
       name: 'Sarah Mitchell',
       email: 'sarah.lead@marketingportal.com',
       passwordHash: sharedPasswordHash,
-      role: 'lead',
+      role: 'head',
       department: 'Marketing Leadership',
       status: 'active',
       capacity: 40,
@@ -467,7 +481,7 @@ async function seed() {
       name: 'Marcus Vance',
       email: 'marcus.lead@marketingportal.com',
       passwordHash: sharedPasswordHash,
-      role: 'lead',
+      role: 'head',
       department: 'Marketing Leadership',
       status: 'active',
       capacity: 40,
@@ -684,12 +698,12 @@ async function seed() {
       }),
     ]);
 
-    // 7.7 Viewers and Empty State Account
+    // 7.7 Management and Empty State Account
     await User.create({
       name: 'Auditor Claire',
       email: 'claire.viewer@marketingportal.com',
       passwordHash: sharedPasswordHash,
-      role: 'viewer',
+      role: 'management',
       department: 'Corporate Governance',
       status: 'active',
       capacity: 40,

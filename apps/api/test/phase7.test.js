@@ -42,7 +42,7 @@ beforeAll(async () => {
   };
 
   const [leadUser, smUser] = await Promise.all([
-    User.findOne({ role: 'lead', status: 'active' }),
+    User.findOne({ role: { $in: ['head', 'lead'] }, status: 'active' }),
     User.findOne({ role: 'sm_manager', status: 'active' }),
   ]);
 

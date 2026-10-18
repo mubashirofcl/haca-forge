@@ -39,7 +39,7 @@ beforeAll(async () => {
   };
 
   adminUser = await User.findOne({ email: 'admin@marketingportal.com' });
-  leadUser = await User.findOne({ role: { $in: ['lead', 'marketing_lead'] }, status: 'active' });
+  leadUser = await User.findOne({ role: { $in: ['head', 'lead', 'marketing_lead'] }, status: 'active' });
   workerUser = await User.findOne({ role: 'worker', status: 'active' });
 
   adminCookie = await login('admin@marketingportal.com', 'Admin1212');

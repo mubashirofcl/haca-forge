@@ -186,7 +186,7 @@ export async function runDailyDigestJob() {
 
     // 2. Find eligible leads & admins with dailyDigest enabled
     const leads = await User.find({
-      role: { $in: ['admin', 'marketing_lead', 'creative_lead', 'copy_lead', 'video_lead'] },
+      role: { $in: ['admin', 'head', 'lead', 'marketing_lead', 'creative_lead', 'copy_lead', 'video_lead'] },
       status: 'active',
       $or: [
         { 'notificationPreferences.dailyDigest': true },

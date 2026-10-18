@@ -86,9 +86,9 @@ export async function approveAccessRequest(id, reviewData, adminUser, ip) {
 
   const assignedRole = reviewData.assignedRole || accessReq.requestedRole;
 
-  // Non-admins cannot grant admin or lead roles
-  if ((assignedRole === 'admin' || assignedRole === 'lead') && adminUser.role !== 'admin') {
-    const error = new Error('Only full Administrators can grant Lead or Admin roles');
+  // Non-admins cannot grant admin, head, or management roles
+  if (['admin', 'head', 'lead', 'management', 'viewer'].includes(assignedRole) && adminUser.role !== 'admin') {
+    const error = new Error('Only full Administrators can grant Head, Management, or Admin roles');
     error.code = 'UNAUTHORIZED_ROLE_ASSIGNMENT';
     error.statusCode = 403;
     throw error;

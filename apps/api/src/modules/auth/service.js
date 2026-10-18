@@ -4,13 +4,14 @@ import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
 import { User } from '../users/model.js';
 import { AccessRequest } from '../access/model.js';
-import { ROLE_PERMISSIONS } from '@mmp/shared';
+import { ROLE_PERMISSIONS, normalizeRole } from '@mmp/shared';
 import { sendMail, templates } from '../../lib/mailer.js';
 
 function generateTokens(user) {
+  const role = normalizeRole(user.role);
   const payload = {
     userId: user._id.toString(),
-    role: user.role,
+    role,
     email: user.email,
   };
 
@@ -94,14 +95,14 @@ export async function loginUser({ email, password }) {
       id: user._id,
       name: user.name,
       email: user.email,
-      role: user.role,
+      role: normalizeRole(user.role),
       department: user.department,
       teamId: user.teamId,
       skills: user.skills,
       capacity: user.capacity,
       attendance: user.attendance,
     },
-    permissions: ROLE_PERMISSIONS[user.role] || [],
+    permissions: ROLE_PERMISSIONS[normalizeRole(user.role)] || [],
     accessToken,
     refreshToken,
   };
@@ -152,11 +153,11 @@ export async function refreshTokens(refreshToken) {
       id: user._id,
       name: user.name,
       email: user.email,
-      role: user.role,
+      role: normalizeRole(user.role),
       department: user.department,
       teamId: user.teamId,
     },
-    permissions: ROLE_PERMISSIONS[user.role] || [],
+    permissions: ROLE_PERMISSIONS[normalizeRole(user.role)] || [],
   };
 }
 

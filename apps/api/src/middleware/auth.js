@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { normalizeRole } from '@mmp/shared';
 import { env } from '../config/env.js';
 import { User } from '../modules/users/model.js';
 import { defineAbilityForUser } from '../lib/permissions.js';
@@ -24,6 +25,9 @@ export async function authenticate(req, res, next) {
     let decoded;
     try {
       decoded = jwt.verify(token, env.JWT_SECRET);
+      if (decoded.role) {
+        decoded.role = normalizeRole(decoded.role);
+      }
     } catch (err) {
       if (err.name === 'TokenExpiredError') {
         return res.status(401).json({
@@ -58,6 +62,10 @@ export async function authenticate(req, res, next) {
           message: 'Your account has been suspended. Please contact the administrator.',
         },
       });
+    }
+
+    if (user.role) {
+      user.role = normalizeRole(user.role);
     }
 
     req.user = user;

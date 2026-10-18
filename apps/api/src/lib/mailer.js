@@ -93,7 +93,7 @@ export function templates() {
     }),
     requestRejected: ({ name, reason }) => ({
       subject: 'Update Regarding Your Marketing Portal Access Request',
-      text: `Hello ${name},\n\nYour access request could not be approved at this time.\nReason: ${reason || 'Not specified'}\n\nIf you have questions, please reach out to the Marketing Lead.`,
+      text: `Hello ${name},\n\nYour access request could not be approved at this time.\nReason: ${reason || 'Not specified'}\n\nIf you have questions, please reach out to the Marketing Head.`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
           <h2>Access Request Update</h2>

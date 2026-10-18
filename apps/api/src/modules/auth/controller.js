@@ -1,7 +1,7 @@
 import { env } from '../../config/env.js';
 import * as authService from './service.js';
 import { User } from '../users/model.js';
-import { ROLE_PERMISSIONS } from '@mmp/shared';
+import { ROLE_PERMISSIONS, normalizeRole } from '@mmp/shared';
 
 function getCookieOptions(maxAgeMs) {
   const isProd = env.NODE_ENV === 'production';
@@ -80,15 +80,15 @@ export async function me(req, res, next) {
         id: req.user._id,
         name: req.user.name,
         email: req.user.email,
-        role: req.user.role,
+        role: normalizeRole(req.user.role),
         department: req.user.department,
         teamId: req.user.teamId,
         skills: req.user.skills,
         capacity: req.user.capacity,
         attendance: req.user.attendance,
       },
-      role: req.user.role,
-      permissions: ROLE_PERMISSIONS[req.user.role] || [],
+      role: normalizeRole(req.user.role),
+      permissions: ROLE_PERMISSIONS[normalizeRole(req.user.role)] || [],
     });
   } catch (error) {
     next(error);

@@ -17,6 +17,7 @@ export async function createTask(input, user, io) {
     ...input,
     taskId,
     status: 'assigned',
+    assignedBy: input.assignee ? (user?._id || input.assignedBy || null) : (input.assignedBy || null),
   });
 
   await task.save();
@@ -135,6 +136,9 @@ export async function updateTask(id, updates, user, io) {
   const previousAssignee = task.assignee?.toString();
 
   Object.assign(task, updates);
+  if (updates.assignee !== undefined && updates.assignee?.toString() !== previousAssignee) {
+    task.assignedBy = user?._id || updates.assignedBy || null;
+  }
   await task.save();
 
   // If assignee changed, send notification and event
@@ -385,8 +389,8 @@ export async function requestDeadlineExtension(taskId, { requestedDate, reason }
 
   await task.save();
 
-  // Notify Leads & Admins
-  const leads = await User.find({ role: { $in: ['lead', 'admin'] } });
+  // Notify Heads, Leads & Admins
+  const leads = await User.find({ role: { $in: ['head', 'lead', 'admin'] } });
   for (const lead of leads) {
     await createNotification({
       recipient: lead._id,

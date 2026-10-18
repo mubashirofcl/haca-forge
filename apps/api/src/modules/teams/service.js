@@ -1,6 +1,7 @@
 import { Team } from './model.js';
 import { User } from '../users/model.js';
 import { recordAuditLog } from '../audit/service.js';
+import { getManagedWorkerIds, isWorkerManagedBy } from '../../lib/teamAccess.js';
 
 export async function listTeams() {
   const teams = await Team.find()
@@ -118,26 +119,33 @@ export async function getTeamDashboardData(teamIdOrName, user) {
     team = { name: teamIdOrName.toLowerCase(), totalWeeklyCapacity: 0 };
   }
 
-  // Team lead scoping check: team_lead can only view their own team
-  if (user.role === 'team_lead') {
-    const userTeam = (user.team || user.teamId || '').toLowerCase();
-    if (userTeam && team.name.toLowerCase() !== userTeam) {
-      const err = new Error('Team leads can only access dashboard data for their own assigned team');
-      err.statusCode = 403;
-      err.code = 'FORBIDDEN';
-      throw err;
-    }
-  }
-
   const teamNameLower = team.name.toLowerCase();
 
   // Find all active members belonging to this team
-  const members = await User.find({
+  let members = await User.find({
     status: 'active',
     $or: [{ teamId: { $regex: new RegExp(`^${teamNameLower}$`, 'i') } }, { team: teamNameLower }],
   })
     .select('name email role avatar skills capacity attendance onLeave leaveDates')
     .lean();
+
+  // Team lead scoping check: team_lead can view teams where they manage at least one worker
+  if (user && user.role === 'team_lead') {
+    const managedIds = await getManagedWorkerIds(user);
+    const managedMembers = members.filter((m) =>
+      Array.isArray(managedIds) && managedIds.some((id) => id.toString() === m._id.toString())
+    );
+
+    if (managedMembers.length === 0) {
+      const err = new Error('Team leads can only access dashboard data for teams where they manage at least one worker');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
+
+    // Filter members to only those managed by this lead
+    members = managedMembers;
+  }
 
   const memberIds = members.map((m) => m._id);
 
@@ -348,10 +356,12 @@ export async function getTeamHandoffQueues(user) {
 /**
  * Reassign task to another worker with capacity check
  */
-export async function reassignTask({ taskId, targetUserId }, actor, io) {
+export async function reassignTask({ taskId, targetUserId, targetWorkerId }, actor, io) {
   const { Task } = await import('../tasks/model.js');
   const { isUserOnLeave } = await import('../leave/service.js');
   const { createNotification } = await import('../notifications/service.js');
+
+  const targetId = targetUserId || targetWorkerId;
 
   const task = await Task.findById(taskId);
   if (!task) {
@@ -361,7 +371,7 @@ export async function reassignTask({ taskId, targetUserId }, actor, io) {
     throw err;
   }
 
-  const targetUser = await User.findById(targetUserId);
+  const targetUser = await User.findById(targetId);
   if (!targetUser) {
     const err = new Error('Target worker not found');
     err.statusCode = 404;
@@ -370,7 +380,7 @@ export async function reassignTask({ taskId, targetUserId }, actor, io) {
   }
 
   // Check if target user is on leave
-  const onLeave = await isUserOnLeave(targetUserId);
+  const onLeave = await isUserOnLeave(targetId);
   const warnings = [];
   if (onLeave) {
     warnings.push(`Warning: ${targetUser.name} is currently marked on leave.`);
@@ -378,7 +388,7 @@ export async function reassignTask({ taskId, targetUserId }, actor, io) {
 
   // Calculate current workload of target user
   const activeTasks = await Task.find({
-    assignee: targetUserId,
+    assignee: targetId,
     status: { $in: ['assigned', 'in_progress'] },
   });
   const currentHours = activeTasks.reduce((sum, t) => sum + (t.estimateHours || 2), 0);
@@ -387,13 +397,27 @@ export async function reassignTask({ taskId, targetUserId }, actor, io) {
     warnings.push(`Warning: Reassigning will put ${targetUser.name} at ${Math.round(((currentHours + (task.estimateHours || 2)) / capacity) * 100)}% capacity (Overloaded).`);
   }
 
+  // Team lead scoping: can only reassign if current assignee and target worker are managed
+  if (actor && actor.role === 'team_lead') {
+    const isCurrentManaged = task.assignee ? await isWorkerManagedBy(actor, task.assignee) : true;
+    const isTargetManaged = await isWorkerManagedBy(actor, targetId);
+
+    if (!isCurrentManaged || !isTargetManaged) {
+      const err = new Error('Team leads can only reassign tasks between workers they manage');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
+  }
+
   const prevAssignee = task.assignee;
-  task.assignee = targetUserId;
+  task.assignee = targetId;
+  task.assignedBy = actor?._id || null;
   await task.save();
 
   // Notify new assignee
   await createNotification({
-    recipient: targetUserId,
+    recipient: targetId,
     type: 'task_assigned',
     title: 'Task Reassigned to You',
     message: `${actor.name} reassigned task ${task.taskId}: "${task.title}" to you.`,
@@ -409,7 +433,7 @@ export async function reassignTask({ taskId, targetUserId }, actor, io) {
     entity: 'Task',
     entityId: task._id,
     before: { assignee: prevAssignee },
-    after: { assignee: targetUserId },
+    after: { assignee: targetId },
   });
 
   const updatedTask = await Task.findById(task._id)
