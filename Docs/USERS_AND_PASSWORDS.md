@@ -38,8 +38,8 @@ Sets monthly revenue/lead targets, oversees cross-brand campaigns, triages deliv
 
 | Name | Email | Marketing OS Role | Database Role | Department | Password | Status |
 |---|---|---|---|---|---|---|
-| Sarah Mitchell | `sarah.lead@marketingportal.com` | `marketing_head` | `head` | Marketing Leadership | `Password123!` | Active |
-| Marcus Vance | `marcus.lead@marketingportal.com` | `marketing_head` | `head` | Marketing Leadership | `Password123!` | Active |
+| Sarah Mitchell | `sarah.lead@marketingportal.com` | `marketing_head` | `marketing_head` | Marketing Leadership | `Password123!` | Active |
+| Marcus Vance | `marcus.lead@marketingportal.com` | `marketing_head` | `marketing_head` | Marketing Leadership | `Password123!` | Active |
 
 ---
 
@@ -62,26 +62,26 @@ Executes assigned deliverables, requests assets, logs progress, and submits deli
 
 | Name | Email | Marketing OS Role | Database Role | Department | Password | Status |
 |---|---|---|---|---|---|---|
-| Aria Montgomery | `aria.m@marketingportal.com` | `team_member` | `worker` | Graphics & Visual Design | `Password123!` | Active |
-| Chloe Bennett | `chloe.b@marketingportal.com` | `team_member` | `worker` | Content & Copywriting | `Password123!` | Active |
-| Dante King | `dante.k@marketingportal.com` | `team_member` | `worker` | Cinematography & Shoots | `Password123!` | Active |
-| Emma Watson | `emma.w@marketingportal.com` | `team_member` | `worker` | Video Editing & Motion Design | `Password123!` | Active |
-| Ethan Hunt | `ethan.h@marketingportal.com` | `team_member` | `worker` | Cinematography & Shoots | `Password123!` | Active |
-| Felix Baum | `felix.b@marketingportal.com` | `team_member` | `worker` | Video Editing & Motion Design | `Password123!` | Active |
-| Gemma Ward | `gemma.w@marketingportal.com` | `team_member` | `worker` | Cinematography & Shoots | `Password123!` | Active |
-| Julian Hayes | `julian.h@marketingportal.com` | `team_member` | `worker` | Content & Copywriting | `Password123!` | Active |
-| Leo Sterling | `leo.s@marketingportal.com` | `team_member` | `worker` | Graphics & Visual Design | `Password123!` | Active |
-| Liam O'Connor | `liam.o@marketingportal.com` | `team_member` | `worker` | Content & Copywriting | `Password123!` | Active |
-| Lucas Rivera | `lucas.r@marketingportal.com` | `team_member` | `worker` | Video Editing & Motion Design | `Password123!` | Active |
-| Mateo Rossi | `mateo.r@marketingportal.com` | `team_member` | `worker` | Graphics & Visual Design | `Password123!` | Active |
-| Maya Patel | `maya.p@marketingportal.com` | `team_member` | `worker` | Content & Copywriting | `Password123!` | Active |
-| Nadia Fox | `nadia.f@marketingportal.com` | `team_member` | `worker` | Cinematography & Shoots | `Password123!` | Active |
-| Noah Miller | `noah.m@marketingportal.com` | `team_member` | `worker` | Graphics & Visual Design | `Password123!` | Active |
-| Oliver Unassigned | `oliver.empty@marketingportal.com` | `team_member` | `worker` | Unassigned Team | `Password123!` | Active |
-| Sienna Brooks | `sienna.b@marketingportal.com` | `team_member` | `worker` | Video Editing & Motion Design | `Password123!` | Active |
-| Sophia Chen | `sophia.c@marketingportal.com` | `team_member` | `worker` | Graphics & Visual Design | `Password123!` | Active |
-| Tariq Al-Mansoor | `tariq.a@marketingportal.com` | `team_member` | `worker` | Video Editing & Motion Design | `Password123!` | Active |
-| Zoe Kravitz | `zoe.k@marketingportal.com` | `team_member` | `worker` | Content & Copywriting | `Password123!` | Active |
+| Aria Montgomery | `aria.m@marketingportal.com` | `team_member` | `team_member` | Graphics & Visual Design | `Password123!` | Active |
+| Chloe Bennett | `chloe.b@marketingportal.com` | `team_member` | `team_member` | Content & Copywriting | `Password123!` | Active |
+| Dante King | `dante.k@marketingportal.com` | `team_member` | `team_member` | Cinematography & Shoots | `Password123!` | Active |
+| Emma Watson | `emma.w@marketingportal.com` | `team_member` | `team_member` | Video Editing & Motion Design | `Password123!` | Active |
+| Ethan Hunt | `ethan.h@marketingportal.com` | `team_member` | `team_member` | Cinematography & Shoots | `Password123!` | Active |
+| Felix Baum | `felix.b@marketingportal.com` | `team_member` | `team_member` | Video Editing & Motion Design | `Password123!` | Active |
+| Gemma Ward | `gemma.w@marketingportal.com` | `team_member` | `team_member` | Cinematography & Shoots | `Password123!` | Active |
+| Julian Hayes | `julian.h@marketingportal.com` | `team_member` | `team_member` | Content & Copywriting | `Password123!` | Active |
+| Leo Sterling | `leo.s@marketingportal.com` | `team_member` | `team_member` | Graphics & Visual Design | `Password123!` | Active |
+| Liam O'Connor | `liam.o@marketingportal.com` | `team_member` | `team_member` | Content & Copywriting | `Password123!` | Active |
+| Lucas Rivera | `lucas.r@marketingportal.com` | `team_member` | `team_member` | Video Editing & Motion Design | `Password123!` | Active |
+| Mateo Rossi | `mateo.r@marketingportal.com` | `team_member` | `team_member` | Graphics & Visual Design | `Password123!` | Active |
+| Maya Patel | `maya.p@marketingportal.com` | `team_member` | `team_member` | Content & Copywriting | `Password123!` | Active |
+| Nadia Fox | `nadia.f@marketingportal.com` | `team_member` | `team_member` | Cinematography & Shoots | `Password123!` | Active |
+| Noah Miller | `noah.m@marketingportal.com` | `team_member` | `team_member` | Graphics & Visual Design | `Password123!` | Active |
+| Oliver Unassigned | `oliver.empty@marketingportal.com` | `team_member` | `team_member` | Unassigned Team | `Password123!` | Active |
+| Sienna Brooks | `sienna.b@marketingportal.com` | `team_member` | `team_member` | Video Editing & Motion Design | `Password123!` | Active |
+| Sophia Chen | `sophia.c@marketingportal.com` | `team_member` | `team_member` | Graphics & Visual Design | `Password123!` | Active |
+| Tariq Al-Mansoor | `tariq.a@marketingportal.com` | `team_member` | `team_member` | Video Editing & Motion Design | `Password123!` | Active |
+| Zoe Kravitz | `zoe.k@marketingportal.com` | `team_member` | `team_member` | Content & Copywriting | `Password123!` | Active |
 
 ---
 
@@ -91,15 +91,15 @@ Staff in ancillary departments whose legacy roles map to `team_member` under Mar
 
 | Name | Email | Normalized Role | Database Role | Department | Password | Status |
 |---|---|---|---|---|---|---|
-| Professor Arthur Pendelton | `arthur.academic@marketingportal.com` | `team_member` | `dept_lead` | Academic Affairs & Research | `Password123!` | Active |
-| Rachel Adams | `rachel.sm@marketingportal.com` | `team_member` | `dept_lead` | Social Media Marketing | `Password123!` | Active |
-| Victoria Stone | `victoria.sales@marketingportal.com` | `team_member` | `dept_lead` | Sales & Business Development | `Password123!` | Active |
-| Vikram Malhotra | `vikram.ads@marketingportal.com` | `team_member` | `dept_lead` | Performance & Paid Media | `Password123!` | Active |
-| Benjamin Clarke | `benjamin.academic@marketingportal.com` | `team_member` | `dept_staff` | Academic Affairs & Research | `Password123!` | Active |
-| Carlos Mendez | `carlos.ads@marketingportal.com` | `team_member` | `dept_staff` | Performance & Paid Media | `Password123!` | Active |
-| Jessica Pearson | `jessica.sales@marketingportal.com` | `team_member` | `dept_staff` | Sales & Business Development | `Password123!` | Active |
-| Hannah Abbott | `hannah.sm@marketingportal.com` | `team_member` | `sm_manager` | Social Media Marketing | `Password123!` | Active |
-| Auditor Claire | `claire.viewer@marketingportal.com` | `team_member` | `management` | Corporate Governance | `Password123!` | Active |
+| Professor Arthur Pendelton | `arthur.academic@marketingportal.com` | `team_member` | `team_member` | Academic Affairs & Research | `Password123!` | Active |
+| Rachel Adams | `rachel.sm@marketingportal.com` | `team_member` | `team_member` | Social Media Marketing | `Password123!` | Active |
+| Victoria Stone | `victoria.sales@marketingportal.com` | `team_member` | `team_member` | Sales & Business Development | `Password123!` | Active |
+| Vikram Malhotra | `vikram.ads@marketingportal.com` | `team_member` | `team_member` | Performance & Paid Media | `Password123!` | Active |
+| Benjamin Clarke | `benjamin.academic@marketingportal.com` | `team_member` | `team_member` | Academic Affairs & Research | `Password123!` | Active |
+| Carlos Mendez | `carlos.ads@marketingportal.com` | `team_member` | `team_member` | Performance & Paid Media | `Password123!` | Active |
+| Jessica Pearson | `jessica.sales@marketingportal.com` | `team_member` | `team_member` | Sales & Business Development | `Password123!` | Active |
+| Hannah Abbott | `hannah.sm@marketingportal.com` | `team_member` | `team_member` | Social Media Marketing | `Password123!` | Active |
+| Auditor Claire | `claire.viewer@marketingportal.com` | `team_member` | `team_member` | Corporate Governance | `Password123!` | Active |
 
 ---
 

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { ROLE_KEYS, JOB_ROLES } from '@mmp/shared';
+import { ROLE_KEYS, JOB_ROLES, normalizeRole } from '@mmp/shared';
 
 const personSchema = new mongoose.Schema(
   {
@@ -26,6 +26,7 @@ const personSchema = new mongoose.Schema(
       default: 'team_member',
       required: true,
       index: true,
+      set: (val) => normalizeRole(val),
     },
     jobRole: {
       type: String,
@@ -126,6 +127,20 @@ personSchema.virtual('department').get(function () {
   return this.departmentId;
 }).set(function (val) {
   this.departmentId = val;
+});
+
+// Resilient role normalization hooks for legacy document preservation
+personSchema.pre('validate', function (next) {
+  if (this.role) {
+    this.role = normalizeRole(this.role);
+  }
+  next();
+});
+
+personSchema.post('init', function () {
+  if (this.role) {
+    this.role = normalizeRole(this.role);
+  }
 });
 
 // Primary Person model, pointing to 'users' collection to transform in-place
