@@ -131,5 +131,6 @@ workItemSchema.index({ ownerId: 1, status: 1 });
 workItemSchema.index({ departmentId: 1, status: 1 });
 workItemSchema.index({ campaignId: 1, status: 1 });
 workItemSchema.index({ deadline: 1, status: 1 });
+workItemSchema.index({ profileId: 1, departmentId: 1, status: 1, deadline: 1 });
 
 export const WorkItem = mongoose.model('WorkItem', workItemSchema);

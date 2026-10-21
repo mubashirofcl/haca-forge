@@ -10,7 +10,7 @@ import {
   getScheduledReports,
   deleteScheduledReport,
 } from './service.js';
-import { getDashboardSummaryByRole } from './dashboard.service.js';
+import { getDashboardSummaryByRole, getDashboardOverview } from './dashboard.service.js';
 
 export async function getDepartmentReportHandler(req, res, next) {
   try {
@@ -134,11 +134,19 @@ export async function deleteScheduledReportHandler(req, res, next) {
   }
 }
 
+export async function getDashboardOverviewHandler(req, res, next) {
+  try {
+    const data = await getDashboardOverview(req.query, req.user);
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getDashboardSummaryHandler(req, res, next) {
   try {
-    const role = req.params.role || req.user.role;
-    const summary = await getDashboardSummaryByRole(role, req.user);
-    return res.status(200).json({ success: true, data: summary });
+    const data = await getDashboardOverview(req.query, req.user);
+    return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
   }

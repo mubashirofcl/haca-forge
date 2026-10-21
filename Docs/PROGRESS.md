@@ -571,7 +571,90 @@ With Phase 4 complete and verified:
 
 ### 5. Phase 6 Readiness
 With Phase 5 complete and verified:
-- Ready to proceed to **Phase 6: Global Filter Bar & Team Dashboard (Screen 2)** upon user approval.
+- Proceeded to **Phase 6: Global Filter Bar & Team Dashboard (Screen 2)**.
+
+---
+
+## Phase 6: Global Filter Bar & Team Dashboard (Status: COMPLETE)
+
+### 1. Executive Summary
+Phase 6 delivered the central executive cockpit and the universal cross-cutting filtering infrastructure for HACA Marketing OS. A universal, URL-synced `GlobalFilterContext` and glassmorphic `GlobalFilterBar` enable instant filtering across Brand Profiles, Departments, Months, and Deliverable Statuses. The complete 9-section `TeamDashboardPage` (`/dashboard` - Screen 2) provides the Marketing Head, Team Leads, and Team Members with real-time operational visibility into monthly targets, execution KPIs, today's immediate priorities, creative production output, campaign sprints, team workload distribution, lead funnel pacing, issues/blockers, and recent platform activity.
+
+All data aggregations are strictly scoped via `resolveScope(user, filters)`, preventing unauthorized data leakage across brand profiles and department boundaries, backed by an optimized compound index on `WorkItem`.
+
+---
+
+### 2. Frontend Screens & Components Delivered
+- **`GlobalFilterContext.tsx` (`apps/web/src/context/GlobalFilterContext.tsx`)**:
+  - URL `useSearchParams` two-way synchronization for `profileId`, `departmentId`, `ownerId`, `campaignId`, `month`, and `status`.
+  - Exposes `filters`, `setFilter`, `resetFilters`, `activeFilterCount`, and computed `queryParams` dictionary for seamless API query string generation.
+- **`GlobalFilterBar.tsx` (`apps/web/src/components/GlobalFilterBar.tsx`)**:
+  - Sticky glassmorphic bar (`glass-panel rounded-2xl border border-white/80 backdrop-blur-md`).
+  - Brand Profile selector pills with active visual highlights.
+  - Department dropdown populated from active organization departments.
+  - Month picker defaulting to current active month.
+  - Status filter dropdown matching `WORK_ITEM_STATUSES`.
+  - Active filter badge counter and quick "Reset" action.
+- **Screen 2: Team Dashboard (`/dashboard` - `TeamDashboardPage.tsx`)**:
+  - **Section 1: Monthly Targets Strip**:
+    - Revenue, Leads, Qualified Leads, and Budget progress cards with progress bars and percentage achieved calculations.
+    - Quick link to Target Setup modal / Campaigns list.
+  - **Section 2: KPI Strip**:
+    - Execution pulse cards: Total Deliverables, In Progress, In Feedback, Blocked, Approved, Published, and Overdue.
+    - Interactive click-through deep links directly navigating to `/work?status=...`.
+  - **Section 3: Today's Priorities**:
+    - Focused operational queue of deliverables due today or overdue.
+    - Priority indicators, brand badges, owner avatars, status pills, and direct jump to deliverable detail.
+  - **Section 4: Creative Production Stats**:
+    - Production output breakdown by work type (Reels, Static Posts, Carousels, Stories, Ad Copies, Blogs).
+    - Departmental throughput comparison bars.
+  - **Section 5: Campaign Progress**:
+    - Active campaign sprints with progress bars, due date indicators, and budget pacing.
+  - **Section 6: Team Workload**:
+    - Team member capacity distribution cards with utilization bands (Balanced, High, Overloaded).
+    - Visual alerts for overloaded team members (>100% capacity).
+  - **Section 7: Lead Funnel Snapshot**:
+    - Qualified lead target vs actual, conversion rate estimates, and deep-link to Lead Funnel analytics.
+  - **Section 8: Issues & Blockers**:
+    - Active blocker cards with dependency owner callouts and SLA duration badges.
+    - Excessive revision flags with root cause badges and links to `/issues`.
+  - **Section 9: Recent Activity Feed**:
+    - Chronological platform audit timeline of recent `ActivityEvent` records with actor names and entity links.
+
+---
+
+### 3. Backend & API Delivered
+- **Optimized Compound Index**:
+  - Added `{ profileId: 1, departmentId: 1, status: 1, deadline: 1 }` to `WorkItem` model (`apps/api/src/modules/workItems/model.js`) for lightning-fast multi-dimensional dashboard aggregations.
+- **`dashboard.service.js` (`apps/api/src/modules/reports/dashboard.service.js`)**:
+  - Implemented `getDashboardOverview(filters, user)`:
+    - Resolves authorization scope via `await resolveScope(user, filters)`.
+    - Simultaneously aggregates Targets, WorkItem KPIs, Today's Priorities, Creative Stats, Campaign Sprints, Team Workloads, Funnel Metrics, Blockers, and Recent Activities.
+    - Implemented `getDashboardSummary(filters, user)` for high-level widget consumption.
+- **Controller & Routes (`apps/api/src/modules/reports/`)**:
+  - `controller.js`: Mounted `getDashboardOverviewHandler` and `getDashboardSummaryHandler`.
+  - `dashboard.routes.js`: Configured `/overview`, `/summary`, `/` and `/:role` routes with authentication and validation.
+- **Automated Vitest Test Suite (`apps/api/test/dashboard_and_filters.test.js`)**:
+  - 3 comprehensive integration tests asserting:
+    1. Full 9-section dashboard response structure and metric calculations.
+    2. Global filter synchronization (filtering by profile restricts KPIs and deliverables to that profile).
+    3. Role-based scoping (team members only see deliverables and targets within their authorized profile scope).
+
+---
+
+### 4. Build & Test Verification
+| Component | Command | Result | Details |
+| :--- | :--- | :--- | :--- |
+| `@mmp/api` | `npx vitest run test/dashboard_and_filters.test.js` | **PASSED** | **3/3 tests pass** (9 sections aggregation, profile filter synchronization, role-based scoping) |
+| `@mmp/api` | `npm test` | **PASSED** | **115/115 tests pass** across all 11 test suites |
+| `@mmp/web` | `tsc && vite build` | **PASSED** | Clean production bundle (`TeamDashboardPage-*.js` chunk generated, 0 TypeScript errors) |
+
+---
+
+### 5. Phase 7 Readiness
+With Phase 6 complete and verified:
+- Ready to proceed to **Phase 7: Automation Rules, Reports & Notifications (Screen 14)** upon user approval.
+
 
 
 

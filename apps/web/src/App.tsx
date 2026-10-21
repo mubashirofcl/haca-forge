@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { GlobalFilterProvider } from './context/GlobalFilterContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -13,7 +14,6 @@ import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 
 import {
-  LayoutDashboard,
   TrendingUp,
   Building2,
   BarChart3,
@@ -30,6 +30,9 @@ const queryClient = new QueryClient({
 });
 
 // Lazy-loaded pages
+const TeamDashboardPage = React.lazy(() =>
+  import('./pages/dashboard/TeamDashboardPage').then((m) => ({ default: m.TeamDashboardPage }))
+);
 const AccessRequestsPage = React.lazy(() =>
   import('./pages/admin/AccessRequestsPage').then((m) => ({ default: m.AccessRequestsPage }))
 );
@@ -102,8 +105,9 @@ export const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <ErrorBoundary>
-            <React.Suspense fallback={<PageSkeleton />}>
+          <GlobalFilterProvider>
+            <ErrorBoundary>
+              <React.Suspense fallback={<PageSkeleton />}>
               <Routes>
                 {/* Public Authentication Routes */}
                 <Route path="/login" element={<LoginPage />} />
@@ -119,24 +123,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Team Dashboard"
-                          screenNumber="Screen 2"
-                          phase="Phase 6"
-                          route="/dashboard"
-                          description="One central executive cockpit where the Marketing Head and Team Leads track monthly marketing targets, live creative throughput, workload distribution, and lead metrics."
-                          features={[
-                            'Monthly Marketing Target editor & progress bar (revenue, leads, qualified leads, budget)',
-                            'KPI strip: planned, completed, in progress, at risk, blocked, pending feedback, overdue',
-                            "Today's Priorities table with immediate action triggers",
-                            'Creative production output & trends across 7 brand profiles',
-                            'Campaign Progress tracker linking to active business goals',
-                            'Team Workload & Lead Funnel snapshots',
-                            'Issues & Blockers overview with dependency warnings',
-                            'Recent Activity stream with domain-wide event tracking',
-                          ]}
-                          icon={LayoutDashboard}
-                        />
+                        <TeamDashboardPage />
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -390,7 +377,8 @@ export const App: React.FC = () => {
               </Routes>
             </React.Suspense>
           </ErrorBoundary>
-        </AuthProvider>
+        </GlobalFilterProvider>
+      </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );
