@@ -15,7 +15,6 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 import {
   LayoutDashboard,
   FileText,
-  Users,
   AlertCircle,
   TrendingUp,
   Building2,
@@ -62,6 +61,9 @@ const WorkDetailPage = React.lazy(() =>
 );
 const TodoPrioritiesPage = React.lazy(() =>
   import('./pages/todo/TodoPrioritiesPage').then((m) => ({ default: m.TodoPrioritiesPage }))
+);
+const TeamWorkloadPage = React.lazy(() =>
+  import('./pages/workload/TeamWorkloadPage').then((m) => ({ default: m.TeamWorkloadPage }))
 );
 
 /**
@@ -239,20 +241,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Team Workload"
-                          screenNumber="Screen 9"
-                          phase="Phase 4"
-                          route="/workload"
-                          description="Capacity monitoring by department with visual workload bands, open task counts, and rolling 90-day avgRevisions."
-                          features={[
-                            'Three capacity bands: Healthy (<65%), High (65-85%), Overloaded (>85%)',
-                            'Auto-assignment recommendation engine with explainable rationale',
-                            'Mandatory AssignmentOverride logging when changing recommendations',
-                            '5 performance dimensions (Output, Efficiency, Quality, Collaboration, Impact)',
-                          ]}
-                          icon={Users}
-                        />
+                        <TeamWorkloadPage />
                       </Layout>
                     </ProtectedRoute>
                   }

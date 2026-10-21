@@ -415,4 +415,80 @@ Phase 1 established the foundation for the HACA Marketing OS 4-role model (`admi
 With Phase 3 complete and verified:
 - Ready to proceed to **Phase 4: Auto-Assignment Engine & Team Workload (Screen 9)** upon user approval.
 
+---
+
+## Phase 4: Auto-Assignment Engine & Team Workload (Screen 9) (Completed & Verified)
+
+### 1. Goals & Invariants Delivered
+- **Workload Formula & Three Capacity Bands:**
+  - $\text{workloadPct} = \text{round}((\sum \text{estimatedEffortHrs of open work items} / \text{weeklyCapacityHours}) \times 100)$
+  - Standardized Capacity Bands:
+    - **Healthy**: $< 65\%$ (Emerald/Green)
+    - **High**: $65\% - 85\%$ (Amber)
+    - **Overloaded**: $> 85\%$ (Rose/Red)
+  - Workload metrics evaluate rolling 90-day `avgRevisions` per person across closed deliverables to assess quality and rework rates.
+- **Explainable Auto-Assignment Engine (`assignment/service.js`):**
+  - Triggered during deliverable creation or scheduling. **Never assigns silently**.
+  - Candidate Pool: Candidates matched from the department responsible for `WORK_TYPE_DEPARTMENT_MAP[workType]`, active non-admin personnel.
+  - Multi-factor deterministic ranking:
+    1. Filter out candidate pool members who exceed capacity where possible; non-overloaded ($<85\%$) ranked ahead of overloaded members.
+    2. Creative `team_member` preferred over managerial `team_lead`.
+    3. Lowest current `workloadPct`.
+    4. Lowest rolling 90-day `avgRevisions`.
+    5. Highest available bandwidth (remaining capacity hours).
+  - Generates clear, human-readable rationale: e.g. `"Recommended Owner: Jane Doe. Reason: lowest current workload (45%) + suitable skill in SEO & Content + 22h available bandwidth."`
+  - Explicit `isOverloadWarning: true` emitted if all candidates in the department exceed 85% capacity.
+- **Mandatory Assignment Override Audit Logging:**
+  - When a Team Lead, Marketing Head, or Admin departs from the recommendation or overrides an existing assignee, a mandatory non-empty `overrideReason` is captured.
+  - Stored in dedicated `AssignmentOverride` Mongoose collection with original recommendation, chosen owner, and audit trail.
+  - Automatically emits `work_item.assignment_overridden` domain event and creates an immutable `ActivityEvent`.
+- **Leading Indicator Early Warning Cockpit:**
+  - Live capacity radar at `/workload` flags overloaded team members before deadlines slip and bottlenecks propagate to subsequent campaigns.
+
+### 2. Frontend Screens Delivered
+- **Screen 9: Team Workload (`/workload` - `TeamWorkloadPage.tsx`)**:
+  - **Early Warning Cockpit Banner**: Dynamically highlights overloaded team members requiring immediate rebalancing.
+  - **KPI Metric Strip**: Total Team Members, Total Bandwidth Hours, Allocated Hours, Available Capacity, Overall Avg Workload %, Overloaded Count, Total Open Deliverables.
+  - **Department Accordions & Workload Cards**:
+    - Grouped by department with average workload percentage and band distribution indicators.
+    - Member cards featuring capacity badges (`Healthy`, `High`, `Overloaded`), animated progress bars, weekly allocated vs capacity hours, and rolling 90-day avg revisions.
+    - Expandable deliverable drawer showing each member's active items, effort hours, overdue status, and deep links to `/work/:id`.
+  - **Filter & Search Bar**: Quick filtering by department, capacity band (`Healthy`, `High`, `Overloaded`), and text search (name, email, job role).
+  - **Interactive Auto-Assignment Modal**:
+    - Test recommendations on demand by selecting Work Type, Estimated Effort Hours, and optional Deadline.
+    - Displays recommended candidate with explainable rationale string, post-assignment simulated workload %, and bandwidth impact.
+    - Depart from recommendation form requiring mandatory override reason with live validation.
+
+### 3. Backend & Shared Schema Delivered
+- **`@mmp/shared`**:
+  - `CAPACITY_BANDS`: `['Healthy', 'High', 'Overloaded']` constant.
+  - `assignmentRecommendSchema`: Validates `workType`, `estimatedEffortHrs`, `deadline`.
+  - `assignmentOverrideSchema`: Validates `workItemId`, `recommendedPersonId`, `chosenPersonId`, `overrideReason`.
+  - Exported TypeScript types: `CapacityBand`, `AssignmentRecommendInput`, `AssignmentOverrideInput`.
+- **`apps/api` Modules**:
+  - `src/modules/assignment/model.js`: `AssignmentOverride` Mongoose schema with indexes on `workItemId`, `chosenPersonId`, `createdAt`.
+  - `src/modules/assignment/service.js`:
+    - `calculateMemberWorkloadMetrics(personId)`
+    - `recommendAssignee(criteria, user)`
+    - `recordAssignmentOverride(data, user)`
+    - `getTeamWorkload(filters, user)`
+    - `listAssignmentOverrides(filters, user)`
+  - `src/modules/assignment/controller.js` & `routes.js`: Mounted at `/api/assignment` (`/recommend`, `/override`, `/overrides`) and `/api/workload`.
+  - Mounted in `apps/api/src/server.js`.
+
+### 4. Build & Test Verification
+| Component | Command | Result | Details |
+| :--- | :--- | :--- | :--- |
+| `@mmp/shared` | `npm run build` | **PASSED** | Clean tsup build (ESM, CJS, DTS) with capacity bands and assignment schemas |
+| `@mmp/api` | `npx vitest run test/assignment_and_workload.test.js` | **PASSED** | **13/13 tests pass** (workload calculation, 3 capacity bands, ranking heuristics, explainable rationale, overload warnings, override logging) |
+| `@mmp/api` | `npm test` | **PASSED** | **97/97 tests pass** across all 9 test suites |
+| `@mmp/web` | `tsc && vite build` | **PASSED** | Clean production bundle (Screen 9 `TeamWorkloadPage-*.js` chunk generated, 0 TypeScript errors) |
+
+---
+
+### 5. Phase 5 Readiness
+With Phase 4 complete and verified:
+- Ready to proceed to **Phase 5: Feedback Loops, Revision Flags & Blockers (Screens 8 & 11)** upon user approval.
+
+
 

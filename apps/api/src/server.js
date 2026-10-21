@@ -33,6 +33,9 @@ import docsRoutes from './modules/docs/routes.js';
 import targetRoutes from './modules/targets/routes.js';
 import campaignRoutes from './modules/campaigns/routes.js';
 import workItemRoutes from './modules/workItems/routes.js';
+import assignmentRoutes from './modules/assignment/routes.js';
+import * as assignmentController from './modules/assignment/controller.js';
+import { authenticate } from './middleware/auth.js';
 import { initQueues } from './lib/queue.js';
 import { initDomainEventListeners } from './modules/notifications/service.js';
 
@@ -178,6 +181,8 @@ app.use('/api/todo', (req, res, next) => {
   req.url = '/todo' + (req.url === '/' ? '' : req.url);
   workItemRoutes(req, res, next);
 });
+app.use('/api/assignment', assignmentRoutes);
+app.use('/api/workload', authenticate, assignmentController.getTeamWorkload);
 
 app.set('io', io);
 

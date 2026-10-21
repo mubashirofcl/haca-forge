@@ -532,3 +532,26 @@ export const workItemTransitionSchema = z.object({
 });
 export type WorkItemTransitionInput = z.infer<typeof workItemTransitionSchema>;
 
+// Phase 4: Auto-Assignment & Workload Schemas
+export const CAPACITY_BANDS = ['Healthy', 'High', 'Overloaded'] as const;
+export type CapacityBand = (typeof CAPACITY_BANDS)[number];
+
+export const assignmentRecommendSchema = z.object({
+  workType: z.enum(WORK_TYPES),
+  campaignId: z.string().optional(),
+  profileId: z.string().optional(),
+  departmentId: z.string().optional(),
+  deadline: z.coerce.date().optional(),
+  estimatedEffortHrs: z.number().min(0.5).max(120).default(4),
+});
+export type AssignmentRecommendInput = z.infer<typeof assignmentRecommendSchema>;
+
+export const assignmentOverrideSchema = z.object({
+  workItemId: z.string().min(1, 'Work item ID is required'),
+  recommendedPersonId: z.string().min(1, 'Recommended person ID is required'),
+  chosenPersonId: z.string().min(1, 'Chosen person ID is required'),
+  reason: z.string().min(3, 'Override reason is required'),
+  metadata: z.record(z.any()).optional(),
+});
+export type AssignmentOverrideInput = z.infer<typeof assignmentOverrideSchema>;
+
