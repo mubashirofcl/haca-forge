@@ -34,8 +34,7 @@ export const AccessRequestsPage: React.FC = () => {
   // Dialog states
   const [selectedRequest, setSelectedRequest] = useState<AccessRequestItem | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | 'info' | null>(null);
-  const [assignedRole, setAssignedRole] = useState<UserRole>('worker');
-  const [assignedTeam, setAssignedTeam] = useState<string>('content');
+  const [assignedRole, setAssignedRole] = useState<UserRole>('team_member');
   const [assignedCapacity, setAssignedCapacity] = useState<number>(40);
   const [actionReason, setActionReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -110,7 +109,6 @@ export const AccessRequestsPage: React.FC = () => {
           body: JSON.stringify({
             status: 'approved',
             assignedRole,
-            teamId: assignedTeam,
             capacity: Number(assignedCapacity),
           }),
         });
@@ -434,24 +432,6 @@ export const AccessRequestsPage: React.FC = () => {
                         ))}
                       </select>
                     </div>
-
-                    {assignedRole === 'worker' && (
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
-                          Production Team
-                        </label>
-                        <select
-                          value={assignedTeam}
-                          onChange={(e) => setAssignedTeam(e.target.value)}
-                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
-                        >
-                          <option value="content">Content (Scripts / Copywriting)</option>
-                          <option value="graphics">Graphics (Posters / Carousels)</option>
-                          <option value="cinematography">Cinematography (Shoots)</option>
-                          <option value="editor">Editor (Reels / Video Exports)</option>
-                        </select>
-                      </div>
-                    )}
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">

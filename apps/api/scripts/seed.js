@@ -1,8 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { env } from '../src/config/env.js';
 import { connectDB, disconnectDB } from '../src/config/db.js';
-import { User } from '../src/modules/users/model.js';
-import { Department } from '../src/modules/departments/model.js';
+import { Person } from '../src/modules/people/model.js';
+import { seedReferenceData } from '../src/modules/referenceData/service.js';
 import { logger } from '../src/lib/logger.js';
 
 async function seed() {
@@ -12,48 +12,42 @@ async function seed() {
   }
 
   await connectDB();
-  logger.info('🌱 Starting clean database seed for HACA Marketing OS baseline...');
+  logger.info('🌱 Starting clean database seed for HACA Marketing OS baseline (Phase 1)...');
 
   try {
     const salt = await bcrypt.genSalt(10);
-    const sharedPasswordHash = await bcrypt.hash('Password123!', salt);
     const adminPasswordHash = await bcrypt.hash(env.ADMIN_SEED_PASSWORD || 'Admin1212', salt);
 
-    // Seed Admin if not exists
+    // 1. Seed Reference Data (7 Profiles and 7 Departments)
+    const { profiles, departments } = await seedReferenceData();
+    const allProfileIds = profiles.map((p) => p._id);
+    const hacaProfile = profiles.find((p) => p.code === 'haca') || profiles[0];
+    const techDept = departments.find((d) => d.code === 'tech') || departments[0];
+
+    // 2. Seed Admin if not exists
     const adminEmail = (env.ADMIN_SEED_EMAIL || 'admin@marketingportal.com').toLowerCase().trim();
-    const existingAdmin = await User.findOne({ email: adminEmail });
+    const existingAdmin = await Person.findOne({ email: adminEmail });
     if (!existingAdmin) {
-      await User.create({
+      await Person.create({
         name: 'System Administrator',
         email: adminEmail,
         passwordHash: adminPasswordHash,
         role: 'admin',
-        department: 'Tech',
+        departmentId: techDept?._id,
+        profileAccess: allProfileIds,
+        lastProfileId: hacaProfile?._id,
         status: 'active',
         mustSetPassword: false,
       });
       logger.info(`✅ Seeded admin user: ${adminEmail}`);
+    } else {
+      if (!existingAdmin.profileAccess || existingAdmin.profileAccess.length === 0) {
+        existingAdmin.profileAccess = allProfileIds;
+        existingAdmin.lastProfileId = hacaProfile?._id;
+        await existingAdmin.save();
+      }
+      logger.info(`ℹ️ Admin user already exists: ${adminEmail}`);
     }
-
-    // Ensure initial departments exist
-    const defaultDepartments = [
-      'Design',
-      'Video Production',
-      'Social Media',
-      'SEO & Content',
-      'WhatsApp',
-      'Performance Marketing',
-      'Tech',
-    ];
-
-    for (const name of defaultDepartments) {
-      await Department.findOneAndUpdate(
-        { name },
-        { name, code: name.toLowerCase().replace(/[^a-z0-9]/g, '_') },
-        { upsert: true, new: true }
-      );
-    }
-    logger.info('✅ Initial departments verified');
 
     logger.info('🎉 Seed completed successfully!');
   } catch (error) {

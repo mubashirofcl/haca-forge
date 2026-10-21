@@ -135,7 +135,100 @@ Deleted all retired FORGE views and components:
 ---
 
 ### 6. Phase 1 Readiness
-With Phase 0 complete and verified:
-- Branch `marketing-os` is clean.
-- Git tag `mos-phase-0-done` will anchor the completion of Phase 0.
-- Ready to proceed immediately to **Phase 1: Reference Data, Profiles & Person Model**.
+Phase 0 successfully closed and verified.
+
+---
+
+## Phase 1: Profiles, People & Access Scoping (Status: COMPLETE)
+
+### 1. Executive Summary
+Phase 1 established the foundation for the HACA Marketing OS 4-role model (`admin`, `marketing_head`, `team_lead`, `team_member`), query-level scoping through `resolveScope(user, filters)`, 7 fixed brand profiles, 7 operational departments, and 13 fixed creative job roles. The `Person` schema now replaces the legacy User abstraction, supporting operational assignments (`jobRole`, `profileAccess[]`, `reportsToIds[]`, `weeklyCapacityHours`) and auditing actions through `ActivityEvent`. The frontend `/people` view has been completely overhauled into a frosted glassmorphic People & Capacity setup interface supporting role-restricted operational editing.
+
+---
+
+### 2. What Was Built & Changed
+
+#### Shared Package (`@mmp/shared`)
+- **4 Canonical Roles**: `ROLE_KEYS = ['admin', 'marketing_head', 'team_lead', 'team_member']`.
+- **20 Permission Keys**: Defined exact matrix from Spec Section 13.1. `admin` holds all permissions dynamically derived from `PERMISSION_KEYS`.
+- **Fixed Reference Taxonomies**:
+  - 7 Profiles: `HACA`, `HACA Mideast`, `HACA Marketing School`, `HACA Marketing School EN`, `HACA Design School`, `HACA Design School EN`, `HACA Tech School`.
+  - 7 Departments: `Design`, `Video Production`, `Social Media`, `SEO & Content`, `WhatsApp`, `Performance Marketing`, `Tech`.
+  - 13 Job Roles: `SEO Specialist`, `Social Specialist`, `UI Designer`, `Writer`, `Developer`, `Social Media Manager`, `Designer`, `Video Editor`, `Creative Manager (TL)`, `Design Lead (TL)`, `YouTube Strategist`, `WhatsApp Marketer`, `Performance Marketer`.
+  - 14 Work Types, 5 Design School Programs, 9 Blocker Reasons, 7 Revision Root Causes, 19 Lead Sources, 12 Funnel Stages.
+  - Workload band definitions: Healthy (<65%), High (65-85%), Overloaded (>85%).
+- **Zod Schemas**: Schemas for Person creation, operational updates, admin updates, and reference data.
+
+#### Backend Modules & Infrastructure (`apps/api/`)
+- **`Person` Model (`modules/people/model.js`)**:
+  - Implements `name`, `email`, `role`, `jobRole`, `departmentId`, `profileAccess[]`, `reportsToIds[]`, `weeklyCapacityHours`, `lastProfileId`, `status`.
+  - Bound to existing MongoDB collection `users` to transform data in-place without dropping or breaking existing references.
+- **`Profile` Model (`modules/referenceData/profile.model.js`)**:
+  - Mongoose schema for the 7 brand profiles (`name`, `code`, `active`).
+- **`Department` Model (`modules/departments/model.js`)**:
+  - Updated to enforce unique `code`, `name`, and reference to `Person` for department lead.
+- **`ActivityEvent` Model & Service (`modules/activity/`)**:
+  - Records domain activity across people, assignments, and work items. Automatically tags admin work actions with `actingAs: 'admin'`.
+- **Row-Level Scoping Engine (`src/lib/scope.js`)**:
+  - `resolveScope(user, filters)` implements query-level security:
+    - `admin`: All profiles, everyone in scope (full access). Excluded from candidate assignment pools and workload metrics.
+    - `marketing_head`: Assigned profiles (all by default), all people in scope.
+    - `team_lead`: Assigned profiles, own team only (direct reports + same department + self).
+    - `team_member`: Assigned profiles, self only.
+    - Out-of-scope profile or member requests return empty/unauthorized query filters.
+- **People Service & Routes (`modules/people/`)**:
+  - `GET /api/people`: Scoped list of team members.
+  - `GET /api/people/assignment-candidates`: Filtered candidates for assignment (excluding admin).
+  - `POST /api/people`: Admin-only user creation (`user.manage`).
+  - `PATCH /api/people/:id`: Accessible by Admin (`user.manage`) and Marketing Head (`people.assign`). Marketing Head is restricted to operational fields (`departmentId`, `jobRole`, `profileAccess`, `reportsToIds`, `weeklyCapacityHours`) of `team_lead` and `team_member` only, and cannot touch admin or head accounts.
+  - `POST /api/people/:id/suspend` & `reactivate`: Admin-only account suspension.
+- **Reference Data Routes (`modules/referenceData/`)**:
+  - `GET /api/reference-data`: Returns profiles, departments, job roles, programs, work types, and taxonomies.
+
+#### Database Migrations & Seeders
+- **`scripts/seed.js` & `seed-reference.js`**:
+  - Idempotently bootstraps the 7 Profiles and 7 Departments, and verifies initial Administrator.
+- **`scripts/migrate-user-to-person.js`**:
+  - 10-key User to Person transformation:
+    - `admin` $\rightarrow$ `admin`
+    - `head`, `lead` $\rightarrow$ `marketing_head`
+    - `team_lead` $\rightarrow$ `team_lead`
+    - `worker`, `sm_manager` $\rightarrow$ `team_member`
+    - `management`, `dept_lead`, `dept_staff`, `viewer` $\rightarrow$ `suspended` (logged in report)
+  - Reads active `TeamAssignment` records from MongoDB and converts into `Person.reportsToIds[]` while preserving the collection.
+  - Supports `scripts/migration-overrides.json` for manual email-level role overrides.
+
+#### Frontend Application (`apps/web/`)
+- **People & Capacity Setup (`pages/admin/UsersPage.tsx` mounted at `/people`)**:
+  - Frosted glass cards displaying person avatar, role badges, job roles, departments, capacity hours, and profile tags.
+  - Role-specific UI permissions: Admin sees full management (Add User, role change, suspend, password reset). Marketing Head sees operational field editor for leads and members only; admin/head cards are marked as Protected.
+  - Filter bar supporting text search, role filter, department filter, and status filter.
+- **RootRedirect (`App.tsx`)**:
+  - `admin`, `marketing_head`, and `team_lead` redirect to `/dashboard`.
+  - `team_member` redirects to `/my-work`.
+- **Access Requests (`AccessRequestsPage.tsx`)**:
+  - Updated to 4-role selection on approval.
+- **Login (`LoginPage.tsx`)**:
+  - Updated to 4-role selection and role-based redirect.
+
+---
+
+### 3. Build & Test Verification
+
+| Component | Command | Result | Details |
+| :--- | :--- | :--- | :--- |
+| `@mmp/shared` | `npm run build` | **PASSED** | Clean tsup build (ESM, CJS, DTS) |
+| `@mmp/api` | `vitest run` | **PASSED** | **23/23 tests pass** across 3 test suites (`phase1_scoping`, `permissions`, `status`) in ~8s |
+| `@mmp/web` | `tsc && vite build` | **PASSED** | Clean production bundle (0 TypeScript errors) in ~7s |
+| `@mmp/web` | `vitest run` | **PASSED** | Smoke tests pass |
+| Monorepo Root | `npm test` | **PASSED** | All workspace tests exit with code 0 |
+| Monorepo Root | `npm run build` | **PASSED** | All workspace builds exit with code 0 |
+
+---
+
+### 4. Phase 2 Readiness
+With Phase 1 complete and fully verified:
+- Branch `marketing-os` is clean and passing.
+- 4 roles, `Person` model, `resolveScope`, 7 profiles, and People Setup are fully functional.
+- Ready to proceed to **Phase 2: Monthly Targets & Campaigns**.
+

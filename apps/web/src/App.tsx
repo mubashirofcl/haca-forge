@@ -67,6 +67,11 @@ const RootRedirect: React.FC = () => {
     return <Navigate to="/login" replace />;
   }
 
+  // Phase 1 Role-specific Redirection
+  if (user.role === 'team_member') {
+    return <Navigate to="/my-work" replace />;
+  }
+
   return <Navigate to="/dashboard" replace />;
 };
 

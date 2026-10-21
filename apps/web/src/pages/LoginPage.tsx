@@ -29,7 +29,7 @@ export const LoginPage: React.FC = () => {
   const [reqEmail, setReqEmail] = useState('');
   const [reqPhone, setReqPhone] = useState('');
   const [reqDept, setReqDept] = useState('');
-  const [reqRole, setReqRole] = useState<UserRole>('dept_staff');
+  const [reqRole, setReqRole] = useState<UserRole>('team_member');
   const [reqSkills, setReqSkills] = useState('');
   const [reqReason, setReqReason] = useState('');
   const [isSubmittingReq, setIsSubmittingReq] = useState(false);
@@ -69,29 +69,10 @@ export const LoginPage: React.FC = () => {
 
     try {
       const loggedUser = await login({ email, password });
-      switch (loggedUser.role) {
-        case 'admin':
-          navigate('/admin');
-          break;
-        case 'head':
-          navigate('/lead');
-          break;
-        case 'team_lead':
-          navigate('/teams');
-          break;
-        case 'worker':
-          navigate('/worker');
-          break;
-        case 'sm_manager':
-        case 'dept_lead':
-        case 'dept_staff':
-          navigate('/requester');
-          break;
-        case 'management':
-          navigate('/reports');
-          break;
-        default:
-          navigate('/requester');
+      if (loggedUser.role === 'team_member') {
+        navigate('/my-work');
+      } else {
+        navigate('/dashboard');
       }
     } catch (err: any) {
       if (err instanceof ApiError) {
@@ -393,13 +374,9 @@ export const LoginPage: React.FC = () => {
                       onChange={(e) => setReqRole(e.target.value as UserRole)}
                       className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
                     >
-                      <option value="dept_staff">Department Staff (Requester)</option>
-                      <option value="dept_lead">Department Lead</option>
-                      <option value="sm_manager">Social Media Manager</option>
-                      <option value="worker">Production Worker (Designer/Editor/Writer)</option>
+                      <option value="team_member">Team Member</option>
                       <option value="team_lead">Team Lead</option>
-                      <option value="head">Marketing Head</option>
-                      <option value="management">Management</option>
+                      <option value="marketing_head">Marketing Head</option>
                     </select>
                   </div>
                   <div>

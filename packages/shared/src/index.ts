@@ -1,25 +1,27 @@
 import { z } from 'zod';
 
 // ==========================================
-// 1. Roles & Production Teams
+// 1. Roles & Permissions (4-Role Marketing OS Model)
 // ==========================================
 
 export const ROLE_KEYS = [
   'admin',
-  'management',
-  'head',
+  'marketing_head',
   'team_lead',
-  'worker',
-  'sm_manager',
-  'dept_lead',
-  'dept_staff',
+  'team_member',
 ] as const;
 
 export type UserRole = (typeof ROLE_KEYS)[number];
 
 export const LEGACY_ROLE_ALIASES = {
-  lead: 'head',
-  viewer: 'management',
+  lead: 'marketing_head',
+  head: 'marketing_head',
+  worker: 'team_member',
+  sm_manager: 'team_member',
+  management: 'team_member',
+  dept_lead: 'team_member',
+  dept_staff: 'team_member',
+  viewer: 'team_member',
 } as const;
 
 export type LegacyRoleAlias = keyof typeof LEGACY_ROLE_ALIASES;
@@ -32,90 +34,273 @@ export function normalizeRole(role: string | null | undefined): UserRole | strin
   return role;
 }
 
-export const TEAM_KEYS = [
-  'content',
-  'graphics',
-  'cinematography',
-  'editor',
+// 20 Canonical Permission Keys (Spec Section 13.1)
+export const PERMISSION_KEYS = [
+  'work.create',
+  'work.request',
+  'work.update.own',
+  'assignment.override',
+  'feedback.give',
+  'feedback.respond',
+  'revision.classify',
+  'campaign.manage',
+  'target.manage',
+  'target.view',
+  'lead.view',
+  'datacenter.view',
+  'analytics.team',
+  'report.view',
+  'report.configure',
+  'automation.manage',
+  'user.approve',
+  'user.manage',
+  'people.assign',
+  'reference.manage',
 ] as const;
 
-export type ProductionTeam = (typeof TEAM_KEYS)[number];
+export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 
-export const DEPARTMENT_TYPES = [
-  'social_media',
-  'performance',
-  'sales',
-  'academics',
-  'other',
-] as const;
-
-export type DepartmentType = (typeof DEPARTMENT_TYPES)[number];
+// Role-to-Permission Mapping Matrix (Spec Section 13.1)
+// Admin is dynamically derived from PERMISSION_KEYS so any new keys are automatically granted
+export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
+  admin: [...PERMISSION_KEYS],
+  marketing_head: [
+    'work.create',
+    'work.request',
+    'work.update.own',
+    'assignment.override',
+    'feedback.give',
+    'feedback.respond',
+    'revision.classify',
+    'campaign.manage',
+    'target.manage',
+    'target.view',
+    'lead.view',
+    'datacenter.view',
+    'analytics.team',
+    'report.view',
+    'report.configure',
+    'automation.manage',
+    'people.assign',
+  ],
+  team_lead: [
+    'work.create',
+    'work.request',
+    'work.update.own',
+    'assignment.override',
+    'feedback.give',
+    'feedback.respond',
+    'revision.classify',
+    'campaign.manage',
+    'target.view',
+    'lead.view',
+    'datacenter.view',
+    'analytics.team',
+    'report.view',
+  ],
+  team_member: [
+    'work.request',
+    'work.update.own',
+    'feedback.respond',
+    'analytics.team',
+  ],
+};
 
 // ==========================================
-// 2. Status Enums
+// 2. Fixed Reference Taxonomies (Spec Section 14)
 // ==========================================
 
-export const REQUEST_STATUSES = [
-  'draft',
-  'submitted',
-  'under_triage',
-  'accepted',
-  'rejected',
-  'needs_info',
-  'converted',
-  'cancelled',
+export const PROFILES = [
+  { name: 'HACA', code: 'haca' },
+  { name: 'HACA Mideast', code: 'haca_mideast' },
+  { name: 'HACA Marketing School', code: 'haca_marketing_school' },
+  { name: 'HACA Marketing School EN', code: 'haca_marketing_school_en' },
+  { name: 'HACA Design School', code: 'haca_design_school' },
+  { name: 'HACA Design School EN', code: 'haca_design_school_en' },
+  { name: 'HACA Tech School', code: 'haca_tech_school' },
 ] as const;
-export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 
-export const CONTENT_STATUSES = [
-  'planned',
-  'brief_ready',
-  'in_production',
-  'in_review',
-  'changes_requested',
-  'approved',
-  'scheduled',
-  'published',
-  'live',
-  'paused',
-  'retired',
-] as const;
-export type ContentStatus = (typeof CONTENT_STATUSES)[number];
+export const PROFILE_CODES = PROFILES.map((p) => p.code);
+export type ProfileCode = (typeof PROFILE_CODES)[number];
 
-export const TASK_STATUSES = [
-  'assigned',
-  'in_progress',
-  'submitted',
-  'changes_requested',
-  'approved',
-  'done',
-  'blocked',
-  'on_hold',
+export const DEPARTMENTS = [
+  { name: 'Design', code: 'design' },
+  { name: 'Video Production', code: 'video_production' },
+  { name: 'Social Media', code: 'social_media' },
+  { name: 'SEO & Content', code: 'seo_content' },
+  { name: 'WhatsApp', code: 'whatsapp' },
+  { name: 'Performance Marketing', code: 'performance_marketing' },
+  { name: 'Tech', code: 'tech' },
 ] as const;
-export type TaskStatus = (typeof TASK_STATUSES)[number];
 
-export const DELIVERABLE_STATUSES = [
-  'submitted',
-  'approved',
-  'changes_requested',
-  'rejected',
-] as const;
-export type DeliverableStatus = (typeof DELIVERABLE_STATUSES)[number];
+export const DEPARTMENT_CODES = DEPARTMENTS.map((d) => d.code);
+export type DepartmentCode = (typeof DEPARTMENT_CODES)[number];
+// Keep DEPARTMENT_TYPES alias for backward compatibility
+export const DEPARTMENT_TYPES = DEPARTMENT_CODES;
+export type DepartmentType = DepartmentCode;
 
-export const SHOOT_STATUSES = [
-  'scheduled',
-  'done',
-  'reshoot_needed',
-  'cancelled',
+export const JOB_ROLES = [
+  'SEO Specialist',
+  'Social Specialist',
+  'UI Designer',
+  'Writer',
+  'Developer',
+  'Social Media Manager',
+  'Designer',
+  'Video Editor',
+  'Creative Manager (TL)',
+  'Design Lead (TL)',
+  'YouTube Strategist',
+  'WhatsApp Marketer',
+  'Performance Marketer',
 ] as const;
-export type ShootStatus = (typeof SHOOT_STATUSES)[number];
+export type JobRole = (typeof JOB_ROLES)[number];
 
-export const TIME_ENTRY_STATUSES = [
-  'draft',
-  'submitted',
-  'approved',
+export const PROGRAMS = [
+  'AI Integrated Graphic Design',
+  'UI/UX Design + AI',
+  'Creative Design & Communication',
+  'AI Integrated Video Editing Mastery',
+  'Branding & Identity Online Program',
 ] as const;
-export type TimeEntryStatus = (typeof TIME_ENTRY_STATUSES)[number];
+export type Program = (typeof PROGRAMS)[number];
+
+export const WORK_TYPES = [
+  'Reel',
+  'Ad Creative',
+  'Landing Page',
+  'Carousel',
+  'Post',
+  'Blog',
+  'Email',
+  'WhatsApp Blast',
+  'Ad Set',
+  'YouTube Short/Video',
+  'SEO Audit',
+  'Copy',
+  'Video Ad',
+  'Internal Report',
+] as const;
+export type WorkType = (typeof WORK_TYPES)[number];
+
+export const WORK_TYPE_DEPARTMENT_MAP: Record<WorkType, DepartmentCode> = {
+  Reel: 'video_production',
+  'Video Ad': 'video_production',
+  'YouTube Short/Video': 'video_production',
+  'Ad Creative': 'design',
+  Carousel: 'design',
+  'Landing Page': 'design',
+  Post: 'social_media',
+  Blog: 'seo_content',
+  Email: 'seo_content',
+  Copy: 'seo_content',
+  'SEO Audit': 'seo_content',
+  'WhatsApp Blast': 'whatsapp',
+  'Ad Set': 'performance_marketing',
+  'Internal Report': 'performance_marketing',
+};
+
+export const PRIORITIES = ['High', 'Medium', 'Low'] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+export const CAMPAIGN_STATUSES = ['In Progress', 'At Risk', 'Completed'] as const;
+export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
+
+export const GOAL_TYPES = ['Leads', 'Reactivations', 'Enrollments'] as const;
+export type GoalType = (typeof GOAL_TYPES)[number];
+
+export const EXPECTED_OUTCOMES = [
+  'Lead Generation',
+  'Brand Awareness',
+  'Engagement',
+  'SEO Ranking',
+  'Nurture',
+  'Conversion',
+  'Reactivation',
+  'Ops',
+] as const;
+export type ExpectedOutcome = (typeof EXPECTED_OUTCOMES)[number];
+
+export const BLOCKER_REASONS = [
+  'Waiting for feedback',
+  'Waiting for content',
+  'Waiting for data',
+  'Technical issue',
+  'Dependency',
+  'Client/business approval',
+  'Resource issue',
+  'Unclear requirement',
+  'Other',
+] as const;
+export type BlockerReason = (typeof BLOCKER_REASONS)[number];
+
+// Reasons that require dependencyOwnerId to be specified
+export const BLOCKER_DEPENDENCY_REASONS: BlockerReason[] = [
+  'Waiting for feedback',
+  'Waiting for content',
+  'Waiting for data',
+];
+
+export const REVISION_ROOT_CAUSES = [
+  'Brief unclear',
+  'Creative direction unclear',
+  'Skill gap',
+  'Feedback inconsistency',
+  'Excessive scope change',
+  'TL approval delay',
+  'Client/business requirement changed',
+] as const;
+export type RevisionRootCause = (typeof REVISION_ROOT_CAUSES)[number];
+
+export const LEAD_SOURCES = [
+  'SMM YouTube',
+  'SMM Instagram',
+  'Online Campaigns (SMM)',
+  'Facebook Lead Ads',
+  'Social Media Re-engaged Leads',
+  'Meta Re-Engaged Leads',
+  'Google Ads',
+  'Inbound Phone Calls',
+  'WhatsApp Reactivation',
+  'WhatsApp Inbound',
+  'Student Referral',
+  'Staff Referral',
+  'SEO',
+  'PR',
+  'Website Leads',
+  'Offline Campaigns',
+  'Walk-in',
+  'Outbound Phone Calls',
+  'Workshops/Webinars',
+] as const;
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+export const FUNNEL_STAGES = [
+  'Total Leads',
+  'Not Contacted',
+  'Not Answered',
+  'Interested',
+  'Qualified Leads',
+  'Call Back',
+  'Payment Received',
+  'Not Interested',
+  'Not a Potential',
+  'Not Answered (Multiple)',
+  'Reconnected',
+  'Not Eligible',
+] as const;
+export type FunnelStage = (typeof FUNNEL_STAGES)[number];
+
+export const WORK_ITEM_STATUSES = [
+  'Not Started',
+  'In Progress',
+  'Feedback',
+  'Pending',
+  'Blocked',
+  'Approved',
+  'Published',
+] as const;
+export type WorkItemStatus = (typeof WORK_ITEM_STATUSES)[number];
 
 export const ACCESS_REQUEST_STATUSES = [
   'pending',
@@ -125,119 +310,39 @@ export const ACCESS_REQUEST_STATUSES = [
 ] as const;
 export type AccessRequestStatus = (typeof ACCESS_REQUEST_STATUSES)[number];
 
-export const HOLD_REASON_CODES = [
-  'waiting_for_content',
-  'approval_delay',
-  'resource_shortage',
-  'client_feedback',
-  'equipment',
-  'weather',
+export const WORKLOAD_BANDS = {
+  HEALTHY_MAX: 65,
+  HIGH_MAX: 85,
+} as const;
+
+export function getWorkloadBand(workloadPct: number): 'Healthy' | 'High' | 'Overloaded' {
+  if (workloadPct < WORKLOAD_BANDS.HEALTHY_MAX) return 'Healthy';
+  if (workloadPct <= WORKLOAD_BANDS.HIGH_MAX) return 'High';
+  return 'Overloaded';
+}
+
+// Deliverables & Upload constants (kept for upload infrastructure)
+export const DELIVERABLE_TYPES = [
+  'video',
+  'image',
+  'document',
+  'audio',
+  'copy',
+  'link',
   'other',
 ] as const;
-export type HoldReasonCode = (typeof HOLD_REASON_CODES)[number];
+export type DeliverableType = (typeof DELIVERABLE_TYPES)[number];
+
+export const MAX_UPLOAD_SIZES = {
+  video: 500 * 1024 * 1024,
+  image: 50 * 1024 * 1024,
+  audio: 100 * 1024 * 1024,
+  document: 50 * 1024 * 1024,
+  other: 50 * 1024 * 1024,
+} as const;
 
 // ==========================================
-// 3. Permission Keys & Matrix (Spec Section 15.1)
-// ==========================================
-
-export const PERMISSION_KEYS = [
-  'user.approve',
-  'user.manage',
-  'settings.manage',
-  'audit.view',
-  'request.create',
-  'request.view.department',
-  'request.triage',
-  'calendar.manage',
-  'calendar.import',
-  'content.create',
-  'content.update',
-  'content.publish',
-  'task.assign',
-  'task.update.own',
-  'task.upload',
-  'review.approve',
-  'request.confirm',
-  'shoot.manage',
-  'time.log',
-  'timesheet.approve',
-  'report.view',
-  'assignment.manage',
-  'assignment.view',
-] as const;
-
-export type PermissionKey = (typeof PERMISSION_KEYS)[number];
-
-export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
-  admin: [...PERMISSION_KEYS],
-  head: [
-    'request.create',
-    'request.view.department',
-    'request.triage',
-    'calendar.manage',
-    'calendar.import',
-    'content.create',
-    'content.update',
-    'task.assign',
-    'task.update.own',
-    'task.upload',
-    'review.approve',
-    'shoot.manage',
-    'time.log',
-    'timesheet.approve',
-    'report.view',
-    'assignment.view',
-  ],
-  team_lead: [
-    'content.create',
-    'content.update',
-    'task.assign',
-    'task.update.own',
-    'task.upload',
-    'review.approve',
-    'shoot.manage',
-    'time.log',
-    'timesheet.approve',
-    'report.view',
-    'assignment.view',
-  ],
-  worker: [
-    'task.update.own',
-    'task.upload',
-    'time.log',
-    'shoot.manage',
-    'report.view',
-    'assignment.view',
-  ],
-  sm_manager: [
-    'request.create',
-    'request.view.department',
-    'calendar.manage',
-    'calendar.import',
-    'content.create',
-    'content.update',
-    'content.publish',
-    'request.confirm',
-    'report.view',
-  ],
-  dept_lead: [
-    'request.create',
-    'request.view.department',
-    'request.confirm',
-    'report.view',
-  ],
-  dept_staff: [
-    'request.create',
-    'request.confirm',
-    'report.view',
-  ],
-  management: [
-    'report.view',
-  ],
-};
-
-// ==========================================
-// 4. Zod Schemas
+// 3. Zod Schemas
 // ==========================================
 
 export const loginSchema = z.object({
@@ -245,17 +350,6 @@ export const loginSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
-
-export const requestAccessSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Valid work email required'),
-  phone: z.string().min(7, 'Valid contact number required'),
-  department: z.string().min(2, 'Department is required'),
-  requestedRole: z.enum(ROLE_KEYS),
-  skills: z.array(z.string()).default([]),
-  reason: z.string().min(10, 'Please provide a clear reason for access'),
-});
-export type RequestAccessInput = z.infer<typeof requestAccessSchema>;
 
 export const setPasswordSchema = z.object({
   token: z.string().min(1, 'Invite token is required'),
@@ -271,460 +365,73 @@ export const refreshTokenSchema = z.object({
   refreshToken: z.string().optional(),
 });
 
+export const requestAccessSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Valid work email required'),
+  phone: z.string().min(7, 'Valid contact number required'),
+  department: z.string().min(2, 'Department is required'),
+  requestedRole: z.enum(ROLE_KEYS).default('team_member'),
+  reason: z.string().min(10, 'Please provide a clear reason for access'),
+});
+export type RequestAccessInput = z.infer<typeof requestAccessSchema>;
+
 export const accessRequestReviewSchema = z.object({
   status: z.enum(['approved', 'rejected', 'info_needed']),
   assignedRole: z.enum(ROLE_KEYS).optional(),
-  teamId: z.string().optional(),
-  skills: z.array(z.string()).optional(),
-  capacity: z.number().min(0).max(80).optional(),
+  departmentId: z.string().optional(),
+  jobRole: z.enum(JOB_ROLES).optional(),
+  weeklyCapacityHours: z.number().min(0).max(80).default(40).optional(),
+  profileAccess: z.array(z.string()).optional(),
   reason: z.string().optional(),
 });
 export type AccessRequestReviewInput = z.infer<typeof accessRequestReviewSchema>;
 
-
-export const statusTransitionSchema = z.object({
-  toStatus: z.string(),
-  reason: z.string().optional(),
-  reasonCode: z.enum(HOLD_REASON_CODES).optional(),
-  comment: z.string().optional(),
-});
-export type StatusTransitionInput = z.infer<typeof statusTransitionSchema>;
-
-// ==========================================
-// 5. Phase 2: Master Data & Organization Schemas
-// ==========================================
-
 export const departmentSchema = z.object({
   name: z.string().min(2, 'Department name is required'),
-  type: z.enum(DEPARTMENT_TYPES),
-  lead: z.string().optional().nullable(),
+  code: z.string().min(2, 'Department code is required'),
   description: z.string().optional(),
+  lead: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
 });
 export type DepartmentInput = z.infer<typeof departmentSchema>;
 
-export const teamSchema = z.object({
-  name: z.enum(TEAM_KEYS),
-  displayName: z.string().min(2, 'Display name is required'),
-  lead: z.string().optional().nullable(),
-  members: z.array(z.string()).default([]),
-  defaultWeeklyCapacity: z.number().min(0).max(200).default(40),
+export const profileSchema = z.object({
+  name: z.string().min(2, 'Profile name is required'),
+  code: z.string().min(2, 'Profile code is required'),
+  active: z.boolean().default(true),
 });
-export type TeamInput = z.infer<typeof teamSchema>;
+export type ProfileInput = z.infer<typeof profileSchema>;
 
-export const platformSchema = z.object({
-  name: z.string().min(2, 'Platform name is required'),
-  slug: z.string().min(2, 'Platform slug is required'),
-  isActive: z.boolean().default(true),
+export const personCreateSchema = z.object({
+  name: z.string().min(2, 'Name is required'),
+  email: z.string().email('Valid email is required'),
+  role: z.enum(ROLE_KEYS),
+  jobRole: z.enum(JOB_ROLES).optional(),
+  departmentId: z.string().optional().nullable(),
+  profileAccess: z.array(z.string()).default([]),
+  reportsToIds: z.array(z.string()).default([]),
+  weeklyCapacityHours: z.number().min(0).max(80).default(40),
+  password: z.string().min(8).optional(),
 });
-export type PlatformInput = z.infer<typeof platformSchema>;
+export type PersonCreateInput = z.infer<typeof personCreateSchema>;
 
-export const prioritySchema = z.object({
-  name: z.string().min(2, 'Priority name is required'),
-  level: z.number().min(1).max(5),
-  color: z.string().default('#8CA4D2'),
-  slaHours: z.number().min(1).default(48),
-  isActive: z.boolean().default(true),
+export const personOperationalUpdateSchema = z.object({
+  departmentId: z.string().optional().nullable(),
+  jobRole: z.enum(JOB_ROLES).optional().nullable(),
+  profileAccess: z.array(z.string()).optional(),
+  reportsToIds: z.array(z.string()).optional(),
+  weeklyCapacityHours: z.number().min(0).max(80).optional(),
+  lastProfileId: z.string().optional().nullable(),
 });
-export type PriorityInput = z.infer<typeof prioritySchema>;
+export type PersonOperationalUpdateInput = z.infer<typeof personOperationalUpdateSchema>;
 
-export const holdReasonSchema = z.object({
-  code: z.enum(HOLD_REASON_CODES),
-  label: z.string().min(2, 'Label is required'),
-  description: z.string().optional(),
-  isActive: z.boolean().default(true),
+export const personAdminUpdateSchema = personOperationalUpdateSchema.extend({
+  name: z.string().min(2).optional(),
+  email: z.string().email().optional(),
+  role: z.enum(ROLE_KEYS).optional(),
+  status: z.enum(['invited', 'active', 'suspended']).optional(),
 });
-export type HoldReasonInput = z.infer<typeof holdReasonSchema>;
-
-export const contentFormatSchema = z.object({
-  name: z.string().min(2, 'Format name is required'),
-  leadTimeDays: z.number().min(1, 'Lead time must be at least 1 day'),
-  defaultPlatforms: z.array(z.string()).default([]),
-  description: z.string().optional(),
-  isActive: z.boolean().default(true),
-});
-export type ContentFormatInput = z.infer<typeof contentFormatSchema>;
-
-export const DYNAMIC_FIELD_TYPES = [
-  'text',
-  'textarea',
-  'number',
-  'select',
-  'multiselect',
-  'date',
-  'checkbox',
-  'url',
-] as const;
-export type DynamicFieldType = (typeof DYNAMIC_FIELD_TYPES)[number];
-
-export const dynamicFieldDefinitionSchema = z.object({
-  fieldKey: z.string().min(1, 'Field key is required').regex(/^[a-zA-Z0-9_]+$/, 'Alphanumeric and underscore only'),
-  label: z.string().min(1, 'Field label is required'),
-  type: z.enum(DYNAMIC_FIELD_TYPES),
-  required: z.boolean().default(false),
-  options: z.array(z.string()).optional(),
-  placeholder: z.string().optional(),
-  helperText: z.string().optional(),
-});
-export type DynamicFieldDefinition = z.infer<typeof dynamicFieldDefinitionSchema>;
-
-export const requestTypeSchema = z.object({
-  name: z.string().min(2, 'Request type name is required'),
-  departmentType: z.enum(DEPARTMENT_TYPES),
-  fieldSchema: z.array(dynamicFieldDefinitionSchema).default([]),
-  isActive: z.boolean().default(true),
-});
-export type RequestTypeInput = z.infer<typeof requestTypeSchema>;
-
-export const settingsSchema = z.object({
-  efficiencyWeights: z
-    .object({
-      onTime: z.number().min(0).max(1).default(0.4),
-      firstPass: z.number().min(0).max(1).default(0.3),
-      speedVsEstimate: z.number().min(0).max(1).default(0.2),
-      volumeUtilization: z.number().min(0).max(1).default(0.1),
-    })
-    .default({
-      onTime: 0.4,
-      firstPass: 0.3,
-      speedVsEstimate: 0.2,
-      volumeUtilization: 0.1,
-    }),
-  requestersCanSeeWorkerNames: z.boolean().default(false),
-  requireReasonForHold: z.boolean().default(true),
-  defaultWeeklyCapacityHours: z.number().min(10).max(80).default(40),
-});
-export type SettingsInput = z.infer<typeof settingsSchema>;
-
-export const auditLogQuerySchema = z.object({
-  actor: z.string().optional(),
-  action: z.string().optional(),
-  entity: z.string().optional(),
-  entityId: z.string().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
-});
-export type AuditLogQueryInput = z.infer<typeof auditLogQuerySchema>;
-
-// ==========================================
-// 5. Phase 3: Requests & Triage Schemas
-// ==========================================
-
-export const PRIORITY_LEVELS = ['urgent', 'high', 'medium', 'low'] as const;
-export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
-
-export const createRequestSchema = z.object({
-  title: z.string().min(3, 'Title must be at least 3 characters'),
-  sourceDepartment: z.string().min(2, 'Source department is required'),
-  requestType: z.string().min(1, 'Request type is required'),
-  dynamicFields: z.record(z.any()).default({}),
-  priority: z.enum(PRIORITY_LEVELS).default('medium'),
-  deadline: z.string().or(z.date()),
-  attachments: z
-    .array(
-      z.object({
-        url: z.string().url(),
-        name: z.string(),
-        size: z.number().optional(),
-        type: z.string().optional(),
-      })
-    )
-    .default([]),
-  isDraft: z.boolean().default(false),
-  recurring: z
-    .object({
-      isRecurring: z.boolean().default(false),
-      frequency: z.enum(['weekly', 'monthly']).optional(),
-      nextRunAt: z.string().or(z.date()).optional(),
-      endDate: z.string().or(z.date()).optional(),
-    })
-    .optional(),
-});
-export type CreateRequestInput = z.infer<typeof createRequestSchema>;
-
-export const editRequestSchema = createRequestSchema.partial().extend({
-  resubmit: z.boolean().optional(),
-  resubmitReason: z.string().optional(),
-});
-export type EditRequestInput = z.infer<typeof editRequestSchema>;
-
-export const triageAcceptSchema = z.object({
-  priority: z.enum(PRIORITY_LEVELS).optional(),
-  deadline: z.string().or(z.date()).optional(),
-  comment: z.string().optional(),
-});
-export type TriageAcceptInput = z.infer<typeof triageAcceptSchema>;
-
-export const triageRejectSchema = z.object({
-  reason: z.string().min(5, 'Rejection reason must be at least 5 characters'),
-});
-export type TriageRejectInput = z.infer<typeof triageRejectSchema>;
-
-export const triageNeedsInfoSchema = z.object({
-  message: z.string().min(5, 'Message explaining required info is required'),
-});
-export type TriageNeedsInfoInput = z.infer<typeof triageNeedsInfoSchema>;
-
-export const triageMergeSchema = z.object({
-  targetRequestId: z.string().min(1, 'Target parent request ID is required'),
-});
-export type TriageMergeInput = z.infer<typeof triageMergeSchema>;
-
-export const requestCommentSchema = z.object({
-  text: z.string().min(1, 'Comment text cannot be empty'),
-});
-export type RequestCommentInput = z.infer<typeof requestCommentSchema>;
-
-// ==========================================
-// 6. Phase 4: Content, Pipelines, Tasks & Handoffs
-// ==========================================
-
-export const CONTENT_FORMATS = [
-  'static_post',
-  'carousel',
-  'story',
-  'reel',
-  'ad_creative',
-  'brochure',
-  'academic_creative',
-] as const;
-export type ContentFormat = (typeof CONTENT_FORMATS)[number];
-
-export const createContentItemSchema = z.object({
-  title: z.string().min(3, 'Title must be at least 3 characters'),
-  format: z.string().min(1, 'Format is required'),
-  sourceDepartment: z.string().min(1, 'Source department is required'),
-  requester: z.string().optional(),
-  requestId: z.string().optional(),
-  campaignId: z.string().optional(),
-  pillar: z.string().default('General'),
-  platforms: z.array(z.string()).min(1, 'At least one platform is required'),
-  publishDate: z.string().or(z.date()),
-  productionDeadline: z.string().or(z.date()).optional(),
-  priority: z.enum(PRIORITY_LEVELS).default('medium'),
-  caption: z.string().optional(),
-  hashtags: z.array(z.string()).default([]),
-  brief: z.string().optional(),
-  publishedUrl: z.string().url().optional().or(z.literal('')),
-});
-export type CreateContentItemInput = z.infer<typeof createContentItemSchema>;
-
-export const updateContentItemSchema = createContentItemSchema.partial().extend({
-  status: z.enum(CONTENT_STATUSES).optional(),
-});
-export type UpdateContentItemInput = z.infer<typeof updateContentItemSchema>;
-
-export const convertRequestSchema = z
-  .object({
-    format: z.string().default('static_post'),
-    title: z.string().min(3).optional(),
-    campaignId: z.string().optional(),
-    platforms: z.array(z.string()).default(['instagram']),
-    publishDate: z.string().or(z.date()).optional(),
-    priority: z.enum(PRIORITY_LEVELS).default('medium'),
-    pillar: z.string().default('General'),
-    brief: z.string().optional(),
-    caption: z.string().optional(),
-  })
-  .default({});
-export type ConvertRequestInput = z.infer<typeof convertRequestSchema>;
-
-export const createTaskSchema = z.object({
-  contentItemId: z.string().min(1, 'Content item ID is required'),
-  stageKey: z.string().min(1, 'Stage key is required'),
-  stageOrder: z.number().default(1),
-  title: z.string().min(3, 'Task title must be at least 3 characters'),
-  team: z.enum(TEAM_KEYS),
-  assignee: z.string().optional(),
-  collaborators: z.array(z.string()).default([]),
-  estimateHours: z.number().min(0.5).default(2),
-  dueDate: z.string().or(z.date()).optional(),
-  dependencies: z.array(z.string()).default([]),
-});
-export type CreateTaskInput = z.infer<typeof createTaskSchema>;
-
-export const updateTaskSchema = z.object({
-  assignee: z.string().nullable().optional(),
-  collaborators: z.array(z.string()).optional(),
-  estimateHours: z.number().min(0.5).optional(),
-  actualHours: z.number().min(0).optional(),
-  dueDate: z.string().or(z.date()).optional(),
-  title: z.string().min(3).optional(),
-});
-export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
-
-export const taskTransitionSchema = z.object({
-  status: z.enum(TASK_STATUSES),
-  holdReason: z.string().optional(),
-  holdComment: z.string().optional(),
-  comment: z.string().optional(),
-});
-export type TaskTransitionInput = z.infer<typeof taskTransitionSchema>;
-
-export const createCommentSchema = z.object({
-  entityType: z.enum(['request', 'content', 'task', 'deliverable']),
-  entityId: z.string().min(1, 'Entity ID is required'),
-  text: z.string().min(1, 'Comment text cannot be empty'),
-  mediaTimestamp: z.number().min(0).optional(),
-  mentions: z.array(z.string()).default([]),
-  attachments: z.array(z.string()).default([]),
-});
-export type CreateCommentInput = z.infer<typeof createCommentSchema>;
-
-// ==========================================
-// 8. Phase 5: Calendar & Publishing Schemas
-// ==========================================
-
-export const CALENDAR_STATUSES = ['draft', 'approved', 'converted'] as const;
-export type CalendarStatus = (typeof CALENDAR_STATUSES)[number];
-
-export const createCalendarEntrySchema = z.object({
-  date: z.string().or(z.date()),
-  platform: z.string().min(1, 'Platform is required'),
-  format: z.string().min(1, 'Format is required'),
-  theme: z.string().min(1, 'Theme is required'),
-  campaign: z.string().optional(),
-  captionBrief: z.string().optional(),
-  contentPillar: z.string().default('General'),
-  status: z.enum(CALENDAR_STATUSES).default('draft'),
-});
-export type CreateCalendarEntryInput = z.infer<typeof createCalendarEntrySchema>;
-
-export const updateCalendarEntrySchema = createCalendarEntrySchema.partial();
-export type UpdateCalendarEntryInput = z.infer<typeof updateCalendarEntrySchema>;
-
-export const commitCalendarImportSchema = z.object({
-  entries: z.array(createCalendarEntrySchema),
-  batchId: z.string().optional(),
-});
-export type CommitCalendarImportInput = z.infer<typeof commitCalendarImportSchema>;
-
-export const publishContentSchema = z.object({
-  publishedUrl: z.string().url('A valid published URL is required'),
-  publishedAt: z.string().or(z.date()).optional(),
-  metrics: z
-    .object({
-      reach: z.number().min(0).optional(),
-      views: z.number().min(0).optional(),
-      likes: z.number().min(0).optional(),
-      shares: z.number().min(0).optional(),
-      comments: z.number().min(0).optional(),
-    })
-    .optional(),
-});
-export type PublishContentInput = z.infer<typeof publishContentSchema>;
-
-export const clashSettingsSchema = z.object({
-  maxPostsPerPlatformPerDay: z.number().min(1).default(3),
-});
-export type ClashSettingsInput = z.infer<typeof clashSettingsSchema>;
-
-// ==========================================
-// 9. Phase 6: Shoots, Time Tracking & Attendance Schemas
-// ==========================================
-
-export const LEAVE_TYPES = ['vacation', 'sick', 'personal', 'other'] as const;
-export type LeaveType = (typeof LEAVE_TYPES)[number];
-
-export const LEAVE_STATUSES = ['pending', 'approved', 'rejected', 'cancelled'] as const;
-export type LeaveStatus = (typeof LEAVE_STATUSES)[number];
-
-export const createShootSchema = z.object({
-  title: z.string().min(3, 'Shoot title must be at least 3 characters'),
-  date: z.string().or(z.date()),
-  location: z.string().min(2, 'Location is required'),
-  crew: z.array(z.string()).min(1, 'At least one crew member must be assigned'),
-  equipment: z.union([z.array(z.string()), z.string()]).default([]),
-  talentNotes: z.string().optional(),
-  contentItems: z.array(z.string()).min(1, 'At least one video content item must be linked'),
-  notes: z.string().optional(),
-  overrideWarning: z.boolean().default(false),
-});
-export type CreateShootInput = z.infer<typeof createShootSchema>;
-
-export const updateShootSchema = createShootSchema.partial().extend({
-  status: z.enum(SHOOT_STATUSES).optional(),
-});
-export type UpdateShootInput = z.infer<typeof updateShootSchema>;
-
-export const shootTransitionSchema = z.object({
-  status: z.enum(SHOOT_STATUSES),
-  notes: z.string().optional(),
-  reshootReason: z.string().optional(),
-});
-export type ShootTransitionInput = z.infer<typeof shootTransitionSchema>;
-
-export const createLeaveRequestSchema = z.object({
-  startDate: z.string().or(z.date()),
-  endDate: z.string().or(z.date()),
-  type: z.enum(LEAVE_TYPES).default('vacation'),
-  reason: z.string().min(3, 'Reason is required'),
-});
-export type CreateLeaveRequestInput = z.infer<typeof createLeaveRequestSchema>;
-
-export const reviewLeaveRequestSchema = z.object({
-  status: z.enum(['approved', 'rejected']),
-  reviewComment: z.string().optional(),
-});
-export type ReviewLeaveRequestInput = z.infer<typeof reviewLeaveRequestSchema>;
-
-export const createTimeEntrySchema = z.object({
-  taskId: z.string().min(1, 'Task ID is required'),
-  date: z.string().or(z.date()).optional(),
-  minutes: z.number().min(1, 'Minutes must be at least 1'),
-  note: z.string().optional(),
-});
-export type CreateTimeEntryInput = z.infer<typeof createTimeEntrySchema>;
-
-export const startTimerSchema = z.object({
-  taskId: z.string().min(1, 'Task ID is required'),
-  note: z.string().optional(),
-});
-export type StartTimerInput = z.infer<typeof startTimerSchema>;
-
-export const stopTimerSchema = z.object({
-  timeEntryId: z.string().optional(),
-  note: z.string().optional(),
-});
-export type StopTimerInput = z.infer<typeof stopTimerSchema>;
-
-export const submitTimesheetSchema = z.object({
-  weekStart: z.string().or(z.date()).optional(),
-  entryIds: z.array(z.string()).optional(),
-});
-export type SubmitTimesheetInput = z.infer<typeof submitTimesheetSchema>;
-
-export const approveTimesheetSchema = z.object({
-  entryIds: z.array(z.string()).min(1, 'At least one time entry must be selected'),
-  status: z.enum(['approved', 'rejected']),
-  comment: z.string().optional(),
-});
-export type ApproveTimesheetInput = z.infer<typeof approveTimesheetSchema>;
-
-// ==========================================
-// 10. Phase 7: Deliverables, Direct Uploads, Video Review & Publishing Flow
-// ==========================================
-
-export const DELIVERABLE_TYPES = [
-  'video',
-  'image',
-  'document',
-  'audio',
-  'copy',
-  'link',
-  'other',
-] as const;
-export type DeliverableType = (typeof DELIVERABLE_TYPES)[number];
-
-export const MAX_UPLOAD_SIZES = {
-  video: 500 * 1024 * 1024, // 500 MB
-  image: 50 * 1024 * 1024, // 50 MB
-  audio: 100 * 1024 * 1024, // 100 MB
-  document: 50 * 1024 * 1024, // 50 MB
-  other: 50 * 1024 * 1024, // 50 MB
-} as const;
+export type PersonAdminUpdateInput = z.infer<typeof personAdminUpdateSchema>;
 
 export const signUploadSchema = z.object({
   fileName: z.string().min(1, 'File name is required'),
@@ -734,44 +441,3 @@ export const signUploadSchema = z.object({
   folder: z.string().optional(),
 });
 export type SignUploadInput = z.infer<typeof signUploadSchema>;
-
-export const createDeliverableSchema = z.object({
-  taskId: z.string().min(1, 'Task ID is required'),
-  contentItemId: z.string().optional(),
-  type: z.enum(DELIVERABLE_TYPES).default('video'),
-  fileUrl: z.string().optional(),
-  externalLink: z.string().optional(),
-  thumbnail: z.string().optional(),
-  notes: z.string().optional(),
-});
-export type CreateDeliverableInput = z.infer<typeof createDeliverableSchema>;
-
-export const reviewDeliverableSchema = z.object({
-  decision: z.enum(['approved', 'changes_requested', 'rejected']),
-  notes: z.string().optional(),
-  comments: z
-    .array(
-      z.object({
-        text: z.string().min(1),
-        mediaTimestamp: z.number().min(0).optional(),
-      })
-    )
-    .optional(),
-});
-export type ReviewDeliverableInput = z.infer<typeof reviewDeliverableSchema>;
-
-export const requesterConfirmSchema = z.object({
-  decision: z.enum(['confirm', 'request_changes']),
-  feedback: z.string().optional(),
-});
-export type RequesterConfirmInput = z.infer<typeof requesterConfirmSchema>;
-
-export const performanceLiveSchema = z.object({
-  liveUrl: z.string().url('A valid live URL is required'),
-  liveDate: z.string().or(z.date()).optional(),
-  notes: z.string().optional(),
-});
-export type PerformanceLiveInput = z.infer<typeof performanceLiveSchema>;
-
-
-
