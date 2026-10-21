@@ -497,3 +497,38 @@ export type CampaignInput = z.infer<typeof campaignSchema>;
 export const campaignUpdateSchema = campaignSchema.partial();
 export type CampaignUpdateInput = z.infer<typeof campaignUpdateSchema>;
 
+// Phase 3: Work Items Schemas
+export const workItemCreateSchema = z.object({
+  campaignId: z.string().min(1, 'Campaign linkage is strictly required'),
+  title: z.string().trim().min(2, 'Work item title is required'),
+  workType: z.enum(WORK_TYPES),
+  departmentId: z.string().min(1, 'Department is required'),
+  ownerId: z.string().min(1, 'Assigned owner is required'),
+  deadline: z.coerce.date(),
+  estimatedEffortHrs: z.number().min(0.5).max(100).default(4),
+  status: z.enum(WORK_ITEM_STATUSES).default('Not Started'),
+  priority: z.enum(PRIORITIES).default('Medium'),
+  description: z.string().optional(),
+  deliverableUrl: z.string().optional(),
+  publishedUrl: z.string().optional(),
+  blockerReason: z.enum(BLOCKER_REASONS).optional(),
+  blockerNote: z.string().optional(),
+  profileId: z.string().optional(),
+  relatedOKR: z.string().optional(),
+  relatedTarget: z.string().optional(),
+});
+export type WorkItemCreateInput = z.infer<typeof workItemCreateSchema>;
+
+export const workItemUpdateSchema = workItemCreateSchema.partial();
+export type WorkItemUpdateInput = z.infer<typeof workItemUpdateSchema>;
+
+export const workItemTransitionSchema = z.object({
+  toStatus: z.enum(WORK_ITEM_STATUSES),
+  blockerReason: z.enum(BLOCKER_REASONS).optional(),
+  blockerNote: z.string().optional(),
+  deliverableUrl: z.string().optional(),
+  publishedUrl: z.string().optional(),
+  comment: z.string().optional(),
+});
+export type WorkItemTransitionInput = z.infer<typeof workItemTransitionSchema>;
+

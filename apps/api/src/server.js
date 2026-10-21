@@ -32,6 +32,7 @@ import dashboardRoutes from './modules/reports/dashboard.routes.js';
 import docsRoutes from './modules/docs/routes.js';
 import targetRoutes from './modules/targets/routes.js';
 import campaignRoutes from './modules/campaigns/routes.js';
+import workItemRoutes from './modules/workItems/routes.js';
 import { initQueues } from './lib/queue.js';
 import { initDomainEventListeners } from './modules/notifications/service.js';
 
@@ -168,6 +169,15 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/docs', docsRoutes);
 app.use('/api/targets', targetRoutes);
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/work', workItemRoutes);
+app.use('/api/my-work', (req, res, next) => {
+  req.url = '/my-work' + (req.url === '/' ? '' : req.url);
+  workItemRoutes(req, res, next);
+});
+app.use('/api/todo', (req, res, next) => {
+  req.url = '/todo' + (req.url === '/' ? '' : req.url);
+  workItemRoutes(req, res, next);
+});
 
 app.set('io', io);
 

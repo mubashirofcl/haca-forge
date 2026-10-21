@@ -14,12 +14,8 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 
 import {
   LayoutDashboard,
-  CheckSquare,
-  Calendar,
-  Film,
   FileText,
   Users,
-  Clock,
   AlertCircle,
   TrendingUp,
   Building2,
@@ -51,6 +47,21 @@ const CampaignsListPage = React.lazy(() =>
 );
 const CampaignDetailPage = React.lazy(() =>
   import('./pages/campaigns/CampaignDetailPage').then((m) => ({ default: m.CampaignDetailPage }))
+);
+const MyWorkPage = React.lazy(() =>
+  import('./pages/work/MyWorkPage').then((m) => ({ default: m.MyWorkPage }))
+);
+const CalendarPage = React.lazy(() =>
+  import('./pages/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage }))
+);
+const WorkListPage = React.lazy(() =>
+  import('./pages/work/WorkListPage').then((m) => ({ default: m.WorkListPage }))
+);
+const WorkDetailPage = React.lazy(() =>
+  import('./pages/work/WorkDetailPage').then((m) => ({ default: m.WorkDetailPage }))
+);
+const TodoPrioritiesPage = React.lazy(() =>
+  import('./pages/todo/TodoPrioritiesPage').then((m) => ({ default: m.TodoPrioritiesPage }))
 );
 
 /**
@@ -131,21 +142,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="My Work"
-                          screenNumber="Screen 3"
-                          phase="Phase 3"
-                          route="/my-work"
-                          description="Personal priority queue for creative team members. Focuses entirely on personal work with one-click transitions and no distractions."
-                          features={[
-                            'Personal work partitioned into Today, Overdue, and Upcoming',
-                            'One-click status transitions (Start, Submit for Review, Publish)',
-                            'Mark Blocked action with mandatory blocker reason & dependency owner alert',
-                            'Request Help and escalation trigger to assigned Team Lead',
-                            'Personal rolling avgRevisions display and clarity empty states',
-                          ]}
-                          icon={CheckSquare}
-                        />
+                        <MyWorkPage />
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -157,20 +154,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Monthly Marketing Calendar"
-                          screenNumber="Screen 4"
-                          phase="Phase 3"
-                          route="/calendar"
-                          description="Multi-view calendar for scheduled work item deadlines, launch dates, and creative deliveries across 7 brand profiles."
-                          features={[
-                            'Month, Week, Campaign, and Owner calendar perspectives',
-                            'Visual color coding by department and brand Profile',
-                            'Filter by profile, department, owner, campaign, status',
-                            'Click-through to Single Work Detail for immediate execution',
-                          ]}
-                          icon={Calendar}
-                        />
+                        <CalendarPage />
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -206,20 +190,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Work Items"
-                          screenNumber="Work List"
-                          phase="Phase 3"
-                          route="/work"
-                          description="Universal drill-down list for all marketing production deliverables, filterable across all 7 brand profiles and departments."
-                          features={[
-                            '14 work types (Reel, Ad Creative, Landing Page, Carousel, Post, Blog, Email, etc.)',
-                            'Computed Overdue status (deadline passed without Approved/Published)',
-                            'Global filter bar integration (Profile, Department, Owner, Status)',
-                            'Full pagination, sorting, and universal link navigation',
-                          ]}
-                          icon={Film}
-                        />
+                        <WorkListPage />
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -231,20 +202,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Single Work Detail"
-                          screenNumber="Screen 7"
-                          phase="Phase 3"
-                          route="/work/:id"
-                          description="The unified execution workplace for an individual work item: Brief, Files, Feedback rounds, ActivityEvent log, and Performance."
-                          features={[
-                            'Tabs: Overview, Brief, Files, Feedback, Activity, Performance, Related Leads',
-                            'Strict status transitions via central transition service',
-                            'Cloudinary signed asset uploads with thumbnail previews',
-                            'Inline revision flag and blocker dependency warning',
-                          ]}
-                          icon={Film}
-                        />
+                        <WorkDetailPage />
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -306,20 +264,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Todo and Priorities"
-                          screenNumber="Screen 10"
-                          phase="Phase 3"
-                          route="/todo"
-                          description="Role-scoped todo list organized by Overdue, Today, and Upcoming. Designed for mental clarity and zero clutter."
-                          features={[
-                            'Role scoping: Head (org-wide), Team Lead (own team), Member (self)',
-                            'Clean partitions: Overdue, Today, and Upcoming',
-                            'One-click status transitions directly from the list',
-                            'Clarity empty states without surveillance pressure',
-                          ]}
-                          icon={Clock}
-                        />
+                        <TodoPrioritiesPage />
                       </Layout>
                     </ProtectedRoute>
                   }

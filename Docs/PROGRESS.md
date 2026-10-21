@@ -348,8 +348,71 @@ Phase 1 established the foundation for the HACA Marketing OS 4-role model (`admi
 
 ---
 
-### 5. Phase 3 Readiness
-With Phase 2 verified and passing:
-- Ready to proceed to **Phase 3: Work Items, My Work, Calendar & Todo**.
+## Phase 3: Work Items, My Work, Calendar & Todo (Completed & Verified)
+
+### 1. Goals & Invariants Delivered
+- **Enforced Execution Traceability Hierarchy:**
+  - `WorkItem` is the central execution unit in Marketing OS.
+  - **Strict Campaign Linkage:** A `WorkItem` strictly requires `campaignId` pointing to an existing, valid `Campaign`. Orphan deliverables are rejected at API/schema boundaries with HTTP 400 (`CAMPAIGN_REQUIRED`).
+  - **Automatic Inheritance:** Inherits `profileId`, `relatedOKR`, and `relatedTarget` directly from the parent campaign's metadata and target anchor.
+- **7-Status Central State Machine (`transition.service.js`):**
+  - Canonical states: `Not Started` $\rightarrow$ `In Progress` $\rightarrow$ `Feedback` $\rightarrow$ `Pending` $\rightarrow$ `Blocked` $\rightarrow$ `Approved` $\rightarrow$ `Published`.
+  - Transitions are restricted exclusively to `ALLOWED_TRANSITIONS` graph.
+  - **Blocker Guard:** Transition to `Blocked` strictly requires a valid canonical `blockerReason` (from the 9 canonical reasons: *Waiting for feedback, Waiting for content, Waiting for data, Technical issue, Dependency, Client/business approval, Third-party tool outage, Asset missing, Creative direction change*).
+  - **Approval Authorization Guard:** `team_member` cannot self-approve without lead or admin authorization.
+  - **Ownership Guard:** `team_member` can only transition their own assigned work items.
+  - **Revision Tracking:** Returning to `Feedback` or `In Progress` increments the work item's `revisions` count.
+  - **Domain Events & Auditing:** Emits `work_item.status_changed`, `work_item.blocked`, `work_item.approved` and writes immutable `ActivityEvent` records.
+- **Computed Overdue State:**
+  - `Overdue` is **never** a stored state in MongoDB. Dynamically evaluated at query time: `deadline < now` and status $\notin$ `['Approved', 'Published']`.
+  - Mongoose virtual `isOverdue` provides live boolean flag on documents.
+
+### 2. Frontend Screens Delivered
+- **Screen 3: My Work (`/my-work` - `MyWorkPage.tsx`)**:
+  - Personal priority queue partitioned into **Overdue**, **Today**, **This Week**, **Upcoming**, and **Completed**.
+  - One-click state transitions (`Start`, `Submit for Review`, `Block`, `Clear Blocker`).
+  - Rolling average revisions metric, active count, and mental clarity empty states with zero surveillance pressure.
+- **Screen 4: Monthly Marketing Calendar (`/calendar` - `CalendarPage.tsx`)**:
+  - Multi-perspective calendar: **Month**, **Week**, and **List Agenda** views.
+  - Visual color coding by brand profile (all 7 brands) and department.
+  - Filter bar: Brand Profile pills, Assigned Owner, Department, and Status.
+  - Day cells with quick-add deliverable button, click-through modal preview, and deep link to workplace.
+- **Screen 7: Single Work Detail (`/work/:id` - `WorkDetailPage.tsx`)**:
+  - Unified execution workplace for individual deliverables.
+  - Workflow stepper with status badge, blocker alerts, and overdue indicators.
+  - 4 tabs: *Overview & Brief*, *Files & Deliverables*, *Feedback Rounds*, *Audit Activity*.
+  - Strict inline status actions (Start, Submit, Block, Clear Blocker, Approve, Publish).
+- **Screen 10: Todo & Priorities (`/todo` - `TodoPrioritiesPage.tsx`)**:
+  - Role-scoped focus queue: Member (self), Team Lead (team), Head/Admin (org-wide).
+  - Partitioned into **Overdue Deliverables**, **Due Today**, and **Upcoming Deliverables**.
+  - Inline transition triggers and modal forms for submit links and blocker reasons.
+- **Universal Work Items Directory (`/work` - `WorkListPage.tsx`)**:
+  - Table and Grid layout switcher for cross-brand deliverables.
+  - Filter by Profile, Status, Work Type, Overdue-only, and search text.
+  - "New Deliverable" modal enforcing campaign linkage and validation.
+
+### 3. Backend & Shared Schema Delivered
+- **`@mmp/shared`**:
+  - Added schemas: `workItemCreateSchema`, `workItemUpdateSchema`, `workItemTransitionSchema`.
+  - Exported types: `WorkItemCreateInput`, `WorkItemUpdateInput`, `WorkItemTransitionInput`.
+- **`apps/api` Modules**:
+  - `src/modules/workItems/model.js`: `WorkItem` schema, compound indexes, virtual `isOverdue`.
+  - `src/modules/workItems/transition.service.js`: Central state machine validator, permission checker, and activity logger.
+  - `src/modules/workItems/service.js`: CRUD, `getMyWork`, `getCalendarWorkItems`, `getTodoItems`, `getWorkItemActivities`.
+  - `src/modules/workItems/controller.js` & `routes.js`: Mounted at `/api/work`, `/api/my-work`, and `/api/todo`.
+
+### 4. Build & Test Verification
+| Component | Command | Result | Details |
+| :--- | :--- | :--- | :--- |
+| `@mmp/shared` | `npm run build` | **PASSED** | Clean tsup build (ESM, CJS, DTS) |
+| `@mmp/api` | `npx vitest run test/work_items_and_transitions.test.js` | **PASSED** | **19/19 tests pass** (traceability, state machine, self-approval guards, blocker reasons, scoping) |
+| `@mmp/api` | `npm test` | **PASSED** | **84/84 tests pass** across all 8 test suites |
+| `@mmp/web` | `tsc && vite build` | **PASSED** | Clean production bundle with code split chunks for all 5 Phase 3 screens |
+
+---
+
+### 5. Phase 4 Readiness
+With Phase 3 complete and verified:
+- Ready to proceed to **Phase 4: Auto-Assignment Engine & Team Workload (Screen 9)** upon user approval.
 
 
