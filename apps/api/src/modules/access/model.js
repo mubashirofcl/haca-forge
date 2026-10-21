@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { ACCESS_REQUEST_STATUSES, ROLE_KEYS } from '@mmp/shared';
+import { ACCESS_REQUEST_STATUSES, ROLE_KEYS, REQUESTABLE_ROLES } from '@mmp/shared';
 
 const accessRequestSchema = new mongoose.Schema(
   {
@@ -25,18 +25,35 @@ const accessRequestSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+    },
+    jobRole: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     requestedRole: {
       type: String,
-      enum: [...ROLE_KEYS, 'lead', 'viewer'],
+      enum: REQUESTABLE_ROLES,
       required: true,
+      default: 'team_member',
     },
-    skills: {
+    requestedProfileCodes: {
       type: [String],
       default: [],
     },
+    requestedProfileIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Profile',
+      },
+    ],
     reason: {
       type: String,
       required: true,
+      trim: true,
     },
     status: {
       type: String,
@@ -46,23 +63,46 @@ const accessRequestSchema = new mongoose.Schema(
     },
     reviewedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'Person',
     },
     reviewedAt: {
       type: Date,
     },
     assignedRole: {
       type: String,
-      enum: [...ROLE_KEYS, 'lead', 'viewer'],
+      enum: ROLE_KEYS,
     },
-    assignedTeam: {
+    assignedJobRole: {
       type: String,
+      trim: true,
     },
+    assignedDepartmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+    },
+    assignedProfileAccess: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Profile',
+      },
+    ],
+    assignedReportsToIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Person',
+      },
+    ],
     assignedCapacity: {
       type: Number,
+      default: 40,
     },
     rejectReason: {
       type: String,
+      trim: true,
+    },
+    infoQuestion: {
+      type: String,
+      trim: true,
     },
     inviteTokenHash: {
       type: String,
@@ -78,5 +118,7 @@ const accessRequestSchema = new mongoose.Schema(
 );
 
 accessRequestSchema.index({ email: 1, status: 1 });
+accessRequestSchema.index({ status: 1, department: 1 });
 
-export const AccessRequest = mongoose.model('AccessRequest', accessRequestSchema);
+export const AccessRequest =
+  mongoose.models.AccessRequest || mongoose.model('AccessRequest', accessRequestSchema);

@@ -5,7 +5,7 @@ export async function submitRequest(req, res, next) {
     const accessReq = await accessService.submitAccessRequest(req.body);
     return res.status(201).json({
       success: true,
-      message: 'Access request submitted successfully. An administrator will review your application.',
+      message: 'Request sent. You will get an email when it is reviewed.',
       requestId: accessReq._id,
     });
   } catch (error) {

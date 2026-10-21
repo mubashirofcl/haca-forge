@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../lib/api';
-import { ROLE_KEYS, type UserRole } from '@mmp/shared';
+import {
+  DEPARTMENTS,
+  JOB_ROLES,
+  PROFILES,
+  ROLE_KEYS,
+  type UserRole,
+} from '@mmp/shared';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -8,6 +14,11 @@ import {
   HelpCircle,
   Search,
   X,
+  UserCheck,
+  Building,
+  Briefcase,
+  Phone,
+  Mail,
 } from 'lucide-react';
 
 interface AccessRequestItem {
@@ -16,26 +27,58 @@ interface AccessRequestItem {
   email: string;
   phone: string;
   department: string;
+  departmentId?: { _id: string; name: string; code: string } | string;
+  jobRole: string;
   requestedRole: UserRole;
-  skills: string[];
+  requestedProfileCodes?: string[];
+  requestedProfileIds?: Array<{ _id: string; name: string; code: string }>;
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'info_needed';
   createdAt: string;
+  reviewedBy?: { _id: string; name: string; email: string; role: string };
+  reviewedAt?: string;
   assignedRole?: UserRole;
+  assignedJobRole?: string;
+  assignedDepartmentId?: { _id: string; name: string; code: string };
+  assignedProfileAccess?: Array<{ _id: string; name: string; code: string }>;
+  assignedReportsToIds?: Array<{ _id: string; name: string; email: string; jobRole?: string }>;
+  assignedCapacity?: number;
   rejectReason?: string;
+  infoQuestion?: string;
+}
+
+interface TeamLeadOption {
+  _id: string;
+  name: string;
+  email: string;
+  jobRole?: string;
+  role: string;
 }
 
 export const AccessRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<AccessRequestItem[]>([]);
+  const [teamLeads, setTeamLeads] = useState<TeamLeadOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Filters
   const [statusFilter, setStatusFilter] = useState<string>('pending');
+  const [deptFilter, setDeptFilter] = useState<string>('all');
+  const [brandFilter, setBrandFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Dialog states
   const [selectedRequest, setSelectedRequest] = useState<AccessRequestItem | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | 'info' | null>(null);
+
+  // Approve dialog form fields
   const [assignedRole, setAssignedRole] = useState<UserRole>('team_member');
+  const [assignedJobRole, setAssignedJobRole] = useState<string>('');
+  const [assignedDept, setAssignedDept] = useState<string>('');
+  const [assignedProfiles, setAssignedProfiles] = useState<string[]>([]);
+  const [assignedReportsTo, setAssignedReportsTo] = useState<string[]>([]);
   const [assignedCapacity, setAssignedCapacity] = useState<number>(40);
+
+  // Reject / Info dialog state
   const [actionReason, setActionReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -62,14 +105,14 @@ export const AccessRequestsPage: React.FC = () => {
     if (!confirm(`Bulk approve and generate onboarding invites for ${selectedIds.length} candidate(s)?`)) return;
     setIsBulkApproving(true);
     try {
-      const res = await apiFetch<{ message: string; data: { approvedCount: number } }>(
+      const res = await apiFetch<{ message: string; data: Array<{ id: string; success: boolean }> }>(
         '/admin/access-requests/bulk-approve',
         {
           method: 'POST',
-          body: JSON.stringify({ requestIds: selectedIds }),
+          body: JSON.stringify({ requestIds: selectedIds, defaultRole: 'team_member', defaultCapacity: 40 }),
         }
       );
-      alert(res.message || `Successfully approved ${res.data?.approvedCount || selectedIds.length} access requests.`);
+      alert(res.message || `Successfully processed ${selectedIds.length} access requests.`);
       setSelectedIds([]);
       await fetchRequests();
     } catch (err: any) {
@@ -79,11 +122,25 @@ export const AccessRequestsPage: React.FC = () => {
     }
   };
 
+  const fetchTeamLeads = async () => {
+    try {
+      const res = await apiFetch<{ data: TeamLeadOption[] }>('/people?role=team_lead');
+      setTeamLeads(res.data || []);
+    } catch (err) {
+      // Non-blocking
+    }
+  };
+
   const fetchRequests = async () => {
     setIsLoading(true);
     try {
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (deptFilter !== 'all') params.append('department', deptFilter);
+      if (brandFilter !== 'all') params.append('brand', brandFilter);
+
       const res = await apiFetch<{ data: AccessRequestItem[] }>(
-        `/admin/access-requests${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`
+        `/admin/access-requests?${params.toString()}`
       );
       setRequests(res.data || []);
     } catch (err) {
@@ -95,7 +152,27 @@ export const AccessRequestsPage: React.FC = () => {
 
   useEffect(() => {
     fetchRequests();
-  }, [statusFilter]);
+    fetchTeamLeads();
+  }, [statusFilter, deptFilter, brandFilter]);
+
+  const openApproveModal = (req: AccessRequestItem) => {
+    setSelectedRequest(req);
+    setActionType('approve');
+    setAssignedRole(req.requestedRole || 'team_member');
+    setAssignedJobRole(req.jobRole || JOB_ROLES[0]);
+    setAssignedDept(req.department || DEPARTMENTS[0].name);
+
+    // Pre-fill profile access from request
+    const requestedCodes = req.requestedProfileCodes && req.requestedProfileCodes.length > 0
+      ? req.requestedProfileCodes
+      : (req.requestedProfileIds?.map((p) => p.code) || [PROFILES[0].code]);
+    setAssignedProfiles(requestedCodes);
+
+    setAssignedReportsTo([]);
+    setAssignedCapacity(40);
+    setActionReason('');
+    setActionMessage(null);
+  };
 
   const handleAction = async () => {
     if (!selectedRequest || !actionType) return;
@@ -109,17 +186,31 @@ export const AccessRequestsPage: React.FC = () => {
           body: JSON.stringify({
             status: 'approved',
             assignedRole,
-            capacity: Number(assignedCapacity),
+            jobRole: assignedJobRole,
+            departmentId: assignedDept,
+            profileAccess: assignedProfiles,
+            reportsToIds: assignedReportsTo,
+            weeklyCapacityHours: Number(assignedCapacity),
           }),
         });
-        setActionMessage(`Approved ${selectedRequest.name}! Activation invite sent.`);
+        setActionMessage(`Approved ${selectedRequest.name}! Activation invite dispatched.`);
       } else if (actionType === 'reject') {
+        if (!actionReason.trim()) {
+          alert('Please enter a rejection reason.');
+          setIsSubmitting(false);
+          return;
+        }
         await apiFetch(`/admin/access-requests/${selectedRequest._id}/reject`, {
           method: 'PATCH',
           body: JSON.stringify({ reason: actionReason }),
         });
         setActionMessage(`Rejected request from ${selectedRequest.name}.`);
       } else if (actionType === 'info') {
+        if (!actionReason.trim()) {
+          alert('Please enter a question for the applicant.');
+          setIsSubmitting(false);
+          return;
+        }
         await apiFetch(`/admin/access-requests/${selectedRequest._id}/info`, {
           method: 'PATCH',
           body: JSON.stringify({ question: actionReason }),
@@ -145,14 +236,15 @@ export const AccessRequestsPage: React.FC = () => {
     (r) =>
       r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.department.toLowerCase().includes(searchTerm.toLowerCase())
+      r.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (r.jobRole && r.jobRole.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
   return (
-    <div className="space-y-8">
-      {/* Header and Filter Pills */}
+    <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Header and Filter Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
@@ -160,234 +252,317 @@ export const AccessRequestsPage: React.FC = () => {
               Access Requests
             </h1>
             {pendingCount > 0 && (
-              <span className="px-3 py-1 text-xs font-bold rounded-full bg-[#7a6af6]/15 text-[#7a6af6] border border-[#7a6af6]/30">
+              <span className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-full border border-amber-200">
                 {pendingCount} Pending
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Review applicant identities, assign production teams, and approve onboarding
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Review public registrations, confirm role scope, brand permissions and issue activation invites.
           </p>
         </div>
 
+        {selectedIds.length > 0 && (
+          <button
+            onClick={handleBulkApprove}
+            disabled={isBulkApproving}
+            className="px-5 py-2.5 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-pill flex items-center gap-2 self-start sm:self-auto disabled:opacity-50"
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>{isBulkApproving ? 'Approving...' : `Bulk Approve (${selectedIds.length})`}</span>
+          </button>
+        )}
+      </div>
+
+      {/* Filter Bar */}
+      <div className="glass-card p-4 rounded-3xl shadow-sm border border-slate-200/80 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status Pills */}
+          {(['pending', 'approved', 'rejected', 'info_needed', 'all'] as const).map((st) => (
+            <button
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold capitalize transition-all ${
+                statusFilter === st
+                  ? 'bg-[#0d0e12] text-white shadow-xs'
+                  : 'bg-white/80 text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              {st.replace('_', ' ')}
+            </button>
+          ))}
+        </div>
+
+        {/* Department, Brand & Search dropdowns */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          {/* Department Filter */}
+          <select
+            value={deptFilter}
+            onChange={(e) => setDeptFilter(e.target.value)}
+            className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+          >
+            <option value="all">All Departments</option>
+            {DEPARTMENTS.map((d) => (
+              <option key={d.code} value={d.name}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Brand Filter */}
+          <select
+            value={brandFilter}
+            onChange={(e) => setBrandFilter(e.target.value)}
+            className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+          >
+            <option value="all">All Brands</option>
+            {PROFILES.map((p) => (
+              <option key={p.code} value={p.code}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Search box */}
+          <div className="relative flex-1 sm:w-56">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search user, email..."
+              placeholder="Search candidate..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-white/80 border border-slate-200 rounded-full text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs w-48 sm:w-60"
+              className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
             />
           </div>
-
-          <div className="p-1 glass-pill-container flex items-center border border-white">
-            {(['pending', 'approved', 'rejected', 'info_needed', 'all'] as const).map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3.5 py-1.5 text-xs font-semibold rounded-full capitalize transition-all ${
-                  statusFilter === st
-                    ? 'pill-active'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {st.replace('_', ' ')}
-              </button>
-            ))}
-          </div>
-
-          {pendingCount > 0 && (
-            <button
-              onClick={selectAllPending}
-              className="px-3.5 py-2 rounded-full border border-slate-200 bg-white/80 hover:bg-white text-xs font-semibold text-slate-700 shadow-xs transition-colors"
-            >
-              {selectedIds.length === pendingCount ? 'Deselect All' : 'Select All Pending'}
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Floating / Sticky Bulk Action Bar */}
-      {selectedIds.length > 0 && (
-        <div className="glass-panel p-3.5 px-6 rounded-2xl border border-violet-200 bg-violet-50/90 shadow-glass flex items-center justify-between animate-in fade-in duration-200">
-          <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse"></span>
-            <span className="text-xs font-extrabold text-violet-900">
-              {selectedIds.length} candidate{selectedIds.length > 1 ? 's' : ''} selected for bulk onboarding
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSelectedIds([])}
-              className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900 font-semibold"
-            >
-              Clear
-            </button>
-            <button
-              onClick={handleBulkApprove}
-              disabled={isBulkApproving}
-              className="px-5 py-2 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-pill flex items-center gap-2 transition-transform hover:scale-105 disabled:opacity-50"
-            >
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>{isBulkApproving ? 'Approving Candidates...' : `Bulk Approve Selected (${selectedIds.length})`}</span>
-            </button>
-          </div>
+      {/* Select All Pending checkbox if there are pending items */}
+      {statusFilter === 'pending' && filteredRequests.length > 0 && (
+        <div className="flex items-center gap-2 pl-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            id="selectAllPending"
+            checked={selectedIds.length === filteredRequests.length && filteredRequests.length > 0}
+            onChange={selectAllPending}
+            className="w-4 h-4 rounded text-[#7a6af6] focus:ring-[#7a6af6] cursor-pointer"
+          />
+          <label htmlFor="selectAllPending" className="cursor-pointer font-medium">
+            Select all {filteredRequests.length} pending request(s)
+          </label>
         </div>
       )}
 
-      {/* Grid of Request Cards */}
+      {/* Request Cards Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-56 glass-panel rounded-[22px] border border-white animate-pulse" />
-          ))}
+        <div className="py-20 text-center text-xs text-slate-400 animate-pulse">
+          Loading access requests...
         </div>
       ) : filteredRequests.length === 0 ? (
-        <div className="text-center py-20 glass-panel rounded-[24px] border border-white shadow-glass">
-          <ShieldCheck className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+        <div className="glass-card p-12 text-center rounded-3xl border border-slate-200/80">
           <h3 className="text-base font-bold text-slate-900">No requests found</h3>
           <p className="text-xs text-slate-500 mt-1">
-            There are currently no access requests matching the "{statusFilter}" status filter.
+            There are currently no access requests matching the selected filters.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredRequests.map((req) => (
-            <div
-              key={req._id}
-              className={`glass-card p-6 flex flex-col justify-between shadow-glass hover:scale-[1.01] transition-all ${
-                selectedIds.includes(req._id) ? 'ring-2 ring-[#7a6af6] bg-violet-50/20' : ''
-              }`}
-            >
-              <div>
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-3">
-                    {req.status === 'pending' && (
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(req._id)}
-                        onChange={() => toggleSelect(req._id)}
-                        className="w-4 h-4 rounded text-[#7a6af6] focus:ring-[#7a6af6] cursor-pointer"
-                        title="Select for bulk approve"
-                      />
-                    )}
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#7a6af6] to-[#4f46e5] text-white font-bold text-xs flex items-center justify-center shadow-xs">
-                      {req.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-slate-900">{req.name}</h3>
-                      <div className="text-xs text-slate-500">{req.email}</div>
-                    </div>
-                  </div>
+          {filteredRequests.map((req) => {
+            const requestedBrands = req.requestedProfileCodes && req.requestedProfileCodes.length > 0
+              ? req.requestedProfileCodes
+              : (req.requestedProfileIds?.map((p) => p.name || p.code) || []);
 
-                  <span
-                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                      req.status === 'pending'
-                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                        : req.status === 'approved'
-                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                        : req.status === 'rejected'
-                        ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                        : 'bg-blue-100 text-blue-700 border border-blue-200'
-                    }`}
-                  >
-                    {req.status.replace('_', ' ')}
-                  </span>
-                </div>
+            return (
+              <div
+                key={req._id}
+                className={`glass-card p-5 sm:p-6 rounded-3xl flex flex-col justify-between shadow-glass hover:scale-[1.01] transition-all border border-white/80 ${
+                  selectedIds.includes(req._id) ? 'ring-2 ring-[#7a6af6] bg-violet-50/20' : ''
+                }`}
+              >
+                <div>
+                  {/* Top user bar */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3">
+                      {req.status === 'pending' && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(req._id)}
+                          onChange={() => toggleSelect(req._id)}
+                          className="w-4 h-4 rounded text-[#7a6af6] focus:ring-[#7a6af6] cursor-pointer"
+                          title="Select for bulk approve"
+                        />
+                      )}
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#7a6af6] to-[#4f46e5] text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                        {req.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-slate-900 leading-snug">{req.name}</h3>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                          <Mail className="w-3 h-3 text-slate-400" />
+                          <span>{req.email}</span>
+                        </div>
+                      </div>
+                    </div>
 
-                <div className="space-y-2 text-xs text-slate-700 bg-white/70 p-3.5 rounded-2xl border border-slate-100 my-4">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Department:</span>
-                    <span className="font-semibold text-slate-900">{req.department}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Requested Role:</span>
-                    <span className="font-bold text-[#7a6af6] capitalize">
-                      {req.requestedRole.replace('_', ' ')}
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                        req.status === 'pending'
+                          ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                          : req.status === 'approved'
+                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                          : req.status === 'rejected'
+                          ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                          : 'bg-blue-100 text-blue-700 border border-blue-200'
+                      }`}
+                    >
+                      {req.status.replace('_', ' ')}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Contact Phone:</span>
-                    <span className="text-slate-700">{req.phone}</span>
-                  </div>
-                </div>
 
-                {req.skills.length > 0 && (
-                  <div className="mb-3">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Skills</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {req.skills.map((skill, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-medium"
-                        >
-                          {skill}
-                        </span>
-                      ))}
+                  {/* Submitted attributes info box */}
+                  <div className="space-y-1.5 text-xs text-slate-700 bg-white/70 p-3.5 rounded-2xl border border-slate-100 my-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Building className="w-3 h-3" /> Department:
+                      </span>
+                      <span className="font-semibold text-slate-900">{req.department}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Briefcase className="w-3 h-3" /> Job Role:
+                      </span>
+                      <span className="font-semibold text-slate-900">{req.jobRole || 'None specified'}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <UserCheck className="w-3 h-3" /> Requested Role:
+                      </span>
+                      <span className="font-bold text-[#7a6af6] capitalize">
+                        {req.requestedRole?.replace('_', ' ')}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Phone className="w-3 h-3" /> Phone:
+                      </span>
+                      <span className="text-slate-700">{req.phone}</span>
                     </div>
                   </div>
+
+                  {/* Brands badges */}
+                  <div className="mb-3">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                      Brands Requested
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {requestedBrands.length > 0 ? (
+                        requestedBrands.map((b, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-semibold border border-slate-200"
+                          >
+                            {b}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-slate-400">None specified</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Reason text */}
+                  <div className="mb-3">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                      Reason for Access
+                    </span>
+                    <p className="text-xs text-slate-600 bg-white/50 p-2.5 rounded-xl border border-slate-100 line-clamp-3">
+                      {req.reason}
+                    </p>
+                  </div>
+
+                  {/* Review Outcome info if not pending */}
+                  {req.status === 'approved' && (
+                    <div className="mt-3 p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs space-y-1">
+                      <div className="text-emerald-800 font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Approved by {req.reviewedBy?.name || 'Admin'}
+                      </div>
+                      <div className="text-slate-600">
+                        Assigned: <strong className="text-slate-900">{req.assignedRole?.replace('_', ' ')}</strong> ({req.assignedCapacity || 40}h/wk)
+                      </div>
+                    </div>
+                  )}
+
+                  {req.status === 'rejected' && req.rejectReason && (
+                    <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-1">
+                      <div className="text-rose-800 font-bold flex items-center gap-1">
+                        <XCircle className="w-3.5 h-3.5" /> Rejection Reason
+                      </div>
+                      <p className="text-slate-700">{req.rejectReason}</p>
+                    </div>
+                  )}
+
+                  {req.status === 'info_needed' && req.infoQuestion && (
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs space-y-1">
+                      <div className="text-blue-800 font-bold flex items-center gap-1">
+                        <HelpCircle className="w-3.5 h-3.5" /> Clarification Question
+                      </div>
+                      <p className="text-slate-700">{req.infoQuestion}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions for Pending or Info Needed Requests */}
+                {req.status === 'pending' && (
+                  <div className="pt-4 border-t border-slate-200/80 flex items-center justify-between gap-2 mt-2">
+                    <button
+                      onClick={() => openApproveModal(req)}
+                      className="flex-1 py-2 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full flex items-center justify-center gap-1.5 shadow-sm transition-transform hover:scale-105"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Approve</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setSelectedRequest(req);
+                        setActionType('reject');
+                        setActionReason('');
+                      }}
+                      className="flex-1 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-full flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Reject</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setSelectedRequest(req);
+                        setActionType('info');
+                        setActionReason('');
+                      }}
+                      title="Request More Info"
+                      className="p-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-full transition-colors"
+                    >
+                      <HelpCircle className="w-4 h-4 text-blue-500" />
+                    </button>
+                  </div>
                 )}
-
-                <div className="mb-4">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Reason</span>
-                  <p className="text-xs text-slate-600 bg-white/50 p-3 rounded-xl border border-slate-100 line-clamp-3">
-                    {req.reason}
-                  </p>
-                </div>
               </div>
-
-              {/* Actions for Pending Requests */}
-              {req.status === 'pending' && (
-                <div className="pt-4 border-t border-slate-200/80 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedRequest(req);
-                      setAssignedRole(req.requestedRole);
-                      setActionType('approve');
-                    }}
-                    className="flex-1 py-2 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full flex items-center justify-center gap-1.5 shadow-sm transition-transform hover:scale-105"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Approve</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setSelectedRequest(req);
-                      setActionType('reject');
-                    }}
-                    className="flex-1 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-full flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <XCircle className="w-3.5 h-3.5 text-rose-500" />
-                    <span>Reject</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setSelectedRequest(req);
-                      setActionType('info');
-                    }}
-                    title="Request More Info"
-                    className="p-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-full transition-colors"
-                  >
-                    <HelpCircle className="w-4 h-4 text-blue-500" />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* Action Modal (Glassmorphic) */}
+      {/* Action Modal (Approve, Reject, or Info) */}
       {selectedRequest && actionType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="glass-modal max-w-md w-full p-6 sm:p-8 shadow-modal-glass border border-white relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="glass-modal max-w-lg w-full max-h-[92vh] overflow-y-auto p-5 sm:p-8 shadow-modal-glass border border-white relative rounded-3xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 mb-5">
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900">
                   {actionType === 'approve'
                     ? `Approve Access: ${selectedRequest.name}`
                     : actionType === 'reject'
@@ -397,6 +572,7 @@ export const AccessRequestsPage: React.FC = () => {
                 <p className="text-xs text-slate-500">{selectedRequest.email}</p>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setSelectedRequest(null);
                   setActionType(null);
@@ -416,35 +592,140 @@ export const AccessRequestsPage: React.FC = () => {
               <div className="space-y-4">
                 {actionType === 'approve' ? (
                   <>
+                    {/* Final Role & Job Role */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Final System Role *
+                        </label>
+                        <select
+                          value={assignedRole}
+                          onChange={(e) => setAssignedRole(e.target.value as UserRole)}
+                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                        >
+                          {ROLE_KEYS.map((rk) => (
+                            <option key={rk} value={rk}>
+                              {rk.replace('_', ' ')}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-slate-400 mt-1 pl-2">
+                          Requested: {selectedRequest.requestedRole?.replace('_', ' ')}
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Job Role *
+                        </label>
+                        <select
+                          value={assignedJobRole}
+                          onChange={(e) => setAssignedJobRole(e.target.value)}
+                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                        >
+                          {JOB_ROLES.map((role) => (
+                            <option key={role} value={role}>
+                              {role}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Department & Capacity */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Department *
+                        </label>
+                        <select
+                          value={assignedDept}
+                          onChange={(e) => setAssignedDept(e.target.value)}
+                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                        >
+                          {DEPARTMENTS.map((dept) => (
+                            <option key={dept.code} value={dept.name}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Weekly Capacity (Hours)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={80}
+                          value={assignedCapacity}
+                          onChange={(e) => setAssignedCapacity(Number(e.target.value))}
+                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Brands (Profile Access) multi-select checkboxes */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-slate-700">
+                          Brand Access Permissions *
+                        </label>
+                        <span className="text-[10px] text-[#7a6af6] font-medium">
+                          {assignedProfiles.length} active
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/70 border border-slate-200/80 rounded-2xl">
+                        {PROFILES.map((profile) => {
+                          const isSelected = assignedProfiles.includes(profile.code);
+                          return (
+                            <button
+                              type="button"
+                              key={profile.code}
+                              onClick={() => {
+                                setAssignedProfiles((prev) =>
+                                  isSelected
+                                    ? prev.filter((c) => c !== profile.code)
+                                    : [...prev, profile.code]
+                                );
+                              }}
+                              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${
+                                isSelected
+                                  ? 'bg-[#0d0e12] text-white border-black shadow-xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              {profile.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Reports To (Team Leads only, optional) */}
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Assigned Role
+                        Reports To (Team Leads only, optional)
                       </label>
                       <select
-                        value={assignedRole}
-                        onChange={(e) => setAssignedRole(e.target.value as UserRole)}
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+                        value={assignedReportsTo[0] || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAssignedReportsTo(val ? [val] : []);
+                        }}
+                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
                       >
-                        {ROLE_KEYS.map((rk) => (
-                          <option key={rk} value={rk}>
-                            {rk.replace('_', ' ')}
+                        <option value="">No supervisor assigned</option>
+                        {teamLeads.map((tl) => (
+                          <option key={tl._id} value={tl._id}>
+                            {tl.name} ({tl.jobRole || 'Team Lead'})
                           </option>
                         ))}
                       </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Weekly Capacity (Hours)
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={80}
-                        value={assignedCapacity}
-                        onChange={(e) => setAssignedCapacity(Number(e.target.value))}
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
-                      />
+                      <p className="text-[10px] text-slate-400 mt-1 pl-2">
+                        Associates team member to a Team Lead for feedback and review scoping.
+                      </p>
                     </div>
                   </>
                 ) : (
@@ -460,7 +741,7 @@ export const AccessRequestsPage: React.FC = () => {
                       placeholder={
                         actionType === 'reject'
                           ? 'Explain why this request is not approved...'
-                          : 'State what clarification is needed...'
+                          : 'State what clarification is needed before approval...'
                       }
                       className="w-full p-3.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs resize-none"
                     />
@@ -474,7 +755,7 @@ export const AccessRequestsPage: React.FC = () => {
                       setSelectedRequest(null);
                       setActionType(null);
                     }}
-                    className="px-5 py-2.5 rounded-full border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold"
+                    className="px-5 py-2.5 rounded-full border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors"
                   >
                     Cancel
                   </button>
@@ -483,7 +764,7 @@ export const AccessRequestsPage: React.FC = () => {
                     type="button"
                     disabled={isSubmitting}
                     onClick={handleAction}
-                    className="px-6 py-2.5 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-pill disabled:opacity-50"
+                    className="px-6 py-2.5 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-pill disabled:opacity-50 transition-transform active:scale-95"
                   >
                     {isSubmitting ? 'Processing...' : 'Confirm'}
                   </button>

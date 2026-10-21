@@ -4,16 +4,20 @@ import type { UserRole, PermissionKey } from '@mmp/shared';
 
 export interface User {
   id: string;
+  _id?: string;
   userId?: string;
   name: string;
   email: string;
   role: UserRole;
   department?: string;
+  departmentId?: string;
   teamId?: string;
   team?: string;
   skills: string[];
   capacity: number;
   attendance: string;
+  profileAccess?: string[];
+  lastProfileId?: string;
 }
 
 interface AuthContextType {

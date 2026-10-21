@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch, ApiError } from '../lib/api';
-import type { UserRole } from '@mmp/shared';
+import {
+  DEPARTMENTS,
+  JOB_ROLES,
+  PROFILES,
+  requestAccessSchema,
+  type RequestableRole,
+} from '@mmp/shared';
 import {
   Lock,
   Mail,
@@ -28,10 +34,12 @@ export const LoginPage: React.FC = () => {
   const [reqName, setReqName] = useState('');
   const [reqEmail, setReqEmail] = useState('');
   const [reqPhone, setReqPhone] = useState('');
-  const [reqDept, setReqDept] = useState('');
-  const [reqRole, setReqRole] = useState<UserRole>('team_member');
-  const [reqSkills, setReqSkills] = useState('');
+  const [reqDept, setReqDept] = useState<string>(DEPARTMENTS[0].name);
+  const [reqJobRole, setReqJobRole] = useState<string>(JOB_ROLES[0]);
+  const [reqRole, setReqRole] = useState<RequestableRole>('team_member');
+  const [reqBrands, setReqBrands] = useState<string[]>([PROFILES[0].code]);
   const [reqReason, setReqReason] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmittingReq, setIsSubmittingReq] = useState(false);
   const [reqSuccess, setReqSuccess] = useState<string | null>(null);
   const [reqError, setReqError] = useState<string | null>(null);
@@ -90,35 +98,60 @@ export const LoginPage: React.FC = () => {
     setIsSubmittingReq(true);
     setReqError(null);
     setReqSuccess(null);
+    setFieldErrors({});
+
+    const validation = requestAccessSchema.safeParse({
+      name: reqName,
+      email: reqEmail,
+      phone: reqPhone,
+      department: reqDept,
+      jobRole: reqJobRole,
+      requestedRole: reqRole,
+      requestedProfileCodes: reqBrands,
+      reason: reqReason,
+    });
+
+    if (!validation.success) {
+      const errors: Record<string, string> = {};
+      validation.error.issues.forEach((issue) => {
+        const fieldName = issue.path[0] as string;
+        if (fieldName && !errors[fieldName]) {
+          errors[fieldName] = issue.message;
+        }
+      });
+      setFieldErrors(errors);
+      setReqError(validation.error.issues[0]?.message || 'Please check the required fields.');
+      setIsSubmittingReq(false);
+      return;
+    }
 
     try {
-      const skillsArray = reqSkills
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      const res = await apiFetch('/auth/request-access', {
+      const res = await apiFetch<{ message?: string }>('/auth/request-access', {
         method: 'POST',
-        body: JSON.stringify({
-          name: reqName,
-          email: reqEmail,
-          phone: reqPhone,
-          department: reqDept,
-          requestedRole: reqRole,
-          skills: skillsArray,
-          reason: reqReason,
-        }),
+        body: JSON.stringify(validation.data),
       });
 
-      setReqSuccess(res.message || 'Your access request was successfully submitted!');
+      setReqSuccess(res.message || 'Request sent. You will get an email when it is reviewed.');
       setReqName('');
       setReqEmail('');
       setReqPhone('');
-      setReqDept('');
-      setReqSkills('');
       setReqReason('');
+      setReqBrands([PROFILES[0].code]);
+      setFieldErrors({});
     } catch (err: any) {
-      setReqError(err.message || 'Failed to submit request. Please try again.');
+      if (
+        err?.code === 'DUPLICATE_PENDING_REQUEST' ||
+        (err?.message && err.message.toLowerCase().includes('already pending'))
+      ) {
+        setReqError('A request for this email is already pending.');
+      } else if (
+        err?.code === 'USER_EXISTS' ||
+        (err?.message && err.message.toLowerCase().includes('already exists'))
+      ) {
+        setReqError('An account already exists with this email address. Please log in.');
+      } else {
+        setReqError(err?.message || 'Failed to submit request. Please try again.');
+      }
     } finally {
       setIsSubmittingReq(false);
     }
@@ -264,16 +297,17 @@ export const LoginPage: React.FC = () => {
 
       {/* Request Access Modal (Glassmorphic) */}
       {showRequestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="glass-modal max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-modal-glass border border-white relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 mb-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="glass-modal max-w-lg w-full max-h-[92vh] overflow-y-auto p-5 sm:p-8 shadow-modal-glass border border-white relative rounded-3xl">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 mb-5">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Request Access</h3>
-                <p className="text-xs text-slate-500">
-                  Submit your details for Administrator review and team assignment
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Request Access</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Submit your details for Administrator review.
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setShowRequestModal(false)}
                 className="w-8 h-8 rounded-full hover:bg-slate-200/60 text-slate-500 flex items-center justify-center transition-colors"
               >
@@ -282,17 +316,21 @@ export const LoginPage: React.FC = () => {
             </div>
 
             {reqSuccess ? (
-              <div className="text-center py-6 space-y-4">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="w-6 h-6" />
+              <div className="text-center py-8 space-y-4">
+                <div className="w-14 h-14 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+                  <CheckCircle2 className="w-7 h-7" />
                 </div>
-                <h4 className="text-base font-bold text-slate-900">Application Received</h4>
+                <h4 className="text-base font-bold text-slate-900">Request Sent</h4>
                 <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-                  {reqSuccess} You will receive an invitation email with a set-password link once an administrator approves your account.
+                  Request sent. You will get an email when it is reviewed.
                 </p>
                 <button
-                  onClick={() => setShowRequestModal(false)}
-                  className="mt-4 px-6 py-2.5 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-sm"
+                  type="button"
+                  onClick={() => {
+                    setShowRequestModal(false);
+                    setReqSuccess(null);
+                  }}
+                  className="mt-4 px-6 py-2.5 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-sm transition-transform active:scale-95"
                 >
                   Close
                 </button>
@@ -306,6 +344,7 @@ export const LoginPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* Name & Work Email */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -317,8 +356,13 @@ export const LoginPage: React.FC = () => {
                       value={reqName}
                       onChange={(e) => setReqName(e.target.value)}
                       placeholder="Jane Doe"
-                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+                      className={`w-full px-4 py-2.5 bg-white/90 border ${
+                        fieldErrors.name ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
+                      } rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs`}
                     />
+                    {fieldErrors.name && (
+                      <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.name}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -330,11 +374,17 @@ export const LoginPage: React.FC = () => {
                       value={reqEmail}
                       onChange={(e) => setReqEmail(e.target.value)}
                       placeholder="jane@company.com"
-                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+                      className={`w-full px-4 py-2.5 bg-white/90 border ${
+                        fieldErrors.email ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
+                      } rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs`}
                     />
+                    {fieldErrors.email && (
+                      <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.email}</p>
+                    )}
                   </div>
                 </div>
 
+                {/* Phone & Department */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -346,53 +396,118 @@ export const LoginPage: React.FC = () => {
                       value={reqPhone}
                       onChange={(e) => setReqPhone(e.target.value)}
                       placeholder="+1 (555) 000-0000"
-                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+                      className={`w-full px-4 py-2.5 bg-white/90 border ${
+                        fieldErrors.phone ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
+                      } rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs`}
                     />
+                    {fieldErrors.phone && (
+                      <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.phone}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Department *
                     </label>
-                    <input
-                      type="text"
-                      required
+                    <select
                       value={reqDept}
                       onChange={(e) => setReqDept(e.target.value)}
-                      placeholder="Sales / Social / Academics"
-                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
-                    />
+                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                    >
+                      {DEPARTMENTS.map((dept) => (
+                        <option key={dept.code} value={dept.name}>
+                          {dept.name}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldErrors.department && (
+                      <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.department}</p>
+                    )}
                   </div>
                 </div>
 
+                {/* Job Role & Requested Role */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Job Role *
+                    </label>
+                    <select
+                      value={reqJobRole}
+                      onChange={(e) => setReqJobRole(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                    >
+                      {JOB_ROLES.map((role) => (
+                        <option key={role} value={role}>
+                          {role}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldErrors.jobRole && (
+                      <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.jobRole}</p>
+                    )}
+                  </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Requested Role *
                     </label>
                     <select
                       value={reqRole}
-                      onChange={(e) => setReqRole(e.target.value as UserRole)}
-                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+                      onChange={(e) => setReqRole(e.target.value as RequestableRole)}
+                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
                     >
                       <option value="team_member">Team Member</option>
                       <option value="team_lead">Team Lead</option>
-                      <option value="marketing_head">Marketing Head</option>
                     </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Skills (comma-separated, optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={reqSkills}
-                      onChange={(e) => setReqSkills(e.target.value)}
-                      placeholder="Reels, Video, Copywriting..."
-                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
-                    />
+                    <p className="text-[10px] text-slate-400 mt-1 pl-2">
+                      Your administrator confirms your final role.
+                    </p>
+                    {fieldErrors.requestedRole && (
+                      <p className="text-[11px] text-rose-600 mt-0.5 pl-2">{fieldErrors.requestedRole}</p>
+                    )}
                   </div>
                 </div>
 
+                {/* Brands Multi-Select */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Brands you work on * <span className="text-slate-400 font-normal">(select at least one)</span>
+                    </label>
+                    <span className="text-[10px] text-[#7a6af6] font-medium">
+                      {reqBrands.length} selected
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/70 border border-slate-200/80 rounded-2xl">
+                    {PROFILES.map((profile) => {
+                      const isSelected = reqBrands.includes(profile.code);
+                      return (
+                        <button
+                          type="button"
+                          key={profile.code}
+                          onClick={() => {
+                            setReqBrands((prev) =>
+                              isSelected
+                                ? prev.filter((c) => c !== profile.code)
+                                : [...prev, profile.code]
+                            );
+                          }}
+                          className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${
+                            isSelected
+                              ? 'bg-[#0d0e12] text-white border-black shadow-xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {profile.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {fieldErrors.requestedProfileCodes && (
+                    <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.requestedProfileCodes}</p>
+                  )}
+                </div>
+
+                {/* Reason for Access */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Reason for Access *
@@ -402,23 +517,29 @@ export const LoginPage: React.FC = () => {
                     rows={3}
                     value={reqReason}
                     onChange={(e) => setReqReason(e.target.value)}
-                    placeholder="Briefly state the work you will coordinate through the portal..."
-                    className="w-full p-3.5 bg-white/90 border border-slate-200 rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs resize-none"
-                  ></textarea>
+                    placeholder="Briefly describe your role and the work you will do in the marketing team."
+                    className={`w-full p-3.5 bg-white/90 border ${
+                      fieldErrors.reason ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
+                    } rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs resize-none`}
+                  />
+                  {fieldErrors.reason && (
+                    <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.reason}</p>
+                  )}
                 </div>
 
+                {/* Actions */}
                 <div className="pt-3 flex justify-end gap-3 border-t border-slate-200/80">
                   <button
                     type="button"
                     onClick={() => setShowRequestModal(false)}
-                    className="px-5 py-2.5 rounded-full border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold"
+                    className="px-5 py-2.5 rounded-full border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmittingReq}
-                    className="px-6 py-2.5 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-pill disabled:opacity-50 flex items-center gap-2"
+                    className="px-6 py-2.5 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-pill disabled:opacity-50 flex items-center gap-2 transition-transform active:scale-95"
                   >
                     {isSubmittingReq ? 'Submitting...' : 'Submit Request'}
                   </button>

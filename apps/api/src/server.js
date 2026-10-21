@@ -30,6 +30,8 @@ import uploadRoutes from './modules/uploads/routes.js';
 import reportRoutes from './modules/reports/routes.js';
 import dashboardRoutes from './modules/reports/dashboard.routes.js';
 import docsRoutes from './modules/docs/routes.js';
+import targetRoutes from './modules/targets/routes.js';
+import campaignRoutes from './modules/campaigns/routes.js';
 import { initQueues } from './lib/queue.js';
 import { initDomainEventListeners } from './modules/notifications/service.js';
 
@@ -164,6 +166,8 @@ app.use('/uploads', uploadRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/docs', docsRoutes);
+app.use('/api/targets', targetRoutes);
+app.use('/api/campaigns', campaignRoutes);
 
 app.set('io', io);
 

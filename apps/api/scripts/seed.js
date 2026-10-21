@@ -3,6 +3,7 @@ import { env } from '../src/config/env.js';
 import { connectDB, disconnectDB } from '../src/config/db.js';
 import { Person } from '../src/modules/people/model.js';
 import { seedReferenceData } from '../src/modules/referenceData/service.js';
+import { seedTargetsAndCampaigns } from '../src/modules/targets/seed.js';
 import { logger } from '../src/lib/logger.js';
 
 async function seed() {
@@ -48,6 +49,10 @@ async function seed() {
       }
       logger.info(`ℹ️ Admin user already exists: ${adminEmail}`);
     }
+
+    // 3. Seed Monthly Targets & Baseline Campaigns (Phase 2)
+    await seedTargetsAndCampaigns();
+    logger.info('🎯 Seeded Monthly Targets and Campaigns baseline');
 
     logger.info('🎉 Seed completed successfully!');
   } catch (error) {

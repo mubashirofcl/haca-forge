@@ -57,67 +57,121 @@ export async function sendMail({ to, subject, html, text }) {
 export function templates() {
   return {
     invite: ({ name, setPasswordUrl }) => ({
-      subject: 'Welcome to Marketing Portal - Set Your Password',
-      text: `Hello ${name},\n\nYour access request has been approved. Please set your password using the link below (valid for 48 hours):\n${setPasswordUrl}\n\nBest regards,\nMarketing Operations Team`,
+      subject: 'Welcome to HACA Marketing OS - Set Your Password',
+      text: `Hello ${name},\n\nYour access request for HACA Marketing OS has been approved. Please set your password using the link below (valid for 48 hours):\n${setPasswordUrl}\n\nBest regards,\nHACA Marketing Operations Team`,
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
-          <h2 style="color: #0f172a;">Welcome to the Marketing Portal</h2>
-          <p>Hello <strong>${name}</strong>,</p>
-          <p>Your request to access the Marketing Workflow and Content Management Portal has been approved.</p>
-          <p>Please click the button below to set your account password (link valid for 48 hours):</p>
-          <p style="margin: 30px 0;">
-            <a href="${setPasswordUrl}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-              Set Password & Activate Account
-            </a>
-          </p>
-          <p style="font-size: 13px; color: #64748b;">Or paste this link into your browser: <br>${setPasswordUrl}</p>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 32px; background-color: #f8fafc; color: #1e293b;">
+          <div style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div style="display: inline-block; padding: 6px 12px; background-color: #ede9fe; color: #6d28d9; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;">
+              HACA Marketing OS
+            </div>
+            <h2 style="color: #0f172a; margin-top: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;">Welcome to the Team, ${name}</h2>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+              Your access request has been approved by the Administrator. You have been provisioned access to your team workspace in HACA Marketing OS.
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+              Please click the button below to set your account password and activate your workspace. This single-use link is valid for <strong>48 hours</strong>.
+            </p>
+            <div style="margin: 28px 0; text-align: center;">
+              <a href="${setPasswordUrl}" style="background-color: #0f172a; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 9999px; font-size: 13px; font-weight: 700; display: inline-block; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);">
+                Set Password & Activate Account
+              </a>
+            </div>
+            <p style="font-size: 12px; line-height: 1.5; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+              If the button does not work, copy and paste this secure link into your browser:<br>
+              <a href="${setPasswordUrl}" style="color: #6366f1; word-break: break-all;">${setPasswordUrl}</a>
+            </p>
+          </div>
         </div>
       `,
     }),
-    accessRequestSubmitted: ({ name, email, department, requestedRole }) => ({
-      subject: `New Access Request: ${name} (${department})`,
-      text: `A new access request has been submitted by ${name} (${email}) for department ${department} with requested role ${requestedRole}. Please review it in the Admin dashboard.`,
+    accessRequestSubmitted: ({ name, email, department, jobRole, requestedRole, brands = [] }) => ({
+      subject: `[Marketing OS] New Access Request: ${name} (${department || 'General'})`,
+      text: `A new access request has been submitted by ${name} (${email}).\nDepartment: ${department}\nJob Role: ${jobRole || 'Not specified'}\nRequested Role: ${requestedRole}\nBrands: ${brands.join(', ') || 'None'}\n\nPlease review it in the Marketing OS Admin Console.`,
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
-          <h2>New Access Request Pending Review</h2>
-          <p>A new user has requested access to the portal:</p>
-          <ul>
-            <li><strong>Name:</strong> ${name}</li>
-            <li><strong>Email:</strong> ${email}</li>
-            <li><strong>Department:</strong> ${department}</li>
-            <li><strong>Requested Role:</strong> ${requestedRole}</li>
-          </ul>
-          <p>Please log in to the Admin Dashboard to review and assign their team and role.</p>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 32px; background-color: #f8fafc; color: #1e293b;">
+          <div style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px;">
+            <div style="display: inline-block; padding: 6px 12px; background-color: #fef3c7; color: #b45309; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 16px;">
+              Pending Review
+            </div>
+            <h2 style="color: #0f172a; margin-top: 0; font-size: 20px; font-weight: 800;">New Access Request Submitted</h2>
+            <p style="font-size: 14px; color: #475569;">A new user has submitted details for review:</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px;">
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-weight: 600; width: 35%;">Name</td>
+                <td style="padding: 8px 0; color: #0f172a; font-weight: 700;">${name}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Email</td>
+                <td style="padding: 8px 0; color: #0f172a;">${email}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Department</td>
+                <td style="padding: 8px 0; color: #0f172a;">${department}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Job Role</td>
+                <td style="padding: 8px 0; color: #0f172a;">${jobRole || 'Unspecified'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Requested Role</td>
+                <td style="padding: 8px 0; color: #6366f1; font-weight: 700;">${requestedRole}</td>
+              </tr>
+              ${brands.length > 0 ? `
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Brands</td>
+                <td style="padding: 8px 0; color: #0f172a;">${brands.join(', ')}</td>
+              </tr>` : ''}
+            </table>
+            <p style="font-size: 13px; color: #475569;">
+              Log in to the Marketing OS Admin Console to confirm final role, brand access, reports-to and capacity.
+            </p>
+          </div>
         </div>
       `,
     }),
     requestRejected: ({ name, reason }) => ({
-      subject: 'Update Regarding Your Marketing Portal Access Request',
-      text: `Hello ${name},\n\nYour access request could not be approved at this time.\nReason: ${reason || 'Not specified'}\n\nIf you have questions, please reach out to the Marketing Head.`,
+      subject: 'Update Regarding Your HACA Marketing OS Access Request',
+      text: `Hello ${name},\n\nYour request to access HACA Marketing OS could not be approved at this time.\nReason: ${reason || 'Administrative decision'}\n\nIf you believe this was in error, please coordinate with your administrator.`,
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
-          <h2>Access Request Update</h2>
-          <p>Hello ${name},</p>
-          <p>Your request to access the Marketing Workflow Portal was reviewed, but could not be approved at this time.</p>
-          <div style="background-color: #f1f5f9; padding: 12px 16px; border-left: 4px solid #ef4444; margin: 16px 0;">
-            <strong>Reason:</strong> ${reason || 'Administrative decision'}
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 32px; background-color: #f8fafc; color: #1e293b;">
+          <div style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px;">
+            <h2 style="color: #0f172a; margin-top: 0; font-size: 20px; font-weight: 800;">Access Request Update</h2>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">Hello <strong>${name}</strong>,</p>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+              Your request for access to HACA Marketing OS was reviewed by an administrator, but could not be approved at this time.
+            </p>
+            <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 14px 18px; border-radius: 8px; margin: 20px 0; font-size: 13px; color: #991b1b;">
+              <strong>Reason:</strong> ${reason || 'Administrative decision'}
+            </div>
+            <p style="font-size: 13px; color: #64748b;">
+              If you have questions or believe this was in error, please reach out directly to your marketing administrator.
+            </p>
           </div>
-          <p>If you believe this was in error, please coordinate with your department lead.</p>
         </div>
       `,
     }),
     infoNeeded: ({ name, question }) => ({
-      subject: 'Action Needed: Marketing Portal Access Request',
-      text: `Hello ${name},\n\nThe administrator needs additional information before approving your access:\n\n${question}\n\nPlease reply or update your request.`,
+      subject: 'Action Needed: Your HACA Marketing OS Access Request',
+      text: `Hello ${name},\n\nThe administrator reviewing your HACA Marketing OS access request has requested more information:\n\n${question}\n\nPlease reply to this email or reach out to your administrator.`,
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
-          <h2>Additional Information Needed</h2>
-          <p>Hello ${name},</p>
-          <p>Before your access request can be completed, the administrator requested more information:</p>
-          <div style="background-color: #f8fafc; padding: 14px; border-left: 4px solid #3b82f6; margin: 16px 0;">
-            ${question}
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 32px; background-color: #f8fafc; color: #1e293b;">
+          <div style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px;">
+            <div style="display: inline-block; padding: 6px 12px; background-color: #eff6ff; color: #2563eb; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 16px;">
+              Information Requested
+            </div>
+            <h2 style="color: #0f172a; margin-top: 0; font-size: 20px; font-weight: 800;">Clarification Needed</h2>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">Hello <strong>${name}</strong>,</p>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+              Before your Marketing OS access request can be completed, the administrator needs additional information:
+            </p>
+            <div style="background-color: #f0fdf4; border-left: 4px solid #10b981; padding: 14px 18px; border-radius: 8px; margin: 20px 0; font-size: 13px; color: #065f46;">
+              ${question}
+            </div>
+            <p style="font-size: 13px; color: #64748b;">
+              Please respond directly to this email or communicate the requested details to your administrator.
+            </p>
           </div>
-          <p>Please respond to this email with the requested details.</p>
         </div>
       `,
     }),

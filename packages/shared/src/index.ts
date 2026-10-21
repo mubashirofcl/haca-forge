@@ -365,24 +365,40 @@ export const refreshTokenSchema = z.object({
   refreshToken: z.string().optional(),
 });
 
+export const REQUESTABLE_ROLES = ['team_member', 'team_lead'] as const;
+export type RequestableRole = (typeof REQUESTABLE_ROLES)[number];
+
 export const requestAccessSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Valid work email required'),
-  phone: z.string().min(7, 'Valid contact number required'),
-  department: z.string().min(2, 'Department is required'),
-  requestedRole: z.enum(ROLE_KEYS).default('team_member'),
-  reason: z.string().min(10, 'Please provide a clear reason for access'),
+  name: z.string().trim().min(2, 'Full name must be at least 2 characters'),
+  email: z.string().trim().email('Valid work email required'),
+  phone: z.string().trim().min(7, 'Valid contact number required'),
+  department: z.string().trim().min(1, 'Department is required'),
+  jobRole: z.string().trim().min(1, 'Job role is required'),
+  requestedRole: z.enum(REQUESTABLE_ROLES, {
+    errorMap: () => ({ message: 'Only Team Member or Team Lead can be requested' }),
+  }),
+  requestedProfileCodes: z
+    .array(z.string())
+    .min(1, 'Please select at least one brand you work on'),
+  reason: z
+    .string()
+    .trim()
+    .min(10, 'Please describe your role and the work you will do in the marketing team (min 10 characters)'),
 });
 export type RequestAccessInput = z.infer<typeof requestAccessSchema>;
+export const publicRequestAccessSchema = requestAccessSchema;
+export type PublicRequestAccessInput = RequestAccessInput;
 
 export const accessRequestReviewSchema = z.object({
-  status: z.enum(['approved', 'rejected', 'info_needed']),
+  status: z.enum(['approved', 'rejected', 'info_needed']).optional().default('approved'),
   assignedRole: z.enum(ROLE_KEYS).optional(),
-  departmentId: z.string().optional(),
-  jobRole: z.enum(JOB_ROLES).optional(),
+  departmentId: z.string().optional().nullable(),
+  jobRole: z.string().optional(),
   weeklyCapacityHours: z.number().min(0).max(80).default(40).optional(),
   profileAccess: z.array(z.string()).optional(),
+  reportsToIds: z.array(z.string()).optional(),
   reason: z.string().optional(),
+  question: z.string().optional(),
 });
 export type AccessRequestReviewInput = z.infer<typeof accessRequestReviewSchema>;
 
@@ -441,3 +457,43 @@ export const signUploadSchema = z.object({
   folder: z.string().optional(),
 });
 export type SignUploadInput = z.infer<typeof signUploadSchema>;
+
+// Phase 2: Monthly Targets & Campaigns Schemas
+export const monthlyTargetSchema = z.object({
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, 'Month must be in YYYY-MM format (e.g. 2026-11)'),
+  profileId: z.string().optional().nullable(),
+  revenueTarget: z.number().min(0, 'Revenue target must be non-negative').default(0),
+  leadsTarget: z.number().min(0, 'Leads target must be non-negative').default(0),
+  qualifiedLeadsTarget: z.number().min(0, 'Qualified leads target must be non-negative').default(0),
+  budget: z.number().min(0, 'Budget must be non-negative').default(0),
+});
+export type MonthlyTargetInput = z.infer<typeof monthlyTargetSchema>;
+
+export const monthlyTargetUpdateSchema = monthlyTargetSchema.partial();
+export type MonthlyTargetUpdateInput = z.infer<typeof monthlyTargetUpdateSchema>;
+
+export const campaignSchema = z.object({
+  name: z.string().trim().min(2, 'Campaign name must be at least 2 characters'),
+  profileId: z.string().min(1, 'Profile / Brand is required'),
+  targetId: z.string().min(1, 'Target linkage is strictly required'),
+  relatedOKR: z.string().trim().min(3, 'Related OKR is strictly required'),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  status: z.enum(CAMPAIGN_STATUSES).default('In Progress'),
+  goalType: z.enum(GOAL_TYPES),
+  goalValue: z.number().min(0).default(0),
+  expectedOutcome: z.enum(EXPECTED_OUTCOMES).optional(),
+  budget: z.number().min(0).default(0),
+  spend: z.number().min(0).default(0),
+  leadsActual: z.number().min(0).default(0),
+  qualifiedLeadsActual: z.number().min(0).default(0),
+  ownerId: z.string().min(1, 'Campaign owner is required'),
+  progressPct: z.number().min(0).max(100).default(0).optional(),
+});
+export type CampaignInput = z.infer<typeof campaignSchema>;
+
+export const campaignUpdateSchema = campaignSchema.partial();
+export type CampaignUpdateInput = z.infer<typeof campaignUpdateSchema>;
+

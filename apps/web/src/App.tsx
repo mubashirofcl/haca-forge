@@ -16,7 +16,6 @@ import {
   LayoutDashboard,
   CheckSquare,
   Calendar,
-  Layers,
   Film,
   FileText,
   Users,
@@ -46,6 +45,12 @@ const UsersPage = React.lazy(() =>
 );
 const NotificationsPage = React.lazy(() =>
   import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage }))
+);
+const CampaignsListPage = React.lazy(() =>
+  import('./pages/campaigns/CampaignsListPage').then((m) => ({ default: m.CampaignsListPage }))
+);
+const CampaignDetailPage = React.lazy(() =>
+  import('./pages/campaigns/CampaignDetailPage').then((m) => ({ default: m.CampaignDetailPage }))
 );
 
 /**
@@ -177,20 +182,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Projects / Campaigns"
-                          screenNumber="Screen 5"
-                          phase="Phase 2"
-                          route="/campaigns"
-                          description="All marketing initiatives grouped into Campaigns tied directly to Monthly Targets. Prevents uncoordinated or orphaned marketing work."
-                          features={[
-                            'Enforced linkage: Target -> Campaign -> Work Items (no orphans)',
-                            'Budget allocation vs spend actuals tracking and burn pace',
-                            'Goal types (Leads, Reactivations, Enrollments)',
-                            'Health status badges (In Progress, At Risk, Completed)',
-                          ]}
-                          icon={Layers}
-                        />
+                        <CampaignsListPage />
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -202,20 +194,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Project Detail"
-                          screenNumber="Screen 6"
-                          phase="Phase 2"
-                          route="/campaigns/:id"
-                          description="Deep-dive into a single Campaign: business goals, budget pace, attached tasks, creative assets, and lead attribution."
-                          features={[
-                            'Traceability Overview tab showing target link and related OKR',
-                            'Tasks tab with attached Work Items and owner assignments',
-                            'Creatives tab previewing uploaded deliverables',
-                            'Leads tab tracking incoming leads attributed to this campaign',
-                          ]}
-                          icon={Layers}
-                        />
+                        <CampaignDetailPage />
                       </Layout>
                     </ProtectedRoute>
                   }

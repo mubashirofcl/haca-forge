@@ -172,9 +172,12 @@ export async function resolveScope(user, filters = {}) {
     return allowedPersonIds.includes(personId.toString());
   };
 
+  const canAccessAllProfiles = role === 'admin' || role === 'marketing_head';
+
   return {
     isAllowed,
     scopeType,
+    canAccessAllProfiles,
     allowedProfileIds,
     allowedPersonIds,
     userProfileAccess,

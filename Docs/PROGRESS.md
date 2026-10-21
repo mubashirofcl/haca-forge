@@ -226,9 +226,130 @@ Phase 1 established the foundation for the HACA Marketing OS 4-role model (`admi
 
 ---
 
-### 4. Phase 2 Readiness
-With Phase 1 complete and fully verified:
-- Branch `marketing-os` is clean and passing.
-- 4 roles, `Person` model, `resolveScope`, 7 profiles, and People Setup are fully functional.
-- Ready to proceed to **Phase 2: Monthly Targets & Campaigns**.
+### 4. Phase 1b: Request Access Fix & Database Reset (Status: COMPLETE)
+
+#### Part A: Request Access Flow & Permissions
+- **Public Form (`apps/web/src/pages/LoginPage.tsx`)**:
+  - Rebuilt the Request Access modal with HACA Marketing OS glassmorphism.
+  - Subtitle: *"Submit your details for Administrator review."*
+  - Required fields validated with shared Zod schema (`requestAccessSchema`):
+    - Full name, Work email, Phone.
+    - Department: dropdown of 7 fixed departments (`DEPARTMENTS`).
+    - Job role: dropdown of 13 job roles (`JOB_ROLES`).
+    - Requested role: strictly `Team Member` and `Team Lead` with helper text: *"Your administrator confirms your final role."*
+    - Brands you work on: multi-select pills for all 7 brand profiles (`PROFILES`).
+    - Reason for access (min 10 characters).
+  - Completely removed legacy FORGE `skills` field and all references to `requester` / `department staff`.
+  - Responsive at 360px viewport.
+  - Clear field error indicators, submitting spinner/disabled state, duplicate pending error handling, and success feedback.
+- **Access Request Model & Backend Service (`apps/api/src/modules/access/`)**:
+  - Replaced legacy skills with `jobRole`, `departmentId`, `requestedProfileCodes`, and `requestedProfileIds`.
+  - Server-side guard: strictly blocks requests for `admin` or `marketing_head` with HTTP 400.
+  - Duplicate email guards: returns HTTP 409 for existing active accounts or already pending requests.
+  - Dispatches email notification to all active administrators.
+  - Records domain `ActivityEvent`.
+- **Admin Review (`apps/web/src/pages/admin/AccessRequestsPage.tsx`)**:
+  - Restricted to `user.approve` (Admin only; non-admins / Marketing Head receive HTTP 403).
+  - Filter bar supporting Status, Department, Brand, and search.
+  - Card view displays all candidate-submitted fields including requested brands.
+  - Approval dialog: selects final role (Admin only can grant Admin/Marketing Head), job role, department, brand profile access (pre-filled), supervisor reports-to selector (Team Leads only), and weekly capacity (default 40h).
+  - Generates 32-byte crypto token hashed with SHA-256 with 48h expiration.
+  - Sends set-password invite link via `lib/mailer.js`.
+  - Support for rejection with reason and clarification requests with question.
+  - Records domain `ActivityEvent` for every admin action.
+- **Mailer Templates (`apps/api/src/lib/mailer.js`)**:
+  - Updated `invite`, `accessRequestSubmitted`, `requestRejected`, and `infoNeeded` templates with HACA Marketing OS branding and wording.
+
+#### Part B: Database Reset Plan & Script (`docs/DB_RESET_PLAN.md` & `scripts/reset-data-marketing-os.js`)
+- **Inventory & Plan (`docs/DB_RESET_PLAN.md`)**:
+  - Discovered 28 collections in MongoDB via `listCollections()` with exact document counts.
+  - Formulated lifecycle actions: `profiles`, `departments`, and `activityevents` are **KEEP**; `users` is **RESET-USERS**; retired FORGE collections are **EMPTY**.
+- **Automated Reset Script (`scripts/reset-data-marketing-os.js`)**:
+  - Dry run by default (changes nothing).
+  - Refuses when `NODE_ENV === 'production'`.
+  - Destructive path requires `--confirm`, `--db-name=<connected_db>`, `--keep-emails=<list>`, and `DEMO_SEED_PASSWORD`.
+  - Pre-deletion safety export: exports every affected collection to `./backup-db-reset-<timestamp>/<collection>.json` and verifies non-empty files before any deletion begins.
+  - Empties retired collections, resets counters, keeps only specified admin/head accounts, calls Phase 1 reference seed and demo seed.
+  - Includes `--rollback-info` with `mongoimport` recovery commands.
+  - **The automated agent ran ONLY dry-run mode and tests; destructive execution is left for the user.**
+
+#### Part C: Demo Users Seed (`scripts/seed-demo-users.js`)
+- Seeds 9 demo accounts with domain `@demo.haca.local` with passwords sourced from `DEMO_SEED_PASSWORD`:
+  - `Demo Marketing Head` (`marketing_head`, all 7 brands, no dept, no reports-to)
+  - `Demo Design Lead` (`team_lead`, Design Lead (TL), Design dept, Design School & Design School EN)
+  - `Demo Creative Manager` (`team_lead`, Creative Manager (TL), Video Production dept, HACA & HACA Design School)
+  - `Demo UI Designer` (`team_member`, UI Designer, Design dept, reports to BOTH Design Lead AND Creative Manager)
+  - `Demo Designer` (`team_member`, Designer, Design dept, reports to Design Lead)
+  - `Demo Video Editor` (`team_member`, Video Editor, Video Production dept, reports to Creative Manager)
+  - `Demo Writer` (`team_member`, Writer, SEO & Content dept, reports to Creative Manager)
+  - `Demo WhatsApp Marketer` (`team_member`, WhatsApp Marketer, WhatsApp dept, reports to Creative Manager)
+  - `Demo Performance Marketer` (`team_member`, Performance Marketer, Performance Marketing dept, reports to Creative Manager)
+- Adds 2 sample pending AccessRequests (one team_member, one team_lead).
+- Supports `--remove-demo` to clean up demo accounts. Idempotent across repeated executions.
+
+---
+
+### 5. Build & Test Verification
+
+| Component | Command | Result | Details |
+| :--- | :--- | :--- | :--- |
+| `@mmp/shared` | `npm run build` | **PASSED** | Clean tsup build (ESM, CJS, DTS) |
+| `@mmp/api` | `vitest run` | **PASSED** | **48/48 tests pass** across 6 test suites (`request_access_schema`, `access_service_and_api`, `reset_and_demo_seed`, `phase1_scoping`, `permissions`, `status`) in ~10s |
+| `@mmp/web` | `tsc && vite build` | **PASSED** | Clean production bundle (0 TypeScript errors) in ~10s |
+| Dry Run | `node scripts/reset-data-marketing-os.js` | **PASSED** | Correct 28-collection inventory & user analysis with zero changes |
+
+---
+
+---
+
+## Phase 2: Monthly Targets & Campaigns (Completed & Verified)
+
+### 1. Goals & Invariants Delivered
+- **Enforced Traceability Chain:** Top of the traceability hierarchy (`MonthlyTarget` $\rightarrow$ `Campaign` $\rightarrow$ `WorkItem`). Zero orphan marketing initiatives permitted.
+- **Strict Validation:** A `Campaign` strictly requires both `targetId` (valid FK to `MonthlyTarget`) and `relatedOKR` (non-empty string). Rejection with HTTP 400 (`TARGET_REQUIRED` / `OKR_REQUIRED`) if either is omitted or invalid.
+- **Profile Scoping (`resolveScope`):** Team Leads can only create, update, or view campaigns within their permitted brand profiles. Head and Admin possess global access.
+- **Target Aggregations & Protection:** `listMonthlyTargets` dynamically rolls up `spendActual`, `leadsActual`, and `budgetAllocated` from linked campaigns. Deletion of a target is protected if campaigns are linked to it.
+- **Audit Logging:** Every campaign creation, status transition, budget update, and deletion is recorded as an immutable `ActivityEvent`.
+
+### 2. Frontend Screens Delivered
+- **Screen 5: Projects / Campaigns (`/campaigns` - `CampaignsListPage.tsx`)**:
+  - Live KPI summary strips (Active Campaigns, Budget Allocated, Spend, Leads Delivered, Over-Budget alerts).
+  - Multi-dimensional filters (Profile pill bar, Status dropdown, Goal Type filter, search bar).
+  - Campaign card grid with burn pace bar, goal progress bar, status pill, and linked target month tag.
+  - "New Campaign" modal enforcing MonthlyTarget linkage and Related OKR.
+  - "Monthly Targets" modal for Head/Admin to view and configure monthly targets.
+- **Screen 6: Project Detail (`/campaigns/:id` - `CampaignDetailPage.tsx`)**:
+  - Strategic Alignment banner showcasing the Related OKR and timeline cadence.
+  - Linked Target Anchor card showing month goal, revenue target, and budget.
+  - Financial Health card with budget vs spend, burn pace progress, and remaining balance.
+  - Outcome Metrics card showing goal type, actuals delivered, qualified leads, and cost per lead.
+  - 4 Deep-dive Tabs:
+    1. *Overview & Strategy*: Brief, cadence, owner details, and 3-Node Traceability Flow diagram.
+    2. *Work Items*: Department deliverables preview and Phase 3 Work Item engine bridge.
+    3. *Lead Funnel*: Attribution metrics and channel breakdown (Meta Ads, WhatsApp, Organic).
+    4. *Audit Trail*: Real-time ActivityEvent stream for the campaign.
+  - Full Edit Campaign modal for updating parameters, metrics, and progress.
+
+### 3. Backend & Shared Schema Delivered
+- **`@mmp/shared`**:
+  - Added schemas: `monthlyTargetSchema`, `monthlyTargetUpdateSchema`, `campaignSchema`, `campaignUpdateSchema`.
+  - Added taxonomies: `CAMPAIGN_STATUSES`, `GOAL_TYPES`, `EXPECTED_OUTCOMES`.
+- **`apps/api` Modules**:
+  - `src/modules/targets/`: `model.js`, `service.js`, `controller.js`, `routes.js`, `seed.js`. Mounted at `/api/targets`.
+  - `src/modules/campaigns/`: `model.js`, `service.js`, `controller.js`, `routes.js`. Mounted at `/api/campaigns`. Includes `GET /api/campaigns/:id/activity`.
+
+### 4. Build & Test Verification
+| Component | Command | Result | Details |
+| :--- | :--- | :--- | :--- |
+| `@mmp/shared` | `npm run build` | **PASSED** | Clean tsup build (ESM, CJS, DTS) |
+| `@mmp/api` | `npx vitest run test/targets_and_campaigns.test.js` | **PASSED** | **17/17 tests pass** verifying strict traceability, invariants, profile scoping, and aggregations |
+| `@mmp/api` | `npm test` | **PASSED** | **65/65 tests pass** across all 7 test suites |
+| `@mmp/web` | `tsc && vite build` | **PASSED** | Clean production bundle with code split chunks for Screen 5 & Screen 6 |
+
+---
+
+### 5. Phase 3 Readiness
+With Phase 2 verified and passing:
+- Ready to proceed to **Phase 3: Work Items, My Work, Calendar & Todo**.
+
 
