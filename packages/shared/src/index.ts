@@ -555,3 +555,61 @@ export const assignmentOverrideSchema = z.object({
 });
 export type AssignmentOverrideInput = z.infer<typeof assignmentOverrideSchema>;
 
+// Phase 5: Feedback Loops, Revision Flags & Blockers Schemas
+export const FEEDBACK_ROUND_STATUSES = ['Revision Required', 'Approved'] as const;
+export type FeedbackRoundStatus = (typeof FEEDBACK_ROUND_STATUSES)[number];
+
+export const feedbackEntryCreateSchema = z.object({
+  workItemId: z.string().min(1, 'Work item ID is required'),
+  round: z.number().int().min(1).default(1),
+  roundStatus: z.enum(FEEDBACK_ROUND_STATUSES).default('Revision Required'),
+  text: z.string().trim().min(2, 'Feedback or response text is required'),
+  isResponse: z.boolean().default(false),
+  attachments: z
+    .array(
+      z.object({
+        name: z.string(),
+        url: z.string().url('Attachment URL must be valid'),
+        fileType: z.string().optional(),
+        size: z.number().optional(),
+      })
+    )
+    .optional(),
+});
+export type FeedbackEntryCreateInput = z.infer<typeof feedbackEntryCreateSchema>;
+
+export const revisionClassifySchema = z.object({
+  rootCause: z.enum(REVISION_ROOT_CAUSES),
+  rootCauseNotes: z.string().optional(),
+});
+export type RevisionClassifyInput = z.infer<typeof revisionClassifySchema>;
+
+export const blockerCreateSchema = z
+  .object({
+    workItemId: z.string().min(1, 'Work item ID is required'),
+    reason: z.enum(BLOCKER_REASONS),
+    notes: z.string().optional(),
+    dependencyOwnerId: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (BLOCKER_DEPENDENCY_REASONS.includes(data.reason)) {
+        return Boolean(data.dependencyOwnerId && data.dependencyOwnerId.trim().length > 0);
+      }
+      return true;
+    },
+    {
+      message:
+        'dependencyOwnerId is mandatory when blocker reason is Waiting for feedback, Waiting for content, or Waiting for data',
+      path: ['dependencyOwnerId'],
+    }
+  );
+export type BlockerCreateInput = z.infer<typeof blockerCreateSchema>;
+
+export const blockerResolveSchema = z.object({
+  resolutionNotes: z.string().optional(),
+  resumeStatus: z.enum(WORK_ITEM_STATUSES).default('In Progress'),
+});
+export type BlockerResolveInput = z.infer<typeof blockerResolveSchema>;
+
+

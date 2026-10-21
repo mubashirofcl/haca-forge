@@ -490,5 +490,89 @@ With Phase 3 complete and verified:
 With Phase 4 complete and verified:
 - Ready to proceed to **Phase 5: Feedback Loops, Revision Flags & Blockers (Screens 8 & 11)** upon user approval.
 
+---
+
+## Phase 5: Feedback Loops, Revision Flags & Blockers (Screens 8 & 11) (Completed & Verified)
+
+### 1. Goals & Invariants Delivered
+- **Structured 2-Entry Review Threads:**
+  - Round-based review structure:
+    - Entry 1: Reviewer feedback (`roundStatus = 'Revision Required' | 'Approved'`, `isResponse = false`). Only Team Lead, Marketing Head, or Admin can approve deliverables.
+    - Entry 2: Assigned Owner response (`isResponse = true`).
+  - Reviewer submitting `Revision Required` sets work item `status = 'Feedback'`, increments `revisions` count, and triggers automated revision flag check.
+  - Reviewer submitting `Approved` sets work item `status = 'Approved'` and writes immutable `ActivityEvent`.
+- **Automated Revision Flagging Engine:**
+  - Invariant: Automatically creates `RevisionFlag` when a deliverable reaches $\ge 4$ revision rounds OR exceeds the owner's rolling 90-day baseline average by $> 1.0$.
+  - Generates `revision.flagged` `ActivityEvent` and dispatches immediate notification to departmental Team Leads and Marketing Heads.
+  - 48-Hour Unclassified Escalation Window: Flags unclassified after 48 hours are automatically flagged as `isEscalated = true` with critical escalation badges directed to the Marketing Head.
+  - 7 Canonical Root Causes:
+    1. `Brief unclear`
+    2. `Creative direction unclear`
+    3. `Skill gap`
+    4. `Feedback inconsistency`
+    5. `Excessive scope change`
+    6. `TL approval delay`
+    7. `Client/business requirement changed`
+  - Classification is strictly restricted to Team Leads, Marketing Heads, or Admins.
+- **Blocker Engine & Dependency Owner Alerting:**
+  - Canonical 9 Blocker Reasons: *Waiting for feedback, Waiting for content, Waiting for data, Technical issue, Dependency, Client/business approval, Resource issue, Unclear requirement, Other*.
+  - **Dependency Invariant Guard:** When reason is in `BLOCKER_DEPENDENCY_REASONS` (`Waiting for feedback`, `Waiting for content`, `Waiting for data`), a non-empty `dependencyOwnerId` is strictly required at schema and API levels.
+  - Immediate multi-channel alerting: In-app notification + email notification dispatched immediately to the dependency owner.
+  - Resolving blocker marks `status = 'Resolved'`, captures `resolutionNotes`, restores deliverable status to `In Progress`, and notifies deliverable owner.
+  - Interactive "Ping Dependency Owner" reminder trigger via `/api/blockers/:id/notify`.
+
+### 2. Frontend Screens Delivered
+- **Screen 8: Feedback & Revision History (`/feedback` - `FeedbackPage.tsx`)**:
+  - Live metric strip: In Feedback, Revision Flags, Escalated Flags (>48h SLA), Approved Deliverables.
+  - Master-detail split layout:
+    - Left column: Filterable list of deliverables with search, brand profile badges, revision counts, and flag indicators.
+    - Right column: Full interactive review thread displaying chronological rounds with reviewer decision cards and owner response cards.
+    - Reviewer action form for submitting round decisions (`Revision Required` vs `Approved`).
+    - Owner response form for replying to comments and submitting revised links.
+    - Flagged revision banner with "Classify Root Cause" modal.
+- **Screen 11: Issues & Blockers (`/issues` - `IssuesBlockersPage.tsx`)**:
+  - Operational console with tabs for **Active Blockers** and **Revision Flags**.
+  - KPI banner: Active Blockers, Long-Blocked (>48h SLA), Revision Flags, 48h Escalations to Marketing Head.
+  - Active Blocker Cards:
+    - Displays blocker reason, blocked duration (hours & days), context notes, and highlighted dependency owner card.
+    - Quick actions: "Ping Owner" reminder button, "Resolve & Unblock" modal.
+    - "+ Report Deliverable Blocker" modal enforcing mandatory dependency owner selection when reason requires it.
+  - Revision Flag Cards:
+    - Displays revision counts vs owner baseline, root-cause status badge, and >48h escalation badges.
+    - Inline "Classify Root Cause" modal with dropdown of the 7 fixed causes and notes.
+
+### 3. Backend & Shared Schema Delivered
+- **`@mmp/shared`**:
+  - `FEEDBACK_ROUND_STATUSES`: `['Revision Required', 'Approved']`.
+  - `feedbackEntryCreateSchema`: Validates `workItemId`, `round`, `roundStatus`, `text`, `isResponse`, `attachments`.
+  - `revisionClassifySchema`: Validates `rootCause` against the 7 fixed taxonomies.
+  - `blockerCreateSchema`: Validates `workItemId`, `reason`, `notes`, with `.refine()` enforcing mandatory `dependencyOwnerId` when reason is in `BLOCKER_DEPENDENCY_REASONS`.
+  - `blockerResolveSchema`: Validates `resolutionNotes` and `resumeStatus`.
+- **`apps/api` Modules**:
+  - `src/modules/feedback/`:
+    - `model.js`: `FeedbackEntry` and `RevisionFlag` models with indexes and `isOver48HoursUnclassified` virtual.
+    - `service.js`: `getFeedbackForWorkItem`, `createFeedbackEntry`, `checkAndCreateRevisionFlag`, `classifyRevisionFlag`, `listRevisionFlags`, `listFeedbackThreads`.
+    - `controller.js` & `routes.js`: Mounted at `/api/feedback` and `/api/revisions`.
+  - `src/modules/blockers/`:
+    - `model.js`: `Blocker` model with indexes on `workItemId` and `dependencyOwnerId`.
+    - `service.js`: `createBlocker`, `resolveBlocker`, `notifyDependencyOwner`, `listBlockers`.
+    - `controller.js` & `routes.js`: Mounted at `/api/blockers`.
+  - Mounted in `apps/api/src/server.js`.
+
+### 4. Build & Test Verification
+| Component | Command | Result | Details |
+| :--- | :--- | :--- | :--- |
+| `@mmp/shared` | `npm run build` | **PASSED** | Clean tsup build with feedback, revision flag, and blocker schemas |
+| `@mmp/api` | `npx vitest run test/feedback_and_blockers.test.js` | **PASSED** | **15/15 tests pass** (two-entry rounds, owner ownership guards, auto-flagging on 4th round, 7 root causes classification, escalation window, dependency owner mandatory validation, resolution, reminder notify) |
+| `@mmp/api` | `npm test` | **PASSED** | **112/112 tests pass** across all 10 test suites |
+| `@mmp/web` | `tsc && vite build` | **PASSED** | Clean production bundle (Screen 8 `FeedbackPage-*.js` and Screen 11 `IssuesBlockersPage-*.js` chunks generated, 0 TypeScript errors) |
+
+---
+
+### 5. Phase 6 Readiness
+With Phase 5 complete and verified:
+- Ready to proceed to **Phase 6: Global Filter Bar & Team Dashboard (Screen 2)** upon user approval.
+
+
 
 

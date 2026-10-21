@@ -14,8 +14,6 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 
 import {
   LayoutDashboard,
-  FileText,
-  AlertCircle,
   TrendingUp,
   Building2,
   BarChart3,
@@ -64,6 +62,12 @@ const TodoPrioritiesPage = React.lazy(() =>
 );
 const TeamWorkloadPage = React.lazy(() =>
   import('./pages/workload/TeamWorkloadPage').then((m) => ({ default: m.TeamWorkloadPage }))
+);
+const FeedbackPage = React.lazy(() =>
+  import('./pages/feedback/FeedbackPage').then((m) => ({ default: m.FeedbackPage }))
+);
+const IssuesBlockersPage = React.lazy(() =>
+  import('./pages/issues/IssuesBlockersPage').then((m) => ({ default: m.IssuesBlockersPage }))
 );
 
 /**
@@ -216,20 +220,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Feedback & Revision History"
-                          screenNumber="Screen 8"
-                          phase="Phase 5"
-                          route="/feedback"
-                          description="Central review hub to triage open feedback threads and resolve flagged revision patterns in one place."
-                          features={[
-                            'Two-entry round structure: Reviewer decision + Owner response',
-                            'Automatic RevisionFlag trigger on 4th round or baseline + 1',
-                            '7 fixed root causes (Brief unclear, Creative direction, Skill gap, etc.)',
-                            '48-hour unclassified escalation to Marketing Head',
-                          ]}
-                          icon={FileText}
-                        />
+                        <FeedbackPage />
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -265,20 +256,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Issues and Blockers"
-                          screenNumber="Screen 11"
-                          phase="Phase 5"
-                          route="/issues"
-                          description="Dedicated operational console for active blockers and revision flags with inline notify and classify actions."
-                          features={[
-                            'Active blockers categorized by 9 fixed blocker reasons',
-                            'Immediate notification to dependency owner for content/feedback/data',
-                            'Flagged items with inline root-cause classification modal',
-                            'Escalation badges for flags unclassified for >48 hours',
-                          ]}
-                          icon={AlertCircle}
-                        />
+                        <IssuesBlockersPage />
                       </Layout>
                     </ProtectedRoute>
                   }
