@@ -91,3 +91,33 @@ export async function getAssignmentCandidates(req, res, next) {
     next(err);
   }
 }
+
+export async function getPersonPerformance(req, res, next) {
+  try {
+    const { calculatePersonPerformance } = await import('./metrics.js');
+    const filters = {
+      month: req.query.month,
+      profileId: req.query.profileId,
+    };
+    const metrics = await calculatePersonPerformance(req.params.id, filters, req.user);
+    res.json({ data: metrics });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getTeamPerformance(req, res, next) {
+  try {
+    const { calculateTeamPerformance } = await import('./metrics.js');
+    const filters = {
+      month: req.query.month,
+      departmentId: req.query.departmentId,
+      profileId: req.query.profileId,
+    };
+    const teamMetrics = await calculateTeamPerformance(filters, req.user);
+    res.json({ data: teamMetrics });
+  } catch (err) {
+    next(err);
+  }
+}
+

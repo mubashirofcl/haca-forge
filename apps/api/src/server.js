@@ -180,6 +180,7 @@ app.use('/api/docs', docsRoutes);
 app.use('/api/targets', targetRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/work', workItemRoutes);
+app.use('/api/work-items', workItemRoutes);
 app.use('/api/my-work', (req, res, next) => {
   req.url = '/my-work' + (req.url === '/' ? '' : req.url);
   workItemRoutes(req, res, next);

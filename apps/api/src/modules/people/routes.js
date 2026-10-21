@@ -30,6 +30,8 @@ router.use(authenticate);
 // Listing & Candidate endpoints
 router.get('/', peopleController.listPeople);
 router.get('/assignment-candidates', peopleController.getAssignmentCandidates);
+router.get('/performance/team', peopleController.getTeamPerformance);
+router.get('/:id/performance', peopleController.getPersonPerformance);
 router.get('/:id', peopleController.getPersonById);
 
 // Admin-only creation

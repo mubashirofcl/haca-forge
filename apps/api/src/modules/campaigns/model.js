@@ -111,5 +111,11 @@ campaignSchema.virtual('spendActual').get(function () {
   this.spend = val;
 });
 
+campaignSchema.index({ profileId: 1, status: 1 });
+campaignSchema.index({ departmentId: 1, status: 1 });
+campaignSchema.index({ ownerId: 1, status: 1 });
+campaignSchema.index({ startDate: 1, endDate: 1 });
+
 export const Campaign =
   mongoose.models.Campaign || mongoose.model('Campaign', campaignSchema);
+

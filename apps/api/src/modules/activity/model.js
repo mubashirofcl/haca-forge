@@ -57,6 +57,8 @@ const activityEventSchema = new mongoose.Schema(
 
 activityEventSchema.index({ profileId: 1, timestamp: -1 });
 activityEventSchema.index({ entityType: 1, entityId: 1, timestamp: -1 });
+activityEventSchema.index({ actorId: 1, timestamp: -1 });
 
 export const ActivityEvent =
+
   mongoose.models.ActivityEvent || mongoose.model('ActivityEvent', activityEventSchema);
