@@ -728,9 +728,85 @@ Frontend Screen 14 (`/reports` - `ReportsPage.tsx`) provides an executive consol
 
 ---
 
-### 5. Phase 8 Readiness
-With Phase 7 complete and verified:
-- Ready to proceed to **Phase 8: LeadSquared (LSQ) Integration & Data Center (Screens 12 & 13)** upon user approval.
+### 5. Phase 8 (LeadSquared & Data Center) Status: COMPLETE
+Phase 7 transitioned seamlessly into Phase 8.
+
+---
+
+## Phase 8: LeadSquared (LSQ) Integration & Data Center (Status: COMPLETE)
+
+### 1. Executive Summary
+Phase 8 delivered complete bi-directional LeadSquared (LSQ) CRM synchronization, data integrity guards, lead funnel analytics, and data hygiene remediation:
+- **Read-Authoritative Architectural Guarantee**: LSQ is established as the authoritative source of truth. Direct mutations (POST, PUT, PATCH, DELETE) to lead records and funnel stages via the Marketing OS API are strictly blocked with `HTTP 405 READ_AUTHORITATIVE_CONSTRAINT`.
+- **Inbound Lead Auto-Task Creation**: Inbound WhatsApp leads (`WhatsApp Inbound`) automatically spawn a prioritized `WorkItem` assigned to the WhatsApp Marketer (or WhatsApp department) with an SLA turnaround deadline and activity audit event.
+- **Idempotent Sync Engine**: Idempotent synchronization keyed on `lsqLeadId` with live LSQ REST API integration and an offline deterministic fixture engine generating 12 funnel stages, 19 lead acquisition sources, and 7 brand profiles.
+- **Screen 12: Lead Funnel (`/leads`)**: Visual 12-stage pipeline conversion and drop-off analysis, executive metric strip ($CPL = \frac{\text{Spend}}{\text{Ad Leads}}$, $CPQL = \frac{\text{Spend}}{\text{Qualified Leads}}$, $\text{Qualified \%} = \frac{\text{Qualified}}{\text{Total}} \times 100$), and 19-channel source acquisition breakdown.
+- **Screen 13: Data Center (`/data-center`)**: LSQ sync health gauge (96%+ health score), orphan and unmapped source tracking, manual sync trigger modal, and discrepancy remediation console allowing the Marketing Head to assign missing brand profiles and map canonical channels.
+
+---
+
+### 2. Frontend Screens Delivered
+
+#### Screen 12: Lead Funnel (`/leads`)
+- **Executive KPI Metric Strip**:
+  - **Total Pipeline**: Total inbound leads and paid ad-generated volume.
+  - **Qualified Leads**: Actual qualified leads vs target with percentage achieved.
+  - **Cost Per Lead (CPL)**: $\frac{\text{Spend}}{\text{Ad Leads}}$ based on active MonthlyTarget budget.
+  - **Cost Per Qualified Lead (CPQL)**: $\frac{\text{Spend}}{\text{Qualified Leads}}$ efficiency index.
+  - **Pipeline Qualification Rate**: $\frac{\text{Qualified}}{\text{Total}} \times 100$ conversion rate.
+- **12-Stage Visual Funnel**:
+  - Waterfall progression for: Total Leads, Not Contacted, Not Answered, Interested, Qualified Leads, Call Back, Payment Received, Not Interested, Not a Potential, Not Answered (Multiple), Reconnected, Not Eligible.
+  - Real-time conversion drop-off indicators, stage volume counts, and milestone highlights.
+- **19-Channel Acquisition Mix**:
+  - Filterable tabs (All 19, Paid Ads 4, WhatsApp Inbound, Organic/Referral).
+  - Searchable data table with channel classification, lead volume, pipeline share %, qualified count, and qualification rate %.
+- **Recent Synced Leads**:
+  - Direct feed of synced leads showing LSQ ID, contact details, brand profile, stage, score, and sync timestamp.
+
+#### Screen 13: Data Center & LSQ Sync Hygiene (`/data-center`)
+- **Sync Health Score Gauge**: Dynamic health index measuring clean vs discrepancy ratio.
+- **Read-Authoritative Guard Banner**: Explicit documentation of the CRM single source of truth and HTTP 405 constraint enforcement.
+- **Sync Trigger Console**: On-demand sync modal with customizable batch sizes and test discrepancy simulation.
+- **Discrepancy Remediation Console**:
+  - Filter tabs for Missing Brand Profile, Unmapped Lead Source, and All Discrepancies.
+  - Actionable resolution modal allowing Marketing Head/Admin to map unrouted leads to one of 7 brand profiles and one of 19 canonical lead sources (`PATCH /api/datacenter/discrepancies/:id/resolve`).
+
+---
+
+### 3. Backend, Shared Schemas & Tests Delivered
+- **`@mmp/shared`**:
+  - `PAID_AD_LEAD_SOURCES`: `['Facebook Lead Ads', 'Google Ads', 'Online Campaigns (SMM)', 'Meta Re-Engaged Leads']`.
+  - `leadDiscrepancyResolveSchema` and `lsqSyncTriggerSchema`.
+- **`apps/api/src/modules/leads/`**:
+  - `model.js`: `Lead` Mongoose schema with `lsqLeadId`, `profileId`, `leadSource`, `stage`, `score`, `ownerEmail`, `syncStatus`, `discrepancyReason`, compound indexes.
+  - `lsqAdapter.js`: LSQ REST API adapter with deterministic fixture engine for offline testing.
+  - `service.js`: `syncLsqLeads`, `createWhatsAppInboundTask`, `getLeadFunnelMetrics`, `getDataCenterStatus`, `resolveDiscrepancy`.
+  - `controller.js` & `rejectLeadModificationHandler`: 405 handlers enforcing read-authoritative rules.
+  - `routes.js` & `datacenter.routes.js`: Mounted at `/api/leads` and `/api/datacenter`.
+- **`apps/api/test/leads_and_datacenter.test.js`**:
+  - 9 comprehensive integration tests verifying:
+    1. LSQ idempotent sync and auto-task generation for WhatsApp Inbound leads.
+    2. Read-authoritative constraint returning HTTP 405 `READ_AUTHORITATIVE_CONSTRAINT` on POST, PUT, PATCH, DELETE.
+    3. Lead funnel analytics with 12 stages, 19-source mix, and CPL/CPQL math.
+    4. Data Center sync health score calculation, discrepancy listing, and remediation.
+    5. On-demand manual sync trigger.
+
+---
+
+### 4. Build & Test Verification
+| Component | Command | Result | Details |
+| :--- | :--- | :--- | :--- |
+| `@mmp/shared` | `npm run build` | **PASSED** | Clean tsup build with Phase 8 lead schemas |
+| `@mmp/api` | `npx vitest run test/leads_and_datacenter.test.js` | **PASSED** | **9/9 tests pass** (idempotency, WhatsApp task, 405 guards, funnel, discrepancy resolution) |
+| `@mmp/api` | `npm test` | **PASSED** | **137/137 tests pass** across all 13 test suites |
+| `@mmp/web` | `tsc && vite build` | **PASSED** | Clean production bundle (`LeadFunnelPage-*.js`, `DataCenterPage-*.js` chunks, 0 TS errors) |
+
+---
+
+### 5. Phase 9 Readiness
+With Phase 8 complete and verified:
+- Ready to proceed to **Phase 9: Performance Dimensions, Hardening & QA** upon user approval.
+
 
 
 

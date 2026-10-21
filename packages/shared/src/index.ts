@@ -660,4 +660,28 @@ export const reportGenerateSchema = z.object({
 });
 export type ReportGenerateInput = z.infer<typeof reportGenerateSchema>;
 
+// ==========================================
+// Phase 8: LeadSquared (LSQ) Integration & Data Center
+// ==========================================
+
+export const PAID_AD_LEAD_SOURCES = [
+  'Facebook Lead Ads',
+  'Google Ads',
+  'Online Campaigns (SMM)',
+  'Meta Re-Engaged Leads',
+] as const;
+
+export const leadDiscrepancyResolveSchema = z.object({
+  profileId: z.string().optional(),
+  leadSource: z.enum(LEAD_SOURCES).optional(),
+});
+export type LeadDiscrepancyResolveInput = z.infer<typeof leadDiscrepancyResolveSchema>;
+
+export const lsqSyncTriggerSchema = z.object({
+  batchSize: z.number().int().min(1).max(500).default(50),
+  simulateDiscrepancies: z.boolean().default(false),
+});
+export type LsqSyncTriggerInput = z.infer<typeof lsqSyncTriggerSchema>;
+
+
 

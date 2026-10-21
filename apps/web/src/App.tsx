@@ -11,12 +11,6 @@ import { PageSkeleton } from './components/Skeleton';
 import { LoginPage } from './pages/LoginPage';
 import { SetPasswordPage } from './pages/SetPasswordPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
-
-import {
-  TrendingUp,
-  Building2,
-} from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,6 +67,12 @@ const IssuesBlockersPage = React.lazy(() =>
 );
 const ReportsPage = React.lazy(() =>
   import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
+);
+const LeadFunnelPage = React.lazy(() =>
+  import('./pages/leads/LeadFunnelPage').then((m) => ({ default: m.LeadFunnelPage }))
+);
+const DataCenterPage = React.lazy(() =>
+  import('./pages/datacenter/DataCenterPage').then((m) => ({ default: m.DataCenterPage }))
 );
 
 /**
@@ -257,20 +257,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Lead Funnel"
-                          screenNumber="Screen 12"
-                          phase="Phase 8"
-                          route="/leads"
-                          description="12-stage LeadSquared funnel analytics, CPL and CPQL calculations, and source mix across 19 lead sources."
-                          features={[
-                            '12-stage funnel from Total Leads to Payment Received',
-                            'Target vs actual qualified leads comparison',
-                            'Cost per Lead (CPL) and Cost per Qualified Lead (CPQL)',
-                            'Lead source distribution across all 19 defined sources',
-                          ]}
-                          icon={TrendingUp}
-                        />
+                        <LeadFunnelPage />
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -282,20 +269,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Data Center / LSQ"
-                          screenNumber="Screen 13"
-                          phase="Phase 8"
-                          route="/data-center"
-                          description="LeadSquared sync health score, unassigned lead monitoring, and sync issue resolution console."
-                          features={[
-                            'LSQ integration health score & live sync status',
-                            'Unassigned lead source monitoring and manual routing',
-                            'Resolvable discrepancy and sync error list',
-                            'Read-authoritative data integrity guarantees',
-                          ]}
-                          icon={Building2}
-                        />
+                        <DataCenterPage />
                       </Layout>
                     </ProtectedRoute>
                   }

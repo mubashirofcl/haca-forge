@@ -38,6 +38,8 @@ import * as assignmentController from './modules/assignment/controller.js';
 import { feedbackRouter, revisionsRouter } from './modules/feedback/routes.js';
 import blockerRoutes from './modules/blockers/routes.js';
 import automationRoutes from './modules/automation/routes.js';
+import leadRoutes from './modules/leads/routes.js';
+import datacenterRoutes from './modules/leads/datacenter.routes.js';
 import { ensureAutomationRules } from './modules/automation/runner.js';
 import { ensureReportDefinitions } from './modules/reports/service.js';
 import { authenticate } from './middleware/auth.js';
@@ -193,6 +195,8 @@ app.use('/api/revisions', revisionsRouter);
 app.use('/api/blockers', blockerRoutes);
 app.use('/api/automation/rules', automationRoutes);
 app.use('/api/automation', automationRoutes);
+app.use('/api/leads', leadRoutes);
+app.use('/api/datacenter', datacenterRoutes);
 
 app.set('io', io);
 
