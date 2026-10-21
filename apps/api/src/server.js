@@ -37,6 +37,9 @@ import assignmentRoutes from './modules/assignment/routes.js';
 import * as assignmentController from './modules/assignment/controller.js';
 import { feedbackRouter, revisionsRouter } from './modules/feedback/routes.js';
 import blockerRoutes from './modules/blockers/routes.js';
+import automationRoutes from './modules/automation/routes.js';
+import { ensureAutomationRules } from './modules/automation/runner.js';
+import { ensureReportDefinitions } from './modules/reports/service.js';
 import { authenticate } from './middleware/auth.js';
 import { initQueues } from './lib/queue.js';
 import { initDomainEventListeners } from './modules/notifications/service.js';
@@ -188,6 +191,8 @@ app.use('/api/workload', authenticate, assignmentController.getTeamWorkload);
 app.use('/api/feedback', feedbackRouter);
 app.use('/api/revisions', revisionsRouter);
 app.use('/api/blockers', blockerRoutes);
+app.use('/api/automation/rules', automationRoutes);
+app.use('/api/automation', automationRoutes);
 
 app.set('io', io);
 
@@ -209,6 +214,8 @@ app.use(errorHandler);
 export async function startServer() {
   await connectDB();
   await initQueues();
+  await ensureAutomationRules();
+  await ensureReportDefinitions();
   initDomainEventListeners(io);
 
   return new Promise((resolve) => {

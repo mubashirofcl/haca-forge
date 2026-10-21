@@ -16,7 +16,6 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 import {
   TrendingUp,
   Building2,
-  BarChart3,
 } from 'lucide-react';
 
 const queryClient = new QueryClient({
@@ -71,6 +70,9 @@ const FeedbackPage = React.lazy(() =>
 );
 const IssuesBlockersPage = React.lazy(() =>
   import('./pages/issues/IssuesBlockersPage').then((m) => ({ default: m.IssuesBlockersPage }))
+);
+const ReportsPage = React.lazy(() =>
+  import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
 
 /**
@@ -305,20 +307,7 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <PlaceholderPage
-                          title="Reports and Automation"
-                          screenNumber="Screen 14"
-                          phase="Phase 7"
-                          route="/reports"
-                          description="6 Marketing OS Report Definitions with on-demand generation, plus 7 configurable Automation Rules."
-                          features={[
-                            '6 Report Definitions (Weekly Marketing, Monthly Scorecard, Output, Funnel, Digest, Campaign)',
-                            'On-demand "Generate Now" HTML email & interactive in-app view',
-                            '7 Automation Rules with active/paused toggle and last-run logging',
-                            'Repeatable BullMQ schedule runner with idempotency checks',
-                          ]}
-                          icon={BarChart3}
-                        />
+                        <ReportsPage />
                       </Layout>
                     </ProtectedRoute>
                   }

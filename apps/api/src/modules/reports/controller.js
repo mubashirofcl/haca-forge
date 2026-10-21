@@ -1,20 +1,84 @@
 import {
-  getDepartmentReport,
-  getTeamReport,
-  getIndividualReport,
-  getContentReport,
-  getBottlenecksReport,
-  getScorecardReport,
+  listReportDefinitions,
+  getReportDefinition,
+  generateReport,
   generateReportExport,
   createScheduledReport,
   getScheduledReports,
   deleteScheduledReport,
 } from './service.js';
-import { getDashboardSummaryByRole, getDashboardOverview } from './dashboard.service.js';
+import { getDashboardOverview } from './dashboard.service.js';
+import { reportGenerateSchema } from '@mmp/shared';
+
+// -------------------------------------------------------------------
+// Phase 7: 6 Marketing OS Report Definitions Endpoints
+// -------------------------------------------------------------------
+
+export async function listReportDefinitionsHandler(req, res, next) {
+  try {
+    const definitions = await listReportDefinitions();
+    return res.status(200).json({ definitions });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getReportDefinitionHandler(req, res, next) {
+  try {
+    const definition = await getReportDefinition(req.params.key);
+    if (!definition) {
+      return res.status(404).json({ error: { message: 'Report definition not found' } });
+    }
+    return res.status(200).json({ definition });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function generateReportHandler(req, res, next) {
+  try {
+    const parsed = reportGenerateSchema.safeParse(req.body || {});
+    const input = parsed.success ? parsed.data : {};
+
+    const reportKey = req.params.key;
+    const filters = {};
+    const month = input.month || req.query.month;
+    if (month && month !== 'all') filters.month = month;
+    const profileId = input.profileId || req.query.profileId;
+    if (profileId && profileId !== 'all') filters.profileId = profileId;
+    const departmentId = input.departmentId || req.query.departmentId;
+    if (departmentId && departmentId !== 'all') filters.departmentId = departmentId;
+    const campaignId = input.campaignId || req.query.campaignId;
+    if (campaignId && campaignId !== 'all') filters.campaignId = campaignId;
+
+    const report = await generateReport(reportKey, filters, req.user, {
+      sendEmail: input.sendEmail,
+      recipients: req.body?.recipients,
+    });
+
+    return res.status(200).json({ success: true, report });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function viewReportHandler(req, res, next) {
+  try {
+    const reportKey = req.params.key;
+    const report = await generateReport(reportKey, req.query, req.user);
+    return res.status(200).json({ success: true, report });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// -------------------------------------------------------------------
+// Legacy / Shared Handlers
+// -------------------------------------------------------------------
 
 export async function getDepartmentReportHandler(req, res, next) {
   try {
-    const report = await getDepartmentReport(req.query, req.user);
+    const report = await generateReport('creative_production', req.query, req.user);
     return res.status(200).json({ success: true, data: report });
   } catch (err) {
     next(err);
@@ -23,7 +87,7 @@ export async function getDepartmentReportHandler(req, res, next) {
 
 export async function getTeamReportHandler(req, res, next) {
   try {
-    const report = await getTeamReport(req.query, req.user);
+    const report = await generateReport('team_performance', req.query, req.user);
     return res.status(200).json({ success: true, data: report });
   } catch (err) {
     next(err);
@@ -32,8 +96,7 @@ export async function getTeamReportHandler(req, res, next) {
 
 export async function getIndividualReportHandler(req, res, next) {
   try {
-    const targetUserId = req.params.userId || req.user.userId;
-    const report = await getIndividualReport(targetUserId, req.query, req.user);
+    const report = await generateReport('team_performance', req.query, req.user);
     return res.status(200).json({ success: true, data: report });
   } catch (err) {
     next(err);
@@ -42,7 +105,7 @@ export async function getIndividualReportHandler(req, res, next) {
 
 export async function getContentReportHandler(req, res, next) {
   try {
-    const report = await getContentReport(req.query, req.user);
+    const report = await generateReport('creative_production', req.query, req.user);
     return res.status(200).json({ success: true, data: report });
   } catch (err) {
     next(err);
@@ -51,7 +114,7 @@ export async function getContentReportHandler(req, res, next) {
 
 export async function getBottlenecksReportHandler(req, res, next) {
   try {
-    const report = await getBottlenecksReport(req.query, req.user);
+    const report = await generateReport('weekly_marketing', req.query, req.user);
     return res.status(200).json({ success: true, data: report });
   } catch (err) {
     next(err);
@@ -60,7 +123,7 @@ export async function getBottlenecksReportHandler(req, res, next) {
 
 export async function getScorecardReportHandler(req, res, next) {
   try {
-    const report = await getScorecardReport(req.query, req.user);
+    const report = await generateReport('monthly_scorecard', req.query, req.user);
     return res.status(200).json({ success: true, data: report });
   } catch (err) {
     next(err);
@@ -69,39 +132,18 @@ export async function getScorecardReportHandler(req, res, next) {
 
 export async function exportReportHandler(req, res, next) {
   try {
-    const reportType = req.query.report || 'scorecard';
-    const format = (req.query.format || 'xlsx').toLowerCase();
-    const { workbook, filename, data } = await generateReportExport({
-      reportType,
-      format,
-      filters: req.query,
-      user: req.user,
+    const reportKey = req.query.report || 'weekly_marketing';
+    const report = await generateReport(reportKey, req.query, req.user);
+
+    if (req.query.format === 'html') {
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(report.html);
+    }
+
+    return res.status(200).json({
+      success: true,
+      report,
     });
-
-    if (format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
-      return await workbook.csv.write(res);
-    }
-
-    if (format === 'pdf') {
-      // PDF summary export: returns clean JSON/HTML payload or stream
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(200).json({
-        success: true,
-        filename: `${filename}.pdf`,
-        summary: data,
-        note: 'Formatted PDF printable document data ready for print rendering',
-      });
-    }
-
-    // Default: XLSX
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    );
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
-    return await workbook.xlsx.write(res);
   } catch (err) {
     next(err);
   }

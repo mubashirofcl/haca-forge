@@ -2,6 +2,10 @@ import express from 'express';
 import { authenticate } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/requirePermission.js';
 import {
+  listReportDefinitionsHandler,
+  getReportDefinitionHandler,
+  generateReportHandler,
+  viewReportHandler,
   getDepartmentReportHandler,
   getTeamReportHandler,
   getIndividualReportHandler,
@@ -20,29 +24,27 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requirePermission('report.view'));
 
-// 1. Department Performance & Turnaround Report
+// -------------------------------------------------------------
+// Phase 7: 6 Marketing OS Report Definitions Endpoints
+// -------------------------------------------------------------
+router.get('/definitions', listReportDefinitionsHandler);
+router.get('/definitions/:key', getReportDefinitionHandler);
+router.post('/definitions/:key/generate', generateReportHandler);
+router.post('/:key/generate', generateReportHandler);
+router.get('/view/:key', viewReportHandler);
+
+// -------------------------------------------------------------
+// Legacy & Export Routes
+// -------------------------------------------------------------
 router.get('/department', getDepartmentReportHandler);
-
-// 2. Production Team Throughput & Velocity Report
 router.get('/team', getTeamReportHandler);
-
-// 3. Individual Worker Performance & Efficiency Report
 router.get('/individual', getIndividualReportHandler);
 router.get('/individual/:userId', getIndividualReportHandler);
-
-// 4. Content Output & Pipeline Report
 router.get('/content', getContentReportHandler);
-
-// 5. Bottlenecks, Delays & Hold Reason Radar
 router.get('/bottlenecks', getBottlenecksReportHandler);
-
-// 6. Management Monthly Scorecard & Demand Forecast
 router.get('/scorecard', getScorecardReportHandler);
-
-// 7. Streaming Exports (XLSX, CSV, PDF)
 router.get('/export', exportReportHandler);
 
-// 8. Scheduled Email Reports
 router.get('/scheduled', getScheduledReportsHandler);
 router.post('/scheduled', createScheduledReportHandler);
 router.delete('/scheduled/:id', deleteScheduledReportHandler);

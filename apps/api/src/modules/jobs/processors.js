@@ -1,29 +1,54 @@
 import { logger } from '../../lib/logger.js';
+import { executeAutomationRule } from '../automation/runner.js';
 
 /**
  * BullMQ Job Processors for HACA Marketing OS
- * 
- * Retired FORGE background jobs (deadline reminders, daily digests, recurring requests,
- * capacity gap checks) have been removed.
- * Marketing OS Automation Rules will be registered here in Phase 7.
+ * Executes Phase 7 Automation Rules and Report Generators with idempotency.
  */
 
-export async function runDeadlineRemindersJob() {
-  logger.info('[BullMQ] Deadline reminders placeholder (Marketing OS Phase 7)');
-  return { processed: 0 };
+export async function runOverdueEscalationJob(job) {
+  logger.info({ jobId: job?.id }, '[BullMQ] Running Overdue Escalation Automation Rule');
+  return executeAutomationRule('overdue_escalation', null);
 }
 
-export async function runDailyDigestJob() {
-  logger.info('[BullMQ] Daily digest placeholder (Marketing OS Phase 7)');
-  return { processed: 0 };
+export async function runTodoEscalationJob(job) {
+  logger.info({ jobId: job?.id }, '[BullMQ] Running Stale Todo Escalation Automation Rule');
+  return executeAutomationRule('todo_escalation', null);
 }
 
-export async function runRecurringRequestsJob() {
-  logger.info('[BullMQ] Recurring requests placeholder (Marketing OS Phase 7)');
-  return { processed: 0 };
+export async function runBlockerAlertsJob(job) {
+  logger.info({ jobId: job?.id }, '[BullMQ] Running Blocker Dependency Alerts Automation Rule');
+  return executeAutomationRule('blocker_dependency_alert', null);
 }
 
-export async function runCapacityGapJob() {
-  logger.info('[BullMQ] Capacity gap check placeholder (Marketing OS Phase 7)');
-  return { processed: 0 };
+export async function runWeeklyReportJob(job) {
+  logger.info({ jobId: job?.id }, '[BullMQ] Running Weekly Marketing Report Automation Rule');
+  return executeAutomationRule('weekly_report', null);
+}
+
+export async function runMonthEndReportJob(job) {
+  logger.info({ jobId: job?.id }, '[BullMQ] Running Month-End Scorecard Automation Rule');
+  return executeAutomationRule('month_end_report', null);
+}
+
+export async function runLsqSyncJob(job) {
+  logger.info({ jobId: job?.id }, '[BullMQ] Running LeadSquared Live Sync Automation Rule');
+  return executeAutomationRule('lsq_live_sync', null);
+}
+
+// Backward compatibility stubs for legacy queue registrations
+export async function runDeadlineRemindersJob(job) {
+  return runOverdueEscalationJob(job);
+}
+
+export async function runDailyDigestJob(job) {
+  return runTodoEscalationJob(job);
+}
+
+export async function runRecurringRequestsJob(job) {
+  return { processed: 0, status: 'retired' };
+}
+
+export async function runCapacityGapJob(job) {
+  return { processed: 0, status: 'retired' };
 }

@@ -1,4 +1,71 @@
 import mongoose from 'mongoose';
+import { REPORT_KEYS, REPORT_CADENCES } from '@mmp/shared';
+
+const reportDefinitionSchema = new mongoose.Schema(
+  {
+    reportKey: {
+      type: String,
+      required: true,
+      unique: true,
+      enum: REPORT_KEYS,
+      index: true,
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    description: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    cadence: {
+      type: String,
+      enum: REPORT_CADENCES,
+      default: 'Weekly',
+      required: true,
+    },
+    scheduleCron: {
+      type: String,
+      default: null,
+    },
+    scheduleDisplay: {
+      type: String,
+      required: true,
+    },
+    recipients: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+    scope: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    lastGeneratedAt: {
+      type: Date,
+      default: null,
+    },
+    lastGeneratedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    lastGeneratedSummary: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    templateConfig: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+  },
+  { timestamps: true }
+);
+
+export const ReportDefinition = mongoose.model('ReportDefinition', reportDefinitionSchema);
 
 const scheduledReportSchema = new mongoose.Schema(
   {

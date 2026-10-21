@@ -612,4 +612,52 @@ export const blockerResolveSchema = z.object({
 });
 export type BlockerResolveInput = z.infer<typeof blockerResolveSchema>;
 
+// ==========================================
+// Phase 7: Automation Rules & Report Definitions
+// ==========================================
+
+export const AUTOMATION_RULE_KEYS = [
+  'month_end_report',
+  'overdue_escalation',
+  'todo_escalation',
+  'blocker_dependency_alert',
+  'revision_pattern_flag',
+  'lsq_live_sync',
+  'weekly_report',
+] as const;
+export type AutomationRuleKey = (typeof AUTOMATION_RULE_KEYS)[number];
+
+export const automationRuleToggleSchema = z.object({
+  active: z.boolean(),
+});
+export type AutomationRuleToggleInput = z.infer<typeof automationRuleToggleSchema>;
+
+export const automationRuleRunSchema = z.object({
+  force: z.boolean().default(false),
+  dryRun: z.boolean().default(false),
+});
+export type AutomationRuleRunInput = z.infer<typeof automationRuleRunSchema>;
+
+export const REPORT_KEYS = [
+  'weekly_marketing',
+  'monthly_scorecard',
+  'creative_production',
+  'lead_funnel_cpl',
+  'team_performance',
+  'campaign_deepdive',
+] as const;
+export type ReportKey = (typeof REPORT_KEYS)[number];
+
+export const REPORT_CADENCES = ['Weekly', 'Monthly', 'On Demand'] as const;
+export type ReportCadence = (typeof REPORT_CADENCES)[number];
+
+export const reportGenerateSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  profileId: z.string().optional(),
+  departmentId: z.string().optional(),
+  campaignId: z.string().optional(),
+  sendEmail: z.boolean().default(false),
+});
+export type ReportGenerateInput = z.infer<typeof reportGenerateSchema>;
+
 

@@ -653,7 +653,85 @@ All data aggregations are strictly scoped via `resolveScope(user, filters)`, pre
 
 ### 5. Phase 7 Readiness
 With Phase 6 complete and verified:
-- Ready to proceed to **Phase 7: Automation Rules, Reports & Notifications (Screen 14)** upon user approval.
+- Proceeded to **Phase 7: Automation Rules, Reports & Notifications (Screen 14)**.
+
+---
+
+## Phase 7: Automation Rules, Reports & Notifications (Status: COMPLETE)
+
+### 1. Executive Summary
+Phase 7 delivered the centralized automation and intelligence core of HACA Marketing OS. The platform now features the **7 standard Automation Rules** (managing month-end scorecard runs, overdue deliverable escalations, stagnant task warnings, cross-functional blocker alerts, revision pattern detection, LeadSquared live sync, and weekly marketing digests) with built-in execution idempotency, and the **6 Marketing OS Report Definitions** with on-demand HTML email generation and live interactive reporting.
+
+Frontend Screen 14 (`/reports` - `ReportsPage.tsx`) provides an executive console with tabs for Report Definitions, Automation Rules, and a Live Interactive Viewer with responsive glass aesthetics.
+
+---
+
+### 2. Frontend Screens & Components Delivered
+- **Screen 14: Reports and Automation (`/reports` - `ReportsPage.tsx`)**:
+  - **Tab 1: Report Definitions (6 Reports)**:
+    - Rich cards for Weekly Marketing, Monthly Performance Scorecard, Creative Production, Lead Funnel & CPL, Team Performance Digest, and Campaign Deep-Dive.
+    - Cadence badges (`Weekly`, `Monthly`, `On Demand`), schedule details, and recipient tags.
+    - Interactive "Generate Now" button triggering instant execution with live spinner and embedded HTML preview modal.
+    - Quick "Copy HTML" and "View Live" buttons.
+  - **Tab 2: Automation Rules (7 Rules)**:
+    - Interactive rule management console for the 7 standard rules.
+    - Active/Paused animated toggle switch (persisting state to backend).
+    - Trigger pills (`cron`, `scheduled`, `event`) and schedule descriptions.
+    - Last-run status indicators (`SUCCESS`, `RUNNING`, `FAILED`, `IDLE`) with execution summaries and timestamps.
+    - "Run Now" on-demand trigger button with immediate toast feedback.
+    - "View Config & Logs" modal showing complete execution payloads and JSON configurations.
+  - **Tab 3: Live Interactive Viewer**:
+    - Report selector dropdown with dynamic scoped data rendering.
+    - Summary KPI metric card strip.
+    - Dynamic data tables with styled headers, zebra striping, and cell formatting.
+    - "Copy HTML" and "Reload" controls.
+
+---
+
+### 3. Backend, Shared Schemas & Jobs Delivered
+- **`@mmp/shared`**:
+  - `AUTOMATION_RULE_KEYS`: `['month_end_report', 'overdue_escalation', 'todo_escalation', 'blocker_dependency_alert', 'revision_pattern_flag', 'lsq_live_sync', 'weekly_report']`.
+  - `REPORT_KEYS`: `['weekly_marketing', 'monthly_scorecard', 'creative_production', 'lead_funnel_cpl', 'team_performance', 'campaign_deepdive']`.
+  - `REPORT_CADENCES`: `['Weekly', 'Monthly', 'On Demand']`.
+  - `automationRuleToggleSchema`, `automationRuleRunSchema`, `reportGenerateSchema`.
+- **`apps/api/src/modules/automation/`**:
+  - `model.js`: `AutomationRule` Mongoose model.
+  - `runner.js`: Execution runner implementing logic for all 7 rules with notification deduplication and SLA escalation (immediate owner ping, 4h department lead escalation).
+  - `service.js`: Rule querying, toggle management, and on-demand trigger dispatcher.
+  - `controller.js` & `routes.js`: Mounted at `/api/automation/rules` and `/api/automation`.
+- **`apps/api/src/modules/reports/`**:
+  - `model.js`: `ReportDefinition` Mongoose model.
+  - `service.js`: Report generation engines for all 6 reports under `resolveScope(user, filters)` and branded HTML email generator.
+  - `controller.js` & `routes.js`: Mounted at `/api/reports/definitions`, `/api/reports/definitions/:key/generate`, `/api/reports/view/:key`, `/api/reports/export`.
+- **`apps/api/src/modules/jobs/processors.js`**:
+  - Wired BullMQ queue job handlers (`runOverdueEscalationJob`, `runTodoEscalationJob`, `runBlockerAlertsJob`, `runWeeklyReportJob`, `runMonthEndReportJob`, `runLsqSyncJob`) to the automation engine.
+- **`apps/api/test/automation_and_reports.test.js`**:
+  - 13 comprehensive integration tests asserting:
+    1. Retrieval and validation of the 7 standard automation rules.
+    2. Active/paused toggling.
+    3. Overdue deliverable notification dispatch (owner ping + 4h lead escalation).
+    4. Stale task identification and alerting.
+    5. Blocker dependency cross-team alerts.
+    6. Retrieval and validation of the 6 standard report definitions.
+    7. On-demand generation of all 6 reports with HTML rendering and data accuracy.
+    8. Idempotency guarantees preventing duplicate notification spam on reruns.
+
+---
+
+### 4. Build & Test Verification
+| Component | Command | Result | Details |
+| :--- | :--- | :--- | :--- |
+| `@mmp/shared` | `npm run build` | **PASSED** | Clean tsup build with Phase 7 automation and report schemas |
+| `@mmp/api` | `npx vitest run test/automation_and_reports.test.js` | **PASSED** | **13/13 tests pass** (7 automation rules, 6 report definitions, idempotency) |
+| `@mmp/api` | `npm test` | **PASSED** | **128/128 tests pass** across all 12 test suites |
+| `@mmp/web` | `tsc && vite build` | **PASSED** | Clean production bundle (Screen 14 `ReportsPage-*.js` chunk generated, 0 TypeScript errors) |
+
+---
+
+### 5. Phase 8 Readiness
+With Phase 7 complete and verified:
+- Ready to proceed to **Phase 8: LeadSquared (LSQ) Integration & Data Center (Screens 12 & 13)** upon user approval.
+
 
 
 
