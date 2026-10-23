@@ -74,6 +74,9 @@ const LeadFunnelPage = React.lazy(() =>
 const DataCenterPage = React.lazy(() =>
   import('./pages/datacenter/DataCenterPage').then((m) => ({ default: m.DataCenterPage }))
 );
+const MyAccountPage = React.lazy(() =>
+  import('./pages/MyAccountPage').then((m) => ({ default: m.MyAccountPage }))
+);
 
 /**
  * RootRedirect: Directs all authenticated users to /dashboard for Phase 0.
@@ -318,6 +321,28 @@ export const App: React.FC = () => {
                     <ProtectedRoute requiredPermission="user.approve">
                       <Layout>
                         <AccessRequestsPage />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* My Account & Work Preferences Enabler */}
+                <Route
+                  path="/account"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <MyAccountPage />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my-account"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <MyAccountPage />
                       </Layout>
                     </ProtectedRoute>
                   }

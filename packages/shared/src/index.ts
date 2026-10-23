@@ -7,6 +7,7 @@ import { z } from 'zod';
 export const ROLE_KEYS = [
   'admin',
   'marketing_head',
+  'executive',
   'team_lead',
   'team_member',
 ] as const;
@@ -18,10 +19,10 @@ export const LEGACY_ROLE_ALIASES = {
   head: 'marketing_head',
   worker: 'team_member',
   sm_manager: 'team_member',
-  management: 'team_member',
+  management: 'executive',
   dept_lead: 'team_member',
   dept_staff: 'team_member',
-  viewer: 'team_member',
+  viewer: 'executive',
 } as const;
 
 export type LegacyRoleAlias = keyof typeof LEGACY_ROLE_ALIASES;
@@ -34,8 +35,10 @@ export function normalizeRole(role: string | null | undefined): UserRole | strin
   return role;
 }
 
-// 20 Canonical Permission Keys (Spec Section 13.1)
+// Canonical Permission Keys (Spec Section 13.1 + Executive Read View)
 export const PERMISSION_KEYS = [
+  'portal.view',
+  'people.view',
   'work.create',
   'work.request',
   'work.update.own',
@@ -65,6 +68,8 @@ export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
   admin: [...PERMISSION_KEYS],
   marketing_head: [
+    'portal.view',
+    'people.view',
     'work.create',
     'work.request',
     'work.update.own',
@@ -82,6 +87,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'report.configure',
     'automation.manage',
     'people.assign',
+  ],
+  executive: [
+    'portal.view',
+    'people.view',
+    'target.view',
+    'lead.view',
+    'datacenter.view',
+    'analytics.team',
+    'report.view',
   ],
   team_lead: [
     'work.create',
@@ -156,6 +170,20 @@ export const JOB_ROLES = [
 ] as const;
 export type JobRole = (typeof JOB_ROLES)[number];
 
+// Phase 5b Content Flow Approvers & Stage Work Preferences
+export const APPROVER_JOB_ROLES = ['Creative Manager (TL)'] as const;
+export type ApproverJobRole = (typeof APPROVER_JOB_ROLES)[number];
+
+export const WORK_PREFERENCES = [
+  'Content',
+  'Script',
+  'Design',
+  'Shoot',
+  'Edit',
+  'Post',
+] as const;
+export type WorkPreference = (typeof WORK_PREFERENCES)[number];
+
 export const PROGRAMS = [
   'AI Integrated Graphic Design',
   'UI/UX Design + AI',
@@ -180,8 +208,38 @@ export const WORK_TYPES = [
   'Copy',
   'Video Ad',
   'Internal Report',
+  // 14 SM Content Flow Design Requirement Types (docs/CONTENT_FLOW.md §1 & §3.3)
+  'Static Post',
+  'Carousel Post',
+  'Story',
+  'Cover Image',
+  'Thumbnail',
+  'Meta Ad Creative',
+  'Class Announcement',
+  'Orientation Creative',
+  'Graduation Creative',
+  'Brochure',
+  'Certificate',
+  'Offer Creative',
+  'Custom Request',
+  'Placement Poster',
+  // Alias for Static Post
+  'Poster',
 ] as const;
 export type WorkType = (typeof WORK_TYPES)[number];
+
+export const WORK_TYPE_ALIASES: Record<string, WorkType> = {
+  Poster: 'Static Post',
+  poster: 'Static Post',
+};
+
+export function normalizeWorkType(type: string | null | undefined): string {
+  if (!type) return '';
+  if (type in WORK_TYPE_ALIASES) {
+    return WORK_TYPE_ALIASES[type];
+  }
+  return type;
+}
 
 export const WORK_TYPE_DEPARTMENT_MAP: Record<WorkType, DepartmentCode> = {
   Reel: 'video_production',
@@ -198,6 +256,22 @@ export const WORK_TYPE_DEPARTMENT_MAP: Record<WorkType, DepartmentCode> = {
   'WhatsApp Blast': 'whatsapp',
   'Ad Set': 'performance_marketing',
   'Internal Report': 'performance_marketing',
+  // 14 Design Requirement Types map to Design department
+  'Static Post': 'design',
+  'Carousel Post': 'design',
+  Story: 'design',
+  'Cover Image': 'design',
+  Thumbnail: 'design',
+  'Meta Ad Creative': 'design',
+  'Class Announcement': 'design',
+  'Orientation Creative': 'design',
+  'Graduation Creative': 'design',
+  Brochure: 'design',
+  Certificate: 'design',
+  'Offer Creative': 'design',
+  'Custom Request': 'design',
+  'Placement Poster': 'design',
+  Poster: 'design',
 };
 
 export const PRIORITIES = ['High', 'Medium', 'Low'] as const;
@@ -428,6 +502,7 @@ export const personCreateSchema = z.object({
   reportsToIds: z.array(z.string()).default([]),
   weeklyCapacityHours: z.number().min(0).max(80).default(40),
   password: z.string().min(8).optional(),
+  workPreferences: z.array(z.enum(WORK_PREFERENCES)).default([]),
 });
 export type PersonCreateInput = z.infer<typeof personCreateSchema>;
 
@@ -438,6 +513,7 @@ export const personOperationalUpdateSchema = z.object({
   reportsToIds: z.array(z.string()).optional(),
   weeklyCapacityHours: z.number().min(0).max(80).optional(),
   lastProfileId: z.string().optional().nullable(),
+  workPreferences: z.array(z.enum(WORK_PREFERENCES)).optional(),
 });
 export type PersonOperationalUpdateInput = z.infer<typeof personOperationalUpdateSchema>;
 
@@ -498,6 +574,13 @@ export const campaignUpdateSchema = campaignSchema.partial();
 export type CampaignUpdateInput = z.infer<typeof campaignUpdateSchema>;
 
 // Phase 3: Work Items Schemas
+export const briefSchema = z.object({
+  description: z.string().optional().default(''),
+  contentLink: z.string().optional().default(''),
+  assetsLink: z.string().optional().default(''),
+});
+export type BriefInput = z.infer<typeof briefSchema>;
+
 export const workItemCreateSchema = z.object({
   campaignId: z.string().min(1, 'Campaign linkage is strictly required'),
   title: z.string().trim().min(2, 'Work item title is required'),
@@ -516,6 +599,16 @@ export const workItemCreateSchema = z.object({
   profileId: z.string().optional(),
   relatedOKR: z.string().optional(),
   relatedTarget: z.string().optional(),
+  // Content Flow stage fields (Phase 3 delta)
+  contentPieceId: z.string().optional().nullable(),
+  stageKey: z.string().optional().nullable(),
+  stageOrder: z.number().int().min(1).optional().nullable(),
+  reviewRequired: z.boolean().default(false).optional(),
+  unlockedAt: z.coerce.date().optional().nullable(),
+  isSkipped: z.boolean().default(false).optional(),
+  contentLink: z.string().optional(),
+  assetsLink: z.string().optional(),
+  brief: z.union([z.string(), briefSchema]).optional(),
 });
 export type WorkItemCreateInput = z.infer<typeof workItemCreateSchema>;
 
@@ -537,12 +630,14 @@ export const CAPACITY_BANDS = ['Healthy', 'High', 'Overloaded'] as const;
 export type CapacityBand = (typeof CAPACITY_BANDS)[number];
 
 export const assignmentRecommendSchema = z.object({
-  workType: z.enum(WORK_TYPES),
+  workType: z.enum(WORK_TYPES).optional(),
   campaignId: z.string().optional(),
   profileId: z.string().optional(),
   departmentId: z.string().optional(),
   deadline: z.coerce.date().optional(),
   estimatedEffortHrs: z.number().min(0.5).max(120).default(4),
+  stageKey: z.string().optional().nullable(),
+  workItemId: z.string().optional().nullable(),
 });
 export type AssignmentRecommendInput = z.infer<typeof assignmentRecommendSchema>;
 

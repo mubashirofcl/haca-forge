@@ -12,10 +12,10 @@ const ROLE_MAP = {
   lead: 'marketing_head',
   worker: 'team_member',
   sm_manager: 'team_member',
-  dept_lead: 'team_member',
-  dept_staff: 'team_member',
-  management: 'team_member',
-  viewer: 'team_member',
+  dept_lead: 'suspended',
+  dept_staff: 'suspended',
+  management: 'executive',
+  viewer: 'executive',
 };
 
 async function migrateLegacyRoles() {

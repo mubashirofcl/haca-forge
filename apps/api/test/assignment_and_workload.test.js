@@ -490,4 +490,131 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
       expect(res.body.data.departments).toBeDefined();
     });
   });
+
+  // ==========================================
+  // Part E: Content Flow Delta: Stage Work Items & Work Preferences
+  // ==========================================
+  describe('Content Flow Delta: Stage Work Items vs Standalone Department Rule', () => {
+    let scriptShooterMember, crossDeptEditor;
+
+    beforeAll(async () => {
+      // Create cross-department test users with explicit work preferences
+      scriptShooterMember = await Person.create({
+        name: 'Shooter Sam',
+        email: 'sam.shooter@assignment-test.com',
+        role: 'team_member',
+        jobRole: 'Social Specialist',
+        departmentId: deptDesign._id, // in Design dept, but has Shoot & Script preferences
+        profileAccess: [profileHaca._id],
+        workPreferences: ['Shoot', 'Script'],
+        status: 'active',
+        weeklyCapacityHours: 40,
+      });
+
+      crossDeptEditor = await Person.create({
+        name: 'Editor Emma',
+        email: 'emma.editor@assignment-test.com',
+        role: 'team_member',
+        jobRole: 'Video Editor',
+        departmentId: deptVideo._id,
+        profileAccess: [profileHaca._id],
+        workPreferences: ['Edit'],
+        status: 'active',
+        weeklyCapacityHours: 40,
+      });
+
+      // Update Alice with Design and Content preferences
+      await Person.findByIdAndUpdate(memberDesignA._id, {
+        workPreferences: ['Design', 'Content'],
+      });
+    });
+
+    it('matches candidates by Person.workPreferences plus brand access when stageKey is provided, ignoring department', async () => {
+      // Ask for "Edit" stage on a design or unspecified work type
+      const rec = await recommendAssignee(
+        {
+          stageKey: 'Edit',
+          profileId: profileHaca._id.toString(),
+          estimatedEffortHrs: 4,
+        },
+        leadUser
+      );
+
+      expect(rec.recommendedPerson).toBeDefined();
+      expect(rec.stageKey).toBe('Edit');
+      expect(rec.recommendedPerson.name).toBe('Editor Emma');
+      expect(rec.rationale).toContain('matched work preference "Edit"');
+      expect(rec.rationale).toContain('brand access');
+
+      // The candidate pool must contain Emma (has Edit preference) and NOT Alice (only Design/Content)
+      const candidateNames = rec.candidatePool.map((c) => c.person.name);
+      expect(candidateNames).toContain('Editor Emma');
+      expect(candidateNames).not.toContain('Designer Alice');
+    });
+
+    it('recommends across departments based on stage preference (e.g. Shoot done by member in Design dept)', async () => {
+      const rec = await recommendAssignee(
+        {
+          stageKey: 'Shoot',
+          profileId: profileHaca._id.toString(),
+          estimatedEffortHrs: 5,
+        },
+        leadUser
+      );
+
+      expect(rec.recommendedPerson).toBeDefined();
+      expect(rec.recommendedPerson.name).toBe('Shooter Sam');
+      expect(rec.rationale).toContain('matched work preference "Shoot"');
+    });
+
+    it('infers stageKey and profileId from workItemId when workItemId is passed', async () => {
+      const stageWorkItem = await WorkItem.create({
+        campaignId: testCampaign._id,
+        profileId: profileHaca._id,
+        relatedOKR: testCampaign.relatedOKR,
+        relatedTarget: testTarget._id,
+        title: 'Content Stage for Banner',
+        workType: 'Static Post',
+        stageKey: 'Content',
+        departmentId: deptDesign._id,
+        ownerId: leadUser._id,
+        deadline: new Date('2026-11-28'),
+        estimatedEffortHrs: 3,
+        status: 'Not Started',
+        createdBy: leadUser._id,
+      });
+
+      const rec = await recommendAssignee(
+        {
+          workItemId: stageWorkItem._id.toString(),
+          estimatedEffortHrs: 3,
+        },
+        leadUser
+      );
+
+      expect(rec.recommendedPerson).toBeDefined();
+      expect(rec.stageKey).toBe('Content');
+      // Alice has 'Content' preference
+      expect(rec.recommendedPerson.name).toBe('Designer Alice');
+      expect(rec.rationale).toContain('matched work preference "Content"');
+    });
+
+    it('keeps the department rule for standalone work items (no stageKey)', async () => {
+      // Standalone workType: 'Ad Creative' -> resolves to deptDesign
+      const rec = await recommendAssignee(
+        {
+          workType: 'Ad Creative',
+          profileId: profileHaca._id.toString(),
+          estimatedEffortHrs: 4,
+        },
+        leadUser
+      );
+
+      expect(rec.recommendedPerson).toBeDefined();
+      expect(rec.stageKey).toBeNull();
+      // Candidates must come from deptDesign
+      expect(rec.candidatePool.every((c) => c.person.departmentId?.toString() === deptDesign._id.toString())).toBe(true);
+      expect(rec.rationale).toContain('Design');
+    });
+  });
 });

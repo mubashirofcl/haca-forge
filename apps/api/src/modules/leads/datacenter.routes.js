@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticate } from '../../middleware/auth.js';
-import { requirePermission } from '../../middleware/requirePermission.js';
+import { requirePermission, requireAnyPermission } from '../../middleware/requirePermission.js';
 import {
   getDataCenterStatusHandler,
   triggerLsqSyncHandler,
@@ -10,12 +10,12 @@ import {
 const router = express.Router();
 
 router.use(authenticate);
-router.use(requirePermission('datacenter.view'));
+router.use(requireAnyPermission('datacenter.view', 'portal.view'));
 
 router.get('/', getDataCenterStatusHandler);
 router.get('/status', getDataCenterStatusHandler);
-router.post('/sync', triggerLsqSyncHandler);
-router.patch('/discrepancies/:id/resolve', resolveDiscrepancyHandler);
-router.patch('/:id/resolve', resolveDiscrepancyHandler);
+router.post('/sync', requirePermission('automation.manage'), triggerLsqSyncHandler);
+router.patch('/discrepancies/:id/resolve', requirePermission('automation.manage'), resolveDiscrepancyHandler);
+router.patch('/:id/resolve', requirePermission('automation.manage'), resolveDiscrepancyHandler);
 
 export default router;

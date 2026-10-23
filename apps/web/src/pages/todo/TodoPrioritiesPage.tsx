@@ -211,7 +211,7 @@ export const TodoPrioritiesPage: React.FC = () => {
   const renderItemCard = (item: TodoWorkItem, section: 'overdue' | 'today' | 'upcoming') => {
     const isLeadOrAdmin = user?.role === 'team_lead' || user?.role === 'marketing_head' || user?.role === 'admin';
     const isOwner = (item.ownerId?._id || item.ownerId) === (user?._id || user?.id);
-    const canTransition = isLeadOrAdmin || isOwner;
+    const canTransition = (isLeadOrAdmin || isOwner) && user?.role !== 'executive';
 
     const deadlineDate = new Date(item.deadline);
     const formattedDeadline = deadlineDate.toLocaleDateString('default', {

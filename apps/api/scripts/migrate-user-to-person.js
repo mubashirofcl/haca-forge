@@ -20,10 +20,10 @@ const DEFAULT_ROLE_MAP = {
   team_lead: 'team_lead',
   worker: 'team_member',
   sm_manager: 'team_member',
-  management: 'suspended',
+  management: 'executive',
   dept_lead: 'suspended',
   dept_staff: 'suspended',
-  viewer: 'suspended',
+  viewer: 'executive',
 };
 
 async function migrateUserToPerson() {
@@ -69,6 +69,7 @@ async function migrateUserToPerson() {
       roles: {
         admin: 0,
         marketing_head: 0,
+        executive: 0,
         team_lead: 0,
         team_member: 0,
       },
@@ -159,14 +160,19 @@ async function migrateUserToPerson() {
         }
       }
 
+      if (targetRole === 'executive') {
+        departmentId = null;
+        reportsToIds = [];
+      }
+
       // 7. Update in place
       const updateDoc = {
         $set: {
           role: targetRole,
           status: targetStatus,
-          jobRole: jobRole || (targetRole === 'admin' ? '' : 'Designer'),
+          jobRole: jobRole || (targetRole === 'admin' || targetRole === 'executive' ? '' : 'Designer'),
           departmentId: departmentId || null,
-          profileAccess: user.profileAccess && user.profileAccess.length > 0 ? user.profileAccess : allProfileIds,
+          profileAccess: targetRole === 'executive' ? allProfileIds : (user.profileAccess && user.profileAccess.length > 0 ? user.profileAccess : allProfileIds),
           reportsToIds,
           weeklyCapacityHours: user.weeklyCapacityHours || user.capacity || 40,
           lastProfileId: user.lastProfileId || hacaProfile?._id,
@@ -189,6 +195,7 @@ async function migrateUserToPerson() {
     logger.info('Active counts by role:');
     logger.info(`  - admin:           ${report.roles.admin}`);
     logger.info(`  - marketing_head:  ${report.roles.marketing_head}`);
+    logger.info(`  - executive:       ${report.roles.executive}`);
     logger.info(`  - team_lead:       ${report.roles.team_lead}`);
     logger.info(`  - team_member:     ${report.roles.team_member}`);
     logger.info(`Suspended legacy accounts: ${report.suspended.length}`);

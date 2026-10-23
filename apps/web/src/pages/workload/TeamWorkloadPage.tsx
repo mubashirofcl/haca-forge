@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import {
   WORK_TYPES,
+  WORK_PREFERENCES,
   type WorkType,
   type CapacityBand,
 } from '@mmp/shared';
@@ -105,6 +107,7 @@ interface RecommendationResponse {
 
 export const TeamWorkloadPage: React.FC = () => {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
 
   const [data, setData] = useState<WorkloadResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -118,6 +121,7 @@ export const TeamWorkloadPage: React.FC = () => {
   // Auto-Assignment Modal State
   const [isRecommendOpen, setIsRecommendOpen] = useState(false);
   const [recWorkType, setRecWorkType] = useState<WorkType>('Reel');
+  const [recStageKey, setRecStageKey] = useState<string>('none');
   const [recEffort, setRecEffort] = useState(4);
   const [recDeadline, setRecDeadline] = useState('');
   const [recResult, setRecResult] = useState<RecommendationResponse | null>(null);
@@ -163,6 +167,7 @@ export const TeamWorkloadPage: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           workType: recWorkType,
+          stageKey: recStageKey !== 'none' ? recStageKey : undefined,
           estimatedEffortHrs: Number(recEffort),
           deadline: recDeadline ? new Date(recDeadline).toISOString() : undefined,
         }),
@@ -253,17 +258,19 @@ export const TeamWorkloadPage: React.FC = () => {
 
         {/* Action Button */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              setIsRecommendOpen(true);
-              setRecResult(null);
-              setOverrideSuccessMsg(null);
-            }}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md shadow-purple-200 transition-all flex items-center gap-2"
-          >
-            <Sparkles className="w-4 h-4" />
-            Auto-Assign Deliverable
-          </button>
+          {hasPermission('assignment.override') && (
+            <button
+              onClick={() => {
+                setIsRecommendOpen(true);
+                setRecResult(null);
+                setOverrideSuccessMsg(null);
+              }}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md shadow-purple-200 transition-all flex items-center gap-2"
+            >
+              <Sparkles className="w-4 h-4" />
+              Auto-Assign Deliverable
+            </button>
+          )}
         </div>
       </div>
 
@@ -617,7 +624,7 @@ export const TeamWorkloadPage: React.FC = () => {
             </p>
 
             <form onSubmit={handleGetRecommendation} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Work Type *</label>
                   <select
@@ -627,6 +634,20 @@ export const TeamWorkloadPage: React.FC = () => {
                   >
                     {WORK_TYPES.map((wt) => (
                       <option key={wt} value={wt}>{wt}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Stage Preference (Content Flow)</label>
+                  <select
+                    value={recStageKey}
+                    onChange={(e) => setRecStageKey(e.target.value)}
+                    className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+                  >
+                    <option value="none">None (Standalone Department Rule)</option>
+                    {WORK_PREFERENCES.map((wp) => (
+                      <option key={wp} value={wp}>Stage: {wp}</option>
                     ))}
                   </select>
                 </div>

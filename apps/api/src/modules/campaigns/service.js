@@ -3,6 +3,7 @@ import { Campaign } from './model.js';
 import { MonthlyTarget } from '../targets/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logActivity, listRecentActivities } from '../activity/service.js';
+import { resolveProfileObjectId } from '../referenceData/service.js';
 
 export async function createCampaign(data, user) {
   // 1. Strict Traceability Check: targetId is required
@@ -30,9 +31,22 @@ export async function createCampaign(data, user) {
     throw error;
   }
 
+  // Resolve Profile ObjectId from data.profileId, or fallback to target.profileId
+  let resolvedProfileId = await resolveProfileObjectId(data.profileId);
+  if (!resolvedProfileId && target.profileId) {
+    resolvedProfileId = target.profileId;
+  }
+
+  if (!resolvedProfileId) {
+    const error = new Error('Profile / Brand linkage is required and could not be resolved');
+    error.statusCode = 400;
+    error.code = 'PROFILE_REQUIRED';
+    throw error;
+  }
+
   // 3. Profile Scoping Check: verify user has permission to create campaign in this profile
   const scope = await resolveScope(user);
-  const targetProfileIdStr = data.profileId ? data.profileId.toString() : '';
+  const targetProfileIdStr = resolvedProfileId.toString();
 
   if (!scope.canAccessAllProfiles && !scope.allowedProfileIds.includes(targetProfileIdStr)) {
     const error = new Error('You do not have permission to create campaigns for this brand profile');
@@ -43,7 +57,7 @@ export async function createCampaign(data, user) {
 
   const campaign = await Campaign.create({
     name: data.name,
-    profileId: data.profileId,
+    profileId: resolvedProfileId,
     targetId: data.targetId,
     relatedOKR: data.relatedOKR.trim(),
     startDate: data.startDate,
@@ -86,18 +100,23 @@ export async function listCampaigns(filters = {}, user) {
   const scope = await resolveScope(user);
   const query = {};
 
+  let filterProfileId = null;
+  if (filters.profileId && filters.profileId !== 'all') {
+    filterProfileId = await resolveProfileObjectId(filters.profileId);
+  }
+
   // Profile Scoping
   if (!scope.canAccessAllProfiles) {
-    if (filters.profileId) {
-      if (!scope.allowedProfileIds.includes(filters.profileId.toString())) {
+    if (filterProfileId) {
+      if (!scope.allowedProfileIds.includes(filterProfileId.toString())) {
         return [];
       }
-      query.profileId = filters.profileId;
+      query.profileId = filterProfileId;
     } else {
       query.profileId = { $in: scope.allowedProfileIds };
     }
-  } else if (filters.profileId && filters.profileId !== 'all') {
-    query.profileId = filters.profileId;
+  } else if (filterProfileId) {
+    query.profileId = filterProfileId;
   }
 
   if (filters.status && filters.status !== 'all') {
@@ -209,7 +228,10 @@ export async function updateCampaign(id, data, user) {
   if (data.qualifiedLeadsActual !== undefined) campaign.qualifiedLeadsActual = data.qualifiedLeadsActual;
   if (data.ownerId) campaign.ownerId = data.ownerId;
   if (data.progressPct !== undefined) campaign.progressPct = data.progressPct;
-  if (data.description !== undefined) campaign.description = data.description;
+  if (data.profileId) {
+    const resolvedProfileId = await resolveProfileObjectId(data.profileId);
+    if (resolvedProfileId) campaign.profileId = resolvedProfileId;
+  }
 
   await campaign.save();
 

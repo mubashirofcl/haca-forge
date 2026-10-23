@@ -10,6 +10,31 @@ import { env } from '../../config/env.js';
 import { eventBus, EVENTS } from '../../lib/events.js';
 import { logActivity } from '../activity/service.js';
 
+export async function resolveDepartmentObjectId(rawDept) {
+  if (!rawDept) return null;
+  if (rawDept instanceof mongoose.Types.ObjectId) return rawDept;
+
+  const deptStr = String(rawDept).trim();
+  if (!deptStr) return null;
+
+  if (mongoose.Types.ObjectId.isValid(deptStr) && /^[0-9a-fA-F]{24}$/.test(deptStr)) {
+    const foundById = await Department.findById(deptStr).select('_id');
+    if (foundById) return foundById._id;
+  }
+
+  const escaped = deptStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const deptDoc = await Department.findOne({
+    $or: [
+      { code: deptStr },
+      { name: deptStr },
+      { code: new RegExp(`^${escaped}$`, 'i') },
+      { name: new RegExp(`^${escaped}$`, 'i') },
+    ],
+  }).select('_id');
+
+  return deptDoc ? deptDoc._id : null;
+}
+
 export async function submitAccessRequest(data) {
   const normalizedEmail = data.email ? data.email.toLowerCase().trim() : '';
 
@@ -42,16 +67,8 @@ export async function submitAccessRequest(data) {
     throw error;
   }
 
-  // Resolve departmentId if not explicitly provided
-  let departmentId = data.departmentId;
-  if (!departmentId && data.department) {
-    const deptDoc = await Department.findOne({
-      $or: [{ code: data.department }, { name: data.department }],
-    });
-    if (deptDoc) {
-      departmentId = deptDoc._id;
-    }
-  }
+  // Resolve departmentId if not explicitly provided or if passed as a string/code
+  const departmentId = await resolveDepartmentObjectId(data.departmentId || data.department);
 
   // Resolve requestedProfileIds from requestedProfileCodes
   let requestedProfileIds = [];
@@ -195,22 +212,21 @@ export async function approveAccessRequest(id, reviewData = {}, adminUser) {
 
   const assignedRole = reviewData.assignedRole || accessReq.requestedRole || 'team_member';
 
-  // Only admin may grant admin or marketing_head
-  if (['admin', 'marketing_head'].includes(assignedRole) && adminUser.role !== 'admin') {
-    const error = new Error('Only full Administrators can grant Admin or Marketing Head roles');
+  // Only admin may grant admin, marketing_head, or executive
+  if (['admin', 'marketing_head', 'executive'].includes(assignedRole) && adminUser.role !== 'admin') {
+    const error = new Error('Only full Administrators can grant Admin, Marketing Head, or Executive roles');
     error.code = 'UNAUTHORIZED_ROLE_ASSIGNMENT';
     error.statusCode = 403;
     throw error;
   }
 
-  // Resolve assigned Department
-  let assignedDepartmentId = reviewData.departmentId || accessReq.departmentId;
-  if (!assignedDepartmentId && accessReq.department) {
-    const deptDoc = await Department.findOne({
-      $or: [{ code: accessReq.department }, { name: accessReq.department }],
-    });
-    if (deptDoc) assignedDepartmentId = deptDoc._id;
-  }
+  // Resolve assigned Department (handles ObjectId hex, department code, or department name)
+  const rawDept =
+    reviewData.departmentId ||
+    reviewData.department ||
+    accessReq.departmentId ||
+    accessReq.department;
+  const assignedDepartmentId = await resolveDepartmentObjectId(rawDept);
 
   // Resolve assigned Profile Access
   let assignedProfileAccess = [];
@@ -231,7 +247,11 @@ export async function approveAccessRequest(id, reviewData = {}, adminUser) {
   }
 
   const assignedJobRole = reviewData.jobRole || accessReq.jobRole || '';
-  const assignedReportsToIds = Array.isArray(reviewData.reportsToIds) ? reviewData.reportsToIds : [];
+  const assignedReportsToIds = Array.isArray(reviewData.reportsToIds)
+    ? reviewData.reportsToIds.filter(
+        (id) => mongoose.Types.ObjectId.isValid(id) && /^[0-9a-fA-F]{24}$/.test(String(id))
+      )
+    : [];
   const assignedCapacity = reviewData.weeklyCapacityHours ?? reviewData.capacity ?? 40;
 
   // Generate 32-byte secure invite token with 48h expiry

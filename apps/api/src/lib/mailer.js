@@ -56,10 +56,12 @@ export async function sendMail({ to, subject, html, text }) {
 // Mail templates
 export function templates() {
   return {
-    invite: ({ name, setPasswordUrl }) => ({
-      subject: 'Welcome to HACA Marketing OS - Set Your Password',
-      text: `Hello ${name},\n\nYour access request for HACA Marketing OS has been approved. Please set your password using the link below (valid for 48 hours):\n${setPasswordUrl}\n\nBest regards,\nHACA Marketing Operations Team`,
-      html: `
+    invite: ({ name, setPasswordUrl, inviteUrl }) => {
+      const targetUrl = setPasswordUrl || inviteUrl;
+      return {
+        subject: 'Welcome to HACA Marketing OS - Set Your Password',
+        text: `Hello ${name},\n\nYour access request for HACA Marketing OS has been approved. Please set your password using the link below (valid for 48 hours):\n${targetUrl}\n\nBest regards,\nHACA Marketing Operations Team`,
+        html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 32px; background-color: #f8fafc; color: #1e293b;">
           <div style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
             <div style="display: inline-block; padding: 6px 12px; background-color: #ede9fe; color: #6d28d9; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;">
@@ -73,18 +75,51 @@ export function templates() {
               Please click the button below to set your account password and activate your workspace. This single-use link is valid for <strong>48 hours</strong>.
             </p>
             <div style="margin: 28px 0; text-align: center;">
-              <a href="${setPasswordUrl}" style="background-color: #0f172a; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 9999px; font-size: 13px; font-weight: 700; display: inline-block; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);">
+              <a href="${targetUrl}" style="background-color: #0f172a; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 9999px; font-size: 13px; font-weight: 700; display: inline-block; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);">
                 Set Password & Activate Account
               </a>
             </div>
             <p style="font-size: 12px; line-height: 1.5; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 16px;">
               If the button does not work, copy and paste this secure link into your browser:<br>
-              <a href="${setPasswordUrl}" style="color: #6366f1; word-break: break-all;">${setPasswordUrl}</a>
+              <a href="${targetUrl}" style="color: #6366f1; word-break: break-all;">${targetUrl}</a>
             </p>
           </div>
         </div>
       `,
-    }),
+      };
+    },
+    inviteUser: ({ name, email, inviteUrl, setPasswordUrl }) => {
+      const targetUrl = inviteUrl || setPasswordUrl;
+      return {
+        subject: 'HACA FORGE - Set Your Password & Access Your Workspace',
+        text: `Hello ${name},\n\nAn account has been provisioned or a password reset has been generated for your account (${email || ''}).\n\nPlease set your password using the link below (valid for 48 hours):\n${targetUrl}\n\nBest regards,\nHACA Marketing Operations Team`,
+        html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 32px; background-color: #f8fafc; color: #1e293b;">
+          <div style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div style="display: inline-block; padding: 6px 12px; background-color: #ede9fe; color: #6d28d9; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;">
+              HACA Marketing OS
+            </div>
+            <h2 style="color: #0f172a; margin-top: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;">Set Your Password, ${name}</h2>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+              A secure password reset / access link has been generated for your account${email ? ` (<strong>${email}</strong>)` : ''}.
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+              Please click the button below to set your account password and access your workspace. This single-use link is valid for <strong>48 hours</strong>.
+            </p>
+            <div style="margin: 28px 0; text-align: center;">
+              <a href="${targetUrl}" style="background-color: #0f172a; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 9999px; font-size: 13px; font-weight: 700; display: inline-block; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);">
+                Set Password & Sign In
+              </a>
+            </div>
+            <p style="font-size: 12px; line-height: 1.5; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+              If the button does not work, copy and paste this secure link into your browser:<br>
+              <a href="${targetUrl}" style="color: #6366f1; word-break: break-all;">${targetUrl}</a>
+            </p>
+          </div>
+        </div>
+      `,
+      };
+    },
     accessRequestSubmitted: ({ name, email, department, jobRole, requestedRole, brands = [] }) => ({
       subject: `[Marketing OS] New Access Request: ${name} (${department || 'General'})`,
       text: `A new access request has been submitted by ${name} (${email}).\nDepartment: ${department}\nJob Role: ${jobRole || 'Not specified'}\nRequested Role: ${requestedRole}\nBrands: ${brands.join(', ') || 'None'}\n\nPlease review it in the Marketing OS Admin Console.`,

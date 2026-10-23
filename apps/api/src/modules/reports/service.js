@@ -1,4 +1,4 @@
-import { ReportDefinition } from './model.js';
+import { ReportDefinition, ScheduledReport } from './model.js';
 import { WorkItem } from '../workItems/model.js';
 import { MonthlyTarget } from '../targets/model.js';
 import { Campaign } from '../campaigns/model.js';
@@ -693,4 +693,60 @@ function renderReportToHtml(report) {
       </body>
     </html>
   `;
+}
+
+// ==========================================
+// Scheduled Reports & Exports
+// ==========================================
+export async function createScheduledReport(body, user) {
+  const { name, reportType, frequency, format, recipients, filters } = body;
+
+  const now = new Date();
+  const nextRunAt = new Date(now);
+  if (frequency === 'daily') nextRunAt.setDate(nextRunAt.getDate() + 1);
+  else if (frequency === 'monthly') nextRunAt.setMonth(nextRunAt.getMonth() + 1);
+  else nextRunAt.setDate(nextRunAt.getDate() + 7); // weekly default
+
+  const userId = user?.userId || user?._id || user?.id;
+
+  const report = await ScheduledReport.create({
+    name,
+    reportType,
+    frequency: frequency || 'weekly',
+    format: format || 'xlsx',
+    recipients: recipients || (user?.email ? [user.email] : []),
+    filters: filters || {},
+    createdBy: userId,
+    nextRunAt,
+  });
+
+  return report;
+}
+
+export async function getScheduledReports(user) {
+  const userId = user?.userId || user?._id || user?.id;
+  const isPrivileged = ['admin', 'lead', 'marketing_head'].includes(user?.role);
+  const scoping = isPrivileged || !userId ? {} : { createdBy: userId };
+
+  return ScheduledReport.find(scoping).sort({ createdAt: -1 }).lean();
+}
+
+export async function deleteScheduledReport(id, user) {
+  const userId = user?.userId || user?._id || user?.id;
+  const isPrivileged = ['admin', 'lead', 'marketing_head'].includes(user?.role);
+  const scoping = isPrivileged || !userId ? { _id: id } : { _id: id, createdBy: userId };
+
+  const res = await ScheduledReport.findOneAndDelete(scoping);
+  if (!res) {
+    const error = new Error('Scheduled report not found or access denied');
+    error.statusCode = 404;
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+  return res;
+}
+
+export async function generateReportExport(options = {}) {
+  const reportKey = options.reportType || options.reportKey || 'weekly_marketing';
+  return generateReport(reportKey, options.filters, options.user);
 }

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.js';
-import { requirePermission } from '../../middleware/requirePermission.js';
+import { requirePermission, requireAnyPermission } from '../../middleware/requirePermission.js';
 import { validate } from '../../middleware/validate.js';
 import {
   workItemCreateSchema,
@@ -14,14 +14,14 @@ const router = Router();
 router.use(authenticate);
 
 // Special Aggregated Endpoints (mounted before /:id)
-router.get('/my-work', workItemController.getMyWork);
-router.get('/calendar', workItemController.getCalendarWorkItems);
-router.get('/todo', workItemController.getTodoItems);
+router.get('/my-work', requirePermission('work.update.own'), workItemController.getMyWork);
+router.get('/calendar', requireAnyPermission('work.request', 'work.update.own', 'portal.view'), workItemController.getCalendarWorkItems);
+router.get('/todo', requireAnyPermission('work.request', 'work.update.own', 'portal.view'), workItemController.getTodoItems);
 
 // Work Items CRUD & Queries
-router.get('/', workItemController.listWorkItems);
-router.get('/:id/activity', workItemController.getWorkItemActivities);
-router.get('/:id', workItemController.getWorkItem);
+router.get('/', requireAnyPermission('work.request', 'work.update.own', 'portal.view'), workItemController.listWorkItems);
+router.get('/:id/activity', requireAnyPermission('work.request', 'work.update.own', 'portal.view'), workItemController.getWorkItemActivities);
+router.get('/:id', requireAnyPermission('work.request', 'work.update.own', 'portal.view'), workItemController.getWorkItem);
 
 router.post(
   '/',

@@ -312,7 +312,7 @@ export async function calculateTeamPerformance(filters = {}, actor = null) {
     return { overallTeamScore: 0, members: [] };
   }
 
-  const query = { status: { $ne: 'suspended' }, role: { $ne: 'admin' } };
+  const query = { status: { $ne: 'suspended' }, role: { $nin: ['admin', 'executive'] } };
   if (scope.allowedPersonIds !== null) {
     query._id = { $in: scope.allowedPersonIds };
   }

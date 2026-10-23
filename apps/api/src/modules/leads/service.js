@@ -263,8 +263,8 @@ export async function getLeadFunnelMetrics(filters = {}, user = null) {
   if (query.profileId) targetQuery.profileId = query.profileId;
 
   const targets = await MonthlyTarget.find(targetQuery).lean();
-  const targetSpend = targets.reduce((sum, t) => sum + (t.budget || 0), 0) || 20000;
-  const targetQualified = targets.reduce((sum, t) => sum + (t.qualifiedLeadsTarget || 0), 0) || 350;
+  const targetSpend = targets.reduce((sum, t) => sum + (t.budget || 0), 0);
+  const targetQualified = targets.reduce((sum, t) => sum + (t.qualifiedLeadsTarget || 0), 0);
 
   // CPL & CPQL Formulas:
   // CPL = Spend / Ad Leads

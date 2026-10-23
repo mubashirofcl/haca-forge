@@ -20,6 +20,9 @@ The target product, **HACA Marketing OS (V1 Team Workspace)**, completely retire
 6. **LeadSquared (LSQ) Integration:** Read-authoritative funnel analytics, CPL/CPQL, and inbound lead auto-tasking.
 7. **14 Dedicated Screens:** Replaced UI with frosted glass components and universal drill-down linking.
 
+> [!NOTE]
+> **Boundary on retired modules:** Pipeline templates and hand-off code stay RETIRE from the build but become 'reference for Phase 5b (read from tag forge-v1-final)'. Shoot planner, time tracking, leave, file library, performance ads, video review studio, calendar import and request intake stay RETIRE.
+
 ---
 
 ## 2. API Modules Audit & Classification
@@ -41,7 +44,7 @@ The target product, **HACA Marketing OS (V1 Team Workspace)**, completely retire
 | **`leave/`** | `LeaveRequest` | Leave management and capacity discounting | Personal leave approval workflow retired from product scope. | **RETIRE** | Remove leave module, routes, and tests. |
 | **`masterData/`** | `ContentFormat`, `Platform`, `Priority`, `RequestType`, `HoldReason` | Dynamic CRUD for taxonomy and intake forms | Marketing OS uses fixed reference data (seeded, non-editable). | **RETIRE** | Remove dynamic master data CRUD. Move taxonomy to `@mmp/shared` constants. |
 | **`notifications/`** | `Notification` | Socket.io real-time bell and persistence | Core enabler for blocker alerts, feedback mentions, and escalations. | **KEEP** | Retain infrastructure. Update event types (`BLOCKER_ALERT`, `REVISION_FLAGGED`, etc.). |
-| **`pipelines/`** | `PipelineTemplate` | Auto-derivation of subtasks from content formats | Pipeline templates and subtask splits retired. Each WorkItem has 1 owner. | **RETIRE** | Delete template engine and derivative task generator. |
+| **`pipelines/`** | `PipelineTemplate` | Auto-derivation of subtasks from content formats | Pipeline templates and hand-off code stay RETIRE from the build but become 'reference for Phase 5b (read from tag forge-v1-final)'. | **RETIRE** | Delete template engine and derivative task generator from active build. Code retained in git tag `forge-v1-final` as reference for Phase 5b. |
 | **`reports/`** | `ScheduledReport`, `ReportDefinition` (old) | 6 FORGE operational reports and scheduled mailer | Replaced by 6 Marketing OS Report Definitions (Weekly Marketing, Monthly Scorecard, etc.). | **CHANGE** | Rebuild report generators to read live scoped Marketing OS collections. |
 | **`requests/`** | `Request`, `Counter` | Requester intake portal, dynamic forms, triage engine | Completely retired. Marketing team plans its own work inside Campaigns. | **RETIRE** | Delete intake routes, duplicate check, and triage controller. Archive MongoDB collection. |
 | **`shoots/`** | `Shoot` | Call sheets, shoot planner, equipment checklists | Dedicated shoot planning module retired. Tracked as WorkItem (`Reel`/`Video Ad`) if needed. | **RETIRE** | Remove shoot planner module and routes. |

@@ -95,9 +95,10 @@ export const CampaignsListPage: React.FC = () => {
   );
   const [formStatus, setFormStatus] = useState<CampaignStatus>('In Progress');
   const [formGoalType, setFormGoalType] = useState<GoalType>('Leads');
-  const [formGoalValue, setFormGoalValue] = useState<number>(500);
+  const [profilesList, setProfilesList] = useState<Array<{ name: string; code: string; _id?: string }>>([...PROFILES]);
+  const [formGoalValue, setFormGoalValue] = useState<number | ''>('');
   const [formExpectedOutcome, setFormExpectedOutcome] = useState<ExpectedOutcome>('Lead Generation');
-  const [formBudget, setFormBudget] = useState<number>(50000);
+  const [formBudget, setFormBudget] = useState<number | ''>('');
   const [formOwnerId, setFormOwnerId] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,10 +108,10 @@ export const CampaignsListPage: React.FC = () => {
   const currentMonthStr = new Date().toISOString().slice(0, 7);
   const [targetMonth, setTargetMonth] = useState(currentMonthStr);
   const [targetProfileId, setTargetProfileId] = useState<string>('org-wide');
-  const [targetRevenue, setTargetRevenue] = useState<number>(500000);
-  const [targetLeads, setTargetLeads] = useState<number>(800);
-  const [targetQualifiedLeads, setTargetQualifiedLeads] = useState<number>(300);
-  const [targetBudget, setTargetBudget] = useState<number>(100000);
+  const [targetRevenue, setTargetRevenue] = useState<number | ''>('');
+  const [targetLeads, setTargetLeads] = useState<number | ''>('');
+  const [targetQualifiedLeads, setTargetQualifiedLeads] = useState<number | ''>('');
+  const [targetBudget, setTargetBudget] = useState<number | ''>('');
   const [isSubmittingTarget, setIsSubmittingTarget] = useState(false);
   const [targetMessage, setTargetMessage] = useState<string | null>(null);
 
@@ -126,18 +127,22 @@ export const CampaignsListPage: React.FC = () => {
       if (goalFilter !== 'all') params.append('goalType', goalFilter);
       if (searchTerm) params.append('search', searchTerm);
 
-      const [cRes, tRes, oRes] = await Promise.all([
+      const [cRes, tRes, oRes, pRes] = await Promise.all([
         apiFetch<{ data: CampaignItem[] }>(`/campaigns?${params.toString()}`).catch(() => ({ data: [] })),
         apiFetch<{ data: MonthlyTargetItem[] }>('/targets').catch(() => ({ data: [] })),
         apiFetch<{ data: TeamMemberOption[] }>('/people').catch(() => ({ data: [] })),
+        apiFetch<{ data: Array<{ name: string; code: string; _id?: string }> }>('/reference-data/profiles').catch(() => ({ data: [] })),
       ]);
 
       setCampaigns(cRes.data || []);
       setTargets(tRes.data || []);
       setOwners(oRes.data || []);
+      if (pRes.data && pRes.data.length > 0) {
+        setProfilesList(pRes.data);
+      }
 
-      if (!formProfileId && PROFILES.length > 0) {
-        setFormProfileId(PROFILES[0].code);
+      if (!formProfileId && (pRes.data?.length || PROFILES.length) > 0) {
+        setFormProfileId((pRes.data?.[0]?.code || PROFILES[0].code));
       }
       if (!formOwnerId && user) {
         setFormOwnerId(user._id || user.id || user.userId || '');
@@ -198,6 +203,8 @@ export const CampaignsListPage: React.FC = () => {
       setFormName('');
       setFormRelatedOKR('');
       setFormDescription('');
+      setFormGoalValue('');
+      setFormBudget('');
       await fetchData();
     } catch (err: any) {
       setFormError(err.message || 'Failed to create campaign. Please check required fields.');
@@ -225,6 +232,10 @@ export const CampaignsListPage: React.FC = () => {
       });
 
       setTargetMessage('Monthly Target saved successfully!');
+      setTargetRevenue('');
+      setTargetLeads('');
+      setTargetQualifiedLeads('');
+      setTargetBudget('');
       await fetchData();
       setTimeout(() => {
         setTargetMessage(null);
@@ -378,7 +389,7 @@ export const CampaignsListPage: React.FC = () => {
             className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
           >
             <option value="all">All Brands</option>
-            {PROFILES.map((p) => (
+            {profilesList.map((p) => (
               <option key={p.code} value={p.code}>
                 {p.name}
               </option>
@@ -602,7 +613,7 @@ export const CampaignsListPage: React.FC = () => {
                     onChange={(e) => setFormProfileId(e.target.value)}
                     className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
                   >
-                    {PROFILES.map((p) => (
+                    {profilesList.map((p) => (
                       <option key={p.code} value={p.code}>
                         {p.name}
                       </option>
@@ -705,7 +716,8 @@ export const CampaignsListPage: React.FC = () => {
                     type="number"
                     min={0}
                     value={formGoalValue}
-                    onChange={(e) => setFormGoalValue(Number(e.target.value))}
+                    onChange={(e) => setFormGoalValue(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 500"
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
                   />
                 </div>
@@ -715,7 +727,8 @@ export const CampaignsListPage: React.FC = () => {
                     type="number"
                     min={0}
                     value={formBudget}
-                    onChange={(e) => setFormBudget(Number(e.target.value))}
+                    onChange={(e) => setFormBudget(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 50000"
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
                   />
                 </div>
@@ -828,7 +841,7 @@ export const CampaignsListPage: React.FC = () => {
                     className="w-full px-4 py-2 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
                   >
                     <option value="org-wide">🏢 Org-Wide (All Profiles)</option>
-                    {PROFILES.map((p) => (
+                    {profilesList.map((p) => (
                       <option key={p.code} value={p.code}>
                         {p.name}
                       </option>
@@ -844,7 +857,8 @@ export const CampaignsListPage: React.FC = () => {
                     type="number"
                     min={0}
                     value={targetRevenue}
-                    onChange={(e) => setTargetRevenue(Number(e.target.value))}
+                    onChange={(e) => setTargetRevenue(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 500000"
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
                   />
                 </div>
@@ -854,7 +868,8 @@ export const CampaignsListPage: React.FC = () => {
                     type="number"
                     min={0}
                     value={targetLeads}
-                    onChange={(e) => setTargetLeads(Number(e.target.value))}
+                    onChange={(e) => setTargetLeads(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 800"
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
                   />
                 </div>
@@ -864,7 +879,8 @@ export const CampaignsListPage: React.FC = () => {
                     type="number"
                     min={0}
                     value={targetQualifiedLeads}
-                    onChange={(e) => setTargetQualifiedLeads(Number(e.target.value))}
+                    onChange={(e) => setTargetQualifiedLeads(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 300"
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
                   />
                 </div>
@@ -874,7 +890,8 @@ export const CampaignsListPage: React.FC = () => {
                     type="number"
                     min={0}
                     value={targetBudget}
-                    onChange={(e) => setTargetBudget(Number(e.target.value))}
+                    onChange={(e) => setTargetBudget(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 100000"
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
                   />
                 </div>
@@ -908,15 +925,23 @@ export const CampaignsListPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {targets.map((t) => (
-                      <tr key={t._id} className="hover:bg-slate-50/50">
-                        <td className="py-2.5 font-bold text-slate-900">{t.month}</td>
-                        <td className="py-2.5 text-slate-700">{t.profileId?.name || '🏢 Org-Wide'}</td>
-                        <td className="py-2.5 text-slate-700">{formatCurrency(t.revenueTarget)}</td>
-                        <td className="py-2.5 text-[#7a6af6] font-semibold">{t.leadsTarget}</td>
-                        <td className="py-2.5 text-slate-700">{formatCurrency(t.budget)}</td>
+                    {targets.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-slate-400">
+                          No registered monthly targets yet. Use the form above to register a target.
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      targets.map((t) => (
+                        <tr key={t._id} className="hover:bg-slate-50/50">
+                          <td className="py-2.5 font-bold text-slate-900">{t.month}</td>
+                          <td className="py-2.5 text-slate-700">{t.profileId?.name || '🏢 Org-Wide'}</td>
+                          <td className="py-2.5 text-slate-700">{formatCurrency(t.revenueTarget)}</td>
+                          <td className="py-2.5 text-[#7a6af6] font-semibold">{t.leadsTarget}</td>
+                          <td className="py-2.5 text-slate-700">{formatCurrency(t.budget)}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

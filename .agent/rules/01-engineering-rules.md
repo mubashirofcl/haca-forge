@@ -5,7 +5,7 @@
 - Backend: Express 5, MongoDB with Mongoose, JavaScript (ESM). Do not convert the backend to TypeScript.
 - Frontend: React 18, Vite, TypeScript (strict), Tailwind, existing glass UI components, TanStack Query and Table,
   React Hook Form + Zod, React Router, Recharts, FullCalendar.
-- packages/shared (@mmp/shared): role keys (admin, marketing_head, team_lead, team_member), permission keys and the role-to-permission map (admin has all permission keys derived from PERMISSION_KEYS), enums, Zod schemas, shared
+- packages/shared (@mmp/shared): role keys (admin, marketing_head, executive, team_lead, team_member), permission keys and the role-to-permission map (admin has all permission keys derived from PERMISSION_KEYS; executive has read-only portal.view, people.view, target.view, lead.view, datacenter.view, analytics.team, report.view), enums, Zod schemas, shared
   metric formulas. Built with tsup.
 - Validation: Zod on every body, query and params. Permissions: CASL. Jobs: BullMQ + Redis. Realtime: Socket.io.
 - Email only through lib/mailer.js (smtp, resend, console). Files: Cloudinary signed direct upload.
@@ -14,9 +14,13 @@
 ## Architecture
 - API modules under apps/api/src/modules/<name>/ with routes, controller, service, model, schema. Thin controllers.
 - ALL data access goes through resolveScope(user, filters). It returns allowed profileIds and the person scope (all, team or
-  self). For admin, resolveScope returns all profiles and all people. Every list, aggregate, report and export uses it.
-- Admin is excluded from auto-assignment candidates, workload calculations, and performance reports.
-- Every route: authentication + requirePermission('key') + Zod validation. Scoping is enforced in database queries, not only in
+  self). For admin and executive, resolveScope returns all profiles and all people (personScope: 'all'). Every list, aggregate, report and export uses it.
+- Both Admin and Executive are excluded from auto-assignment candidates, workload calculations, and performance reports.
+- Read endpoints allow `portal.view` (or module-specific view permission) using `requireAnyPermission`.
+- Executive role is strictly read-only: zero mutation privileges across all modules (HTTP 403 on all POST, PATCH, PUT, DELETE).
+- In the People API, email and phone are omitted for executive callers.
+- Only Admin can grant or approve the executive role; Marketing Head cannot modify or grant executive accounts.
+- Every route: authentication + requirePermission('key') (or requireAnyPermission) + Zod validation. Scoping is enforced in database queries, not only in
   the UI. A route is never 'authenticated only' unless it touches the caller's own profile.
 - One shared filter schema (profile, department, owner, campaign, date or month, status) parsed once and used by all list endpoints.
 - One transition service for work item status. Every change writes an ActivityEvent (admin actions recorded with actingAs: 'admin').

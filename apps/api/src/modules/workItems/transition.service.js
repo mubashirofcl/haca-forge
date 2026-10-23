@@ -1,6 +1,8 @@
 import { WorkItem } from './model.js';
 import { logActivity } from '../activity/service.js';
-import { BLOCKER_REASONS } from '@mmp/shared';
+import { BLOCKER_REASONS, APPROVER_JOB_ROLES, normalizeRole } from '@mmp/shared';
+import { resolveScope } from '../../lib/scope.js';
+import { Person } from '../people/model.js';
 
 export const ALLOWED_TRANSITIONS = {
   'Not Started': ['In Progress', 'Blocked'],
@@ -43,7 +45,7 @@ export async function transitionWorkItem(id, transitionData, user) {
 
   // 3. Ownership / Role Authorization
   const userId = (user._id || user.id || user.userId)?.toString();
-  const ownerIdStr = workItem.ownerId?.toString();
+  const ownerIdStr = (workItem.ownerId?._id || workItem.ownerId)?.toString();
   const isAdminOrHead = user.role === 'admin' || user.role === 'marketing_head';
   const isTeamLead = user.role === 'team_lead';
 
@@ -54,12 +56,70 @@ export async function transitionWorkItem(id, transitionData, user) {
     throw error;
   }
 
-  // 4. Approval Guard: Team member cannot approve work items
-  if (toStatus === 'Approved' && !isAdminOrHead && !isTeamLead) {
-    const error = new Error('Only a Team Lead, Marketing Head, or Administrator can approve deliverables');
-    error.statusCode = 403;
-    error.code = 'FORBIDDEN_APPROVAL';
-    throw error;
+  // 4. Approval Guard
+  if (toStatus === 'Approved') {
+    const userRole = normalizeRole(user.role);
+
+    // CONTENT FLOW DELTA: The owner can NEVER approve their own stage
+    if (workItem.reviewRequired && ownerIdStr === userId) {
+      const error = new Error('The owner can never approve their own stage');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN_SELF_APPROVAL';
+      throw error;
+    }
+
+    if (workItem.reviewRequired) {
+      let userJobRole = user.jobRole;
+      let effectiveUserRole = userRole;
+      if ((!userJobRole || !effectiveUserRole) && userId) {
+        const person = await Person.findById(userId);
+        if (person) {
+          userJobRole = userJobRole || person.jobRole;
+          effectiveUserRole = effectiveUserRole || normalizeRole(person.role);
+        }
+      }
+
+      const isApproverLead =
+        effectiveUserRole === 'team_lead' && APPROVER_JOB_ROLES.includes(userJobRole);
+      const isAllowedRole =
+        effectiveUserRole === 'admin' || effectiveUserRole === 'marketing_head' || isApproverLead;
+
+      if (!isAllowedRole) {
+        const error = new Error(
+          'For review-required stages, approvers must be team leads with an approver job role (Creative Manager (TL)), Marketing Head, or Administrator'
+        );
+        error.statusCode = 403;
+        error.code = 'FORBIDDEN_APPROVAL';
+        throw error;
+      }
+
+      // Normal scope rule: must hold the brand
+      const scope = await resolveScope(user);
+      const itemProfileIdStr = (workItem.profileId?._id || workItem.profileId)?.toString();
+      if (itemProfileIdStr && !scope.canAccessProfile(itemProfileIdStr)) {
+        const error = new Error('You do not have brand profile access to approve deliverables for this brand');
+        error.statusCode = 403;
+        error.code = 'FORBIDDEN_PROFILE_APPROVAL';
+        throw error;
+      }
+    } else {
+      // Standalone work items keep the standard rule
+      if (!isAdminOrHead && !isTeamLead) {
+        const error = new Error('Only a Team Lead, Marketing Head, or Administrator can approve deliverables');
+        error.statusCode = 403;
+        error.code = 'FORBIDDEN_APPROVAL';
+        throw error;
+      }
+
+      const scope = await resolveScope(user);
+      const itemProfileIdStr = (workItem.profileId?._id || workItem.profileId)?.toString();
+      if (itemProfileIdStr && !scope.canAccessProfile(itemProfileIdStr)) {
+        const error = new Error('You do not have permission to approve work items for this brand profile');
+        error.statusCode = 403;
+        error.code = 'FORBIDDEN_PROFILE_APPROVAL';
+        throw error;
+      }
+    }
   }
 
   // 5. Blocker Reason Guard: mandatory when toStatus is Blocked

@@ -6,6 +6,7 @@ import { WorkItem } from '../workItems/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logActivity } from '../activity/service.js';
 import { WORK_TYPE_DEPARTMENT_MAP } from '@mmp/shared';
+import { resolveProfileObjectId } from '../referenceData/service.js';
 
 /**
  * Calculate member workload metrics and capacity bands
@@ -85,57 +86,128 @@ export async function calculateMemberWorkloadMetrics(personId, personDoc = null)
  * Never assigns silently. Returns human-readable explainable rationale.
  */
 export async function recommendAssignee(criteria = {}, user) {
-  const { workType, profileId, departmentId, deadline, estimatedEffortHrs = 4 } = criteria;
+  const {
+    workType,
+    profileId,
+    departmentId,
+    deadline,
+    estimatedEffortHrs = 4,
+    stageKey,
+    workItemId,
+  } = criteria;
 
-  // 1. Resolve Target Department
+  let effectiveStageKey = stageKey || null;
+  let rawProfileId = profileId || null;
+
+  // Infer stageKey and brand profileId from existing work item if provided
+  if (workItemId && mongoose.Types.ObjectId.isValid(workItemId)) {
+    const item = await WorkItem.findById(workItemId);
+    if (item) {
+      if (!effectiveStageKey && item.stageKey) {
+        effectiveStageKey = item.stageKey;
+      }
+      if (!rawProfileId && item.profileId) {
+        rawProfileId = item.profileId;
+      }
+    }
+  }
+
+  // Resolve target brand profile
+  let targetProfileId = null;
+  if (rawProfileId) {
+    targetProfileId = await resolveProfileObjectId(rawProfileId);
+  }
+
+  let candidates = [];
   let targetDepartment = null;
-  if (departmentId && mongoose.Types.ObjectId.isValid(departmentId)) {
-    targetDepartment = await Department.findById(departmentId);
-  } else if (workType && WORK_TYPE_DEPARTMENT_MAP[workType]) {
-    const deptCode = WORK_TYPE_DEPARTMENT_MAP[workType];
-    targetDepartment = await Department.findOne({
-      $or: [{ code: deptCode }, { name: new RegExp(`^${deptCode}$`, 'i') }],
-    });
-  }
 
-  // 2. Candidate Query (strictly non-admin members and leads)
-  const query = {
-    status: 'active',
-    role: { $ne: 'admin' },
-  };
-
-  if (targetDepartment) {
-    query.departmentId = targetDepartment._id;
-  }
-
-  // Profile scoping: if a profile is requested, check permissions
-  if (profileId && mongoose.Types.ObjectId.isValid(profileId)) {
-    query.profileAccess = profileId;
-  }
-
-  let candidates = await Person.find(query);
-
-  // If no candidates in target department with profile access, fallback to any active team member with profile access
-  if (candidates.length === 0 && profileId) {
-    candidates = await Person.find({
+  if (effectiveStageKey) {
+    // ------------------------------------------------------------------------
+    // CONTENT FLOW DELTA: Stage Work Items
+    // Candidates come from Person.workPreferences plus brand access
+    // instead of the department table.
+    // ------------------------------------------------------------------------
+    const stageQuery = {
       status: 'active',
-      role: { $ne: 'admin' },
-      profileAccess: profileId,
-    });
-  }
+      role: { $nin: ['admin', 'executive'] },
+      workPreferences: effectiveStageKey,
+    };
 
-  // If still empty, get all active non-admin personnel
-  if (candidates.length === 0) {
-    candidates = await Person.find({
+    if (targetProfileId) {
+      stageQuery.profileAccess = targetProfileId;
+    }
+
+    candidates = await Person.find(stageQuery);
+
+    // If no candidate with this stage preference has explicit brand access,
+    // fallback to any active team member with this stage preference
+    if (candidates.length === 0 && targetProfileId) {
+      candidates = await Person.find({
+        status: 'active',
+        role: { $nin: ['admin', 'executive'] },
+        workPreferences: effectiveStageKey,
+      });
+    }
+
+    // Ultimate fallback if no member has configured this preference
+    if (candidates.length === 0) {
+      candidates = await Person.find({
+        status: 'active',
+        role: { $nin: ['admin', 'executive'] },
+      });
+    }
+  } else {
+    // ------------------------------------------------------------------------
+    // STANDALONE WORK ITEMS: Keep the department rule
+    // Candidates come from the target department responsible for workType
+    // ------------------------------------------------------------------------
+    if (departmentId && mongoose.Types.ObjectId.isValid(departmentId)) {
+      targetDepartment = await Department.findById(departmentId);
+    } else if (workType && WORK_TYPE_DEPARTMENT_MAP[workType]) {
+      const deptCode = WORK_TYPE_DEPARTMENT_MAP[workType];
+      targetDepartment = await Department.findOne({
+        $or: [{ code: deptCode }, { name: new RegExp(`^${deptCode}$`, 'i') }],
+      });
+    }
+
+    const deptQuery = {
       status: 'active',
-      role: { $ne: 'admin' },
-    });
+      role: { $nin: ['admin', 'executive'] },
+    };
+
+    if (targetDepartment) {
+      deptQuery.departmentId = targetDepartment._id;
+    }
+
+    if (targetProfileId) {
+      deptQuery.profileAccess = targetProfileId;
+    }
+
+    candidates = await Person.find(deptQuery);
+
+    if (candidates.length === 0 && targetProfileId) {
+      candidates = await Person.find({
+        status: 'active',
+        role: { $nin: ['admin', 'executive'] },
+        profileAccess: targetProfileId,
+      });
+    }
+
+    if (candidates.length === 0) {
+      candidates = await Person.find({
+        status: 'active',
+        role: { $nin: ['admin', 'executive'] },
+      });
+    }
   }
 
   if (candidates.length === 0) {
     return {
       recommendedPerson: null,
-      rationale: 'No active team members available for assignment.',
+      rationale: effectiveStageKey
+        ? `No active team members available with "${effectiveStageKey}" work preference.`
+        : 'No active team members available for assignment.',
+      stageKey: effectiveStageKey,
       department: targetDepartment,
       candidatePool: [],
       isOverloadWarning: false,
@@ -195,10 +267,18 @@ export async function recommendAssignee(criteria = {}, user) {
   let rationale = '';
   const isOverloadWarning = bestCandidate.workloadPct > 85;
 
-  if (isOverloadWarning) {
-    rationale = `Recommended Owner: ${bestCandidate.person.name} (Capacity Warning: ${bestCandidate.workloadPct}% current workload). All candidates in ${deptLabel} exceed healthy bandwidth.`;
+  if (effectiveStageKey) {
+    if (isOverloadWarning) {
+      rationale = `Recommended Owner: ${bestCandidate.person.name} (Capacity Warning: ${bestCandidate.workloadPct}% current workload). All candidates with "${effectiveStageKey}" work preference exceed healthy bandwidth.`;
+    } else {
+      rationale = `Recommended Owner: ${bestCandidate.person.name}. Reason: matched work preference "${effectiveStageKey}" + brand access + lowest current workload (${bestCandidate.workloadPct}%) + ${bestCandidate.availableHours}h available bandwidth (avg ${bestCandidate.avgRevisions} revs).`;
+    }
   } else {
-    rationale = `Recommended Owner: ${bestCandidate.person.name}. Reason: lowest current workload (${bestCandidate.workloadPct}%) + suitable skill in ${deptLabel} + ${bestCandidate.availableHours}h available bandwidth (avg ${bestCandidate.avgRevisions} revs).`;
+    if (isOverloadWarning) {
+      rationale = `Recommended Owner: ${bestCandidate.person.name} (Capacity Warning: ${bestCandidate.workloadPct}% current workload). All candidates in ${deptLabel} exceed healthy bandwidth.`;
+    } else {
+      rationale = `Recommended Owner: ${bestCandidate.person.name}. Reason: lowest current workload (${bestCandidate.workloadPct}%) + suitable skill in ${deptLabel} + ${bestCandidate.availableHours}h available bandwidth (avg ${bestCandidate.avgRevisions} revs).`;
+    }
   }
 
   return {
@@ -212,6 +292,7 @@ export async function recommendAssignee(criteria = {}, user) {
       newWorkloadPct: bestCandidate.newWorkloadPct,
     },
     rationale,
+    stageKey: effectiveStageKey,
     department: targetDepartment,
     candidatePool,
     isOverloadWarning,
@@ -288,7 +369,7 @@ export async function getTeamWorkload(filters = {}, user) {
 
   const personQuery = {
     status: 'active',
-    role: { $ne: 'admin' }, // Admin excluded from operational workload
+    role: { $nin: ['admin', 'executive'] }, // Admin and Executive excluded from operational workload
   };
 
   if (!scope.canAccessAllProfiles) {

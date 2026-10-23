@@ -19,13 +19,23 @@ export async function listUsers(query = {}) {
   return User.find(filter).sort({ createdAt: -1 });
 }
 
-export async function updateUserRole(userId, newRole) {
+export async function updateUserRole(userId, newRole, actor) {
   const user = await User.findById(userId);
   if (!user) {
     const error = new Error('User not found');
     error.code = 'NOT_FOUND';
     error.statusCode = 404;
     throw error;
+  }
+
+  // Prevent non-admin from modifying admin or executive accounts or granting admin or executive roles
+  if (actor && actor.role !== 'admin') {
+    if (newRole === 'admin' || newRole === 'executive' || user.role === 'admin' || user.role === 'executive') {
+      const error = new Error('Only administrators can grant or modify admin or executive roles');
+      error.code = 'FORBIDDEN';
+      error.statusCode = 403;
+      throw error;
+    }
   }
 
   user.role = newRole;
@@ -42,8 +52,18 @@ export async function updateUserStatus(userId, newStatus, adminUser) {
     throw error;
   }
 
+  // Prevent non-admin from modifying admin or executive accounts
+  if (adminUser && adminUser.role !== 'admin') {
+    if (user.role === 'admin' || user.role === 'executive') {
+      const error = new Error('Only administrators can modify admin or executive accounts');
+      error.code = 'FORBIDDEN';
+      error.statusCode = 403;
+      throw error;
+    }
+  }
+
   // Prevent admin from suspending themselves
-  if (user._id.toString() === adminUser._id.toString() && newStatus === 'suspended') {
+  if (adminUser && user._id.toString() === adminUser._id.toString() && newStatus === 'suspended') {
     const error = new Error('Administrators cannot suspend their own account');
     error.code = 'SELF_SUSPENSION_PROHIBITED';
     error.statusCode = 400;

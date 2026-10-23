@@ -43,7 +43,18 @@ export async function resolveScope(user, filters = {}) {
   let isAllowed = true;
 
   if (filters.profileId) {
-    const requestedProfileId = filters.profileId.toString();
+    let requestedProfileId = filters.profileId.toString();
+    if (!mongoose.Types.ObjectId.isValid(requestedProfileId) || !/^[0-9a-fA-F]{24}$/.test(requestedProfileId)) {
+      const pDoc = await Profile.findOne({
+        $or: [
+          { code: requestedProfileId.toLowerCase() },
+          { name: requestedProfileId },
+        ],
+      }).select('_id');
+      if (pDoc) {
+        requestedProfileId = pDoc._id.toString();
+      }
+    }
     if (role === 'admin') {
       allowedProfileIds = [requestedProfileId];
     } else if (userProfileAccess.includes(requestedProfileId)) {
@@ -59,7 +70,7 @@ export async function resolveScope(user, filters = {}) {
   let scopeType = 'self';
   let allowedPersonIds = null; // null represents all people
 
-  if (role === 'admin' || role === 'marketing_head') {
+  if (role === 'admin' || role === 'marketing_head' || role === 'executive') {
     scopeType = 'all';
     allowedPersonIds = null; // Full visibility
 
@@ -167,7 +178,7 @@ export async function resolveScope(user, filters = {}) {
 
   const canAccessPerson = (personId) => {
     if (!personId) return false;
-    if (role === 'admin' || role === 'marketing_head') return true;
+    if (role === 'admin' || role === 'marketing_head' || role === 'executive') return true;
     if (allowedPersonIds === null) return true;
     return allowedPersonIds.includes(personId.toString());
   };

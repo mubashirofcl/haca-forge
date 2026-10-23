@@ -67,9 +67,18 @@ produce, approve and report, with the coordination and reporting around it autom
 ### 3.1 In scope (V1)
 
 14 screens: Login and Profile selection, Team Dashboard, My Work, Monthly Marketing
-Calendar, Projects/Campaigns, Project Detail, Single Work Detail, Feedback & Revision
-History, Team Workload, Todo & Priorities, Issues & Blockers, Lead Funnel, Data
-Center/LSQ, Reports & Automation
+Calendar (with Content Tracker view: Social view and Design view tables replacing the team's sheets),
+Projects/Campaigns, Project Detail, Single Work Detail (with sequential stage stepper),
+Feedback & Revision History, Team Workload, Todo & Priorities, Issues & Blockers, Lead Funnel,
+Data Center/LSQ, Reports & Automation
+
+Content flow (CONTENT_FLOW.md): ContentPiece grouping sequential stage work items (Design pipeline and
+Reel pipeline variants A, B, C), stage-based work items with dependency unlocking, review stages
+(Script, Content, Design, Edit) and non-review stages (Shoot, Post), Creative Head approver rule
+(team_lead with job role Creative Manager (TL)), work preferences (Content, Script, Design, Shoot,
+Edit, Post) for stage candidates, cross-department assignment by SM Manager, Content Tracker table view
+on Calendar, stage stepper on Work Detail, standing monthly brand campaigns, and turnaround tracking.
+(Note: CV stage is parked and NOT included).
 
 Auto-assignment recommendation with Team Lead override
 
@@ -124,35 +133,37 @@ incentives.
 | --- | --- | --- | --- |
 | admin | System Owner / Admin | IT / System Owner | Every permission, all profiles, everyone, every screen |
 | marketing_head | Marketing Head | Head of Marketing | Org-wide, all profiles by default (creative & operating leadership) |
+| executive | Executive / Management | CEO, Business Head, Directors | Complete read-only view of portal, all 7 profiles, zero write permissions |
 | team_lead | Team Lead | Creative Manager, Design Lead and other leads | Own team (direct reports and department), within assigned profiles |
 | team_member | Team Member | Designers, writers, editors, specialists | Self only, within assigned profiles |
 
 Role sets breadth. Profile access sets which brands that breadth applies to. Example: a
 Team Lead scoped to HACA Design School has Team Lead breadth for that profile only.
 Admin sits outside the creative hierarchy, holds all permissions, and manages user accounts and access requests.
+Executive sits at company management level, holds complete read-only visibility into all profiles and screens, and cannot mutate any data.
 
 ### 5.2 Capability matrix (from the specification)
 
-| Capability | Admin | Marketing Head | Team Lead | Team Member |
-| --- | --- | --- | --- | --- |
-| User administration & role changes | Yes | No | No | No |
-| Approve / reject access requests | Yes | No | No | No |
-| Manage people operating fields | Yes | Yes (TL & Member only) | No | No |
-| Profiles visible | All | All by default | Assigned profiles | Assigned profiles |
-| People visible | Everyone | Everyone | Own team (direct reports and department) | Self only |
-| Dashboard scope | Org-wide | Org-wide KPIs, all campaigns | Team KPIs, team's campaigns | Personal priorities only |
-| Create and assign work | Yes | Yes, any profile in scope | Yes, own team | No, can request via Team Lead |
-| Override auto-assignment | Yes | Yes | Yes | No |
-| Approve and give feedback | Yes | Yes | Yes, own team's work | No, can respond to feedback |
-| Classify revision root cause | Yes | Yes | Yes | No |
-| Team performance analytics | Full | Full | Own team only | Own stats only |
-| Lead Funnel, LSQ, Data Center | Full | Full | View only, own profiles | Hidden |
-| Reports and Automation config | Full | Full | View own team's scheduled reports | Hidden |
-| OKR and Targets entry | Yes | Yes | View only | Hidden |
+| Capability | Admin | Marketing Head | Executive | Team Lead | Team Member |
+| --- | --- | --- | --- | --- | --- |
+| User administration & role changes | Yes | No | No | No | No |
+| Approve / reject access requests | Yes | No | No | No | No |
+| Manage people operating fields | Yes | Yes (TL & Member only) | No | No | No |
+| Profiles visible | All | All by default | All (7 by default) | Assigned profiles | Assigned profiles |
+| People visible | Everyone | Everyone | Everyone (names/roles; email/phone masked) | Own team (direct reports and department) | Self only |
+| Dashboard scope | Org-wide | Org-wide KPIs, all campaigns | Org-wide KPIs, all campaigns (read-only) | Team KPIs, team's campaigns | Personal priorities only |
+| Create and assign work | Yes | Yes, any profile in scope | No | Yes, own team | No, can request via Team Lead |
+| Override auto-assignment | Yes | Yes | No | Yes | No |
+| Approve and give feedback | Yes | Yes | No | Yes, own team's work | No, can respond to feedback |
+| Classify revision root cause | Yes | Yes | No | Yes | No |
+| Team performance analytics | Full | Full | Full (view only) | Own team only | Own stats only |
+| Lead Funnel, LSQ, Data Center | Full | Full | View only (all profiles) | View only, own profiles | Hidden |
+| Reports and Automation config | Full | Full | View reports (generation blocked) | View own team's scheduled reports | Hidden |
+| OKR and Targets entry | Yes | Yes | View only | View only | Hidden |
 
 ### 5.3 Profile access
 
-profileAccess[] is a list on each Person. Admin and the Marketing Head default to all profiles.
+profileAccess[] is a list on each Person. Admin, the Marketing Head, and Executive default to all profiles.
 A person with several profiles lands on All or on their last-used profile.
 Changing the Profile filter changes every section of the screen at once.
 
@@ -166,10 +177,10 @@ to, review and see that member.
 ### 5.5 Enablers (needed to run the system, not product features)
 
 People setup and access administration:
-- The Admin creates and invites users, approves/rejects access requests, sets roles (including granting admin or marketing_head), suspends users, and forces logouts.
-- The Marketing Head manages operational fields of team leads and team members (department, job role, profileAccess, reportsToIds, weeklyCapacityHours) via `people.assign`.
-- The Request Access flow is kept from FORGE as an Admin-only onboarding enabler: public request form (rate-limited, duplicate-protected) + Admin approval interface.
-- CEO and Business Head are report recipients by email, not users.
+- The Admin creates and invites users, approves/rejects access requests, sets roles (including granting admin, marketing_head, and executive), suspends users, and forces logouts.
+- The Marketing Head manages operational fields of team leads and team members (department, job role, profileAccess, reportsToIds, weeklyCapacityHours) via `people.assign`. Marketing Head cannot create, grant, or modify admin or executive accounts.
+- The Request Access flow is kept from FORGE as an Admin-only onboarding enabler: public request form (rate-limited, duplicate-protected) + Admin approval interface. The executive role cannot be requested publicly.
+- Executive Leadership (CEO, Business Head, Directors) hold the `executive` role for complete portal visibility across all 7 brand profiles, while also continuing to receive scheduled email reports.
 
 ## 6. Architecture
 
@@ -224,9 +235,9 @@ schedules and read AutomationRule.active  before acting.
 
 ## 7. Data model
 
-Nine entities come from the specification (Profile, Person, Campaign, Work Item,
-Feedback Entry, Blocker, Lead, Automation Rule, Report Definition). Records marked (S)
-are supporting records that the specification's own rules require.
+Ten core entities include the nine from the specification (Profile, Person, Campaign, Work Item,
+Feedback Entry, Blocker, Lead, Automation Rule, Report Definition) plus ContentPiece from the content flow.
+Records marked (S) are supporting records that the specification's own rules require.
 
 Profile (7 fixed values): id , name . A filter dimension, not a tenant.
 
@@ -244,6 +255,7 @@ Person
 | reportsToIds[] (S) | Team Leads this person reports to (empty for admin and marketing_head) |
 | weeklyCapacityHours | Used for workload %. Optional for admin (admin excluded from workload/assignment) |
 | lastProfileId (S) | Last-used profile filter |
+| workPreferences[] | Stages person can take: Content, Script, Design, Shoot, Edit, Post. Set by Admin or Marketing Head in People |
 | workloadPct | Derived: sum of estimatedEffortHrs of open owned work items divided by weeklyCapacityHours |
 | avgRevisions | Derived, rolling 90 days. Feeds the revision flag and auto-assignment |
 
@@ -265,27 +277,50 @@ Campaign / Project
 | progressPct | Derived from linked work item completion, or set manually when the goal is not work-item-countable |
 | startDate, endDate (S) | Needed for budget pace and the Campaign calendar view |
 
-Work Item (the atomic unit; every screen is a view over this table and its feedback)
+ContentPiece (groups sequential stages of a piece from CONTENT_FLOW.md)
 
 | Field | Notes |
 | --- | --- |
-| title, type | 14 types (section 14) |
+| code, topic | Generated code, content topic |
+| contentType | One of the extended work types (Reel, Static Post, Carousel Post, etc.) |
+| profileId | FK to Profile (brand). Replaces the sheet brand tabs |
+| campaignId | FK to Campaign (standing monthly campaign for the brand) |
+| finalDate | Final date F: posting date for postable types, deadline from design sheet for others |
+| pipeline | Design or Reel (Variant A, B, or C) |
+| needsScript, needsShoot | Booleans (for Reel pipeline variants) |
+| contentLink, assetsLink | Zoho Writer / Google Docs content link, creative assets link |
+| remarks | Free text remarks |
+| createdById | FK to Person (SM Manager, Marketing Head, or Admin) |
+| status | Derived: Planning, In production, Awaiting approval, Revision requested, Ready (final done), Published; red flag if Blocked/Overdue |
+| turnaroundDays | Derived: published date minus first stage start date |
+| stageWorkItems[] | List of attached stage WorkItem records in execution sequence |
+
+Work Item (the atomic unit; each stage of a ContentPiece is a normal Work Item)
+
+| Field | Notes |
+| --- | --- |
+| title, type | Extended work types: 14 design requirement types + Reel (section 14) |
 | profileId, campaignId, ownerId | Campaign is required |
+| contentPieceId | FK to parent ContentPiece (empty for standalone work items) |
+| stageKey, stageOrder | Stage identifier (Script, Shoot, Edit, Post, Content, Design) and numeric order |
+| reviewRequired | Boolean: true for review stages (Script, Content, Design, Edit); false for non-review stages (Shoot, Post) |
+| unlockedAt, isSkipped | Unlocking timestamp when prior stage finishes; isSkipped for stages not needed |
+| contentLink, assetsLink | Stage deliverable link (Zoho/Google doc or assets link) |
 | departmentId | Derived from owner, stored for fast filtering |
 | priority | High, Medium, Low |
 | status | Not Started, In Progress, Feedback, Pending, Blocked, Approved, Published. Overdue is computed |
 | channel, expectedOutcome | expectedOutcome: Lead Generation, Brand Awareness, Engagement, SEO Ranking, Nurture, Conversion, Reactivation, Ops |
-
-| Field | Notes |
-| --- | --- |
 | estimatedEffortHrs, actualEffortHrs | Feed workload and auto-assignment |
-| deadline | Date |
+| deadline | Date (calculated by stage offset from final date F, editable) |
 | brief | objective, audience, message, cta, platform, deliverable, successMetric, reference |
 | relatedOKR, relatedTarget | Inherited from the campaign, read-only |
 | files[] (S) | Uploaded files or links, for the Files tab |
 | createdAt, assignedAt, startedAt, submittedAt, approvedAt, publishedAt | Full timeline, feeds turnaround reporting |
 | leadsGenerated, qualifiedLeads | Filled after publishing via LSQ attribution |
 | revisions | Derived: number of rounds marked Revision Required |
+
+Shared config: pipelines, stage definitions, type-to-pipeline table, default due-date offsets, approver job roles (Creative Manager (TL)).
+Work types: extended with the 14 design requirement types and Reel. Note: CV stage is parked and NOT included.
 
 Feedback Entry: workItemId , round , fromPersonId , text , isResponse  (true for the
 
@@ -358,37 +393,35 @@ stored and never a transition target.
 | From | To | Who | Rule |
 | --- | --- | --- | --- |
 | Not Started | In Progress | Owner | Start. Sets startedAt |
-| In Progress | Feedback | Owner | Submit. Sets submittedAt |
-| Feedback | Approved | Reviewer (Head, or Team Lead of the owner) | Feedback entry with roundStatus Approved. Sets approvedAt |
-
-| From | To | Who | Rule |
-| --- | --- | --- | --- |
-| Feedback | In Progress | Reviewer | roundStatus Revision Required. Owner must respond before the next round |
-| Approved | Published | Owner or reviewer (assumed) | Sets publishedAt |
+| In Progress | Feedback | Owner | Submit for approval (review stages: Script, Content, Design, Edit). Sets submittedAt |
+| Feedback | Approved | Reviewer (Creative Head [Creative Manager (TL)], Head, or Admin) | Feedback entry with roundStatus Approved. Sets approvedAt |
+| Feedback | In Progress | Reviewer (Creative Head, Head, or Admin) | roundStatus Revision Required ('Rejected' in sheet maps to Revision Required, counted as revision; not final). Owner must respond before next round |
+| In Progress | Approved / Next stage | Owner | 'Done and forward' for non-review stages (Shoot, Post). Sets completed timestamp and links |
+| Approved | Published | Owner or reviewer | Sets publishedAt (only for postable types: Reel, Static Post, Carousel Post, Story, Poster) |
 | Any open status | Blocked | Owner | Reason required (8.6) |
 | Blocked | Previous status | Owner or Team Lead | Resolves the blocker |
 | In Progress | Pending | Owner | Assumed meaning: waiting, but not a blocker |
 
-### 8.3 Auto-assignment
+Stage dependency rule: A stage cannot be started until the previous stage is approved or done.
+Skipped stages ('Not needed') are bypassed and ignored by deadlines, workload, and alerts.
+Poster is final done when Design Approval is given; for postable types the Post stage follows.
+'Approval' in the sheet is the Creative Head's decision on the last review stage, not a separate task.
+
+### 8.3 Auto-assignment and work preferences
 
 Triggered when a Work Item is created without an owner.
 
-1. Filter candidates: right department for the work type, workloadPct  below 85%, and
+1. Filter candidates:
+   - For standalone work items: right department for the work type, workloadPct below 85%, and enough unallocated capacity before the deadline.
+   - For ContentPiece stage work items: candidate pool comes from Person.workPreferences[] (Content, Script, Design, Shoot, Edit, Post) instead of the department table, filtered by brand profile, workloadPct below 85%, and available bandwidth before the stage due date.
+2. Rank: lowest workloadPct first, then lowest avgRevisions, then earliest availability.
+3. Show, never assign silently: 'Recommended Owner: [Name]. Reason: lowest current workload ([X]%) + suitable skill/preference + available bandwidth.'
+4. Who assigns: SM Manager, Marketing Head, and Admin. The Creative Head approves only.
+5. Cross-department assignment: The SM Manager can assign across departments for content pieces (e.g. a Writer, a Designer, and an Editor on one piece), even though a normal team lead only sees their own team.
+6. Assign now or later: Stages can be assigned at planning time or left open ('Needs owner'), alerting the SM Manager when unlocked.
+7. Overrides: Head or Team Lead (SM Manager) may override before creation. Every override is logged in AssignmentOverride (who, from whom, to whom).
 
-enough unallocated capacity before the deadline for estimatedEffortHrs .
-
-2. Rank: lowest workloadPct  first, then lowest avgRevisions , then earliest availability.
-
-3. Show, never assign silently: 'Recommended Owner: [Name]. Reason: lowest current
-
-workload ([X]%) + suitable skill + available bandwidth.'
-
-4. The Head or Team Lead may override before the work item is created. Every override is
-
-logged in AssignmentOverride (who, from whom, to whom) so the rule can be tuned.
-
-Proposed work type to department mapping (the specification only confirms Reel to
-Video Production, so this table needs sign-off):
+Proposed work type to department mapping (standalone work items):
 
 | Department | Work types |
 | --- | --- |
@@ -464,6 +497,42 @@ deferred Leaderboard later.
 | Quality | Approval rate, rejection rate, re-edit rate |
 | Collaboration | Feedback response time, blocker resolution time, dependency delay incidents caused |
 | Business impact | Leads, qualified leads and engagement attributable to published work |
+
+### 8.8 Content flow pipelines, deadlines, approvals & turnaround
+
+From `docs/CONTENT_FLOW.md` (replaces legacy SM CONTENT and brand design sheets; brand tabs become Brand filter; CV stage is parked and NOT included).
+
+1. **Pipelines:**
+   - **Design pipeline (posters and all design requirements):** Content (Content creator, reviewed by Creative Head -> content doc link) -> Design (Designer, reviewed by Creative Head -> assets link or files) -> Post (Posting owner, non-review -> published date and link, only for postable types). Poster is final done when Design Approval is given; for postable types the Post stage follows.
+   - **Reel pipeline:** SM Manager specifies Needs script? and Needs shoot?:
+     - Variant A (with script, with shoot): Script (reviewed) -> Shoot -> Edit (reviewed) -> Post
+     - Variant B (no script, with shoot): Shoot -> Edit (reviewed) -> Post
+     - Variant C (no script, no shoot - program-video based reels): Edit (reviewed) -> Post
+     - Skipped stages show as 'Not needed' in the tracker and are ignored by deadlines, workload, and alerts.
+   - **Type to pipeline:**
+     - Reel: Reel (A, B, or C; has Post stage)
+     - Static Post, Carousel Post, Story, Poster (SM sheet): Design pipeline (has Post stage)
+     - Cover Image, Thumbnail: Design pipeline (no Post stage)
+     - Meta Ad Creative: Design pipeline (no Post stage; final done, hand-off to performance team not built)
+     - Class Announcement, Orientation Creative, Graduation Creative, Offer Creative, Brochure, Certificate, Placement Poster, Custom Request: Design pipeline (no Post stage; final done)
+
+2. **Approver rule (default):**
+   A piece can be approved by a team lead whose job role is `Creative Manager (TL)` (Creative Head), by the Marketing Head, or by Admin. The SM Manager assigns but does NOT approve.
+
+3. **Stage Deadlines:**
+   Each stage has its own due date, counted back from final date F (posting date for postable types, deadline from design sheet for the rest):
+   - Design, postable: Content F-6, Design F-3, Post F
+   - Design, not postable: Content F-5, Design F-2 (approved by F)
+   - Reel A: Script F-10, Shoot F-7, Edit F-4, Post F
+   - Reel B: Shoot F-7, Edit F-4, Post F
+   - Reel C: Edit F-4, Post F
+   - Approvals are expected within 1 working day of submission. If the posting date changes, the SM Manager can shift all unstarted stage deadlines in one click.
+
+4. **Turnaround:**
+   Turnaround (Days) = Published date minus the first stage start date.
+
+5. **Campaign Linkage:**
+   Each content piece links to one standing campaign per brand per month.
 
 ## 9. Automation rules
 
@@ -553,55 +622,44 @@ The Reports and Automation screen lists these with a manual Generate Now.
 | # | Screen | Route | Who | What it does |
 | --- | --- | --- | --- | --- |
 | 1 | Login and Profile selection | /login | All | Sign in, resolve role, set default profile from profileAccess (All or last used) |
-| 2 | Team Dashboard | /dashboard | Admin, Head, Team Lead | Sections in 12.2. Every card is clickable |
+| 2 | Team Dashboard | /dashboard | Admin, Head, Executive, Team Lead | Sections in 12.2. Every card is clickable (Executive is read-only) |
 
 | # | Screen | Route | Who | What it does |
 | --- | --- | --- | --- | --- |
-| 3 | My Work | /my-work | All | Today, Overdue, Upcoming. One-click Start, Submit, Request Help, Mark Blocked |
-| 4 | Monthly Marketing Calendar | /calendar | All | Month, Week, Campaign and Owner views over work item deadlines. Each item opens its detail |
-| 5 | Projects / Campaigns | /campaigns | Head, Team Lead | Campaign list: goal, budget and spend, progress, status. Filter by profile and status |
-| 6 | Project Detail | /campaigns/:id | Head, Team Lead | Tabs: Overview (traceability chain, budget pace), Tasks, Creatives, Leads |
-| 7 | Single Work Detail | /work/:id | All (scoped) | Tabs in 12.3. Revision flag and blocker state shown inline |
-| 8 | Feedback and Revision History | /feedback | Head, Team Lead | Every open feedback thread and every flagged revision pattern, to triage in one place |
-| 9 | Team Workload | /workload | Head, Team Lead | Grouped by department: workload %, band, open tasks, avgRevisions |
+| 3 | My Work | /my-work | Admin, Head, Team Lead, Team Member | Today, Overdue, Upcoming. One-click Start, Submit, Request Help, Mark Blocked (Hidden for Executive). Creative Head works from 'Waiting for my approval' |
+| 4 | Monthly Marketing Calendar | /calendar | All | Month, Week, Campaign and Owner views over work item deadlines. Gets a Content Tracker view (Social view and Design view) replacing the team's sheets, with stage status, date, owner chips, and quick-add row. Each item opens its detail |
+| 5 | Projects / Campaigns | /campaigns | Head, Executive, Team Lead | Campaign list: goal, budget and spend, progress, status. Filter by profile and status |
+| 6 | Project Detail | /campaigns/:id | Head, Executive, Team Lead | Tabs: Overview (traceability chain, budget pace), Tasks, Creatives, Leads |
+| 7 | Single Work Detail | /work/:id | All (scoped) | Shows a sequential stage stepper (stages, links, outputs, history). Tabs in 12.3. Revision flag and blocker state shown inline (Executive is read-only) |
+| 8 | Feedback and Revision History | /feedback | Head, Executive, Team Lead | Every open feedback thread and every flagged revision pattern. Creative Head works from 'Waiting for my approval' queue |
+| 9 | Team Workload | /workload | Head, Executive, Team Lead | Grouped by department: workload %, band, open tasks, avgRevisions |
 | 10 | Todo and Priorities | /todo | All | Overdue, Today, Upcoming by role scope. Empty state reads as clarity |
 
 | # | Screen | Route | Who | What it does |
 | --- | --- | --- | --- | --- |
-| 11 | Issues and Blockers | /issues | Head, Team Lead | Open blockers and revision flags, with Notify and Classify Reason inline |
-| 12 | Lead Funnel | /leads | Head, Team Lead (view) | 12-stage funnel, target vs actual qualified leads, CPL and CPQL, source mix over 19 sources |
-| 13 | Data Center / LSQ | /data-center | Head, Team Lead (view) | Health score and issue list |
-| 14 | Reports and Automation | /reports | Head (Team Lead views own team's scheduled reports) | Scheduled reports with Generate Now, automation rules with active or paused switch |
+| 11 | Issues and Blockers | /issues | Head, Executive, Team Lead | Open blockers and revision flags, with Notify and Classify Reason inline |
+| 12 | Lead Funnel | /leads | Head, Executive, Team Lead (view) | 12-stage funnel, target vs actual qualified leads, CPL and CPQL, source mix over 19 sources |
+| 13 | Data Center / LSQ | /data-center | Head, Executive, Team Lead (view) | Health score and issue list |
+| 14 | Reports and Automation | /reports | Head, Executive, Team Lead | Scheduled reports with Generate Now, automation rules with active or paused switch (Executive view only) |
 
-After login (RootRedirect): Admin, Marketing Head and Team Lead land on /dashboard, Team Member on /my-work.
+After login (RootRedirect): Admin, Marketing Head, Executive, and Team Lead land on /dashboard, Team Member on /my-work.
 
 ### 12.2 Team Dashboard sections (top to bottom)
 
-1. Monthly Marketing Target: revenue, leads, qualified, budget vs actual (Head edits the
-
-target here)
-
-2. KPI strip: planned, completed, in progress, at risk, blocked, pending feedback, overdue,
-
-each opening its filtered list
-
+1. Monthly Marketing Target: revenue, leads, qualified, budget vs actual (Head edits the target here)
+2. KPI strip: planned, completed, in progress, at risk, blocked, pending feedback, overdue, each opening its filtered list
 3. Today's Priorities table
-
-4. Creative Production stats and output trend
-
+4. Creative Production stats and output trend (plus pipeline counts: pieces by stage, waiting approval, needs owner, behind schedule)
 5. Campaign Progress list
-
 6. Team Workload
-
 7. Lead Funnel snapshot
-
 8. Issues and Blockers
-
 9. Recent Activity
 
-### 12.3 Work Detail tabs
+### 12.3 Work Detail tabs and stage stepper
 
-Overview, Brief, Files, Feedback, Activity, Performance, Related Leads.
+The single Work Detail page (/work/:id) features a visual **stage stepper** across the top showing the piece's stages in sequence (Script/Content, Shoot, Edit, Post, Design), the active stage, links to stage deliverables (content doc link, assets link, published link), and history.
+Tabs below the stepper: Overview, Brief, Files, Feedback, Activity, Performance, Related Leads.
 
 ### 12.4 Global filter and navigation chain
 
@@ -610,35 +668,71 @@ Campaign (within profile scope), Date or month, Status. Navigation runs Business
 Department, Team Member, Project, Individual Work, Feedback, Result, clickable at every
 step.
 
+### 12.5 Content Tracker (Calendar screen view)
+
+The **Content Tracker** is a dedicated table view on the Calendar screen (/calendar) that replaces Sheet A (SM CONTENT) and Sheet B (per-brand design sheets):
+- **Views:**
+  - **Social view:** Posting Date, Topic, Type, Script (status, date, owner), Shoot (status, date, owner), Edit (status, date, owner), Approval (status, date, by), Published Date, Posting Owner, Turnaround, Remarks.
+  - **Design view:** ID, Date, Requirement, Content link, Assets link, Deadline, Designer, Status, Approval.
+- **Controls & Filters:**
+  - Brand filter (replaces the brand tabs from Sheet B).
+  - Filters: Brand, month, type, owner, stage status, Needs owner, Waiting approval, Overdue, Blocked.
+  - Quick-add row at the top, allowing fast inline piece creation like typing in the sheet.
+  - Clicking any row opens the piece with its sequential **stage stepper**, links, outputs, and history.
+- **Tracker Access Matrix:**
+  - Admin, Marketing Head, SM Manager: All pieces across their assigned brands.
+  - Creative Head: All pieces across their brands (since they approve review stages).
+  - Other Team Leads: Pieces where at least one of their team members owns a stage.
+  - Executive: All pieces across all brands, read-only.
+  - Team Members: No tracker access. They see their assigned stage items in My Work with input links from previous stages.
+
 ## 13. Permissions and API
 
 ### 13.1 Permission keys
 
-| Key | Admin | Marketing Head | Team Lead | Team Member |
-| --- | --- | --- | --- | --- |
-| work.create (any profile in scope / own team) | Yes | Yes | Yes | No |
-| work.request (ask a Team Lead for work) | Yes | Yes | Yes | Yes |
-| work.update.own | Yes | Yes | Yes | Yes |
-| assignment.override | Yes | Yes | Yes | No |
-| feedback.give (approve, request revision) | Yes | Yes | Own team | No |
-| feedback.respond | Yes | Yes | Yes | Yes |
-| revision.classify | Yes | Yes | Yes | No |
-| campaign.manage | Yes | Yes | Own team | No |
-| target.manage | Yes | Yes | No | No |
-| target.view | Yes | Yes | Yes | No |
-| lead.view | Yes | Full | Own profiles | No |
-| datacenter.view | Yes | Yes | Yes (view) | No |
-| analytics.team | Yes | Full | Own team | Own stats |
-| report.view | Yes | Yes | Own team | No |
-| report.configure , automation.manage | Yes | Yes | No | No |
-| user.approve (approve/reject access requests) | Yes | No | No | No |
-| user.manage (create, invite, suspend, reactivate, set roles, reset pwd) | Yes | No | No | No |
-| people.assign (edit dept, jobRole, profileAccess, reportsTo, capacity) | Yes | Yes (TL & Member only) | No | No |
-| reference.manage (manage reference data) | Yes | No | No | No |
+| Key | Admin | Marketing Head | Executive | Team Lead | Team Member |
+| --- | --- | --- | --- | --- | --- |
+| portal.view (universal portal read access) | Yes | Yes | Yes | No | No |
+| people.view (read people directory, masked email/phone) | Yes | Yes | Yes | No | No |
+| work.create (any profile in scope / own team) | Yes | Yes | No | Yes | No |
+| work.request (ask a Team Lead for work) | Yes | Yes | No | Yes | Yes |
+| work.update.own | Yes | Yes | No | Yes | Yes |
+| assignment.override | Yes | Yes | No | Yes | No |
+| feedback.give (approve, request revision) | Yes | Yes | No | Own team | No |
+| feedback.respond | Yes | Yes | No | Yes | Yes |
+| revision.classify | Yes | Yes | No | Yes | No |
+| campaign.manage | Yes | Yes | No | Own team | No |
+| target.manage | Yes | Yes | No | No | No |
+| target.view | Yes | Yes | Yes | Yes | No |
+| lead.view | Yes | Full | Full | Own profiles | No |
+| datacenter.view | Yes | Yes | Yes | Yes (view) | No |
+| analytics.team | Yes | Full | Full | Own team | Own stats |
+| report.view | Yes | Yes | Yes | Own team | No |
+| report.configure , automation.manage | Yes | Yes | No | No | No |
+| user.approve (approve/reject access requests) | Yes | No | No | No | No |
+| user.manage (create, invite, suspend, reactivate, set roles, reset pwd) | Yes | No | No | No | No |
+| people.assign (edit dept, jobRole, profileAccess, reportsTo, capacity) | Yes | Yes (TL & Member only) | No | No | No |
+| reference.manage (manage reference data) | Yes | No | No | No | No |
 
 Admin has all permission keys (derived from PERMISSION_KEYS array, so future keys are included automatically).
-Work actions taken by Admin are recorded in ActivityEvent with actingAs: 'admin'. Admin is excluded from
+Work actions taken by Admin are recorded in ActivityEvent with actingAs: 'admin'. Both Admin and Executive are excluded from
 auto-assignment, workload % calculations, and performance reports.
+Executive role is strictly read-only: holds `portal.view`, `people.view`, `target.view`, `lead.view`, `datacenter.view`, `analytics.team`, `report.view`, and receives HTTP 403 on all POST, PATCH, PUT, and DELETE routes. In the People Directory, contact details (email and phone) are omitted for executive callers. Only Admin can grant or approve the executive role; Marketing Head cannot modify or grant executive accounts.
+
+#### Content Flow Access Matrix (from CONTENT_FLOW.md §10)
+
+| Action | Admin | Marketing Head | SM Manager | Creative Head | Other team lead | Member | Executive |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Create or edit a content piece | Yes | Yes | Yes | No | No | No | No |
+| Assign or reassign stage owners | Yes | Yes | Yes | No | No | No | No |
+| Change due dates, skip a stage | Yes | Yes | Yes | No | No | No | No |
+| Work a stage and forward it | Yes | Yes | Yes | Yes | Yes | Own stages | No |
+| Approve or request revision | Yes | Yes | No | Yes | No | No | No |
+| Post and mark Published | Yes | Yes | Yes | No | No | Own Post stage | No |
+| See the Tracker | Yes | Yes | Yes | Yes | Own people's pieces | No | Read-only |
+| Set work preferences | Yes | Yes | No | No | No | No | No |
+
+*Approver rule (default):* A review stage can be approved only by a team lead whose job role is Creative Manager (TL) (Creative Head), the Marketing Head, or Admin. The SM Manager assigns across departments but does not approve.
 
 ### 13.2 API catalog (all routes scoped by resolveScope )
 
@@ -720,7 +814,7 @@ components, Vitest setup, CI.
 
 | FORGE | Becomes |
 | --- | --- |
-| User and 8 role keys | Person with 4 roles (admin, marketing_head, team_lead, team_member), job role, department, profileAccess[], reportsToIds[], capacity (jobRole/dept/capacity optional for admin) |
+| User and 8 role keys | Person with 5 roles (admin, marketing_head, executive, team_lead, team_member), job role, department, profileAccess[], reportsToIds[], capacity (jobRole/dept/capacity optional for admin/executive) |
 | CASL abilities and permission keys | New permission keys (13.1) plus profile scoping through resolveScope |
 | Campaign (optional, basic) | Campaign with goal, budget, spend, target link, status, progress |
 | Task and ContentItem | Work Item (one owner, campaign required, 14 types, brief, effort, timeline) |
@@ -741,6 +835,7 @@ components, Vitest setup, CI.
 
 Request intake, triage and dynamic request forms. Requester roles (dept_lead, dept_staff), sm_manager, viewer.
 (NOTE: `admin` role, the public Request Access flow, and the admin Users and Access Requests pages are KEPT as Admin-only onboarding enablers and adapted in Phase 1).
+Legacy roles `management` and `viewer` map to `executive` (active status, all 7 profiles, empty reportsTo), while `dept_lead` and `dept_staff` map to `suspended`.
 Calendar bulk import and clash detection. Content publishing queue. Pipeline templates and automatic
 stage handoffs. Shoot planner. Time tracking, timesheets and leave. File library (DAM) and
 Performance Ads dashboard. Video review studio and version compare. Master data
@@ -841,6 +936,27 @@ Phase 8 depends on LSQ access, so start that conversation in parallel with Phase
 8. Lead source to department mapping for the other 18 sources.
 
 9. How leads are attributed to a work item.
+
+### 17.4 Content Flow decisions and proposed defaults (CONTENT_FLOW.md §13)
+
+| # | Question | Proposed Default |
+| --- | --- | --- |
+| 1 | Who is the Creative Head? | A team lead with job role Creative Manager (TL), plus Marketing Head and Admin |
+| 2 | Who shoots? There is no job role for it | Anyone with the Shoot work preference |
+| 3 | Is Poster the same as Static Post? | Yes |
+| 4 | Which types have a Post stage? | Reel, Static Post, Carousel Post, Story, Poster (table in CONTENT_FLOW §3.3) |
+| 5 | Does Meta Ad Creative hand off to the performance team? | Not built. Final done only |
+| 6 | Program-video reels: need a shoot, or edit only? | Both variants (B with shoot, C edit only) |
+| 7 | Which profile is 'HACA UAE', and what is the fifth tab? | HACA UAE maps to HACA Mideast. Fifth tab to confirm |
+| 8 | Standing campaign per brand per month for every piece? | Yes |
+| 9 | How is Turnaround (Days) counted? | Published date minus the first stage start date |
+| 10 | Do other departments also request designs (the Custom Request type)? | No. The SM Manager enters them |
+| 11 | Is Rejected a revision request, not a final rejection? | Yes (revision required, goes back to owner, counted) |
+| 12 | Can the SM Manager approve? | No (assigns across departments, but does not approve) |
+| 13 | Default due-date offsets in section 6 | As listed in CONTENT_FLOW §6 |
+| 14 | Import of the existing sheet rows? | Not built. Start fresh from the new month |
+
+Parked / Out of scope for Content Flow (CONTENT_FLOW.md §14): CV Status, Date and Owner (parked and NOT included), shoot day planning, bulk import, time tracking, requests from other departments, rich-text editing (content stays in Zoho Writer / Google Docs, linked), video player with timestamped comments.
 
 ## 18. Out of scope for this version
 

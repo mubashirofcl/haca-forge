@@ -438,4 +438,181 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
       expect(typeof todo.total).toBe('number');
     });
   });
+
+  describe('Content Flow Delta: Extended Work Types, Poster Alias, Stage Fields & Brief Links', () => {
+    const designRequirementTypes = [
+      'Static Post',
+      'Carousel Post',
+      'Story',
+      'Cover Image',
+      'Thumbnail',
+      'Meta Ad Creative',
+      'Class Announcement',
+      'Orientation Creative',
+      'Graduation Creative',
+      'Brochure',
+      'Certificate',
+      'Offer Creative',
+      'Custom Request',
+      'Placement Poster',
+    ];
+
+    it('creates work items with each of the 14 design requirement types and Reel', async () => {
+      for (const wt of [...designRequirementTypes, 'Reel']) {
+        const item = await workItemService.createWorkItem(
+          {
+            campaignId: testCampaign._id,
+            title: `P3 Test: Design Type ${wt}`,
+            workType: wt,
+            departmentId: testDept._id,
+            ownerId: memberUser._id,
+            deadline: new Date(Date.now() + 86400000 * 3),
+          },
+          leadUser
+        );
+        expect(item.workType).toBe(wt);
+      }
+    });
+
+    it('handles Poster as an alias of Static Post and normalizes appropriately', async () => {
+      const posterItem = await workItemService.createWorkItem(
+        {
+          campaignId: testCampaign._id,
+          title: 'P3 Test: Poster Alias Item',
+          workType: 'Poster',
+          departmentId: testDept._id,
+          ownerId: memberUser._id,
+          deadline: new Date(Date.now() + 86400000 * 4),
+        },
+        leadUser
+      );
+
+      expect(posterItem.workType).toBe('Static Post');
+    });
+
+    it('supports stage fields: nullable contentPieceId, stageKey, stageOrder, reviewRequired, unlockedAt, isSkipped', async () => {
+      const fakeContentPieceId = new mongoose.Types.ObjectId();
+      const unlockedDate = new Date();
+
+      const stageItem = await workItemService.createWorkItem(
+        {
+          campaignId: testCampaign._id,
+          title: 'P3 Test: Stage Item with Pipeline Metadata',
+          workType: 'Static Post',
+          departmentId: testDept._id,
+          ownerId: memberUser._id,
+          deadline: new Date(Date.now() + 86400000 * 5),
+          contentPieceId: fakeContentPieceId,
+          stageKey: 'Design',
+          stageOrder: 2,
+          reviewRequired: true,
+          unlockedAt: unlockedDate,
+          isSkipped: false,
+        },
+        leadUser
+      );
+
+      expect(stageItem.contentPieceId.toString()).toBe(fakeContentPieceId.toString());
+      expect(stageItem.stageKey).toBe('Design');
+      expect(stageItem.stageOrder).toBe(2);
+      expect(stageItem.reviewRequired).toBe(true);
+      expect(new Date(stageItem.unlockedAt).toISOString()).toBe(unlockedDate.toISOString());
+      expect(stageItem.isSkipped).toBe(false);
+
+      // Verify querying by contentPieceId and stageKey
+      const queried = await workItemService.listWorkItems(
+        { contentPieceId: fakeContentPieceId.toString(), stageKey: 'Design' },
+        leadUser
+      );
+      expect(queried.length).toBeGreaterThan(0);
+      expect(queried.some((q) => q._id.toString() === stageItem._id.toString())).toBe(true);
+    });
+
+    it('stores brief with contentLink and assetsLink, syncing to top-level fields', async () => {
+      const contentDocUrl = 'https://writer.zoho.com/doc/123456';
+      const assetsDriveUrl = 'https://drive.google.com/drive/folders/abcdef';
+
+      // 1. Creation with direct links
+      const itemWithLinks = await workItemService.createWorkItem(
+        {
+          campaignId: testCampaign._id,
+          title: 'P3 Test: Deliverable Links Direct',
+          workType: 'Carousel Post',
+          departmentId: testDept._id,
+          ownerId: memberUser._id,
+          deadline: new Date(Date.now() + 86400000 * 2),
+          contentLink: contentDocUrl,
+          assetsLink: assetsDriveUrl,
+          description: 'Execution brief for Carousel Post',
+        },
+        leadUser
+      );
+
+      expect(itemWithLinks.contentLink).toBe(contentDocUrl);
+      expect(itemWithLinks.assetsLink).toBe(assetsDriveUrl);
+      expect(itemWithLinks.brief).toBeDefined();
+      expect(itemWithLinks.brief.contentLink).toBe(contentDocUrl);
+      expect(itemWithLinks.brief.assetsLink).toBe(assetsDriveUrl);
+      expect(itemWithLinks.brief.description).toBe('Execution brief for Carousel Post');
+
+      // 2. Creation with brief object
+      const itemWithBriefObject = await workItemService.createWorkItem(
+        {
+          campaignId: testCampaign._id,
+          title: 'P3 Test: Deliverable Links via Brief Subdocument',
+          workType: 'Story',
+          departmentId: testDept._id,
+          ownerId: memberUser._id,
+          deadline: new Date(Date.now() + 86400000 * 2),
+          brief: {
+            description: 'Story specs with swipe up',
+            contentLink: 'https://docs.google.com/document/d/987654',
+            assetsLink: 'https://drive.google.com/drive/folders/storyassets',
+          },
+        },
+        leadUser
+      );
+
+      expect(itemWithBriefObject.brief.description).toBe('Story specs with swipe up');
+      expect(itemWithBriefObject.brief.contentLink).toBe('https://docs.google.com/document/d/987654');
+      expect(itemWithBriefObject.brief.assetsLink).toBe('https://drive.google.com/drive/folders/storyassets');
+      expect(itemWithBriefObject.contentLink).toBe('https://docs.google.com/document/d/987654');
+      expect(itemWithBriefObject.assetsLink).toBe('https://drive.google.com/drive/folders/storyassets');
+
+      // 3. Update via updateWorkItem
+      const updatedItem = await workItemService.updateWorkItem(
+        itemWithBriefObject._id,
+        {
+          contentLink: 'https://writer.zoho.com/doc/updated-doc',
+          assetsLink: 'https://drive.google.com/drive/folders/updated-assets',
+        },
+        leadUser
+      );
+
+      expect(updatedItem.contentLink).toBe('https://writer.zoho.com/doc/updated-doc');
+      expect(updatedItem.assetsLink).toBe('https://drive.google.com/drive/folders/updated-assets');
+      expect(updatedItem.brief.contentLink).toBe('https://writer.zoho.com/doc/updated-doc');
+      expect(updatedItem.brief.assetsLink).toBe('https://drive.google.com/drive/folders/updated-assets');
+    });
+
+    it('keeps standalone work items backward compatible with null contentPieceId', async () => {
+      const standalone = await workItemService.createWorkItem(
+        {
+          campaignId: testCampaign._id,
+          title: 'P3 Test: Standalone Ad Creative',
+          workType: 'Ad Creative',
+          departmentId: testDept._id,
+          ownerId: memberUser._id,
+          deadline: new Date(Date.now() + 86400000 * 2),
+        },
+        leadUser
+      );
+
+      expect(standalone.contentPieceId).toBeNull();
+      expect(standalone.stageKey).toBeNull();
+      expect(standalone.stageOrder).toBeNull();
+      expect(standalone.reviewRequired).toBe(false);
+      expect(standalone.isSkipped).toBe(false);
+    });
+  });
 });

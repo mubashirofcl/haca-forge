@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.js';
-import { requirePermission } from '../../middleware/requirePermission.js';
+import { requirePermission, requireAnyPermission } from '../../middleware/requirePermission.js';
 import { validate } from '../../middleware/validate.js';
 import { monthlyTargetSchema, monthlyTargetUpdateSchema } from '@mmp/shared';
 import * as targetController from './controller.js';
@@ -9,9 +9,9 @@ const router = Router();
 
 router.use(authenticate);
 
-// View monthly targets (Admin, Marketing Head, Team Lead)
-router.get('/', requirePermission('target.view'), targetController.listTargets);
-router.get('/:id', requirePermission('target.view'), targetController.getTarget);
+// View monthly targets (Admin, Marketing Head, Team Lead, Executive)
+router.get('/', requireAnyPermission('target.view', 'portal.view'), targetController.listTargets);
+router.get('/:id', requireAnyPermission('target.view', 'portal.view'), targetController.getTarget);
 
 // Set / Manage monthly targets (Admin, Marketing Head only)
 router.post(

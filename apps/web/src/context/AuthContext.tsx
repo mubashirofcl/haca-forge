@@ -16,8 +16,10 @@ export interface User {
   skills: string[];
   capacity: number;
   attendance: string;
+  jobRole?: string;
   profileAccess?: string[];
   lastProfileId?: string;
+  workPreferences?: string[];
 }
 
 interface AuthContextType {

@@ -10,6 +10,7 @@ This document provides the complete reference of all user accounts currently pro
 |---|---|---|---|
 | **Administrator** | `admin@hacaforge.com` | `Admin1212` | `/dashboard` (All Access) |
 | **Marketing Head** | `sarah.lead@marketingportal.com` | `Password123!` | `/dashboard` (Executive View) |
+| **Executive (C-Suite)** | `executive@demo.haca.local` | `demoPassword123!` | `/dashboard` (Executive Read-Only View) |
 | **Team Lead (Content)** | `david.content@marketingportal.com` | `Password123!` | `/dashboard` (Scoped View) |
 | **Team Lead (Graphics)** | `elena.graphics@marketingportal.com` | `Password123!` | `/dashboard` (Scoped View) |
 | **Team Lead (Cinematography)** | `kai.cinema@marketingportal.com` | `Password123!` | `/dashboard` (Scoped View) |
@@ -18,6 +19,7 @@ This document provides the complete reference of all user accounts currently pro
 
 > **Default Password Policy:**
 > - The **System Administrator** (`admin@hacaforge.com`) uses `Admin1212` (configured in `apps/api/.env`).
+> - The **Demo Executive** (`executive@demo.haca.local`) uses `demoPassword123!`.
 > - **All other staff accounts** use the shared test credentials: `Password123!`.
 
 ---
@@ -43,7 +45,20 @@ Sets monthly revenue/lead targets, oversees cross-brand campaigns, triages deliv
 
 ---
 
-## 3. Team Leads (`team_lead`)
+---
+
+## 3. Executive Leadership (`executive`)
+
+Company management (CEO, Business Head, Board Directors). Full read-only view of all marketing data, reports, and dashboards across all 7 brand profiles (`personScope: 'all'`, all 7 profiles by default). Zero mutation privileges (cannot create, edit, approve, or delete deliverables, campaigns, or settings; HTTP 403 on all mutation routes). Lands on `/dashboard`. Excluded from auto-assignment candidate pools, workload metrics, and team performance digests. In the People Directory, contact details (email and phone) are masked/omitted for executive callers. Only System Administrators can grant or approve executive accounts.
+
+| Name | Email | Marketing OS Role | Database Role | Department | Password | Status |
+|---|---|---|---|---|---|---|
+| Demo Executive | `executive@demo.haca.local` | `executive` | `executive` | Executive Management | `demoPassword123!` | Active |
+| Auditor Claire (Legacy Viewer) | `claire.viewer@marketingportal.com` | `executive` | `executive` | Corporate Governance | `Password123!` | Active |
+
+---
+
+## 4. Team Leads (`team_lead`)
 
 Manages campaigns, work distribution, quality reviews, and approvals for their designated teams and brand profiles.
 
@@ -56,7 +71,7 @@ Manages campaigns, work distribution, quality reviews, and approvals for their d
 
 ---
 
-## 4. Creative Team Members (`team_member`)
+## 5. Creative Team Members (`team_member`)
 
 Executes assigned deliverables, requests assets, logs progress, and submits deliverables for review. Lands on `/my-work`.
 
@@ -85,36 +100,44 @@ Executes assigned deliverables, requests assets, logs progress, and submits deli
 
 ---
 
-## 5. Other Department Staff & Management (Normalized to `team_member`)
+## 6. Legacy Roles Migration Mapping
 
-Staff in ancillary departments whose legacy roles map to `team_member` under Marketing OS canonical RBAC normalization.
+Under the Marketing OS canonical RBAC normalization:
+- `admin` $\rightarrow$ `admin` (Active, all profiles)
+- `head`, `lead` $\rightarrow$ `marketing_head` (Active, all profiles)
+- `team_lead` $\rightarrow$ `team_lead` (Active, scoped profiles)
+- `worker`, `sm_manager` $\rightarrow$ `team_member` (Active, scoped profiles)
+- `management`, `viewer` $\rightarrow$ `executive` (Active, all 7 profiles, empty reportsTo)
+- `dept_lead`, `dept_staff` $\rightarrow$ `suspended` (Retained safely in database, cannot log in)
 
-| Name | Email | Normalized Role | Database Role | Department | Password | Status |
+| Name | Email | Legacy Role | Canonical Role | Department | Password | Status |
 |---|---|---|---|---|---|---|
-| Professor Arthur Pendelton | `arthur.academic@marketingportal.com` | `team_member` | `team_member` | Academic Affairs & Research | `Password123!` | Active |
-| Rachel Adams | `rachel.sm@marketingportal.com` | `team_member` | `team_member` | Social Media Marketing | `Password123!` | Active |
-| Victoria Stone | `victoria.sales@marketingportal.com` | `team_member` | `team_member` | Sales & Business Development | `Password123!` | Active |
-| Vikram Malhotra | `vikram.ads@marketingportal.com` | `team_member` | `team_member` | Performance & Paid Media | `Password123!` | Active |
-| Benjamin Clarke | `benjamin.academic@marketingportal.com` | `team_member` | `team_member` | Academic Affairs & Research | `Password123!` | Active |
-| Carlos Mendez | `carlos.ads@marketingportal.com` | `team_member` | `team_member` | Performance & Paid Media | `Password123!` | Active |
-| Jessica Pearson | `jessica.sales@marketingportal.com` | `team_member` | `team_member` | Sales & Business Development | `Password123!` | Active |
-| Hannah Abbott | `hannah.sm@marketingportal.com` | `team_member` | `team_member` | Social Media Marketing | `Password123!` | Active |
-| Auditor Claire | `claire.viewer@marketingportal.com` | `team_member` | `team_member` | Corporate Governance | `Password123!` | Active |
+| Professor Arthur Pendelton | `arthur.academic@marketingportal.com` | `dept_lead` | `suspended` | Academic Affairs & Research | `Password123!` | Suspended |
+| Rachel Adams | `rachel.sm@marketingportal.com` | `dept_staff` | `suspended` | Social Media Marketing | `Password123!` | Suspended |
+| Victoria Stone | `victoria.sales@marketingportal.com` | `dept_lead` | `suspended` | Sales & Business Development | `Password123!` | Suspended |
+| Vikram Malhotra | `vikram.ads@marketingportal.com` | `dept_staff` | `suspended` | Performance & Paid Media | `Password123!` | Suspended |
+| Benjamin Clarke | `benjamin.academic@marketingportal.com` | `dept_staff` | `suspended` | Academic Affairs & Research | `Password123!` | Suspended |
+| Carlos Mendez | `carlos.ads@marketingportal.com` | `dept_staff` | `suspended` | Performance & Paid Media | `Password123!` | Suspended |
+| Jessica Pearson | `jessica.sales@marketingportal.com` | `dept_lead` | `suspended` | Sales & Business Development | `Password123!` | Suspended |
+| Hannah Abbott | `hannah.sm@marketingportal.com` | `dept_staff` | `suspended` | Social Media Marketing | `Password123!` | Suspended |
+| Auditor Claire | `claire.viewer@marketingportal.com` | `viewer` | `executive` | Corporate Governance | `Password123!` | Active |
 
 ---
 
-## 6. Demo Users Seed Template (`@demo.haca.local`)
+## 7. Demo Users Seed Template (`@demo.haca.local`)
 
-When running `node scripts/seed-demo-users.js` with `DEMO_SEED_PASSWORD=<your_password>`, the following structured test cohort is provisioned:
+When running `node scripts/seed-demo-users.js` with `DEMO_SEED_PASSWORD=<your_password>`, the following 11-user test cohort is provisioned:
 
-| Email | Canonical Role | Job Role | Department | Assigned Profiles |
-|---|---|---|---|---|
-| `head@demo.haca.local` | `marketing_head` | Marketing Head | Leadership | All 7 Brand Profiles |
-| `lead.design@demo.haca.local` | `team_lead` | Design Lead (TL) | Design | `haca_design_school`, `haca_design_school_en` |
-| `manager.creative@demo.haca.local` | `team_lead` | Creative Manager (TL) | Video Production | `haca`, `haca_design_school` |
-| `ui.designer@demo.haca.local` | `team_member` | UI Designer | Design | `haca_design_school`, `haca_design_school_en` |
-| `designer@demo.haca.local` | `team_member` | Designer | Design | `haca_design_school` |
-| `video.editor@demo.haca.local` | `team_member` | Video Editor | Video Production | `haca`, `haca_design_school` |
-| `writer@demo.haca.local` | `team_member` | Writer | SEO & Content | `haca`, `haca_design_school`, `haca_marketing_school` |
-| `whatsapp@demo.haca.local` | `team_member` | WhatsApp Marketer | WhatsApp | `haca` |
-| `performance@demo.haca.local` | `team_member` | Performance Marketer | Performance Marketing | `haca`, `haca_mideast` |
+| Email | Canonical Role | Job Role | Department | Work Preferences | Assigned Profiles |
+|---|---|---|---|---|---|
+| `head@demo.haca.local` | `marketing_head` | Marketing Head | Leadership | `Content`, `Script`, `Post` | All 7 Brand Profiles |
+| `executive@demo.haca.local` | `executive` | Executive | Executive Management | *None* | All 7 Brand Profiles |
+| `lead.design@demo.haca.local` | `team_lead` | Design Lead (TL) | Design | `Design` | `haca_design_school`, `haca_design_school_en` |
+| `manager.creative@demo.haca.local` | `team_lead` | Creative Manager (TL) | Video Production | `Script`, `Shoot`, `Edit` | `haca`, `haca_design_school` |
+| `sm.manager@demo.haca.local` | `team_lead` | Social Media Manager | Social Media | `Post`, `Content` | All 7 Brand Profiles |
+| `ui.designer@demo.haca.local` | `team_member` | UI Designer | Design | `Design` | `haca_design_school`, `haca_design_school_en` |
+| `designer@demo.haca.local` | `team_member` | Designer | Design | `Design` | `haca_design_school` |
+| `video.editor@demo.haca.local` | `team_member` | Video Editor | Video Production | `Edit`, `Shoot` | `haca`, `haca_design_school` |
+| `writer@demo.haca.local` | `team_member` | Writer | SEO & Content | `Content`, `Script` | `haca`, `haca_design_school`, `haca_marketing_school` |
+| `whatsapp@demo.haca.local` | `team_member` | WhatsApp Marketer | WhatsApp | `Post`, `Content` | `haca` |
+| `performance@demo.haca.local` | `team_member` | Performance Marketer | Performance Marketing | `Post` | `haca`, `haca_mideast` |

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.js';
-import { requirePermission } from '../../middleware/requirePermission.js';
+import { requirePermission, requireAnyPermission } from '../../middleware/requirePermission.js';
 import { validate } from '../../middleware/validate.js';
 import { campaignSchema, campaignUpdateSchema } from '@mmp/shared';
 import * as campaignController from './controller.js';
@@ -9,10 +9,10 @@ const router = Router();
 
 router.use(authenticate);
 
-// View campaigns (Team Leads, Marketing Head, Admin)
-router.get('/', requirePermission('campaign.manage'), campaignController.listCampaigns);
-router.get('/:id/activity', requirePermission('campaign.manage'), campaignController.getCampaignActivities);
-router.get('/:id', requirePermission('campaign.manage'), campaignController.getCampaign);
+// View campaigns (Team Leads, Marketing Head, Admin, Executive)
+router.get('/', requireAnyPermission('campaign.manage', 'portal.view'), campaignController.listCampaigns);
+router.get('/:id/activity', requireAnyPermission('campaign.manage', 'portal.view'), campaignController.getCampaignActivities);
+router.get('/:id', requireAnyPermission('campaign.manage', 'portal.view'), campaignController.getCampaign);
 
 // Create campaign (requires targetId & relatedOKR)
 router.post(

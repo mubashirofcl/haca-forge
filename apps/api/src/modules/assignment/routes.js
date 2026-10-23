@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.js';
-import { requirePermission } from '../../middleware/requirePermission.js';
+import { requirePermission, requireAnyPermission } from '../../middleware/requirePermission.js';
 import { validate } from '../../middleware/validate.js';
 import { assignmentRecommendSchema, assignmentOverrideSchema } from '@mmp/shared';
 import * as assignmentController from './controller.js';
@@ -12,6 +12,7 @@ router.use(authenticate);
 // Auto-Assignment recommendation (Available to all who can create/request deliverables)
 router.post(
   '/recommend',
+  requireAnyPermission('work.create', 'work.request'),
   validate(assignmentRecommendSchema),
   assignmentController.getRecommendation
 );
@@ -26,7 +27,7 @@ router.post(
 
 router.get(
   '/overrides',
-  requirePermission('assignment.override'),
+  requireAnyPermission('assignment.override', 'portal.view'),
   assignmentController.listOverrides
 );
 

@@ -33,9 +33,9 @@ export async function listPeople({ actor, filters = {}, excludeAdmin = false }) 
     query.role = filters.role;
   }
 
-  // Exclude admin from auto-assignment candidate pools, workload calculations, and performance metrics
+  // Exclude admin and executive from auto-assignment candidate pools, workload calculations, and performance metrics
   if (excludeAdmin) {
-    query.role = { $ne: 'admin' };
+    query.role = { $nin: ['admin', 'executive'] };
   }
 
   const people = await Person.find(query)
@@ -44,6 +44,26 @@ export async function listPeople({ actor, filters = {}, excludeAdmin = false }) 
     .populate('reportsToIds', 'name email role jobRole')
     .sort({ name: 1 })
     .lean();
+
+  if (normalizeRole(actor?.role) === 'executive') {
+    return people.map((p) => {
+      const sanitized = { ...p };
+      delete sanitized.email;
+      delete sanitized.phone;
+      if (Array.isArray(sanitized.reportsToIds)) {
+        sanitized.reportsToIds = sanitized.reportsToIds.map((r) => {
+          if (typeof r === 'object' && r !== null) {
+            const rep = { ...r };
+            delete rep.email;
+            delete rep.phone;
+            return rep;
+          }
+          return r;
+        });
+      }
+      return sanitized;
+    });
+  }
 
   return people;
 }
@@ -70,6 +90,24 @@ export async function getPersonById(id, actor) {
       error.statusCode = 403;
       throw error;
     }
+  }
+
+  if (normalizeRole(actor?.role) === 'executive') {
+    const sanitized = { ...person };
+    delete sanitized.email;
+    delete sanitized.phone;
+    if (Array.isArray(sanitized.reportsToIds)) {
+      sanitized.reportsToIds = sanitized.reportsToIds.map((r) => {
+        if (typeof r === 'object' && r !== null) {
+          const rep = { ...r };
+          delete rep.email;
+          delete rep.phone;
+          return rep;
+        }
+        return r;
+      });
+    }
+    return sanitized;
   }
 
   return person;
@@ -112,6 +150,7 @@ export async function createPerson(data, actor) {
     profileAccess: data.profileAccess || [],
     reportsToIds: data.reportsToIds || [],
     weeklyCapacityHours: data.weeklyCapacityHours ?? 40,
+    workPreferences: data.workPreferences || [],
     status: data.status || 'active',
     mustSetPassword,
   });
@@ -150,6 +189,14 @@ export async function updatePerson(id, updates, actor) {
       throw error;
     }
 
+    // Cannot touch executive accounts
+    if (targetRole === 'executive') {
+      const error = new Error('Forbidden: Marketing Head cannot modify executive accounts');
+      error.code = 'FORBIDDEN';
+      error.statusCode = 403;
+      throw error;
+    }
+
     // Cannot modify core account identity fields
     if (updates.role && updates.role !== target.role) {
       const error = new Error('Forbidden: Marketing Head cannot change user roles');
@@ -166,7 +213,7 @@ export async function updatePerson(id, updates, actor) {
     }
 
     if (updates.email || updates.password || updates.name) {
-      const error = new Error('Forbidden: Marketing Head can only edit operational fields (department, jobRole, profileAccess, reportsToIds, weeklyCapacityHours)');
+      const error = new Error('Forbidden: Marketing Head can only edit operational fields (department, jobRole, profileAccess, reportsToIds, weeklyCapacityHours, workPreferences)');
       error.code = 'FORBIDDEN';
       error.statusCode = 403;
       throw error;
@@ -179,6 +226,7 @@ export async function updatePerson(id, updates, actor) {
     if (updates.reportsToIds !== undefined) target.reportsToIds = updates.reportsToIds;
     if (updates.weeklyCapacityHours !== undefined) target.weeklyCapacityHours = updates.weeklyCapacityHours;
     if (updates.lastProfileId !== undefined) target.lastProfileId = updates.lastProfileId;
+    if (updates.workPreferences !== undefined) target.workPreferences = updates.workPreferences;
   } else if (actorRole === 'admin') {
     // Admin has full control
     if (updates.name !== undefined) target.name = updates.name;
@@ -191,6 +239,7 @@ export async function updatePerson(id, updates, actor) {
     if (updates.reportsToIds !== undefined) target.reportsToIds = updates.reportsToIds;
     if (updates.weeklyCapacityHours !== undefined) target.weeklyCapacityHours = updates.weeklyCapacityHours;
     if (updates.lastProfileId !== undefined) target.lastProfileId = updates.lastProfileId;
+    if (updates.workPreferences !== undefined) target.workPreferences = updates.workPreferences;
 
     if (updates.password) {
       const salt = await bcrypt.genSalt(10);
@@ -291,7 +340,7 @@ export async function reactivatePerson(id, actor) {
 
 export async function getAssignmentCandidates({ departmentId, profileId, excludeIds = [] }) {
   const query = {
-    role: { $ne: 'admin' }, // Admin strictly excluded from candidate pools
+    role: { $nin: ['admin', 'executive'] }, // Admin & Executive strictly excluded from candidate pools
     status: 'active',
   };
 

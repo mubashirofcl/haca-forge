@@ -6,6 +6,7 @@ import {
   JOB_ROLES,
   PROFILES,
   DEPARTMENTS,
+  WORK_PREFERENCES,
   type UserRole,
   type JobRole,
 } from '@mmp/shared';
@@ -51,6 +52,7 @@ interface PersonRecord {
     jobRole?: string;
   }>;
   weeklyCapacityHours?: number;
+  workPreferences?: string[];
   lastLogin?: string;
   createdAt: string;
 }
@@ -64,8 +66,9 @@ export const UsersPage: React.FC = () => {
   const { user: currentUser, hasPermission } = useAuth();
   const isAdmin = currentUser?.role === 'admin';
   const isMarketingHead = currentUser?.role === 'marketing_head';
-  const canManageUsers = isAdmin || hasPermission('user.manage');
-  const canAssignPeople = canManageUsers || isMarketingHead || hasPermission('people.assign');
+  const isExecutive = currentUser?.role === 'executive';
+  const canManageUsers = (isAdmin || hasPermission('user.manage')) && !isExecutive;
+  const canAssignPeople = (canManageUsers || isMarketingHead || hasPermission('people.assign')) && !isExecutive;
 
   const [people, setPeople] = useState<PersonRecord[]>([]);
   const [referenceData, setReferenceData] = useState<ReferenceData>({
@@ -95,6 +98,7 @@ export const UsersPage: React.FC = () => {
     profileAccess: [] as string[],
     reportsToIds: [] as string[],
     password: '',
+    workPreferences: [] as string[],
   });
 
   // Edit Person modal state
@@ -105,6 +109,7 @@ export const UsersPage: React.FC = () => {
   const [editCapacity, setEditCapacity] = useState<number>(40);
   const [editProfileAccess, setEditProfileAccess] = useState<string[]>([]);
   const [editReportsToIds, setEditReportsToIds] = useState<string[]>([]);
+  const [editWorkPreferences, setEditWorkPreferences] = useState<string[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Password Reset modal
@@ -182,6 +187,7 @@ export const UsersPage: React.FC = () => {
       typeof r === 'object' && r !== null ? r._id : r
     );
     setEditReportsToIds(reportsIds);
+    setEditWorkPreferences(p.workPreferences || []);
   };
 
   // Save Person Updates
@@ -197,6 +203,7 @@ export const UsersPage: React.FC = () => {
         weeklyCapacityHours: Number(editCapacity),
         profileAccess: editProfileAccess,
         reportsToIds: editReportsToIds,
+        workPreferences: editWorkPreferences,
       };
 
       // Admin can also update role
@@ -234,6 +241,7 @@ export const UsersPage: React.FC = () => {
           profileAccess: createForm.profileAccess.length > 0
             ? createForm.profileAccess
             : referenceData.profiles.map((p) => p._id),
+          workPreferences: createForm.workPreferences,
         }),
       });
 
@@ -249,6 +257,7 @@ export const UsersPage: React.FC = () => {
         profileAccess: [],
         reportsToIds: [],
         password: '',
+        workPreferences: [],
       });
       await fetchData();
       setTimeout(() => setFeedback(null), 4000);
@@ -293,6 +302,8 @@ export const UsersPage: React.FC = () => {
     switch (role) {
       case 'admin':
         return 'bg-purple-500/10 text-purple-600 border border-purple-200 dark:border-purple-500/30';
+      case 'executive':
+        return 'bg-indigo-500/10 text-indigo-600 border border-indigo-200 dark:border-indigo-500/30';
       case 'marketing_head':
         return 'bg-amber-500/10 text-amber-600 border border-amber-200 dark:border-amber-500/30';
       case 'team_lead':
@@ -431,8 +442,8 @@ export const UsersPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredPeople.map((person) => {
             const isSelf = person._id === currentUser?.id;
-            const isProtectedAccount = !isAdmin && (person.role === 'admin' || person.role === 'marketing_head');
-            const canEditThisPerson = canAssignPeople && !isProtectedAccount;
+            const isProtectedAccount = !isAdmin && (person.role === 'admin' || person.role === 'marketing_head' || person.role === 'executive');
+            const canEditThisPerson = canAssignPeople && !isProtectedAccount && !isExecutive;
 
             const deptName = typeof person.departmentId === 'object' && person.departmentId !== null
               ? person.departmentId.name
@@ -468,7 +479,9 @@ export const UsersPage: React.FC = () => {
                             </span>
                           )}
                         </h3>
-                        <p className="text-xs text-slate-500">{person.email}</p>
+                        {!isExecutive && person.email && (
+                          <p className="text-xs text-slate-500">{person.email}</p>
+                        )}
                       </div>
                     </div>
 
@@ -533,6 +546,26 @@ export const UsersPage: React.FC = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* Stage Work Preferences (Content Flow) */}
+                  <div className="mb-3">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                      Work Preferences ({person.workPreferences?.length || 0})
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {(person.workPreferences || []).map((pref, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-md text-[10px] font-bold"
+                        >
+                          {pref}
+                        </span>
+                      ))}
+                      {(!person.workPreferences || person.workPreferences.length === 0) && (
+                        <span className="text-[10px] text-slate-400 italic">None assigned</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Footer & Action Buttons */}
@@ -549,48 +582,52 @@ export const UsersPage: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    {canEditThisPerson ? (
-                      <button
-                        onClick={() => openEditModal(person)}
-                        className="p-1.5 rounded-full hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
-                        title="Edit Operational Fields"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    ) : isProtectedAccount ? (
-                      <span
-                        className="text-[10px] font-semibold text-slate-400 px-2 py-0.5 bg-slate-100 rounded-full"
-                        title="Marketing Head cannot edit Admin or Head accounts"
-                      >
-                        Protected
-                      </span>
-                    ) : null}
-
-                    {isAdmin && !isSelf && (
+                    {!isExecutive && (
                       <>
-                        <button
-                          onClick={() => handleResetPassword(person)}
-                          className="p-1.5 rounded-full hover:bg-slate-100 text-slate-600 hover:text-purple-600 transition-colors"
-                          title="Generate Password Reset Link"
-                        >
-                          <Key className="w-3.5 h-3.5" />
-                        </button>
+                        {canEditThisPerson ? (
+                          <button
+                            onClick={() => openEditModal(person)}
+                            className="p-1.5 rounded-full hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
+                            title="Edit Operational Fields"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : isProtectedAccount ? (
+                          <span
+                            className="text-[10px] font-semibold text-slate-400 px-2 py-0.5 bg-slate-100 rounded-full"
+                            title="Protected account"
+                          >
+                            Protected
+                          </span>
+                        ) : null}
 
-                        <button
-                          onClick={() => handleToggleStatus(person)}
-                          className={`p-1.5 rounded-full hover:bg-slate-100 transition-colors ${
-                            person.status === 'active'
-                              ? 'text-rose-500 hover:text-rose-700'
-                              : 'text-emerald-500 hover:text-emerald-700'
-                          }`}
-                          title={person.status === 'active' ? 'Suspend Account' : 'Reactivate Account'}
-                        >
-                          {person.status === 'active' ? (
-                            <UserX className="w-3.5 h-3.5" />
-                          ) : (
-                            <UserCheck className="w-3.5 h-3.5" />
-                          )}
-                        </button>
+                        {isAdmin && !isSelf && (
+                          <>
+                            <button
+                              onClick={() => handleResetPassword(person)}
+                              className="p-1.5 rounded-full hover:bg-slate-100 text-slate-600 hover:text-purple-600 transition-colors"
+                              title="Generate Password Reset Link"
+                            >
+                              <Key className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => handleToggleStatus(person)}
+                              className={`p-1.5 rounded-full hover:bg-slate-100 transition-colors ${
+                                person.status === 'active'
+                                  ? 'text-rose-500 hover:text-rose-700'
+                                  : 'text-emerald-500 hover:text-emerald-700'
+                              }`}
+                              title={person.status === 'active' ? 'Suspend Account' : 'Reactivate Account'}
+                            >
+                              {person.status === 'active' ? (
+                                <UserX className="w-3.5 h-3.5" />
+                              ) : (
+                                <UserCheck className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
@@ -747,6 +784,43 @@ export const UsersPage: React.FC = () => {
                 </span>
               </div>
 
+              {/* Work Preferences (Content Flow) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Content Flow Stage Preferences
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    Content, Script, Design, Shoot, Edit, Post
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
+                  {WORK_PREFERENCES.map((pref) => {
+                    const checked = editWorkPreferences.includes(pref);
+                    return (
+                      <label key={pref} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEditWorkPreferences([...editWorkPreferences, pref]);
+                            } else {
+                              setEditWorkPreferences(editWorkPreferences.filter((p) => p !== pref));
+                            }
+                          }}
+                          className="rounded text-purple-600 focus:ring-purple-500/30"
+                        />
+                        <span className="font-medium">{pref}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Stages this person is eligible to be assigned on Content Pieces.
+                </span>
+              </div>
+
               <div className="pt-4 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
@@ -866,6 +940,46 @@ export const UsersPage: React.FC = () => {
                   placeholder="Leave empty to require password setup"
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-900"
                 />
+              </div>
+
+              {/* Work Preferences (Content Flow) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Content Flow Stage Preferences
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    Content, Script, Design, Shoot, Edit, Post
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
+                  {WORK_PREFERENCES.map((pref) => {
+                    const checked = createForm.workPreferences.includes(pref);
+                    return (
+                      <label key={pref} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setCreateForm({
+                                ...createForm,
+                                workPreferences: [...createForm.workPreferences, pref],
+                              });
+                            } else {
+                              setCreateForm({
+                                ...createForm,
+                                workPreferences: createForm.workPreferences.filter((p) => p !== pref),
+                              });
+                            }
+                          }}
+                          className="rounded text-purple-600 focus:ring-purple-500/30"
+                        />
+                        <span className="font-medium">{pref}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="pt-4 flex items-center justify-end gap-2.5">

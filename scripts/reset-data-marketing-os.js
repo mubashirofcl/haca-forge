@@ -22,10 +22,10 @@ const DEFAULT_ROLE_MAP = {
   team_lead: 'team_lead',
   worker: 'team_member',
   sm_manager: 'team_member',
-  management: 'suspended',
+  management: 'executive',
   dept_lead: 'suspended',
   dept_staff: 'suspended',
-  viewer: 'suspended',
+  viewer: 'executive',
 };
 
 // Collections that belong to Marketing OS and must always be KEPT
@@ -237,7 +237,7 @@ export async function runMarketingOsReset(cliArgs = process.argv.slice(2), testD
   const userRoleMap = { ...DEFAULT_ROLE_MAP, ...overrides };
 
   for (const kept of keptUsersList) {
-    const targetRole = userRoleMap[kept.role] || (['admin', 'marketing_head', 'team_lead', 'team_member'].includes(kept.role) ? kept.role : 'team_member');
+    const targetRole = userRoleMap[kept.role] || (['admin', 'marketing_head', 'executive', 'team_lead', 'team_member'].includes(kept.role) ? kept.role : 'team_member');
     await db.collection('users').updateOne(
       { email: kept.email },
       {

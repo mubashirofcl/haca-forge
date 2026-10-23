@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.js';
+import { requirePermission, requireAnyPermission } from '../../middleware/requirePermission.js';
 import * as feedbackController from './controller.js';
 
 export const feedbackRouter = Router();
@@ -7,19 +8,43 @@ export const feedbackRouter = Router();
 feedbackRouter.use(authenticate);
 
 // Feedback threads list
-feedbackRouter.get('/threads', feedbackController.listFeedbackThreads);
+feedbackRouter.get(
+  '/threads',
+  requireAnyPermission('analytics.team', 'portal.view'),
+  feedbackController.listFeedbackThreads
+);
 
 // Feedback per work item
-feedbackRouter.get('/work-item/:workItemId', feedbackController.getFeedbackForWorkItem);
-feedbackRouter.post('/work-item/:workItemId', feedbackController.createFeedbackEntry);
+feedbackRouter.get(
+  '/work-item/:workItemId',
+  requireAnyPermission('analytics.team', 'portal.view'),
+  feedbackController.getFeedbackForWorkItem
+);
+feedbackRouter.post(
+  '/work-item/:workItemId',
+  requireAnyPermission('feedback.give', 'feedback.respond'),
+  feedbackController.createFeedbackEntry
+);
 
 // Generic feedback entry submission
-feedbackRouter.post('/', feedbackController.createFeedbackEntry);
+feedbackRouter.post(
+  '/',
+  requireAnyPermission('feedback.give', 'feedback.respond'),
+  feedbackController.createFeedbackEntry
+);
 
 export const revisionsRouter = Router();
 
 revisionsRouter.use(authenticate);
 
 // Revision Flags
-revisionsRouter.get('/flags', feedbackController.listRevisionFlags);
-revisionsRouter.post('/flags/:id/classify', feedbackController.classifyRevisionFlag);
+revisionsRouter.get(
+  '/flags',
+  requireAnyPermission('analytics.team', 'portal.view'),
+  feedbackController.listRevisionFlags
+);
+revisionsRouter.post(
+  '/flags/:id/classify',
+  requirePermission('revision.classify'),
+  feedbackController.classifyRevisionFlag
+);

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { ROLE_KEYS, JOB_ROLES, normalizeRole } from '@mmp/shared';
+import { ROLE_KEYS, JOB_ROLES, normalizeRole, WORK_PREFERENCES } from '@mmp/shared';
 
 const personSchema = new mongoose.Schema(
   {
@@ -57,6 +57,11 @@ const personSchema = new mongoose.Schema(
       default: 40,
       min: 0,
       max: 168,
+    },
+    workPreferences: {
+      type: [String],
+      enum: WORK_PREFERENCES,
+      default: [],
     },
     lastProfileId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -126,7 +131,11 @@ personSchema.virtual('capacity').get(function () {
 personSchema.virtual('department').get(function () {
   return this.departmentId;
 }).set(function (val) {
-  this.departmentId = val;
+  if (val === null || val === undefined) {
+    this.departmentId = null;
+  } else if (val instanceof mongoose.Types.ObjectId || (mongoose.Types.ObjectId.isValid(val) && /^[0-9a-fA-F]{24}$/.test(String(val)))) {
+    this.departmentId = val;
+  }
 });
 
 // Resilient role normalization hooks for legacy document preservation

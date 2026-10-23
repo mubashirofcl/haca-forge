@@ -89,6 +89,7 @@ export async function me(req, res, next) {
         weeklyCapacityHours: req.user.weeklyCapacityHours || req.user.capacity || 40,
         lastProfileId: req.user.lastProfileId,
         status: req.user.status,
+        workPreferences: req.user.workPreferences || [],
       },
       role: normalizeRole(req.user.role),
       permissions: ROLE_PERMISSIONS[normalizeRole(req.user.role)] || [],

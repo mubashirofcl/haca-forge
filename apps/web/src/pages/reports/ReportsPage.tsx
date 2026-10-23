@@ -355,23 +355,25 @@ export const ReportsPage: React.FC = () => {
 
                   {/* Actions */}
                   <div className="mt-5 pt-4 border-t border-slate-100 flex items-center gap-2">
-                    <button
-                      onClick={() => handleGenerateReport(def.reportKey)}
-                      disabled={isGenerating}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-sm transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-                    >
-                      {isGenerating ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-white" />
-                          Generate Now
-                        </>
-                      )}
-                    </button>
+                    {hasPermission('report.configure') && (
+                      <button
+                        onClick={() => handleGenerateReport(def.reportKey)}
+                        disabled={isGenerating}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-sm transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                      >
+                        {isGenerating ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 fill-white" />
+                            Generate Now
+                          </>
+                        )}
+                      </button>
+                    )}
 
                     <button
                       onClick={() => {

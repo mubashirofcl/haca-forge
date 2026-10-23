@@ -109,6 +109,64 @@ const workItemSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    // Content Flow stage fields (Phase 3 delta)
+    contentPieceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ContentPiece',
+      default: null,
+      index: true,
+    },
+    stageKey: {
+      type: String,
+      trim: true,
+      default: null,
+      index: true,
+    },
+    stageOrder: {
+      type: Number,
+      default: null,
+    },
+    reviewRequired: {
+      type: Boolean,
+      default: false,
+    },
+    unlockedAt: {
+      type: Date,
+      default: null,
+    },
+    isSkipped: {
+      type: Boolean,
+      default: false,
+    },
+    // Deliverable link fields
+    contentLink: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    assetsLink: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    // Brief specs with synchronized links
+    brief: {
+      description: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      contentLink: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      assetsLink: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+    },
   },
   {
     timestamps: true,
@@ -116,6 +174,34 @@ const workItemSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
+
+// Keep brief and top-level fields (description, contentLink, assetsLink) in sync
+workItemSchema.pre('validate', function (next) {
+  if (!this.brief) {
+    this.brief = {
+      description: this.description || '',
+      contentLink: this.contentLink || '',
+      assetsLink: this.assetsLink || '',
+    };
+  } else {
+    if (this.brief.description && !this.description) {
+      this.description = this.brief.description;
+    } else if (this.description && !this.brief.description) {
+      this.brief.description = this.description;
+    }
+    if (this.brief.contentLink && !this.contentLink) {
+      this.contentLink = this.brief.contentLink;
+    } else if (this.contentLink && !this.brief.contentLink) {
+      this.brief.contentLink = this.contentLink;
+    }
+    if (this.brief.assetsLink && !this.assetsLink) {
+      this.assetsLink = this.brief.assetsLink;
+    } else if (this.assetsLink && !this.brief.assetsLink) {
+      this.brief.assetsLink = this.assetsLink;
+    }
+  }
+  next();
+});
 
 // Dynamic computed property: isOverdue
 // Overdue is NEVER a stored state. It is dynamically evaluated based on deadline and terminal status.
@@ -135,5 +221,7 @@ workItemSchema.index({ isBlocked: 1 });
 workItemSchema.index({ 'blocker.dependencyOwnerId': 1 });
 workItemSchema.index({ workType: 1, status: 1 });
 workItemSchema.index({ profileId: 1, departmentId: 1, status: 1, deadline: 1 });
+workItemSchema.index({ contentPieceId: 1, stageOrder: 1 });
+workItemSchema.index({ contentPieceId: 1, stageKey: 1 });
 
 export const WorkItem = mongoose.model('WorkItem', workItemSchema);

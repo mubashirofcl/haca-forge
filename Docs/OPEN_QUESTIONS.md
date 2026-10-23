@@ -16,13 +16,14 @@
 * **Working Default:** **YES, removed completely.** Marketing OS is an internal team planning system where the Marketing Head and Team Leads create work items inside planned Campaigns. Other departments do not have login access or intake forms.
 * **Internal Work Requests:** To enable team members to suggest work, an internal `WorkRequest` record is provided: a team member can request work via their Team Lead, who can accept and convert it into a formal `WorkItem`.
 
-### 1.2 System Owner (Admin) vs. Marketing Head vs. Executive Email Recipients
-* **Ambiguity:** Does the Marketing Head own user administration, and do executive leaders (CEO, Business Head) log in?
-* **Working Default:** **4-Role Model:**
-  * **`admin` (System Owner):** IT / System Owner outside the creative hierarchy. Holds all permissions (derived), manages user accounts, approves access requests, grants roles, suspends users, and forces logouts.
-  * **`marketing_head`:** Operational leader of marketing. Plans work, targets, and campaigns; manages operational assignments (`people.assign` for `team_lead` and `team_member`), but cannot create users or grant roles.
-  * **`team_lead` & `team_member`:** Operational roles.
-  * **CEO & Business Head:** Email recipients only. They do not log into the portal and receive scheduled HTML reports.
+### 1.2 System Owner (Admin) vs. Marketing Head vs. Executive Leadership (5-Role Model)
+* **Ambiguity:** Does the Marketing Head own user administration, and do executive leaders (CEO, Business Head) log into the portal or only receive emails?
+* **Working Default:** **5-Role Model:**
+  * **`admin` (System Owner):** IT / System Owner outside the creative hierarchy. Holds all permissions (derived), manages user accounts, approves access requests, grants roles (only admin can grant admin, marketing_head, or executive), suspends users, and forces logouts.
+  * **`marketing_head`:** Operational leader of marketing. Plans work, targets, and campaigns; manages operational assignments (`people.assign` for `team_lead` and `team_member`), but cannot create users or grant roles, and cannot modify admin or executive accounts.
+  * **`executive` (Company Management):** CEO, Business Head, Board Directors. Complete read-only view of the portal across all 7 brand profiles (`personScope: 'all'`, all 7 profiles by default). Zero mutation permissions (HTTP 403 on all POST, PATCH, PUT, DELETE endpoints). Lands on `/dashboard`. Excluded from auto-assignment candidate pools, workload calculations, and team performance digests. Contact details (email and phone) are omitted for executive callers in the People directory. Only Admin can grant or approve the executive role; it cannot be requested publicly.
+  * **`team_lead` & `team_member`:** Creative and operational roles.
+  * **Executive Report Delivery:** CEO, Business Head, and leadership continue to receive scheduled HTML email reports, alongside complete in-portal read access.
 
 ### 1.3 Starting Profile for Carried-Over Data
 * **Ambiguity:** When converting existing FORGE users to the `Person` schema, which of the 7 Profiles should they belong to?
@@ -112,3 +113,86 @@
 ### 3.7 System Timezone
 * **Ambiguity:** In what timezone do schedulers, reports, and daily cutoffs operate?
 * **Working Default:** Configured via `REPORT_TIMEZONE` in `.env`, defaulting to **`Asia/Kolkata` (IST, UTC+5:30)**, matching HACA's headquarters and operational hours.
+
+### 3.8 Executive Role Report Generation & Mutation Controls
+* **Ambiguity:** Should executive users be able to trigger on-demand manual report generation or sync jobs?
+* **Working Default:** **No, strictly read-only.**
+  * Report generation endpoints (`/api/reports/definitions/:key/generate` and `/api/reports/:key/generate`) require `report.configure` or `campaign.manage`. Executive users hold `report.view` and can view existing generated reports, but receive HTTP 403 Forbidden if attempting manual generation.
+  * Data Center sync triggers (`/api/datacenter/sync`) require `automation.manage`, barring executive callers.
+  * WorkItem status transitions (`/api/work-items/:id/transition`) and updates are forbidden for executive users.
+
+---
+
+## 4. Content Flow & SM Pipeline Decisions (CONTENT_FLOW.md §13)
+
+### 4.1 Creative Head Identity & Approver Role
+* **Question:** Who acts as the Creative Head with approval authority over content, design, and edit stages?
+* **Working Default:** A `team_lead` whose job role is `Creative Manager (TL)`, plus the `marketing_head` and `admin`. Other team leads and the SM Manager cannot approve review stages.
+
+### 4.2 Shooting Role (No Dedicated Job Role)
+* **Question:** There is no dedicated `Shooter` job role in the taxonomy. Who shoots video content?
+* **Working Default:** Anyone with the `Shoot` work preference in their `Person.workPreferences[]` (e.g., Nifthash or other team members across departments).
+
+### 4.3 Poster vs. Static Post
+* **Question:** Is "Poster" in Sheet A (SM CONTENT) identical to "Static Post" in Sheet B (design sheets)?
+* **Working Default:** **Yes, identical.** They follow the same Design pipeline with a final Post stage.
+
+### 4.4 Types with a Post Stage
+* **Question:** Which requirement types include a final `Post` stage?
+* **Working Default:** As established in CONTENT_FLOW.md §3.3:
+  * **Has Post stage:** `Reel`, `Static Post`, `Carousel Post`, `Story`, `Poster`.
+  * **No Post stage (final done on Design Approval):** `Cover Image`, `Thumbnail`, `Meta Ad Creative`, `Class Announcement`, `Orientation Creative`, `Graduation Creative`, `Offer Creative`, `Brochure`, `Certificate`, `Placement Poster`, `Custom Request`.
+
+### 4.5 Meta Ad Creative Hand-Off to Performance Team
+* **Question:** Does Meta Ad Creative hand off automatically to the performance marketing team?
+* **Working Default:** **Not built in V1.** It is marked final done upon Design Approval. Performance ad setup is tracked separately if needed.
+
+### 4.6 Program-Video Reels (Shoot vs. Edit Only)
+* **Question:** Do program-video reels require a shoot stage, or are they edit-only?
+* **Working Default:** **Both variants supported:**
+  * Variant B: Shoot $\rightarrow$ Edit (reviewed) $\rightarrow$ Post (if footage needs capturing).
+  * Variant C: Edit (reviewed) $\rightarrow$ Post (no script, no shoot; existing footage/program assets only).
+
+### 4.7 Profile Mapping for 'HACA UAE' and Fifth Sheet Tab
+* **Question:** Which brand profile does "HACA UAE" map to, and what is the fifth tab starting with 'HACA C'?
+* **Working Default:**
+  * "HACA UAE" maps to profile **`HACA Mideast`**.
+  * Fifth tab starting with 'HACA C' is to be confirmed upon receiving the latest sheet export.
+
+### 4.8 Standing Campaign per Brand per Month
+* **Question:** Should every content piece attach to a standing monthly campaign for that brand?
+* **Working Default:** **Yes.** One standing campaign per brand per month (e.g., "October 2026 Tech School Social"), created like any campaign and linked to the active `MonthlyTarget`.
+
+### 4.9 Turnaround (Days) Calculation
+* **Question:** How is Turnaround (Days) calculated for completed pieces?
+* **Working Default:** $\text{Turnaround} = \text{Published Date} - \text{First Stage Start Date}$.
+
+### 4.10 Request Intake for Custom Requests
+* **Question:** Do other departments submit design requests (e.g., Custom Request, Placement Poster) via an intake portal?
+* **Working Default:** **No.** External request intake remains retired. The SM Manager (or Marketing Head) enters them directly into the Content Calendar.
+
+### 4.11 "Rejected" Status Semantics
+* **Question:** Is "Rejected" in the sheet a terminal rejection or a revision request?
+* **Working Default:** **Revision request.** Maps to `roundStatus: 'Revision Required'`. The stage returns to the owner (`In Progress`) and the revision is counted. It is never a terminal rejection.
+
+### 4.12 SM Manager Approval Authority
+* **Question:** Can the SM Manager approve stages?
+* **Working Default:** **No.** The SM Manager creates calendar rows, sets deadlines, and assigns/reassigns stage owners across departments, but does not approve. Approvals belong exclusively to the Creative Head, Marketing Head, or Admin.
+
+### 4.13 Default Due-Date Offsets
+* **Question:** What are the default stage due-date offsets counted back from final date F?
+* **Working Default:** Confirmed as listed in CONTENT_FLOW.md §6:
+  * **Design postable:** Content $F-6$, Design $F-3$, Post $F$
+  * **Design not postable:** Content $F-5$, Design $F-2$ (approved by $F$)
+  * **Reel A (with script, with shoot):** Script $F-10$, Shoot $F-7$, Edit $F-4$, Post $F$
+  * **Reel B (no script, with shoot):** Shoot $F-7$, Edit $F-4$, Post $F$
+  * **Reel C (no script, no shoot):** Edit $F-4$, Post $F$
+  * Approvals expected within 1 working day of submission. If final date shifts, unstarted deadlines shift in one click.
+
+### 4.14 Legacy Sheet Data Import
+* **Question:** Should historical rows from Sheet A and Sheet B be imported into the portal?
+* **Working Default:** **Not built.** Start fresh with clean data from the new operating month.
+
+*(Note: CV Status, Date, and Owner are parked and NOT included in the portal).*
+
+

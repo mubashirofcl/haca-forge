@@ -838,6 +838,79 @@ Phase 9 successfully concluded the Master Build Plan for the HACA Marketing OS:
 | **Phase 9 E2E Suite** | `npx vitest run test/phase9_mos_e2e.test.js` | **PASSED** | **11/11 tests pass** (Target $\rightarrow$ Campaign $\rightarrow$ Work $\rightarrow$ Feedback $\rightarrow$ Blocker $\rightarrow$ Report $\rightarrow$ 5 Dimensions) |
 | **Web Production Build** | `tsc && vite build` | **PASSED** | **100% production build clean** with zero TypeScript errors across all 14 screens |
 
+---
+
+## Phase 10: Executive Role Addition (Status: COMPLETE)
+
+### 1. Executive Summary
+Phase 10 introduced the fifth canonical role, `'executive'`, designed for company leadership (CEO, Business Head, Board Directors). The executive role provides complete read-only visibility into all marketing operations, campaigns, deliverables, feedback threads, lead funnels, and reports across all 7 brand profiles (`personScope: 'all'`, all 7 profiles assigned by default), while strictly prohibiting any data creation, modification, approval, or deletion (HTTP 403 Forbidden across all write routes).
+
+---
+
+### 2. Architecture & Backend Implementation
+1. **Canonical Roles & Permissions (`@mmp/shared`)**:
+   - `ROLE_KEYS = ['admin', 'marketing_head', 'executive', 'team_lead', 'team_member']`.
+   - New permission keys:
+     - `portal.view`: Universal read-only permission covering all portal read endpoints (dashboard, campaigns, work items, calendar, feedback, blockers, leads, datacenter, reports).
+     - `people.view`: Read-only directory access with contact information (email and phone) omitted.
+   - `ROLE_PERMISSIONS.executive = ['portal.view', 'people.view', 'target.view', 'lead.view', 'datacenter.view', 'analytics.team', 'report.view']`.
+   - `ROLE_PERMISSIONS.admin` derives all permission keys dynamically.
+   - `ROLE_PERMISSIONS.marketing_head` explicitly includes `portal.view` and `people.view`.
+2. **Permission Middleware (`apps/api/src/middleware/requirePermission.js`)**:
+   - Implemented and exported `requireAnyPermission(...perms)` to support routes accessible by either role-specific permissions or universal `portal.view`.
+3. **Row-Level Scoping (`apps/api/src/lib/scope.js`)**:
+   - For `role === 'executive'`: returns all profiles in `user.profileAccess` (all 7 profiles by default) and `personScope: 'all'` (`allowedPersonIds = null`, `canAccessPerson: true`).
+4. **Data Redaction & Isolation (`modules/people/`)**:
+   - In `people/service.js` and `people/routes.js`: when caller has `executive` role or lacks `user.manage`/`people.assign`, `email` and `phone` are sanitized (omitted) from all person listings and profile detail queries.
+   - Excluded `executive` from candidate selection pools (`assignment/service.js`), operational workload calculations (`modules/people/`), and team performance digest queries (`metrics.js`).
+5. **Access Control & Security Guards (`modules/access/`, `modules/users/`)**:
+   - Public `POST /api/v1/access/request` rejects requests for `executive` or `admin`.
+   - Only `admin` can grant `executive` role or approve access requests for `executive`.
+   - `marketing_head` is barred from granting `executive` role, editing `executive` accounts, or suspending `executive` users (returns HTTP 403 `CANNOT_MODIFY_PROTECTED_ROLE`).
+6. **Route Protection Verification**:
+   - GET endpoints across all modules accept `portal.view` (or specific view permission).
+   - Mutation endpoints (POST, PATCH, PUT, DELETE) require write permissions (`work.create`, `work.request`, `campaign.manage`, `target.manage`, `feedback.give`, `automation.manage`, `report.configure`), returning HTTP 403 for executive callers.
+   - Report generation endpoints (`POST /api/reports/definitions/:key/generate` and `POST /api/reports/:key/generate`) require `requireAnyPermission('report.configure', 'campaign.manage')`, blocking executive generation while allowing reading reports.
+
+---
+
+### 3. Data Migration & Demo Seeding
+1. **Migration Scripts (`apps/api/scripts/migrate-user-to-person.js`, `scripts/migrate-legacy-roles.js`)**:
+   - Updated `DEFAULT_ROLE_MAP`:
+     - `management` $\rightarrow$ `executive` (Active, all 7 profiles, empty `reportsToIds`)
+     - `viewer` $\rightarrow$ `executive` (Active, all 7 profiles, empty `reportsToIds`)
+     - `dept_lead` $\rightarrow$ `suspended`
+     - `dept_staff` $\rightarrow$ `suspended`
+2. **Demo Cohort Seeding (`scripts/demo-users.json`, `scripts/seed-demo-users.js`)**:
+   - Added `Demo Executive` (`executive@demo.haca.local`, password `demoPassword123!`) with all 7 brand profiles assigned and status active, expanding the demo roster to 10 users.
+
+---
+
+### 4. Frontend UI Implementation (`apps/web`)
+1. **Navigation & Routing (`Layout.tsx`, `App.tsx`)**:
+   - `RootRedirect`: `executive` lands on `/dashboard`.
+   - Hides `/my-work` from category navigation and sidebar when current user has `executive` role.
+2. **Read-Only UI Protections**:
+   - `TeamDashboardPage.tsx`: Hides "New Deliverable" button for non-creators; maps `executive` to "Executive" display badge.
+   - `CalendarPage.tsx`: Hides "New Deliverable" button.
+   - `WorkListPage.tsx`: Hides "New Work Item" button.
+   - `ReportsPage.tsx`: Hides "Generate Now" action button.
+   - `TeamWorkloadPage.tsx`: Hides "Auto-Assign Deliverable" action.
+   - `TodoPrioritiesPage.tsx`: Hides quick status transition buttons for `executive`.
+   - `UsersPage.tsx`: Hides "Add New User", omits contact fields, disables edit/suspend/reset actions, and renders a "Protected" badge on executive accounts.
+
+---
+
+### 5. Build & Test Verification
+| Suite | Command | Result | Details |
+| :--- | :--- | :--- | :--- |
+| **Executive Role Suite** | `npx vitest run test/executive_role.test.js` | **PASSED** | **53/53 tests pass** (contract snapshot, scoping, route walker with 200 on reads and 403 on writes, email/phone masking, candidate/workload exclusion, security guards) |
+| **Reset & Seed Suite** | `npx vitest run test/reset_and_demo_seed.test.js` | **PASSED** | **14/14 tests pass** (10 demo users verified including Demo Executive) |
+| **Full API Test Suite** | `npx vitest run` | **PASSED** | **202/202 tests pass** across all 15 test suites with 0 failures |
+| **Shared Package Build** | `npm run build` in `packages/shared` | **PASSED** | Clean tsup build with 5 roles and `portal.view`/`people.view` emitted |
+| **Web Production Build** | `npm run build` in `apps/web` | **PASSED** | Clean production build with **0 TypeScript errors** |
+
+
 
 
 

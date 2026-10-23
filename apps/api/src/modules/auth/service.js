@@ -104,6 +104,7 @@ export async function loginUser({ email, password }) {
       weeklyCapacityHours: user.weeklyCapacityHours || user.capacity || 40,
       lastProfileId: user.lastProfileId,
       status: user.status,
+      workPreferences: user.workPreferences || [],
     },
     permissions: ROLE_PERMISSIONS[normalizeRole(user.role)] || [],
     accessToken,
@@ -165,6 +166,7 @@ export async function refreshTokens(refreshToken) {
       weeklyCapacityHours: user.weeklyCapacityHours || user.capacity || 40,
       lastProfileId: user.lastProfileId,
       status: user.status,
+      workPreferences: user.workPreferences || [],
     },
     permissions: ROLE_PERMISSIONS[normalizeRole(user.role)] || [],
   };

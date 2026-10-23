@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationToastContainer } from './NotificationToast';
+import { MyAccountModal } from './MyAccountModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -52,6 +53,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showMyAccountModal, setShowMyAccountModal] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
@@ -121,7 +123,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           path: '/my-work',
           description: 'Personal priority queue & actions',
           icon: CheckSquare,
-          show: true,
+          show: user?.role !== 'executive',
           activeMatcher: (p) => p.startsWith('/my-work'),
         },
         {
@@ -292,13 +294,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       path: dashboardPath,
       active: isDashboardActive,
     },
-    {
-      id: 'my-work',
-      icon: CheckSquare,
-      label: 'My Work',
-      path: '/my-work',
-      active: location.pathname.startsWith('/my-work'),
-    },
+    ...(user?.role !== 'executive'
+      ? [
+          {
+            id: 'my-work',
+            icon: CheckSquare,
+            label: 'My Work',
+            path: '/my-work',
+            active: location.pathname.startsWith('/my-work'),
+          },
+        ]
+      : []),
     {
       id: 'campaigns',
       icon: Layers,
@@ -556,28 +562,35 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Notification Center */}
             <NotificationCenter />
 
-            {/* User Avatar & Menu */}
-            <div className="flex items-center gap-2.5 pl-2 border-l border-slate-300/60">
-              <div className="relative">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-800 to-slate-900 text-white font-bold text-xs flex items-center justify-center ring-2 ring-white shadow-sm">
-                  {user?.name?.slice(0, 2).toUpperCase() || 'AD'}
+            {/* User Avatar & Menu (Opens My Account) */}
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-300/60">
+              <button
+                type="button"
+                onClick={() => setShowMyAccountModal(true)}
+                title="My Account & Work Preferences"
+                className="flex items-center gap-2.5 p-1 rounded-full hover:bg-white/80 transition-all text-left group cursor-pointer"
+              >
+                <div className="relative">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-800 to-slate-900 text-white font-bold text-xs flex items-center justify-center ring-2 ring-white shadow-sm group-hover:ring-purple-400 transition-all">
+                    {user?.name?.slice(0, 2).toUpperCase() || 'AD'}
+                  </div>
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
                 </div>
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
-              </div>
 
-              <div className="hidden xl:block text-left">
-                <div className="text-xs font-bold text-slate-900 leading-tight">
-                  {user?.name || 'Administrator'}
+                <div className="hidden xl:block text-left">
+                  <div className="text-xs font-bold text-slate-900 leading-tight group-hover:text-purple-600 transition-colors">
+                    {user?.name || 'Administrator'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 capitalize leading-tight mt-0.5">
+                    {user?.role?.replace('_', ' ') || 'admin'} • My Account
+                  </div>
                 </div>
-                <div className="text-[10px] text-slate-500 capitalize leading-tight mt-0.5">
-                  {user?.role?.replace('_', ' ') || 'admin'}
-                </div>
-              </div>
+              </button>
 
               <button
                 onClick={handleLogout}
                 title="Sign out"
-                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50/60 rounded-full transition-colors ml-1"
+                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50/60 rounded-full transition-colors ml-0.5"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -764,6 +777,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Real-time Toast Notifications */}
       <NotificationToastContainer />
+
+      {/* My Account Modal */}
+      <MyAccountModal
+        isOpen={showMyAccountModal}
+        onClose={() => setShowMyAccountModal(false)}
+      />
     </div>
   );
 };

@@ -188,6 +188,7 @@ export const AccessRequestsPage: React.FC = () => {
             assignedRole,
             jobRole: assignedJobRole,
             departmentId: assignedDept,
+            department: assignedDept,
             profileAccess: assignedProfiles,
             reportsToIds: assignedReportsTo,
             weeklyCapacityHours: Number(assignedCapacity),

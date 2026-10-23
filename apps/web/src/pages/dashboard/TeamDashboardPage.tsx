@@ -145,7 +145,7 @@ interface DashboardData {
 }
 
 export const TeamDashboardPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const navigate = useNavigate();
   const { queryParams } = useGlobalFilter();
 
@@ -176,6 +176,8 @@ export const TeamDashboardPage: React.FC = () => {
         return 'Administrator';
       case 'marketing_head':
         return 'Marketing Head';
+      case 'executive':
+        return 'Executive';
       case 'team_lead':
         return 'Team Lead';
       case 'team_member':
@@ -210,13 +212,15 @@ export const TeamDashboardPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => navigate('/work')}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-900/30 transition-all flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Deliverable</span>
-            </button>
+            {hasPermission('work.create') && (
+              <button
+                onClick={() => navigate('/work')}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-900/30 transition-all flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Deliverable</span>
+              </button>
+            )}
             <button
               onClick={() => navigate('/calendar')}
               className="px-4 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all flex items-center gap-2 shadow-sm"

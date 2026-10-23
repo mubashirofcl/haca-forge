@@ -4,6 +4,7 @@ import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import {
   REVISION_ROOT_CAUSES,
+  APPROVER_JOB_ROLES,
   type RevisionRootCause,
   type FeedbackRoundStatus,
 } from '@mmp/shared';
@@ -33,6 +34,8 @@ interface FeedbackThreadItem {
     profileId?: { _id: string; name: string; code: string };
     departmentId?: { _id: string; name: string; code: string };
     ownerId?: { _id: string; name: string; email: string; role: string; jobRole?: string };
+    reviewRequired?: boolean;
+    stageKey?: string;
   };
   latestEntry?: {
     _id: string;
@@ -273,6 +276,15 @@ export const FeedbackPage: React.FC = () => {
     const totalApproved = threads.filter((t) => t.workItem.status === 'Approved').length;
     return { totalActive, totalFlagged, totalEscalated, totalApproved };
   }, [threads]);
+
+  const isApproverLead =
+    user?.role === 'team_lead' &&
+    Boolean(user?.jobRole && (APPROVER_JOB_ROLES as readonly string[]).includes(user.jobRole));
+
+  const canApprove =
+    user?.role === 'admin' ||
+    user?.role === 'marketing_head' ||
+    isApproverLead;
 
   const isLeadOrAdmin = user?.role === 'admin' || user?.role === 'marketing_head' || user?.role === 'team_lead';
   const isAssignedOwner =
@@ -715,16 +727,19 @@ export const FeedbackPage: React.FC = () => {
                           />
                           <span className="font-semibold text-amber-800">Revision Required</span>
                         </label>
-                        <label className="flex items-center gap-1 text-xs cursor-pointer">
+                        <label className={`flex items-center gap-1 text-xs ${activeThread.workItem.reviewRequired && !canApprove ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                           <input
                             type="radio"
                             name="decision"
                             value="Approved"
+                            disabled={Boolean(activeThread.workItem.reviewRequired && !canApprove)}
                             checked={reviewDecision === 'Approved'}
                             onChange={() => setReviewDecision('Approved')}
                             className="text-emerald-600"
                           />
-                          <span className="font-semibold text-emerald-800">Approved</span>
+                          <span className="font-semibold text-emerald-800">
+                            Approved {activeThread.workItem.reviewRequired && !canApprove && '(Approver Role Required)'}
+                          </span>
                         </label>
                       </div>
                     </div>

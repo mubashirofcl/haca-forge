@@ -3,6 +3,7 @@ import { MonthlyTarget } from './model.js';
 import { Campaign } from '../campaigns/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logActivity } from '../activity/service.js';
+import { resolveProfileObjectId } from '../referenceData/service.js';
 
 export async function listMonthlyTargets(filter = {}, user) {
   const scope = await resolveScope(user);
@@ -16,7 +17,8 @@ export async function listMonthlyTargets(filter = {}, user) {
     if (filter.profileId === 'org-wide' || filter.profileId === 'null') {
       query.profileId = null;
     } else {
-      query.profileId = filter.profileId;
+      const resolvedProf = await resolveProfileObjectId(filter.profileId);
+      query.profileId = resolvedProf || filter.profileId;
     }
   }
 
@@ -117,7 +119,10 @@ export async function getMonthlyTargetById(id, user) {
 }
 
 export async function setMonthlyTarget(data, user) {
-  const profileId = data.profileId || null;
+  let profileId = null;
+  if (data.profileId && data.profileId !== 'org-wide' && data.profileId !== 'null') {
+    profileId = await resolveProfileObjectId(data.profileId);
+  }
 
   const target = await MonthlyTarget.findOneAndUpdate(
     { month: data.month, profileId },

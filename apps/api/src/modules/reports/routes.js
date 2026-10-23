@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticate } from '../../middleware/auth.js';
-import { requirePermission } from '../../middleware/requirePermission.js';
+import { requirePermission, requireAnyPermission } from '../../middleware/requirePermission.js';
 import {
   listReportDefinitionsHandler,
   getReportDefinitionHandler,
@@ -20,17 +20,25 @@ import {
 
 const router = express.Router();
 
-// All report routes require authentication and report.view permission
+// All report routes require authentication and report.view or portal.view permission
 router.use(authenticate);
-router.use(requirePermission('report.view'));
+router.use(requireAnyPermission('report.view', 'portal.view'));
 
 // -------------------------------------------------------------
 // Phase 7: 6 Marketing OS Report Definitions Endpoints
 // -------------------------------------------------------------
 router.get('/definitions', listReportDefinitionsHandler);
 router.get('/definitions/:key', getReportDefinitionHandler);
-router.post('/definitions/:key/generate', generateReportHandler);
-router.post('/:key/generate', generateReportHandler);
+router.post(
+  '/definitions/:key/generate',
+  requireAnyPermission('report.configure', 'campaign.manage'),
+  generateReportHandler
+);
+router.post(
+  '/:key/generate',
+  requireAnyPermission('report.configure', 'campaign.manage'),
+  generateReportHandler
+);
 router.get('/view/:key', viewReportHandler);
 
 // -------------------------------------------------------------
@@ -46,7 +54,7 @@ router.get('/scorecard', getScorecardReportHandler);
 router.get('/export', exportReportHandler);
 
 router.get('/scheduled', getScheduledReportsHandler);
-router.post('/scheduled', createScheduledReportHandler);
-router.delete('/scheduled/:id', deleteScheduledReportHandler);
+router.post('/scheduled', requirePermission('report.configure'), createScheduledReportHandler);
+router.delete('/scheduled/:id', requirePermission('report.configure'), deleteScheduledReportHandler);
 
 export default router;

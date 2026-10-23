@@ -77,6 +77,7 @@ export async function seedDemoUsers(options = {}) {
         profileAccess: getProfileIds(['haca_design_school', 'haca_design_school_en']),
         reportsToIds: [],
         weeklyCapacityHours: 40,
+        workPreferences: ['Design'],
         status: 'active',
         mustSetPassword: false,
       },
@@ -97,6 +98,28 @@ export async function seedDemoUsers(options = {}) {
         profileAccess: getProfileIds(['haca', 'haca_design_school']),
         reportsToIds: [],
         weeklyCapacityHours: 40,
+        workPreferences: ['Script', 'Shoot', 'Edit'],
+        status: 'active',
+        mustSetPassword: false,
+      },
+    },
+    { upsert: true, new: true }
+  );
+
+  const smManager = await Person.findOneAndUpdate(
+    { email: 'sm.manager@demo.haca.local' },
+    {
+      $set: {
+        name: 'Demo SM Manager',
+        email: 'sm.manager@demo.haca.local',
+        passwordHash,
+        role: 'team_lead',
+        jobRole: 'Social Media Manager',
+        departmentId: getDeptId('Social Media'),
+        profileAccess: allProfiles.map((p) => p._id),
+        reportsToIds: [],
+        weeklyCapacityHours: 40,
+        workPreferences: ['Post', 'Content'],
         status: 'active',
         mustSetPassword: false,
       },
@@ -118,6 +141,29 @@ export async function seedDemoUsers(options = {}) {
         profileAccess: allProfiles.map((p) => p._id),
         reportsToIds: [],
         weeklyCapacityHours: 40,
+        workPreferences: ['Content', 'Script', 'Post'],
+        status: 'active',
+        mustSetPassword: false,
+      },
+    },
+    { upsert: true, new: true }
+  );
+
+  // 2b. Create Executive (CEO / Business Head / Director)
+  const executive = await Person.findOneAndUpdate(
+    { email: 'executive@demo.haca.local' },
+    {
+      $set: {
+        name: 'Demo Executive',
+        email: 'executive@demo.haca.local',
+        passwordHash,
+        role: 'executive',
+        jobRole: '',
+        departmentId: null,
+        profileAccess: allProfiles.map((p) => p._id),
+        reportsToIds: [],
+        weeklyCapacityHours: 40,
+        workPreferences: [],
         status: 'active',
         mustSetPassword: false,
       },
@@ -134,7 +180,8 @@ export async function seedDemoUsers(options = {}) {
       jobRole: 'UI Designer',
       department: 'Design',
       brandCodes: ['haca_design_school', 'haca_design_school_en'],
-      reportsTo: [designLead._id, creativeManager._id], // UI Designer reports to BOTH Design Lead AND Creative Manager
+      reportsTo: [designLead._id, creativeManager._id],
+      workPreferences: ['Design'],
     },
     {
       name: 'Demo Designer',
@@ -144,6 +191,7 @@ export async function seedDemoUsers(options = {}) {
       department: 'Design',
       brandCodes: ['haca_design_school'],
       reportsTo: [designLead._id],
+      workPreferences: ['Design'],
     },
     {
       name: 'Demo Video Editor',
@@ -153,6 +201,7 @@ export async function seedDemoUsers(options = {}) {
       department: 'Video Production',
       brandCodes: ['haca', 'haca_design_school'],
       reportsTo: [creativeManager._id],
+      workPreferences: ['Edit', 'Shoot'],
     },
     {
       name: 'Demo Writer',
@@ -162,6 +211,7 @@ export async function seedDemoUsers(options = {}) {
       department: 'SEO & Content',
       brandCodes: ['haca', 'haca_design_school', 'haca_marketing_school'],
       reportsTo: [creativeManager._id],
+      workPreferences: ['Content', 'Script'],
     },
     {
       name: 'Demo WhatsApp Marketer',
@@ -171,6 +221,7 @@ export async function seedDemoUsers(options = {}) {
       department: 'WhatsApp',
       brandCodes: ['haca'],
       reportsTo: [creativeManager._id],
+      workPreferences: ['Post', 'Content'],
     },
     {
       name: 'Demo Performance Marketer',
@@ -180,6 +231,7 @@ export async function seedDemoUsers(options = {}) {
       department: 'Performance Marketing',
       brandCodes: ['haca', 'haca_mideast'],
       reportsTo: [creativeManager._id],
+      workPreferences: ['Post'],
     },
   ];
 
@@ -198,6 +250,7 @@ export async function seedDemoUsers(options = {}) {
           profileAccess: getProfileIds(m.brandCodes),
           reportsToIds: m.reportsTo,
           weeklyCapacityHours: 40,
+          workPreferences: m.workPreferences || [],
           status: 'active',
           mustSetPassword: false,
         },
@@ -277,8 +330,10 @@ export async function seedDemoUsers(options = {}) {
 
   const allDemoUsers = [
     marketingHead,
+    executive,
     designLead,
     creativeManager,
+    smManager,
     ...seededMembers,
   ];
 
@@ -290,6 +345,7 @@ export async function seedDemoUsers(options = {}) {
       Name: u.name,
       Role: u.role,
       'Job Role': u.jobRole || 'none',
+      'Work Preferences': (u.workPreferences || []).join(', ') || 'none',
       'Reports To Count': u.reportsToIds?.length || 0,
       'Brand Access Count': u.profileAccess?.length || 0,
     }))

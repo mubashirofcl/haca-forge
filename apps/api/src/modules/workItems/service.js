@@ -3,6 +3,8 @@ import { WorkItem } from './model.js';
 import { Campaign } from '../campaigns/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logActivity, listRecentActivities } from '../activity/service.js';
+import { resolveProfileObjectId } from '../referenceData/service.js';
+import { normalizeWorkType } from '@mmp/shared';
 
 export async function createWorkItem(data, user) {
   // 1. Strict Campaign Linkage Verification
@@ -22,13 +24,19 @@ export async function createWorkItem(data, user) {
   }
 
   // 2. Inherit strategic attributes from campaign if not explicitly passed
-  const profileId = data.profileId || campaign.profileId;
+  let resolvedProfileId = null;
+  if (data.profileId) {
+    resolvedProfileId = await resolveProfileObjectId(data.profileId);
+  }
+  if (!resolvedProfileId && campaign.profileId) {
+    resolvedProfileId = campaign.profileId;
+  }
   const relatedOKR = data.relatedOKR || campaign.relatedOKR;
   const relatedTarget = data.relatedTarget || campaign.targetId;
 
   // 3. Profile Scoping Check
   const scope = await resolveScope(user);
-  const profileIdStr = (profileId?._id || profileId)?.toString();
+  const profileIdStr = (resolvedProfileId?._id || resolvedProfileId)?.toString();
 
   if (!scope.canAccessAllProfiles && !scope.allowedProfileIds.includes(profileIdStr)) {
     const error = new Error('You do not have permission to create work items for this brand profile');
@@ -37,24 +45,47 @@ export async function createWorkItem(data, user) {
     throw error;
   }
 
+  const desc =
+    data.description !== undefined
+      ? data.description
+      : typeof data.brief === 'string'
+      ? data.brief
+      : data.brief?.description || '';
+  const contentLink = data.contentLink || data.brief?.contentLink || '';
+  const assetsLink = data.assetsLink || data.brief?.assetsLink || '';
+
   const workItem = await WorkItem.create({
     campaignId: campaign._id,
-    profileId,
+    profileId: resolvedProfileId,
     relatedOKR,
     relatedTarget,
     title: data.title.trim(),
-    workType: data.workType,
+    workType: normalizeWorkType(data.workType) || data.workType,
     departmentId: data.departmentId,
     ownerId: data.ownerId || user._id || user.userId,
     deadline: data.deadline,
     estimatedEffortHrs: data.estimatedEffortHrs || 4,
     status: data.status || 'Not Started',
     priority: data.priority || 'Medium',
-    description: data.description || '',
+    description: desc,
     deliverableUrl: data.deliverableUrl || '',
     publishedUrl: data.publishedUrl || '',
     blockerReason: data.status === 'Blocked' ? data.blockerReason : null,
     blockerNote: data.status === 'Blocked' ? data.blockerNote : '',
+    // Content Flow stage fields (Phase 3 delta)
+    contentPieceId: data.contentPieceId || null,
+    stageKey: data.stageKey || null,
+    stageOrder: data.stageOrder !== undefined ? data.stageOrder : null,
+    reviewRequired: Boolean(data.reviewRequired),
+    unlockedAt: data.unlockedAt || null,
+    isSkipped: Boolean(data.isSkipped),
+    contentLink,
+    assetsLink,
+    brief: {
+      description: desc,
+      contentLink,
+      assetsLink,
+    },
   });
 
   await logActivity({
@@ -85,18 +116,23 @@ export async function listWorkItems(filters = {}, user) {
   const scope = await resolveScope(user, filters);
   const query = {};
 
+  let filterProfileId = null;
+  if (filters.profileId && filters.profileId !== 'all') {
+    filterProfileId = await resolveProfileObjectId(filters.profileId);
+  }
+
   // Profile Scoping
   if (!scope.canAccessAllProfiles) {
-    if (filters.profileId) {
-      if (!scope.allowedProfileIds.includes(filters.profileId.toString())) {
+    if (filterProfileId) {
+      if (!scope.allowedProfileIds.includes(filterProfileId.toString())) {
         return [];
       }
-      query.profileId = filters.profileId;
+      query.profileId = filterProfileId;
     } else {
       query.profileId = { $in: scope.allowedProfileIds };
     }
-  } else if (filters.profileId && filters.profileId !== 'all') {
-    query.profileId = filters.profileId;
+  } else if (filterProfileId) {
+    query.profileId = filterProfileId;
   }
 
   // Person Scoping (for Team Member)
@@ -125,6 +161,14 @@ export async function listWorkItems(filters = {}, user) {
 
   if (filters.priority && filters.priority !== 'all') {
     query.priority = filters.priority;
+  }
+
+  // Content Flow filters
+  if (filters.contentPieceId) {
+    query.contentPieceId = filters.contentPieceId;
+  }
+  if (filters.stageKey && filters.stageKey !== 'all') {
+    query.stageKey = filters.stageKey;
   }
 
   // Dynamic Overdue filter
@@ -193,15 +237,58 @@ export async function updateWorkItem(id, data, user) {
   }
 
   if (data.title) workItem.title = data.title.trim();
-  if (data.workType) workItem.workType = data.workType;
+  if (data.workType) workItem.workType = normalizeWorkType(data.workType) || data.workType;
   if (data.departmentId) workItem.departmentId = data.departmentId;
   if (data.ownerId) workItem.ownerId = data.ownerId;
   if (data.deadline) workItem.deadline = data.deadline;
   if (data.estimatedEffortHrs !== undefined) workItem.estimatedEffortHrs = data.estimatedEffortHrs;
   if (data.priority) workItem.priority = data.priority;
-  if (data.description !== undefined) workItem.description = data.description;
+  if (data.description !== undefined) {
+    workItem.description = data.description;
+    if (workItem.brief) workItem.brief.description = data.description;
+  }
   if (data.deliverableUrl !== undefined) workItem.deliverableUrl = data.deliverableUrl;
   if (data.publishedUrl !== undefined) workItem.publishedUrl = data.publishedUrl;
+
+  // Content Flow stage fields (Phase 3 delta)
+  if (data.contentPieceId !== undefined) workItem.contentPieceId = data.contentPieceId;
+  if (data.stageKey !== undefined) workItem.stageKey = data.stageKey;
+  if (data.stageOrder !== undefined) workItem.stageOrder = data.stageOrder;
+  if (data.reviewRequired !== undefined) workItem.reviewRequired = data.reviewRequired;
+  if (data.unlockedAt !== undefined) workItem.unlockedAt = data.unlockedAt;
+  if (data.isSkipped !== undefined) workItem.isSkipped = data.isSkipped;
+
+  // Deliverable link and brief updates
+  if (data.contentLink !== undefined) {
+    workItem.contentLink = data.contentLink;
+    if (workItem.brief) workItem.brief.contentLink = data.contentLink;
+  }
+  if (data.assetsLink !== undefined) {
+    workItem.assetsLink = data.assetsLink;
+    if (workItem.brief) workItem.brief.assetsLink = data.assetsLink;
+  }
+  if (data.brief !== undefined) {
+    if (typeof data.brief === 'string') {
+      workItem.description = data.brief;
+      if (workItem.brief) workItem.brief.description = data.brief;
+    } else if (data.brief && typeof data.brief === 'object') {
+      if (!workItem.brief) {
+        workItem.brief = { description: '', contentLink: '', assetsLink: '' };
+      }
+      if (data.brief.description !== undefined) {
+        workItem.description = data.brief.description;
+        workItem.brief.description = data.brief.description;
+      }
+      if (data.brief.contentLink !== undefined) {
+        workItem.contentLink = data.brief.contentLink;
+        workItem.brief.contentLink = data.brief.contentLink;
+      }
+      if (data.brief.assetsLink !== undefined) {
+        workItem.assetsLink = data.brief.assetsLink;
+        workItem.brief.assetsLink = data.brief.assetsLink;
+      }
+    }
+  }
 
   await workItem.save();
 
