@@ -26,8 +26,8 @@ const makeToken = (user) =>
   );
 
 describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () => {
-  let adminUser, leadUser, memberUser, depOwnerUser;
-  let adminToken, leadToken, memberToken;
+  let adminUser, headUser, leadUser, memberUser, depOwnerUser;
+  let adminToken, headToken, leadToken, memberToken;
   let profileAlpha;
   let deptDesign;
   let campaignAlpha;
@@ -86,6 +86,14 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
       active: true,
     });
 
+    headUser = await Person.create({
+      name: 'Auto Head',
+      email: 'head@auto-test.com',
+      role: 'marketing_head',
+      profileAccess: [profileAlpha._id],
+      active: true,
+    });
+
     memberUser = await Person.create({
       name: 'Auto Member',
       email: 'member@auto-test.com',
@@ -107,6 +115,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
     });
 
     adminToken = makeToken(adminUser);
+    headToken = makeToken(headUser);
     leadToken = makeToken(leadUser);
     memberToken = makeToken(memberUser);
 
@@ -353,7 +362,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
     it('Generates Weekly Marketing Report on demand via POST /api/reports/definitions/:key/generate', async () => {
       const res = await request(app)
         .post('/api/reports/definitions/weekly_marketing/generate')
-        .set('Authorization', `Bearer ${leadToken}`)
+        .set('Authorization', `Bearer ${headToken}`)
         .send({ sendEmail: false });
 
       expect(res.status).toBe(200);
@@ -383,10 +392,19 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
       expect(res.body.report.html).toContain('Monthly Performance Scorecard');
     });
 
-    it('Generates Creative Production Report with work type throughput', async () => {
+    it('Refuses report generation for Team Lead with 403 Forbidden', async () => {
       const res = await request(app)
         .post('/api/reports/definitions/creative_production/generate')
         .set('Authorization', `Bearer ${leadToken}`)
+        .send({});
+
+      expect(res.status).toBe(403);
+    });
+
+    it('Generates Creative Production Report with work type throughput (Marketing Head)', async () => {
+      const res = await request(app)
+        .post('/api/reports/definitions/creative_production/generate')
+        .set('Authorization', `Bearer ${headToken}`)
         .send({});
 
       expect(res.status).toBe(200);
@@ -398,7 +416,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
     it('Generates Lead Funnel & CPL Report with stages, CPL and CPQL metrics', async () => {
       const res = await request(app)
         .post('/api/reports/definitions/lead_funnel_cpl/generate')
-        .set('Authorization', `Bearer ${leadToken}`)
+        .set('Authorization', `Bearer ${headToken}`)
         .send({});
 
       expect(res.status).toBe(200);
@@ -411,7 +429,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
     it('Generates Team Performance Digest with capacity utilization and bands', async () => {
       const res = await request(app)
         .post('/api/reports/definitions/team_performance/generate')
-        .set('Authorization', `Bearer ${leadToken}`)
+        .set('Authorization', `Bearer ${headToken}`)
         .send({});
 
       expect(res.status).toBe(200);
@@ -423,7 +441,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
     it('Generates Campaign Deep-Dive Report with sprint spend and pace', async () => {
       const res = await request(app)
         .post('/api/reports/definitions/campaign_deepdive/generate')
-        .set('Authorization', `Bearer ${leadToken}`)
+        .set('Authorization', `Bearer ${headToken}`)
         .send({ campaignId: campaignAlpha._id.toString() });
 
       expect(res.status).toBe(200);

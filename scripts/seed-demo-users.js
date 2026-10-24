@@ -37,6 +37,10 @@ export async function seedDemoUsers(options = {}) {
     return { removedUsers: userRes.deletedCount, removedRequests: reqRes.deletedCount };
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('CRITICAL: Demo users cannot be seeded in production environment.');
+  }
+
   const demoPassword = process.env.DEMO_SEED_PASSWORD;
   if (!demoPassword) {
     throw new Error(

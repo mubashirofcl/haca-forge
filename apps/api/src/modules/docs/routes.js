@@ -6,9 +6,9 @@ import { openApiSpec } from './openapi.js';
 
 const router = Router();
 
-// In production, Swagger/OpenAPI documentation is protected behind Admin authentication
+// Outside local development, Swagger/OpenAPI documentation is protected behind Admin authentication
 const guardDocs = (req, res, next) => {
-  if (env.NODE_ENV === 'production') {
+  if (env.NODE_ENV !== 'development') {
     return authenticate(req, res, () => {
       return requirePermission('settings.manage')(req, res, next);
     });

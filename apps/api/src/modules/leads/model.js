@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { FUNNEL_STAGES } from '@mmp/shared';
+import mongoose from "mongoose";
+import { FUNNEL_STAGES } from "@mmp/shared";
 
 const leadSchema = new mongoose.Schema(
   {
@@ -12,7 +12,7 @@ const leadSchema = new mongoose.Schema(
     },
     profileId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Profile',
+      ref: "Profile",
       default: null,
       index: true,
     },
@@ -25,7 +25,7 @@ const leadSchema = new mongoose.Schema(
     stage: {
       type: String,
       enum: FUNNEL_STAGES,
-      default: 'Total Leads',
+      default: "Total Leads",
       required: true,
       index: true,
     },
@@ -37,33 +37,33 @@ const leadSchema = new mongoose.Schema(
       type: String,
       lowercase: true,
       trim: true,
-      default: '',
+      default: "",
     },
     ownerName: {
       type: String,
-      default: '',
+      default: "",
       trim: true,
     },
     contactName: {
       type: String,
-      default: '',
+      default: "",
       trim: true,
     },
     contactEmail: {
       type: String,
       lowercase: true,
       trim: true,
-      default: '',
+      default: "",
     },
     contactPhone: {
       type: String,
-      default: '',
+      default: "",
       trim: true,
     },
     syncStatus: {
       type: String,
-      enum: ['synced', 'discrepancy', 'unassigned'],
-      default: 'synced',
+      enum: ["synced", "discrepancy", "unassigned"],
+      default: "synced",
       index: true,
     },
     discrepancyReason: {
@@ -76,7 +76,11 @@ const leadSchema = new mongoose.Schema(
     },
     resolvedById: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Person',
+      ref: "Person",
+      default: null,
+    },
+    resolutionNotes: {
+      type: String,
       default: null,
     },
     rawData: {
@@ -88,11 +92,11 @@ const leadSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  }
+  },
 );
 
 leadSchema.index({ profileId: 1, stage: 1 });
 leadSchema.index({ syncStatus: 1, createdAt: -1 });
 leadSchema.index({ leadSource: 1, createdAt: -1 });
 
-export const Lead = mongoose.models.Lead || mongoose.model('Lead', leadSchema);
+export const Lead = mongoose.models.Lead || mongoose.model("Lead", leadSchema);

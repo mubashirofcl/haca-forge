@@ -1,18 +1,14 @@
-import { Lead } from './model.js';
-import { fetchLsqLeadsFromSource } from './lsqAdapter.js';
-import { WorkItem } from '../workItems/model.js';
-import { Campaign } from '../campaigns/model.js';
-import { Person } from '../people/model.js';
-import { Department } from '../departments/model.js';
-import { MonthlyTarget } from '../targets/model.js';
-import { ActivityEvent } from '../activity/model.js';
-import { resolveScope } from '../../lib/scope.js';
-import { logger } from '../../lib/logger.js';
-import {
-  FUNNEL_STAGES,
-  LEAD_SOURCES,
-  PAID_AD_LEAD_SOURCES,
-} from '@mmp/shared';
+import { Lead } from "./model.js";
+import { fetchLsqLeadsFromSource } from "./lsqAdapter.js";
+import { WorkItem } from "../workItems/model.js";
+import { Campaign } from "../campaigns/model.js";
+import { Person } from "../people/model.js";
+import { Department } from "../departments/model.js";
+import { MonthlyTarget } from "../targets/model.js";
+import { ActivityEvent } from "../activity/model.js";
+import { resolveScope } from "../../lib/scope.js";
+import { logger } from "../../lib/logger.js";
+import { FUNNEL_STAGES, LEAD_SOURCES, PAID_AD_LEAD_SOURCES } from "@mmp/shared";
 
 /**
  * 1. Synchronize Leads from LeadSquared (LSQ)
@@ -30,18 +26,18 @@ export async function syncLsqLeads(options = {}, user = null) {
     const isNew = !existing;
 
     // Hygiene checks
-    let syncStatus = raw.syncStatus || 'synced';
+    let syncStatus = raw.syncStatus || "synced";
     let discrepancyReason = raw.discrepancyReason || null;
 
     if (!raw.profileId) {
-      syncStatus = 'discrepancy';
-      discrepancyReason = 'Missing Brand Profile';
+      syncStatus = "discrepancy";
+      discrepancyReason = "Missing Brand Profile";
     } else if (!LEAD_SOURCES.includes(raw.leadSource)) {
-      syncStatus = 'discrepancy';
-      discrepancyReason = 'Unmapped Lead Source';
+      syncStatus = "discrepancy";
+      discrepancyReason = "Unmapped Lead Source";
     } else if (!FUNNEL_STAGES.includes(raw.stage)) {
-      syncStatus = 'discrepancy';
-      discrepancyReason = 'Invalid Funnel Stage';
+      syncStatus = "discrepancy";
+      discrepancyReason = "Invalid Funnel Stage";
     }
 
     const leadDoc = await Lead.findOneAndUpdate(
@@ -62,10 +58,10 @@ export async function syncLsqLeads(options = {}, user = null) {
           rawData: raw.rawData || {},
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true },
     );
 
-    if (syncStatus === 'synced') {
+    if (syncStatus === "synced") {
       syncedCount++;
     } else {
       discrepancyCount++;
@@ -73,7 +69,11 @@ export async function syncLsqLeads(options = {}, user = null) {
 
     // Auto-Task Creation Rule:
     // Only WhatsApp Inbound source automatically creates a task for the WhatsApp Marketer.
-    if (isNew && leadDoc.leadSource === 'WhatsApp Inbound' && leadDoc.profileId) {
+    if (
+      isNew &&
+      leadDoc.leadSource === "WhatsApp Inbound" &&
+      leadDoc.profileId
+    ) {
       const taskCreated = await createWhatsAppInboundTask(leadDoc, user);
       if (taskCreated) tasksCreated++;
     }
@@ -84,8 +84,8 @@ export async function syncLsqLeads(options = {}, user = null) {
     try {
       await ActivityEvent.create({
         actorId: user._id,
-        action: 'lsq.sync_completed',
-        entityType: 'lsq_sync',
+        action: "lsq.sync_completed",
+        entityType: "lsq_sync",
         entityId: `sync-${Date.now()}`,
         metadata: {
           syncedCount,
@@ -94,7 +94,10 @@ export async function syncLsqLeads(options = {}, user = null) {
         },
       });
     } catch (err) {
-      logger.warn({ err: err.message }, 'Failed to record ActivityEvent for LSQ sync');
+      logger.warn(
+        { err: err.message },
+        "Failed to record ActivityEvent for LSQ sync",
+      );
     }
   }
 
@@ -114,24 +117,24 @@ async function createWhatsAppInboundTask(lead, user) {
   try {
     // 1. Locate assignee: JobRole 'WhatsApp Marketer', or in department 'whatsapp'
     let assignee = await Person.findOne({
-      jobRole: 'WhatsApp Marketer',
-      status: { $ne: 'suspended' },
+      jobRole: "WhatsApp Marketer",
+      status: { $ne: "suspended" },
     });
 
     if (!assignee) {
-      const waDept = await Department.findOne({ code: 'whatsapp' });
+      const waDept = await Department.findOne({ code: "whatsapp" });
       if (waDept) {
         assignee = await Person.findOne({
           departmentId: waDept._id,
-          status: { $ne: 'suspended' },
+          status: { $ne: "suspended" },
         });
       }
     }
 
     if (!assignee) {
       assignee = await Person.findOne({
-        role: { $in: ['marketing_head', 'admin'] },
-        status: { $ne: 'suspended' },
+        role: { $in: ["marketing_head", "admin"] },
+        status: { $ne: "suspended" },
       });
     }
 
@@ -139,29 +142,59 @@ async function createWhatsAppInboundTask(lead, user) {
 
     // 2. Locate department
     const dept =
-      assignee.departmentId || (await Department.findOne({ code: 'whatsapp' }))?._id;
+      assignee.departmentId ||
+      (await Department.findOne({ code: "whatsapp" }))?._id;
 
     // 3. Find active campaign for profile
     let campaign = await Campaign.findOne({
       profileId: lead.profileId,
-      status: 'In Progress',
+      status: "In Progress",
     });
 
     if (!campaign) {
-      campaign = await Campaign.findOne({ status: 'In Progress' });
+      campaign = await Campaign.findOne({ status: "In Progress" });
     }
 
     if (!campaign) {
+      // B10 Fix: Campaign strictly requires targetId (MonthlyTarget linkage).
+      let target = await MonthlyTarget.findOne({
+        profileId: lead.profileId,
+        status: { $in: ["active", "locked", "draft"] },
+      }).sort({ month: -1 });
+
+      if (!target && lead.profileId) {
+        target = await MonthlyTarget.findOne({
+          profileId: lead.profileId,
+        }).sort({ month: -1 });
+      }
+
+      if (!target) {
+        target = await MonthlyTarget.findOne().sort({ month: -1 });
+      }
+
+      if (!target) {
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        target = await MonthlyTarget.create({
+          month: currentMonth,
+          profileId: lead.profileId,
+          targetLeads: 100,
+          targetRevenue: 0,
+          status: "active",
+          notes: "Auto-provisioned target for inbound lead campaigns",
+        });
+      }
+
       // Create lightweight campaign anchor if none exists
       campaign = await Campaign.create({
-        name: 'Inbound Lead Response Sprint',
+        name: "Inbound Lead Response Sprint",
         profileId: lead.profileId,
+        targetId: target._id,
         departmentId: dept,
         ownerId: assignee._id,
-        goalType: 'Leads',
-        expectedOutcome: 'Lead Generation',
-        relatedOKR: 'Respond to WhatsApp Inbound leads within 24h',
-        status: 'In Progress',
+        goalType: "Leads",
+        expectedOutcome: "Lead Generation",
+        relatedOKR: "Respond to WhatsApp Inbound leads within 24h",
+        status: "In Progress",
         startDate: new Date(),
         endDate: new Date(Date.now() + 30 * 86400000),
       });
@@ -170,27 +203,27 @@ async function createWhatsAppInboundTask(lead, user) {
     // 4. Create WorkItem
     const task = await WorkItem.create({
       title: `Follow-up WhatsApp Inbound Lead: ${lead.contactName || lead.lsqLeadId}`,
-      workType: 'WhatsApp Blast',
+      workType: "WhatsApp Blast",
       departmentId: dept,
       profileId: lead.profileId,
       campaignId: campaign._id,
       ownerId: assignee._id,
-      status: 'Not Started',
-      priority: 'High',
+      status: "Not Started",
+      priority: "High",
       deadline: new Date(Date.now() + 24 * 3600000), // 24-hour turnaround
       estimatedEffortHrs: 1.5,
-      relatedOKR: 'WhatsApp Lead Inbound SLA < 24h',
-      description: `Inbound WhatsApp lead automatically created from LeadSquared.\nContact: ${lead.contactName} (${lead.contactPhone || 'No phone'})\nLead ID: ${lead.lsqLeadId}`,
+      relatedOKR: "WhatsApp Lead Inbound SLA < 24h",
+      description: `Inbound WhatsApp lead automatically created from LeadSquared.\nContact: ${lead.contactName} (${lead.contactPhone || "No phone"})\nLead ID: ${lead.lsqLeadId}`,
     });
 
     // 5. Activity Event
     await ActivityEvent.create({
       actorId: assignee._id,
-      action: 'work_item.created',
-      entityType: 'work_item',
+      action: "work_item.created",
+      entityType: "work_item",
       entityId: task._id.toString(),
       metadata: {
-        trigger: 'lsq_whatsapp_inbound_auto_task',
+        trigger: "lsq_whatsapp_inbound_auto_task",
         leadId: lead._id,
         lsqLeadId: lead.lsqLeadId,
       },
@@ -198,7 +231,10 @@ async function createWhatsAppInboundTask(lead, user) {
 
     return task;
   } catch (err) {
-    logger.error({ err: err.message, lsqLeadId: lead.lsqLeadId }, 'Failed to auto-create WhatsApp task');
+    logger.error(
+      { err: err.message, lsqLeadId: lead.lsqLeadId },
+      "Failed to auto-create WhatsApp task",
+    );
     return null;
   }
 }
@@ -210,7 +246,9 @@ async function createWhatsAppInboundTask(lead, user) {
 export async function getLeadFunnelMetrics(filters = {}, user = null) {
   const scope = await resolveScope(user, filters);
   if (!scope.isAllowed) {
-    throw new Error('User does not have access to view leads within the requested scope');
+    throw new Error(
+      "User does not have access to view leads within the requested scope",
+    );
   }
 
   // Build query
@@ -218,11 +256,13 @@ export async function getLeadFunnelMetrics(filters = {}, user = null) {
   if (scope.allowedProfileIds.length > 0) {
     query.profileId = { $in: scope.allowedProfileIds };
   }
-  if (filters.profileId && filters.profileId !== 'all') {
+  if (filters.profileId && filters.profileId !== "all") {
     query.profileId = filters.profileId;
   }
 
-  const leads = await Lead.find(query).populate('profileId', 'name code').lean();
+  const leads = await Lead.find(query)
+    .populate("profileId", "name code")
+    .lean();
   const totalLeads = leads.length;
 
   // 12-Stage Funnel breakdown
@@ -235,13 +275,15 @@ export async function getLeadFunnelMetrics(filters = {}, user = null) {
     if (stageCounts[l.stage] !== undefined) {
       stageCounts[l.stage] += 1;
     } else {
-      stageCounts['Total Leads'] += 1;
+      stageCounts["Total Leads"] += 1;
     }
   });
 
   const funnelStages = FUNNEL_STAGES.map((stage) => {
     const count = stageCounts[stage];
-    const conversionPct = totalLeads ? Math.round((count / totalLeads) * 100) : 0;
+    const conversionPct = totalLeads
+      ? Math.round((count / totalLeads) * 100)
+      : 0;
     return {
       stage,
       count,
@@ -251,11 +293,13 @@ export async function getLeadFunnelMetrics(filters = {}, user = null) {
 
   // Qualified Leads definition: 'Qualified Leads' stage or completed stages
   const qualifiedLeads = leads.filter((l) =>
-    ['Qualified Leads', 'Call Back', 'Payment Received'].includes(l.stage)
+    ["Qualified Leads", "Call Back", "Payment Received"].includes(l.stage),
   ).length;
 
   // Paid Ad Leads
-  const adLeads = leads.filter((l) => PAID_AD_LEAD_SOURCES.includes(l.leadSource)).length;
+  const adLeads = leads.filter((l) =>
+    PAID_AD_LEAD_SOURCES.includes(l.leadSource),
+  ).length;
 
   // Ad Spend calculation from active MonthlyTarget in scope
   const currentMonth = filters.month || new Date().toISOString().slice(0, 7);
@@ -264,15 +308,20 @@ export async function getLeadFunnelMetrics(filters = {}, user = null) {
 
   const targets = await MonthlyTarget.find(targetQuery).lean();
   const targetSpend = targets.reduce((sum, t) => sum + (t.budget || 0), 0);
-  const targetQualified = targets.reduce((sum, t) => sum + (t.qualifiedLeadsTarget || 0), 0);
+  const targetQualified = targets.reduce(
+    (sum, t) => sum + (t.qualifiedLeadsTarget || 0),
+    0,
+  );
 
   // CPL & CPQL Formulas:
   // CPL = Spend / Ad Leads
   // CPQL = Spend / Qualified Leads
   // Qualified % = Qualified Leads / Total Leads * 100
-  const cpl = adLeads > 0 ? (targetSpend / adLeads).toFixed(2) : '0.00';
-  const cpql = qualifiedLeads > 0 ? (targetSpend / qualifiedLeads).toFixed(2) : '0.00';
-  const qualifiedPct = totalLeads > 0 ? Math.round((qualifiedLeads / totalLeads) * 100) : 0;
+  const cpl = adLeads > 0 ? (targetSpend / adLeads).toFixed(2) : "0.00";
+  const cpql =
+    qualifiedLeads > 0 ? (targetSpend / qualifiedLeads).toFixed(2) : "0.00";
+  const qualifiedPct =
+    totalLeads > 0 ? Math.round((qualifiedLeads / totalLeads) * 100) : 0;
 
   // Source Mix Breakdown across 19 Lead Sources
   const sourceMap = {};
@@ -283,7 +332,9 @@ export async function getLeadFunnelMetrics(filters = {}, user = null) {
   leads.forEach((l) => {
     if (sourceMap[l.leadSource]) {
       sourceMap[l.leadSource].count += 1;
-      if (['Qualified Leads', 'Call Back', 'Payment Received'].includes(l.stage)) {
+      if (
+        ["Qualified Leads", "Call Back", "Payment Received"].includes(l.stage)
+      ) {
         sourceMap[l.leadSource].qualified += 1;
       }
     }
@@ -294,7 +345,9 @@ export async function getLeadFunnelMetrics(filters = {}, user = null) {
     count: stats.count,
     sharePct: totalLeads ? Math.round((stats.count / totalLeads) * 100) : 0,
     qualifiedCount: stats.qualified,
-    qualificationRate: stats.count ? Math.round((stats.qualified / stats.count) * 100) : 0,
+    qualificationRate: stats.count
+      ? Math.round((stats.qualified / stats.count) * 100)
+      : 0,
   }));
 
   return {
@@ -320,21 +373,26 @@ export async function getLeadFunnelMetrics(filters = {}, user = null) {
  */
 export async function getDataCenterStatus(filters = {}, user = null) {
   const allLeads = await Lead.find()
-    .populate('profileId', 'name code')
+    .populate("profileId", "name code")
     .sort({ createdAt: -1 })
     .lean();
 
   const total = allLeads.length;
-  const synced = allLeads.filter((l) => l.syncStatus === 'synced').length;
-  const discrepancies = allLeads.filter((l) => l.syncStatus === 'discrepancy');
+  const synced = allLeads.filter((l) => l.syncStatus === "synced").length;
+  const discrepancies = allLeads.filter((l) => l.syncStatus === "discrepancy");
   const unassigned = allLeads.filter((l) => !l.profileId).length;
 
   // Integration Health Score: % of total leads synced cleanly (e.g. 98.4%)
-  const healthScore = total > 0 ? Math.round((synced / total) * 1000) / 10 : 100.0;
+  const healthScore =
+    total > 0 ? Math.round((synced / total) * 1000) / 10 : 100.0;
 
   // Discrepancy groupings
-  const missingProfilesCount = discrepancies.filter((d) => d.discrepancyReason === 'Missing Brand Profile').length;
-  const unmappedSourcesCount = discrepancies.filter((d) => d.discrepancyReason === 'Unmapped Lead Source').length;
+  const missingProfilesCount = discrepancies.filter(
+    (d) => d.discrepancyReason === "Missing Brand Profile",
+  ).length;
+  const unmappedSourcesCount = discrepancies.filter(
+    (d) => d.discrepancyReason === "Unmapped Lead Source",
+  ).length;
 
   return {
     healthScore,
@@ -354,7 +412,7 @@ export async function getDataCenterStatus(filters = {}, user = null) {
       contactPhone: d.contactPhone,
       leadSource: d.leadSource,
       stage: d.stage,
-      profileName: d.profileId?.name || 'Unassigned',
+      profileName: d.profileId?.name || "Unassigned",
       profileId: d.profileId?._id || null,
       discrepancyReason: d.discrepancyReason,
       syncStatus: d.syncStatus,
@@ -367,26 +425,23 @@ export async function getDataCenterStatus(filters = {}, user = null) {
  * 4. Resolve Data Center Discrepancy (Screen 13)
  * Head / Admin maps a missing profile or unmapped lead source to resolve discrepancy.
  */
-export async function resolveDiscrepancy(leadId, resolutionData = {}, user = null) {
+export async function resolveDiscrepancy(
+  leadId,
+  resolutionData = {},
+  user = null,
+) {
   const lead = await Lead.findById(leadId);
   if (!lead) {
-    throw new Error('Lead not found in Data Center');
+    throw new Error("Lead not found in Data Center");
   }
 
-  if (resolutionData.profileId) {
-    lead.profileId = resolutionData.profileId;
-  }
-  if (resolutionData.leadSource) {
-    lead.leadSource = resolutionData.leadSource;
-  }
-
-  // Re-verify hygiene
-  if (lead.profileId && LEAD_SOURCES.includes(lead.leadSource)) {
-    lead.syncStatus = 'synced';
-    lead.discrepancyReason = null;
-    lead.resolvedAt = new Date();
-    lead.resolvedById = user?._id || null;
-  }
+  // A6 Fix: Leads from LSQ are read-authoritative: do not overwrite leadSource or profile on lead record.
+  // Record resolution metadata and mark discrepancy resolved.
+  lead.syncStatus = "synced";
+  lead.discrepancyReason = null;
+  lead.resolvedAt = new Date();
+  lead.resolvedById = user?._id || null;
+  lead.resolutionNotes = resolutionData.note || "Acknowledged by operator";
 
   await lead.save();
 
@@ -394,8 +449,8 @@ export async function resolveDiscrepancy(leadId, resolutionData = {}, user = nul
     try {
       await ActivityEvent.create({
         actorId: user._id,
-        action: 'datacenter.discrepancy_resolved',
-        entityType: 'lead',
+        action: "datacenter.discrepancy_resolved",
+        entityType: "lead",
         entityId: lead._id.toString(),
         metadata: {
           lsqLeadId: lead.lsqLeadId,
@@ -404,7 +459,10 @@ export async function resolveDiscrepancy(leadId, resolutionData = {}, user = nul
         },
       });
     } catch (err) {
-      logger.warn({ err: err.message }, 'Failed to record ActivityEvent for discrepancy resolution');
+      logger.warn(
+        { err: err.message },
+        "Failed to record ActivityEvent for discrepancy resolution",
+      );
     }
   }
 

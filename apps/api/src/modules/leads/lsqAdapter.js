@@ -8,7 +8,16 @@ import { Profile } from '../referenceData/profile.model.js';
  * Connects to LSQ REST API with fallback to deterministic fixture generation for offline/test environments.
  */
 
-export async function fetchLsqLeadsFromSource({ batchSize = 50, sinceDate = null, simulateDiscrepancies = false } = {}) {
+export async function fetchLsqLeadsFromSource({
+  batchSize = 50,
+  sinceDate = null,
+  simulateDiscrepancies = false,
+  mockLeads = null,
+} = {}) {
+  if (Array.isArray(mockLeads) && mockLeads.length > 0) {
+    return mockLeads;
+  }
+
   // If actual LSQ credentials are provided, attempt live API call
   if (env.LSQ_ACCESS_KEY && env.LSQ_SECRET_KEY && env.LSQ_API_HOST) {
     try {

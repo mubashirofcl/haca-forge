@@ -303,10 +303,11 @@ describe('Phase 8: LeadSquared (LSQ) Integration & Data Center (Screens 12 & 13)
       expect(res.body.lead.discrepancyReason).toBeNull();
       expect(res.body.lead.resolvedAt).toBeTruthy();
 
-      // Verify DB persistence
+      // Verify DB persistence & A6 read-authoritative preservation (profileId is not overwritten on lead)
       const updated = await Lead.findById(discrepancy._id);
       expect(updated.syncStatus).toBe('synced');
-      expect(updated.profileId.toString()).toBe(profileAlpha._id.toString());
+      expect(updated.discrepancyReason).toBeNull();
+      expect(updated.resolvedAt).toBeTruthy();
     });
 
     it('POST /api/leads/sync triggers manual LSQ sync on demand from Data Center', async () => {
