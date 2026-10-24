@@ -58,21 +58,21 @@ describe('Shared Zod Schemas: Request Access & Review', () => {
     }
   });
 
-  it('strictly limits requestedRole to team_member and team_lead only', () => {
-    expect(REQUESTABLE_ROLES).toEqual(['team_member', 'team_lead']);
+  it('strictly limits requestedRole to team_member and sm_manager only', () => {
+    expect(REQUESTABLE_ROLES).toEqual(['team_member', 'sm_manager']);
 
     // Allowed roles
     expect(requestAccessSchema.safeParse({ ...validPayload, requestedRole: 'team_member' }).success).toBe(true);
-    expect(requestAccessSchema.safeParse({ ...validPayload, requestedRole: 'team_lead' }).success).toBe(true);
+    expect(requestAccessSchema.safeParse({ ...validPayload, requestedRole: 'sm_manager' }).success).toBe(true);
 
     // Privileged and retired roles are strictly rejected
     const adminAttempt = requestAccessSchema.safeParse({ ...validPayload, requestedRole: 'admin' });
     expect(adminAttempt.success).toBe(false);
 
-    const headAttempt = requestAccessSchema.safeParse({ ...validPayload, requestedRole: 'marketing_head' });
+    const headAttempt = requestAccessSchema.safeParse({ ...validPayload, requestedRole: 'creative_head' });
     expect(headAttempt.success).toBe(false);
 
-    const retiredAttempt = requestAccessSchema.safeParse({ ...validPayload, requestedRole: 'worker' });
+    const retiredAttempt = requestAccessSchema.safeParse({ ...validPayload, requestedRole: 'team_lead' });
     expect(retiredAttempt.success).toBe(false);
   });
 
@@ -105,8 +105,8 @@ describe('Shared Zod Schemas: Request Access & Review', () => {
   it('validates accessRequestReviewSchema for administrator review', () => {
     const validReview = {
       status: 'approved',
-      assignedRole: 'team_lead',
-      jobRole: 'Design Lead (TL)',
+      assignedRole: 'sm_manager',
+      jobRole: 'Social Media Manager',
       weeklyCapacityHours: 40,
       profileAccess: ['prof1', 'prof2'],
       reportsToIds: [],

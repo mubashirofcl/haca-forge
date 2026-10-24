@@ -41,7 +41,8 @@ temp/
 .mongodb_data/
 .agent/
 .agents/
-backup-before-marketing-os/
+backup*/
+backups/
 
 # Credentials and secrets
 *USERS_AND_PASSWORDS.md

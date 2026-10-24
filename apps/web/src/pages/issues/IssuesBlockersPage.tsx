@@ -40,7 +40,6 @@ interface BlockerItem {
     workType: string;
     deadline: string;
     status: string;
-    campaignId?: { _id: string; name: string };
     profileId?: { _id: string; name: string };
     departmentId?: { _id: string; name: string };
     ownerId?: { _id: string; name: string; email: string; role: string; jobRole?: string };
@@ -78,7 +77,6 @@ interface RevisionFlagItem {
     workType: string;
     deadline: string;
     status: string;
-    campaignId?: { _id: string; name: string };
     profileId?: { _id: string; name: string };
     departmentId?: { _id: string; name: string };
     revisions: number;
@@ -328,7 +326,7 @@ export const IssuesBlockersPage: React.FC = () => {
     });
   }, [revisionFlags, searchQuery]);
 
-  const isLeadOrAdmin = user?.role === 'admin' || user?.role === 'marketing_head' || user?.role === 'team_lead';
+  const isLeadOrAdmin = user?.role === 'admin' || user?.role === 'creative_head' || user?.role === 'sm_manager';
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
@@ -515,11 +513,6 @@ export const IssuesBlockersPage: React.FC = () => {
                       >
                         {b.workItemId?.title || 'Deliverable'}
                       </h3>
-                      {b.workItemId?.campaignId && (
-                        <span className="text-[11px] text-slate-400 block mt-0.5">
-                          Campaign: {b.workItemId.campaignId.name}
-                        </span>
-                      )}
                     </div>
 
                     <div className="text-right shrink-0">

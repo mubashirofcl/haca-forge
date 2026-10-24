@@ -126,7 +126,7 @@ export async function createBlocker(data, user) {
   }
 
   return Blocker.findById(blocker._id)
-    .populate('workItemId', 'title workType deadline status campaignId')
+    .populate('workItemId', 'title workType deadline status')
     .populate('blockedById', 'name email role')
     .populate('dependencyOwnerId', 'name email role jobRole');
 }
@@ -198,7 +198,7 @@ export async function resolveBlocker(blockerId, data = {}, user) {
   }
 
   return Blocker.findById(blocker._id)
-    .populate('workItemId', 'title workType deadline status campaignId')
+    .populate('workItemId', 'title workType deadline status')
     .populate('blockedById', 'name email role')
     .populate('dependencyOwnerId', 'name email role')
     .populate('resolvedById', 'name email role');
@@ -290,9 +290,8 @@ export async function listBlockers(filters = {}, user) {
   const blockers = await Blocker.find(query)
     .populate({
       path: 'workItemId',
-      select: 'title workType deadline status campaignId profileId departmentId ownerId',
+      select: 'title workType deadline status profileId departmentId ownerId',
       populate: [
-        { path: 'campaignId', select: 'name' },
         { path: 'profileId', select: 'name code' },
         { path: 'departmentId', select: 'name code' },
         { path: 'ownerId', select: 'name email role jobRole' },

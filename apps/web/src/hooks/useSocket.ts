@@ -21,8 +21,14 @@ export function useSocket() {
 
     // Connect socket if not already connected
     if (!socketInstance) {
+      const token =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('accessToken') || localStorage.getItem('token')
+          : null;
       socketInstance = io(window.location.origin, {
         withCredentials: true,
+        auth: token ? { token } : undefined,
+        query: token ? { token } : undefined,
         transports: ['websocket', 'polling'],
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
@@ -34,6 +40,12 @@ export function useSocket() {
 
       socketInstance.on('disconnect', () => {
         setIsConnected(false);
+      });
+
+      socketInstance.on('connect_error', (err) => {
+        if (err.message && err.message.toLowerCase().includes('authentication')) {
+          setIsConnected(false);
+        }
       });
     } else if (socketInstance.connected) {
       setIsConnected(true);

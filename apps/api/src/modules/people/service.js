@@ -179,19 +179,11 @@ export async function updatePerson(id, updates, actor) {
 
   const targetRole = normalizeRole(target.role);
 
-  // Marketing Head update restrictions
-  if (actorRole === 'marketing_head') {
-    // Cannot touch admin or marketing_head accounts
-    if (targetRole === 'admin' || targetRole === 'marketing_head') {
-      const error = new Error('Forbidden: Marketing Head cannot modify admin or marketing_head accounts');
-      error.code = 'FORBIDDEN';
-      error.statusCode = 403;
-      throw error;
-    }
-
-    // Cannot touch executive accounts
-    if (targetRole === 'executive') {
-      const error = new Error('Forbidden: Marketing Head cannot modify executive accounts');
+  // Creative Head update restrictions
+  if (actorRole === 'creative_head') {
+    // Cannot touch admin, creative_head, or executive accounts
+    if (targetRole === 'admin' || targetRole === 'creative_head' || targetRole === 'executive') {
+      const error = new Error('Forbidden: Creative Head cannot modify admin, executive, or other creative_head accounts');
       error.code = 'FORBIDDEN';
       error.statusCode = 403;
       throw error;
@@ -199,21 +191,21 @@ export async function updatePerson(id, updates, actor) {
 
     // Cannot modify core account identity fields
     if (updates.role && updates.role !== target.role) {
-      const error = new Error('Forbidden: Marketing Head cannot change user roles');
+      const error = new Error('Forbidden: Creative Head cannot change user roles');
       error.code = 'FORBIDDEN';
       error.statusCode = 403;
       throw error;
     }
 
     if (updates.status && updates.status !== target.status) {
-      const error = new Error('Forbidden: Marketing Head cannot change user status (suspend/activate)');
+      const error = new Error('Forbidden: Creative Head cannot change user status (suspend/activate)');
       error.code = 'FORBIDDEN';
       error.statusCode = 403;
       throw error;
     }
 
     if (updates.email || updates.password || updates.name) {
-      const error = new Error('Forbidden: Marketing Head can only edit operational fields (department, jobRole, profileAccess, reportsToIds, weeklyCapacityHours, workPreferences)');
+      const error = new Error('Forbidden: Creative Head can only edit operational fields (department, jobRole, workPreferences, weeklyCapacityHours)');
       error.code = 'FORBIDDEN';
       error.statusCode = 403;
       throw error;

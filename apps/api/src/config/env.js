@@ -34,10 +34,6 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
-  LSQ_ACCESS_KEY: z.string().optional(),
-  LSQ_SECRET_KEY: z.string().optional(),
-  LSQ_HOST_URL: z.string().optional(),
-  LSQ_MOCK_MODE: z.coerce.boolean().default(true),
 });
 
 const parsed = envSchema.safeParse(process.env);

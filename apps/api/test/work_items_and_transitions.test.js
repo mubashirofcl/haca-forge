@@ -3,20 +3,14 @@ import mongoose from 'mongoose';
 import { Person } from '../src/modules/people/model.js';
 import { Profile } from '../src/modules/referenceData/profile.model.js';
 import { Department } from '../src/modules/departments/model.js';
-import { MonthlyTarget } from '../src/modules/targets/model.js';
-import { Campaign } from '../src/modules/campaigns/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { ActivityEvent } from '../src/modules/activity/model.js';
-import * as targetService from '../src/modules/targets/service.js';
-import * as campaignService from '../src/modules/campaigns/service.js';
 import * as workItemService from '../src/modules/workItems/service.js';
 import * as transitionService from '../src/modules/workItems/transition.service.js';
 
 describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () => {
   let adminUser, headUser, leadUser, otherLeadUser, memberUser, otherMemberUser;
   let testProfileAlpha, testProfileBeta, testDept;
-  let testTarget, testCampaign;
-  const testMonth = '2027-03';
 
   beforeAll(async () => {
     const mongoUri =
@@ -27,8 +21,6 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
 
     // Clean test artifacts
     await WorkItem.deleteMany({ title: /P3 Test/i });
-    await Campaign.deleteMany({ name: /P3 Test/i });
-    await MonthlyTarget.deleteMany({ month: testMonth });
     await Person.deleteMany({ email: /@p3-test\.com$/ });
     await Profile.deleteMany({ code: { $in: ['p3_alpha', 'p3_beta'] } });
     await Department.deleteMany({ code: 'p3_design' });
@@ -49,28 +41,28 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
     });
 
     headUser = await Person.create({
-      name: 'P3 Marketing Head',
+      name: 'P3 Creative Head',
       email: 'head@p3-test.com',
-      role: 'marketing_head',
+      role: 'creative_head',
       status: 'active',
       profileAccess: [testProfileAlpha._id, testProfileBeta._id],
     });
 
     leadUser = await Person.create({
-      name: 'P3 Team Lead Alpha',
+      name: 'P3 SM Manager Alpha',
       email: 'lead@p3-test.com',
-      role: 'team_lead',
-      jobRole: 'Design Lead (TL)',
+      role: 'sm_manager',
+      jobRole: 'Social Media Manager',
       departmentId: testDept._id,
       status: 'active',
       profileAccess: [testProfileAlpha._id],
     });
 
     otherLeadUser = await Person.create({
-      name: 'P3 Other Lead Beta',
+      name: 'P3 Other SM Manager Beta',
       email: 'otherlead@p3-test.com',
-      role: 'team_lead',
-      jobRole: 'Creative Manager (TL)',
+      role: 'sm_manager',
+      jobRole: 'Social Media Manager',
       status: 'active',
       profileAccess: [testProfileBeta._id],
     });
@@ -94,84 +86,22 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
       status: 'active',
       profileAccess: [testProfileBeta._id],
     });
-
-    // Seed target & campaign
-    testTarget = await targetService.setMonthlyTarget(
-      {
-        month: testMonth,
-        profileId: testProfileAlpha._id,
-        revenueTarget: 800000,
-        leadsTarget: 1000,
-        budget: 200000,
-      },
-      adminUser
-    );
-
-    testCampaign = await campaignService.createCampaign(
-      {
-        name: 'P3 Test: Flagship Campaign',
-        profileId: testProfileAlpha._id,
-        targetId: testTarget._id,
-        relatedOKR: 'Acquire 500 new enrolled design students',
-        startDate: '2027-03-01',
-        endDate: '2027-03-31',
-        goalType: 'Enrollments',
-        goalValue: 500,
-        budget: 100000,
-        ownerId: leadUser._id,
-      },
-      leadUser
-    );
   });
 
   afterAll(async () => {
     await WorkItem.deleteMany({ title: /P3 Test/i });
-    await Campaign.deleteMany({ name: /P3 Test/i });
-    await MonthlyTarget.deleteMany({ month: testMonth });
     await Person.deleteMany({ email: /@p3-test\.com$/ });
     await Profile.deleteMany({ code: { $in: ['p3_alpha', 'p3_beta'] } });
     await Department.deleteMany({ code: 'p3_design' });
     await ActivityEvent.deleteMany({ 'metadata.title': /P3 Test/i });
   });
 
-  describe('WorkItem Creation & Invariant Inheritance', () => {
-    it('REJECTS work item creation without campaignId (HTTP 400)', async () => {
-      await expect(
-        workItemService.createWorkItem(
-          {
-            title: 'P3 Test: Orphan Task',
-            workType: 'Reel',
-            departmentId: testDept._id,
-            ownerId: memberUser._id,
-            deadline: new Date(Date.now() + 86400000),
-          },
-          leadUser
-        )
-      ).rejects.toThrow(/strictly requires a valid campaignId/);
-    });
-
-    it('REJECTS work item creation with invalid campaignId (HTTP 400)', async () => {
-      const fakeId = new mongoose.Types.ObjectId();
-      await expect(
-        workItemService.createWorkItem(
-          {
-            campaignId: fakeId,
-            title: 'P3 Test: Invalid Campaign Task',
-            workType: 'Reel',
-            departmentId: testDept._id,
-            ownerId: memberUser._id,
-            deadline: new Date(Date.now() + 86400000),
-          },
-          leadUser
-        )
-      ).rejects.toThrow(/does not exist/);
-    });
-
-    it('CREATES work item and inherits profileId, relatedOKR, and relatedTarget from Campaign', async () => {
+  describe('WorkItem Creation & Scoping', () => {
+    it('CREATES work item without campaignId and attaches profileId', async () => {
       const deadline = new Date(Date.now() + 3 * 86400000);
       const item = await workItemService.createWorkItem(
         {
-          campaignId: testCampaign._id,
+          profileId: testProfileAlpha._id,
           title: 'P3 Test: Hero Banner Creative',
           workType: 'Ad Creative',
           departmentId: testDept._id,
@@ -179,17 +109,14 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
           deadline,
           estimatedEffortHrs: 6,
           priority: 'High',
-          description: 'Create high-converting hero banner for Spring admission campaign.',
+          description: 'Create high-converting hero banner for Spring admission.',
         },
         leadUser
       );
 
       expect(item).toBeDefined();
       expect(item.title).toBe('P3 Test: Hero Banner Creative');
-      expect(item.campaignId._id.toString()).toBe(testCampaign._id.toString());
       expect(item.profileId._id.toString()).toBe(testProfileAlpha._id.toString());
-      expect(item.relatedOKR).toBe(testCampaign.relatedOKR);
-      expect(item.relatedTarget._id.toString()).toBe(testTarget._id.toString());
       expect(item.status).toBe('Not Started');
       expect(item.isOverdue).toBe(false);
     });
@@ -198,7 +125,7 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
       await expect(
         workItemService.createWorkItem(
           {
-            campaignId: testCampaign._id,
+            profileId: testProfileAlpha._id,
             title: 'P3 Test: Cross-Brand Breach',
             workType: 'Reel',
             departmentId: testDept._id,
@@ -217,7 +144,7 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
     beforeAll(async () => {
       testItem = await workItemService.createWorkItem(
         {
-          campaignId: testCampaign._id,
+          profileId: testProfileAlpha._id,
           title: 'P3 Test: Transition Workflow Item',
           workType: 'Landing Page',
           departmentId: testDept._id,
@@ -294,11 +221,11 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
         memberUser
       );
 
-      // Move back to In Progress for revision
+      // Move back to In Progress for revision (Creative Head or Admin required)
       const reworked = await transitionService.transitionWorkItem(
         testItem._id,
         { toStatus: 'In Progress' },
-        memberUser
+        headUser
       );
 
       expect(reworked.status).toBe('In Progress');
@@ -313,21 +240,31 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
         memberUser
       );
 
-      // Attempt approval by member
+      // Attempt approval by member (owner)
       await expect(
         transitionService.transitionWorkItem(
           testItem._id,
           { toStatus: 'Approved' },
           memberUser
         )
-      ).rejects.toThrow(/Only a Team Lead, Marketing Head, or Administrator can approve/);
+      ).rejects.toThrow(/The owner can never approve/);
     });
 
-    it('ALLOWS Team Lead to approve deliverable and move to Approved', async () => {
+    it('BLOCKS SM Manager from approving deliverable (HTTP 403)', async () => {
+      await expect(
+        transitionService.transitionWorkItem(
+          testItem._id,
+          { toStatus: 'Approved' },
+          leadUser
+        )
+      ).rejects.toThrow(/Review stages can be approved only by Creative Head and Admin/);
+    });
+
+    it('ALLOWS Creative Head to approve deliverable and move to Approved', async () => {
       const approved = await transitionService.transitionWorkItem(
         testItem._id,
         { toStatus: 'Approved' },
-        leadUser
+        headUser
       );
 
       expect(approved.status).toBe('Approved');
@@ -366,7 +303,7 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
 
       overdueItem = await workItemService.createWorkItem(
         {
-          campaignId: testCampaign._id,
+          profileId: testProfileAlpha._id,
           title: 'P3 Test: Dynamic Overdue Item',
           workType: 'Post',
           departmentId: testDept._id,
@@ -379,7 +316,7 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
 
       completedPastItem = await workItemService.createWorkItem(
         {
-          campaignId: testCampaign._id,
+          profileId: testProfileAlpha._id,
           title: 'P3 Test: Completed Past Item',
           workType: 'Post',
           departmentId: testDept._id,
@@ -461,7 +398,7 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
       for (const wt of [...designRequirementTypes, 'Reel']) {
         const item = await workItemService.createWorkItem(
           {
-            campaignId: testCampaign._id,
+            profileId: testProfileAlpha._id,
             title: `P3 Test: Design Type ${wt}`,
             workType: wt,
             departmentId: testDept._id,
@@ -477,7 +414,7 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
     it('handles Poster as an alias of Static Post and normalizes appropriately', async () => {
       const posterItem = await workItemService.createWorkItem(
         {
-          campaignId: testCampaign._id,
+          profileId: testProfileAlpha._id,
           title: 'P3 Test: Poster Alias Item',
           workType: 'Poster',
           departmentId: testDept._id,
@@ -496,7 +433,7 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
 
       const stageItem = await workItemService.createWorkItem(
         {
-          campaignId: testCampaign._id,
+          profileId: testProfileAlpha._id,
           title: 'P3 Test: Stage Item with Pipeline Metadata',
           workType: 'Static Post',
           departmentId: testDept._id,
@@ -535,7 +472,7 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
       // 1. Creation with direct links
       const itemWithLinks = await workItemService.createWorkItem(
         {
-          campaignId: testCampaign._id,
+          profileId: testProfileAlpha._id,
           title: 'P3 Test: Deliverable Links Direct',
           workType: 'Carousel Post',
           departmentId: testDept._id,
@@ -558,7 +495,7 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
       // 2. Creation with brief object
       const itemWithBriefObject = await workItemService.createWorkItem(
         {
-          campaignId: testCampaign._id,
+          profileId: testProfileAlpha._id,
           title: 'P3 Test: Deliverable Links via Brief Subdocument',
           workType: 'Story',
           departmentId: testDept._id,
@@ -598,7 +535,7 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
     it('keeps standalone work items backward compatible with null contentPieceId', async () => {
       const standalone = await workItemService.createWorkItem(
         {
-          campaignId: testCampaign._id,
+          profileId: testProfileAlpha._id,
           title: 'P3 Test: Standalone Ad Creative',
           workType: 'Ad Creative',
           departmentId: testDept._id,

@@ -60,10 +60,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (credentials: { email: string; password: string }) => {
     setIsLoading(true);
     try {
-      const data = await apiFetch<{ user: User; permissions: PermissionKey[] }>('/auth/login', {
+      const data = await apiFetch<{
+        user: User;
+        permissions: PermissionKey[];
+        accessToken?: string;
+        refreshToken?: string;
+      }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(credentials),
       });
+      if (typeof window !== 'undefined') {
+        if (data.accessToken) localStorage.setItem('accessToken', data.accessToken);
+        if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+      }
       setUser(data.user);
       setPermissions(data.permissions || []);
       return data.user;
@@ -76,6 +85,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await apiFetch('/auth/logout', { method: 'POST' });
     } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+      }
       setUser(null);
       setPermissions([]);
     }

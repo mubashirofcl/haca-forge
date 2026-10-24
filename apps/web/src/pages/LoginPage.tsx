@@ -456,7 +456,7 @@ export const LoginPage: React.FC = () => {
                       className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
                     >
                       <option value="team_member">Team Member</option>
-                      <option value="team_lead">Team Lead</option>
+                      <option value="sm_manager">SM Manager</option>
                     </select>
                     <p className="text-[10px] text-slate-400 mt-1 pl-2">
                       Your administrator confirms your final role.

@@ -25,6 +25,10 @@ import {
   ChevronDown,
   ChevronUp,
   FileCheck,
+  Lock,
+  ExternalLink,
+  Globe,
+  Check,
 } from 'lucide-react';
 
 interface WorkItemSummary {
@@ -32,6 +36,7 @@ interface WorkItemSummary {
   title: string;
   workType: WorkType;
   deadline: string;
+  dueDate?: string;
   estimatedEffortHrs: number;
   status: WorkItemStatus;
   priority: Priority;
@@ -39,10 +44,38 @@ interface WorkItemSummary {
   blockerReason?: BlockerReason;
   blockerNote?: string;
   deliverableUrl?: string;
-  campaignId: { _id: string; name: string; relatedOKR?: string };
+  publishedUrl?: string;
   profileId: { _id: string; name: string; code: string };
   departmentId?: { _id: string; name: string };
   isOverdue?: boolean;
+  isLocked?: boolean;
+  stageKey?: string;
+  stageOrder?: number;
+  contentPieceId?: {
+    _id: string;
+    topic: string;
+    contentType: string;
+    postingDate: string;
+    liveUrl?: string;
+  };
+  suggestedDependencyOwner?: {
+    _id: string;
+    name: string;
+    email: string;
+    jobRole?: string;
+  };
+  previousStage?: {
+    stageKey: string;
+    deliverableUrl?: string;
+    publishedUrl?: string;
+    status: string;
+    owner?: {
+      _id: string;
+      name: string;
+      email: string;
+      jobRole?: string;
+    };
+  };
 }
 
 interface MyWorkResponse {
@@ -72,6 +105,7 @@ export const MyWorkPage: React.FC = () => {
   const [selectedItemForBlock, setSelectedItemForBlock] = useState<WorkItemSummary | null>(null);
   const [blockerReason, setBlockerReason] = useState<BlockerReason>('Waiting for feedback');
   const [blockerNote, setBlockerNote] = useState('');
+  const [dependencyOwnerId, setDependencyOwnerId] = useState('');
   const [isBlocking, setIsBlocking] = useState(false);
   const [blockError, setBlockError] = useState<string | null>(null);
 
@@ -127,6 +161,7 @@ export const MyWorkPage: React.FC = () => {
           toStatus: 'Blocked',
           blockerReason,
           blockerNote,
+          dependencyOwnerId: dependencyOwnerId || undefined,
         }),
       });
       setSelectedItemForBlock(null);
@@ -145,12 +180,17 @@ export const MyWorkPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      const isShoot = selectedItemForSubmit.stageKey === 'Shoot';
+      const isPost = selectedItemForSubmit.stageKey === 'Post';
+      const toStatus = isShoot ? 'Approved' : isPost ? 'Published' : 'Feedback';
+
       await apiFetch(`/api/work/${selectedItemForSubmit._id}/transition`, {
         method: 'POST',
         body: JSON.stringify({
-          toStatus: 'Pending',
-          deliverableUrl,
-          comment: submitComment,
+          toStatus,
+          deliverableUrl: !isPost ? deliverableUrl.trim() : undefined,
+          publishedUrl: isPost ? deliverableUrl.trim() : undefined,
+          comment: submitComment.trim(),
         }),
       });
       setSelectedItemForSubmit(null);
@@ -165,9 +205,47 @@ export const MyWorkPage: React.FC = () => {
   };
 
   const renderWorkCard = (item: WorkItemSummary, isOverdueCard = false) => {
-    const isPastDeadline = new Date(item.deadline) < new Date();
+    // 1. Locked Stage Card (Greyed out under Upcoming)
+    if (item.isLocked) {
+      return (
+        <div
+          key={item._id}
+          className="p-5 rounded-2xl flex flex-col justify-between border border-slate-200/90 bg-slate-50/70 opacity-60 transition-all shadow-2xs"
+        >
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 flex items-center gap-1">
+                <Lock className="w-3 h-3 text-slate-400" />
+                Locked Stage {item.stageOrder ? `${item.stageOrder}: ${item.stageKey}` : ''}
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium">
+                Unlocks when previous stage completes
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-slate-700 leading-snug">
+              {item.contentPieceId?.topic || item.title}
+            </h3>
+            {item.stageKey && (
+              <span className="text-[11px] font-semibold text-purple-700/70 mt-1 block">
+                Deliverable: {item.stageKey}
+              </span>
+            )}
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-slate-400 text-xs">
+            <span>Due: {new Date(item.dueDate || item.deadline).toLocaleDateString()}</span>
+            <span className="italic text-[11px]">Upcoming</span>
+          </div>
+        </div>
+      );
+    }
+
+    const isPastDeadline = new Date(item.dueDate || item.deadline) < new Date();
     const isTerminal = item.status === 'Approved' || item.status === 'Published';
     const isActuallyOverdue = isPastDeadline && !isTerminal;
+
+    const isShoot = item.stageKey === 'Shoot';
+    const isPost = item.stageKey === 'Post';
+    const isReviewStage = item.stageKey && !isShoot && !isPost;
 
     return (
       <div
@@ -188,7 +266,7 @@ export const MyWorkPage: React.FC = () => {
                 {item.profileId?.name || 'Brand'}
               </span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-[#7a6af6]">
-                {item.workType}
+                {item.stageKey ? `Stage ${item.stageOrder}: ${item.stageKey}` : item.workType}
               </span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -231,24 +309,35 @@ export const MyWorkPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Title */}
+          {/* Title / Topic */}
           <h3
             onClick={() => navigate(`/work/${item._id}`)}
             className="text-sm font-extrabold text-slate-900 group-hover:text-[#7a6af6] transition-colors cursor-pointer leading-snug"
           >
-            {item.title}
+            {item.contentPieceId?.topic || item.title}
           </h3>
 
-          {/* Campaign Link */}
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-2 font-medium">
-            <Layers className="w-3.5 h-3.5 text-slate-400" />
-            <span
-              onClick={() => navigate(`/campaigns/${item.campaignId._id}`)}
-              className="hover:underline cursor-pointer text-slate-700 font-semibold truncate"
-            >
-              {item.campaignId.name}
-            </span>
-          </div>
+          {/* Previous Stage Outputs */}
+          {item.previousStage && (
+            <div className="mt-2.5 p-2 bg-purple-50/60 border border-purple-100 rounded-xl text-[11px]">
+              <span className="font-bold text-purple-900 block">
+                Previous Stage ({item.previousStage.stageKey}) Output:
+              </span>
+              {item.previousStage.deliverableUrl || item.previousStage.publishedUrl ? (
+                <a
+                  href={item.previousStage.deliverableUrl || item.previousStage.publishedUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-purple-600 hover:underline flex items-center gap-1 font-semibold mt-0.5 break-all"
+                >
+                  <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                  <span>{item.previousStage.deliverableUrl || item.previousStage.publishedUrl}</span>
+                </a>
+              ) : (
+                <span className="text-slate-400 italic">Outputs logged in previous stage</span>
+              )}
+            </div>
+          )}
 
           {/* Blocker alert if blocked */}
           {item.status === 'Blocked' && (
@@ -267,7 +356,7 @@ export const MyWorkPage: React.FC = () => {
           <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
             <Calendar className="w-3.5 h-3.5 text-slate-400" />
             <span className={isActuallyOverdue ? 'text-rose-600 font-bold' : 'text-slate-600'}>
-              Due: {new Date(item.deadline).toLocaleDateString()}
+              Due: {new Date(item.dueDate || item.deadline).toLocaleDateString()}
             </span>
             {isActuallyOverdue && (
               <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-rose-600 text-white uppercase ml-1 animate-pulse">
@@ -290,18 +379,70 @@ export const MyWorkPage: React.FC = () => {
 
             {item.status === 'In Progress' && (
               <>
+                {/* Review Stage -> Submit to Creative Head */}
+                {isReviewStage && (
+                  <button
+                    onClick={() => {
+                      setSelectedItemForSubmit(item);
+                      setDeliverableUrl(item.deliverableUrl || '');
+                    }}
+                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1"
+                  >
+                    <Send className="w-3 h-3" />
+                    Submit to Creative Head
+                  </button>
+                )}
+
+                {/* Non-Review Stage (Shoot) -> Done and forward */}
+                {isShoot && (
+                  <button
+                    onClick={() => {
+                      setSelectedItemForSubmit(item);
+                      setDeliverableUrl(item.deliverableUrl || '');
+                    }}
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1"
+                  >
+                    <Check className="w-3 h-3" />
+                    Done and forward
+                  </button>
+                )}
+
+                {/* Post Stage -> Publish Live */}
+                {isPost && (
+                  <button
+                    onClick={() => {
+                      setSelectedItemForSubmit(item);
+                      setDeliverableUrl(item.publishedUrl || item.deliverableUrl || '');
+                    }}
+                    className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1"
+                  >
+                    <Globe className="w-3 h-3" />
+                    Publish Live
+                  </button>
+                )}
+
+                {/* Standalone Work Item default */}
+                {!item.stageKey && (
+                  <button
+                    onClick={() => {
+                      setSelectedItemForSubmit(item);
+                      setDeliverableUrl(item.deliverableUrl || '');
+                    }}
+                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1"
+                  >
+                    <Send className="w-3 h-3" />
+                    Submit Review
+                  </button>
+                )}
+
                 <button
                   onClick={() => {
-                    setSelectedItemForSubmit(item);
-                    setDeliverableUrl(item.deliverableUrl || '');
+                    setSelectedItemForBlock(item);
+                    setBlockerReason('Waiting for feedback');
+                    setBlockerNote('');
+                    const prevOwner = item.suggestedDependencyOwner || item.previousStage?.owner;
+                    setDependencyOwnerId(prevOwner?._id || '');
                   }}
-                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1"
-                >
-                  <Send className="w-3 h-3" />
-                  Submit Review
-                </button>
-                <button
-                  onClick={() => setSelectedItemForBlock(item)}
                   className="px-2.5 py-1 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border border-slate-200"
                   title="Mark Blocked"
                 >
@@ -352,6 +493,13 @@ export const MyWorkPage: React.FC = () => {
               <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3 text-blue-600" />
                 Approved
+              </span>
+            )}
+
+            {item.status === 'Published' && (
+              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-teal-600" />
+                Published
               </span>
             )}
 
@@ -565,6 +713,27 @@ export const MyWorkPage: React.FC = () => {
             )}
 
             <form onSubmit={submitBlocker} className="space-y-4">
+              {/* Suggested Previous Stage Dependency Owner */}
+              {(selectedItemForBlock?.suggestedDependencyOwner || selectedItemForBlock?.previousStage?.owner) && (
+                <div className="p-3 bg-purple-50/90 border border-purple-200/90 rounded-xl text-xs">
+                  <span className="font-bold text-purple-900 block mb-1">
+                    Suggested Dependency Owner (Previous Stage):
+                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-800 truncate">
+                      {selectedItemForBlock?.suggestedDependencyOwner?.name || selectedItemForBlock?.previousStage?.owner?.name} ({selectedItemForBlock?.previousStage?.stageKey || 'Previous'} stage owner)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDependencyOwnerId(selectedItemForBlock?.suggestedDependencyOwner?._id || selectedItemForBlock?.previousStage?.owner?._id || '')}
+                      className="text-[11px] font-bold text-purple-600 hover:text-purple-800 bg-white px-2 py-0.5 rounded border border-purple-200 shadow-2xs whitespace-nowrap"
+                    >
+                      {dependencyOwnerId === (selectedItemForBlock?.suggestedDependencyOwner?._id || selectedItemForBlock?.previousStage?.owner?._id) ? 'Selected ✓' : 'Select'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Reason for Blocker *
@@ -624,7 +793,13 @@ export const MyWorkPage: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2 text-indigo-600">
                 <Send className="w-5 h-5" />
-                <h3 className="text-base font-extrabold text-slate-900">Submit for Review</h3>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  {selectedItemForSubmit.stageKey === 'Shoot'
+                    ? 'Done & Forward Stage'
+                    : selectedItemForSubmit.stageKey === 'Post'
+                    ? 'Publish Live'
+                    : 'Submit to Creative Head'}
+                </h3>
               </div>
               <button
                 onClick={() => setSelectedItemForSubmit(null)}
@@ -637,11 +812,17 @@ export const MyWorkPage: React.FC = () => {
             <form onSubmit={submitDeliverable} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Deliverable Link / Asset URL
+                  {selectedItemForSubmit.stageKey === 'Post'
+                    ? 'Live URL (Instagram Reel, LinkedIn, TikTok, etc.) *'
+                    : 'Deliverable Link / Asset URL (Google Drive, Figma, Frame.io)'}
                 </label>
                 <input
                   type="url"
-                  placeholder="https://drive.google.com/... or Figma link"
+                  placeholder={
+                    selectedItemForSubmit.stageKey === 'Post'
+                      ? 'https://instagram.com/reel/...'
+                      : 'https://drive.google.com/... or Figma link'
+                  }
                   value={deliverableUrl}
                   onChange={(e) => setDeliverableUrl(e.target.value)}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
@@ -656,7 +837,7 @@ export const MyWorkPage: React.FC = () => {
                   rows={3}
                   value={submitComment}
                   onChange={(e) => setSubmitComment(e.target.value)}
-                  placeholder="Summarize key changes made or points of attention for review..."
+                  placeholder="Summarize key outputs, raw footage drive link, or review context..."
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
                 />
               </div>
@@ -674,7 +855,13 @@ export const MyWorkPage: React.FC = () => {
                   disabled={isSubmitting}
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit Deliverable'}
+                  {isSubmitting
+                    ? 'Submitting...'
+                    : selectedItemForSubmit.stageKey === 'Shoot'
+                    ? 'Done and forward'
+                    : selectedItemForSubmit.stageKey === 'Post'
+                    ? 'Publish Live'
+                    : 'Submit to Creative Head'}
                 </button>
               </div>
             </form>

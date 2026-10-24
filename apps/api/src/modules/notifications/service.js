@@ -1,5 +1,5 @@
 import { Notification } from './model.js';
-import { User } from '../users/model.js';
+import { User } from '../people/model.js';
 import { logger } from '../../lib/logger.js';
 import { enqueueEmail } from '../../lib/queue.js';
 import { eventBus, EVENTS } from '../../lib/events.js';

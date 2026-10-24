@@ -5,8 +5,6 @@ import { app } from '../src/server.js';
 import { Person } from '../src/modules/people/model.js';
 import { Department } from '../src/modules/departments/model.js';
 import { Profile } from '../src/modules/referenceData/profile.model.js';
-import { MonthlyTarget } from '../src/modules/targets/model.js';
-import { Campaign } from '../src/modules/campaigns/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { AssignmentOverride } from '../src/modules/assignment/model.js';
 import { ActivityEvent } from '../src/modules/activity/model.js';
@@ -26,7 +24,6 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
   let adminToken, leadToken, memberToken;
   let profileHaca;
   let deptDesign, deptVideo;
-  let testTarget, testCampaign;
 
   beforeAll(async () => {
     const mongoUri =
@@ -38,8 +35,6 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
     // Clean test collections
     await AssignmentOverride.deleteMany({});
     await WorkItem.deleteMany({});
-    await Campaign.deleteMany({});
-    await MonthlyTarget.deleteMany({});
     await ActivityEvent.deleteMany({});
     await Person.deleteMany({ email: /@assignment-test\.com$/ });
     await Department.deleteMany({ code: { $in: ['test_design', 'test_video'] } });
@@ -74,12 +69,12 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
       weeklyCapacityHours: 40,
     });
 
-    // Seed Team Lead
+    // Seed SM Manager
     leadUser = await Person.create({
       name: 'Design Lead P4',
       email: 'lead@assignment-test.com',
-      role: 'team_lead',
-      jobRole: 'Design Lead (TL)',
+      role: 'sm_manager',
+      jobRole: 'Social Media Manager',
       departmentId: deptDesign._id,
       profileAccess: [profileHaca._id],
       status: 'active',
@@ -129,38 +124,9 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
     leadToken = makeToken(leadUser);
     memberToken = makeToken(memberDesignA);
 
-    // Seed Baseline Target & Campaign
-    testTarget = await MonthlyTarget.create({
-      month: '2026-11',
-      profileId: profileHaca._id,
-      revenueTarget: 100000,
-      leadsTarget: 500,
-      qualifiedLeadsTarget: 200,
-      budget: 20000,
-      createdBy: adminUser._id,
-    });
-
-    testCampaign = await Campaign.create({
-      name: 'November Admission Sprint P4',
-      profileId: profileHaca._id,
-      targetId: testTarget._id,
-      relatedOKR: 'Increase Q4 qualified admissions by 25%',
-      startDate: new Date('2026-11-01'),
-      endDate: new Date('2026-11-30'),
-      status: 'In Progress',
-      goalType: 'Leads',
-      expectedOutcome: 'Lead Generation',
-      budgetAllocated: 15000,
-      ownerId: adminUser._id,
-      createdBy: adminUser._id,
-    });
-
     // Seed initial work items for memberDesignA (10h)
     await WorkItem.create({
-      campaignId: testCampaign._id,
       profileId: profileHaca._id,
-      relatedOKR: testCampaign.relatedOKR,
-      relatedTarget: testTarget._id,
       title: 'Alice Task 1',
       workType: 'Ad Creative',
       departmentId: deptDesign._id,
@@ -174,10 +140,7 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
 
     // Seed initial work items for memberDesignB (36h -> Overloaded)
     await WorkItem.create({
-      campaignId: testCampaign._id,
       profileId: profileHaca._id,
-      relatedOKR: testCampaign.relatedOKR,
-      relatedTarget: testTarget._id,
       title: 'Bob Heavy Task 1',
       workType: 'Carousel',
       departmentId: deptDesign._id,
@@ -190,10 +153,7 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
     });
 
     await WorkItem.create({
-      campaignId: testCampaign._id,
       profileId: profileHaca._id,
-      relatedOKR: testCampaign.relatedOKR,
-      relatedTarget: testTarget._id,
       title: 'Bob Heavy Task 2',
       workType: 'Landing Page',
       departmentId: deptDesign._id,
@@ -209,8 +169,6 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
   afterAll(async () => {
     await AssignmentOverride.deleteMany({});
     await WorkItem.deleteMany({});
-    await Campaign.deleteMany({});
-    await MonthlyTarget.deleteMany({});
     await ActivityEvent.deleteMany({});
     await Person.deleteMany({ email: /@assignment-test\.com$/ });
     await Department.deleteMany({ code: { $in: ['test_design', 'test_video'] } });
@@ -245,10 +203,7 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
     it('excludes Approved and Published items from active workload', async () => {
       // Create completed item
       await WorkItem.create({
-        campaignId: testCampaign._id,
         profileId: profileHaca._id,
-        relatedOKR: testCampaign.relatedOKR,
-        relatedTarget: testTarget._id,
         title: 'Alice Completed Task',
         workType: 'Ad Creative',
         departmentId: deptDesign._id,
@@ -319,10 +274,7 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
     it('flags overload warning when all available candidates are overloaded', async () => {
       // Overload memberDesignA as well
       const tempTask1 = await WorkItem.create({
-        campaignId: testCampaign._id,
         profileId: profileHaca._id,
-        relatedOKR: testCampaign.relatedOKR,
-        relatedTarget: testTarget._id,
         title: 'Alice Overload Task',
         workType: 'Ad Creative',
         departmentId: deptDesign._id,
@@ -336,10 +288,7 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
 
       // Overload leadUser as well so all candidates in dept are > 85%
       const tempTask2 = await WorkItem.create({
-        campaignId: testCampaign._id,
         profileId: profileHaca._id,
-        relatedOKR: testCampaign.relatedOKR,
-        relatedTarget: testTarget._id,
         title: 'Lead Overload Task',
         workType: 'Ad Creative',
         departmentId: deptDesign._id,
@@ -376,10 +325,7 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
     it('records an assignment override when choosing someone other than recommendation', async () => {
       // Create work item initially unassigned or with Alice
       const item = await WorkItem.create({
-        campaignId: testCampaign._id,
         profileId: profileHaca._id,
-        relatedOKR: testCampaign.relatedOKR,
-        relatedTarget: testTarget._id,
         title: 'Special VIP Brochure',
         workType: 'Ad Creative',
         departmentId: deptDesign._id,
@@ -569,10 +515,7 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
 
     it('infers stageKey and profileId from workItemId when workItemId is passed', async () => {
       const stageWorkItem = await WorkItem.create({
-        campaignId: testCampaign._id,
         profileId: profileHaca._id,
-        relatedOKR: testCampaign.relatedOKR,
-        relatedTarget: testTarget._id,
         title: 'Content Stage for Banner',
         workType: 'Static Post',
         stageKey: 'Content',

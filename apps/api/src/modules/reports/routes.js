@@ -7,6 +7,7 @@ import {
 import {
   listReportDefinitionsHandler,
   getReportDefinitionHandler,
+  updateReportDefinitionHandler,
   generateReportHandler,
   viewReportHandler,
   getDepartmentReportHandler,
@@ -32,6 +33,11 @@ router.use(requireAnyPermission("report.view", "portal.view"));
 // -------------------------------------------------------------
 router.get("/definitions", listReportDefinitionsHandler);
 router.get("/definitions/:key", getReportDefinitionHandler);
+router.patch(
+  "/definitions/:key",
+  requirePermission("report.configure"),
+  updateReportDefinitionHandler,
+);
 router.post(
   "/definitions/:key/generate",
   requirePermission("report.configure"),

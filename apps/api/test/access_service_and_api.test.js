@@ -41,18 +41,18 @@ describe('Phase 1b: Access Request Backend Service & Authorization', () => {
     });
 
     headUser = await Person.create({
-      name: 'Test Marketing Head',
+      name: 'Test Creative Head',
       email: 'head@access-test.com',
-      role: 'marketing_head',
+      role: 'creative_head',
       status: 'active',
       profileAccess: [testProfile1._id, testProfile2._id],
     });
 
     leadUser = await Person.create({
-      name: 'Test Team Lead',
+      name: 'Test SM Manager',
       email: 'lead@access-test.com',
-      role: 'team_lead',
-      jobRole: 'Creative Manager (TL)',
+      role: 'sm_manager',
+      jobRole: 'Social Media Manager',
       status: 'active',
       profileAccess: [testProfile1._id],
     });
@@ -85,7 +85,7 @@ describe('Phase 1b: Access Request Backend Service & Authorization', () => {
         requestedProfileCodes: ['brand_alpha'],
         reason: 'Attempting to self-request admin privileges',
       })
-    ).rejects.toThrow('Only Team Member or Team Lead can be requested');
+    ).rejects.toThrow('Only Team Member or SM Manager can be requested');
 
     await expect(
       accessService.submitAccessRequest({
@@ -94,11 +94,11 @@ describe('Phase 1b: Access Request Backend Service & Authorization', () => {
         phone: '+1 555 000 1112',
         department: 'SEO & Content',
         jobRole: 'Writer',
-        requestedRole: 'marketing_head',
+        requestedRole: 'creative_head',
         requestedProfileCodes: ['brand_alpha'],
-        reason: 'Attempting to self-request marketing head privileges',
+        reason: 'Attempting to self-request creative head privileges',
       })
-    ).rejects.toThrow('Only Team Member or Team Lead can be requested');
+    ).rejects.toThrow('Only Team Member or SM Manager can be requested');
   });
 
   it('rejects duplicate submission if an account already exists for that email', async () => {
@@ -168,11 +168,11 @@ describe('Phase 1b: Access Request Backend Service & Authorization', () => {
     expect(brandReqs.length).toBeGreaterThan(0);
   });
 
-  it('enforces that only admin can approve; marketing_head receives 403', async () => {
+  it('enforces that only admin can approve; creative_head receives 403', async () => {
     const candidateReq = await AccessRequest.findOne({ email: 'candidate1@access-test.com' });
     expect(candidateReq).toBeDefined();
 
-    // Marketing Head attempts approval -> 403 Forbidden
+    // Creative Head attempts approval -> 403 Forbidden
     await expect(
       accessService.approveAccessRequest(
         candidateReq._id,
@@ -185,7 +185,7 @@ describe('Phase 1b: Access Request Backend Service & Authorization', () => {
     });
   });
 
-  it('enforces that non-admin cannot grant privileged roles (admin, marketing_head)', async () => {
+  it('enforces that non-admin cannot grant privileged roles (admin, creative_head, executive)', async () => {
     const candidateReq = await AccessRequest.findOne({ email: 'candidate1@access-test.com' });
 
     // Non-admin lead user attempts granting admin -> 403 Forbidden
@@ -295,12 +295,12 @@ describe('Phase 1b: Access Request Backend Service & Authorization', () => {
       phone: '+1 555 999 0002',
       department: 'SEO & Content',
       jobRole: 'Writer',
-      requestedRole: 'team_lead',
+      requestedRole: 'sm_manager',
       requestedProfileCodes: ['brand_alpha'],
-      reason: 'Applying for team lead position',
+      reason: 'Applying for SM Manager position',
     });
 
-    // Marketing Head cannot request info
+    // Creative Head cannot request info
     await expect(
       accessService.requestInfoForAccess(infoCandidate._id, 'Please clarify your experience', headUser)
     ).rejects.toMatchObject({ statusCode: 403 });

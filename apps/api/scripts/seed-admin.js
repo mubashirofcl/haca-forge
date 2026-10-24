@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { env } from '../src/config/env.js';
 import { connectDB, disconnectDB } from '../src/config/db.js';
-import { User } from '../src/modules/users/model.js';
+import { User } from '../src/modules/people/model.js';
 import { logger } from '../src/lib/logger.js';
 
 async function seedAdmin() {

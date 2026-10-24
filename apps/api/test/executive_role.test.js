@@ -7,15 +7,12 @@ import {
   ROLE_KEYS,
   PERMISSION_KEYS,
   ROLE_PERMISSIONS,
-  LEGACY_ROLE_ALIASES,
   REQUESTABLE_ROLES,
 } from '@mmp/shared';
 import { resolveScope } from '../src/lib/scope.js';
 import { Person } from '../src/modules/people/model.js';
 import { Department } from '../src/modules/departments/model.js';
 import { Profile } from '../src/modules/referenceData/profile.model.js';
-import { MonthlyTarget } from '../src/modules/targets/model.js';
-import { Campaign } from '../src/modules/campaigns/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { AutomationRule } from '../src/modules/automation/model.js';
 import { AccessRequest } from '../src/modules/access/model.js';
@@ -34,8 +31,7 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
   let adminUser, headUser, execUser, execRestrictedUser, leadUser, memberUser;
   let adminToken, headToken, execToken, execRestrictedToken, leadToken;
   let profileAlpha, profileBeta;
-  let testDept;
-  let testCampaign, testWorkItem, testTarget, testRule;
+  let testWorkItem, testRule, testDept;
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -50,9 +46,7 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
     await Person.deleteMany({ email: /@exec-test\.com$/ });
     await Profile.deleteMany({ code: { $in: ['exec_alpha', 'exec_beta'] } });
     await Department.deleteMany({ code: 'exec_design' });
-    await Campaign.deleteMany({ name: /Exec Test/ });
     await WorkItem.deleteMany({ title: /Exec Work/ });
-    await MonthlyTarget.deleteMany({ month: currentMonth, profileId: { $exists: true } });
     await AutomationRule.deleteMany({ ruleKey: 'exec_test_rule' });
     await AccessRequest.deleteMany({ email: /@exec-test\.com$/ });
 
@@ -71,9 +65,9 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
     });
 
     headUser = await Person.create({
-      name: 'Exec Marketing Head',
+      name: 'Exec Creative Head',
       email: 'head@exec-test.com',
-      role: 'marketing_head',
+      role: 'creative_head',
       status: 'active',
       profileAccess: [profileAlpha._id, profileBeta._id],
     });
@@ -96,9 +90,9 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
     });
 
     leadUser = await Person.create({
-      name: 'Exec Team Lead',
+      name: 'Exec SM Manager',
       email: 'lead@exec-test.com',
-      role: 'team_lead',
+      role: 'sm_manager',
       status: 'active',
       departmentId: testDept._id,
       profileAccess: [profileAlpha._id, profileBeta._id],
@@ -122,38 +116,12 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
     leadToken = makeToken(leadUser);
 
     // 3. Seed operational fixtures
-    testTarget = await MonthlyTarget.create({
-      month: currentMonth,
-      profileId: profileAlpha._id,
-      revenueTarget: 500000,
-      leadsTarget: 100,
-      qualifiedLeadsTarget: 40,
-      budget: 50000,
-    });
-
-    testCampaign = await Campaign.create({
-      name: 'Exec Test Campaign Alpha',
-      profileId: profileAlpha._id,
-      targetId: testTarget._id,
-      departmentId: testDept._id,
-      ownerId: leadUser._id,
-      goalType: 'Leads',
-      expectedOutcome: 'Lead Generation',
-      relatedOKR: 'Scale brand leads through creative ad sets',
-      status: 'In Progress',
-      budget: 25000,
-      startDate: new Date(),
-      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    });
-
     testWorkItem = await WorkItem.create({
       title: 'Exec Work Item Alpha',
       workType: 'Ad Creative',
-      campaignId: testCampaign._id,
       profileId: profileAlpha._id,
       departmentId: testDept._id,
       ownerId: memberUser._id,
-      relatedOKR: 'Scale brand leads through creative ad sets',
       deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
       estimatedEffortHrs: 4,
       status: 'In Progress',
@@ -177,9 +145,7 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
     await Person.deleteMany({ email: /@exec-test\.com$/ });
     await Profile.deleteMany({ code: { $in: ['exec_alpha', 'exec_beta'] } });
     await Department.deleteMany({ code: 'exec_design' });
-    await Campaign.deleteMany({ name: /Exec Test/ });
     await WorkItem.deleteMany({ title: /Exec Work/ });
-    await MonthlyTarget.deleteMany({ month: currentMonth, profileId: { $exists: true } });
     await AutomationRule.deleteMany({ ruleKey: 'exec_test_rule' });
     await AccessRequest.deleteMany({ email: /@exec-test\.com$/ });
   });
@@ -189,7 +155,7 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
   // -------------------------------------------------------------
   describe('Part 1: Contract & Permissions Snapshot', () => {
     it('defines executive in ROLE_KEYS with exactly 5 roles', () => {
-      expect(ROLE_KEYS).toEqual(['admin', 'marketing_head', 'executive', 'team_lead', 'team_member']);
+      expect(ROLE_KEYS).toEqual(['admin', 'creative_head', 'executive', 'sm_manager', 'team_member']);
     });
 
     it('contains portal.view and people.view in PERMISSION_KEYS', () => {
@@ -201,27 +167,19 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
       expect(ROLE_PERMISSIONS.executive).toEqual([
         'portal.view',
         'people.view',
-        'target.view',
-        'lead.view',
-        'datacenter.view',
         'analytics.team',
         'report.view',
       ]);
     });
 
-    it('grants marketing_head portal.view and people.view', () => {
-      expect(ROLE_PERMISSIONS.marketing_head).toContain('portal.view');
-      expect(ROLE_PERMISSIONS.marketing_head).toContain('people.view');
-    });
-
-    it('maps legacy management and viewer roles to executive', () => {
-      expect(LEGACY_ROLE_ALIASES.management).toBe('executive');
-      expect(LEGACY_ROLE_ALIASES.viewer).toBe('executive');
+    it('grants creative_head portal.view and people.view', () => {
+      expect(ROLE_PERMISSIONS.creative_head).toContain('portal.view');
+      expect(ROLE_PERMISSIONS.creative_head).toContain('people.view');
     });
 
     it('excludes executive from public REQUESTABLE_ROLES', () => {
       expect(REQUESTABLE_ROLES).not.toContain('executive');
-      expect(REQUESTABLE_ROLES).toEqual(['team_member', 'team_lead']);
+      expect(REQUESTABLE_ROLES).toEqual(['team_member', 'sm_manager']);
     });
   });
 
@@ -267,20 +225,7 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('GET /api/targets -> 200', async () => {
-      const res = await request(app)
-        .get('/api/targets')
-        .set('Authorization', `Bearer ${execToken}`);
-      expect(res.status).toBe(200);
-    });
 
-    it('GET /api/campaigns -> 200', async () => {
-      const res = await request(app)
-        .get('/api/campaigns')
-        .set('Authorization', `Bearer ${execToken}`);
-      expect(res.status).toBe(200);
-      expect(res.body.data).toBeDefined();
-    });
 
     it('GET /api/work-items -> 200', async () => {
       const res = await request(app)
@@ -353,19 +298,7 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('GET /api/leads/datacenter -> 200', async () => {
-      const res = await request(app)
-        .get('/api/leads/datacenter')
-        .set('Authorization', `Bearer ${execToken}`);
-      expect(res.status).toBe(200);
-    });
 
-    it('GET /api/leads/funnel -> 200', async () => {
-      const res = await request(app)
-        .get('/api/leads/funnel')
-        .set('Authorization', `Bearer ${execToken}`);
-      expect(res.status).toBe(200);
-    });
 
     it('GET /api/assignment/overrides -> 200', async () => {
       const res = await request(app)
@@ -383,7 +316,6 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
         .send({
           title: 'Forbidden Exec Work',
           workType: 'Ad Creative',
-          campaignId: testCampaign._id.toString(),
           deadline: new Date().toISOString(),
         });
       expect(res.status).toBe(403);
@@ -412,35 +344,7 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
         .send({
           title: 'Forbidden Calendar Event',
           deadline: new Date().toISOString(),
-          campaignId: testCampaign._id.toString(),
           workType: 'Ad Creative',
-        });
-      expect(res.status).toBe(403);
-    });
-
-    it('POST /api/campaigns -> 403', async () => {
-      const res = await request(app)
-        .post('/api/campaigns')
-        .set('Authorization', `Bearer ${execToken}`)
-        .send({
-          name: 'Forbidden Campaign',
-          profileId: profileAlpha._id.toString(),
-          startDate: new Date().toISOString(),
-          endDate: new Date().toISOString(),
-          budget: 1000,
-        });
-      expect(res.status).toBe(403);
-    });
-
-    it('POST /api/targets -> 403', async () => {
-      const res = await request(app)
-        .post('/api/targets')
-        .set('Authorization', `Bearer ${execToken}`)
-        .send({
-          month: '2027-01',
-          profileId: profileAlpha._id.toString(),
-          revenueTarget: 1000,
-          leadsTarget: 10,
         });
       expect(res.status).toBe(403);
     });
@@ -538,13 +442,7 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
       expect(res.status).toBe(403);
     });
 
-    it('POST /api/datacenter/sync -> 403', async () => {
-      const res = await request(app)
-        .post('/api/datacenter/sync')
-        .set('Authorization', `Bearer ${execToken}`)
-        .send({});
-      expect(res.status).toBe(403);
-    });
+
 
     it('POST /api/uploads/sign -> 403', async () => {
       const res = await request(app)
@@ -675,30 +573,30 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('Marketing Head CANNOT modify executive accounts', async () => {
+    it('Creative Head CANNOT modify executive accounts', async () => {
       await expect(
         peopleService.updatePerson(
           execUser._id,
           { weeklyCapacityHours: 30 },
           headUser
         )
-      ).rejects.toThrow(/Marketing Head cannot modify executive accounts/);
+      ).rejects.toThrow(/Creative Head cannot modify/);
     });
 
-    it('Marketing Head CANNOT approve access requests with executive role', async () => {
+    it('Creative Head CANNOT approve access requests with executive role', async () => {
       const req = await AccessRequest.create({
         name: 'Pending Exec Applicant',
         email: 'applicant.pending@exec-test.com',
         phone: '+91 99999 44444',
         department: 'Tech',
         jobRole: 'Director',
-        requestedRole: 'team_lead',
+        requestedRole: 'sm_manager',
         requestedProfileCodes: ['haca'],
         reason: 'Evaluating access',
         status: 'pending',
       });
 
-      // Marketing head tries to assign executive
+      // Creative head tries to assign executive
       const res = await request(app)
         .patch(`/api/admin/access-requests/${req._id}/approve`)
         .set('Authorization', `Bearer ${headToken}`)

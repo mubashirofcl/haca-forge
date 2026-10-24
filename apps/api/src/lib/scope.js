@@ -8,7 +8,7 @@ import { normalizeRole } from '@mmp/shared';
  * Source of truth: Spec Section 6.3 and Master Build Plan Phase 1.
  *
  * @param {Object} user - Authenticated user / Person object
- * @param {Object} filters - Optional filters: { profileId, departmentId, ownerId, campaignId, status }
+ * @param {Object} filters - Optional filters: { profileId, departmentId, ownerId, status }
  * @returns {Promise<Object>} Scoping definition with allowedProfileIds, allowedPersonIds, and query builders
  */
 export async function resolveScope(user, filters = {}) {
@@ -30,8 +30,8 @@ export async function resolveScope(user, filters = {}) {
     typeof p === 'object' && p !== null ? (p._id || p.id)?.toString() : p?.toString()
   ).filter(Boolean);
 
-  // If user is admin or marketing_head without profileAccess explicitly set, fetch all profile IDs
-  if (role === 'admin' || (role === 'marketing_head' && userProfileAccess.length === 0)) {
+  // If user is admin or creative_head without profileAccess explicitly set, fetch all profile IDs
+  if (role === 'admin' || (role === 'creative_head' && userProfileAccess.length === 0)) {
     const allProfiles = await Profile.find({ active: true }, '_id').lean();
     if (allProfiles.length > 0) {
       userProfileAccess = allProfiles.map((p) => p._id.toString());
@@ -66,49 +66,16 @@ export async function resolveScope(user, filters = {}) {
     }
   }
 
-  // Resolve person scope
+  // Resolve person scope (Task 3: admin, creative_head, executive, and sm_manager see all; team_member sees self only)
   let scopeType = 'self';
   let allowedPersonIds = null; // null represents all people
 
-  if (role === 'admin' || role === 'marketing_head' || role === 'executive') {
+  if (role === 'admin' || role === 'creative_head' || role === 'executive' || role === 'sm_manager') {
     scopeType = 'all';
-    allowedPersonIds = null; // Full visibility
+    allowedPersonIds = null; // Full visibility across all people and all work
 
     if (filters.ownerId) {
       allowedPersonIds = [filters.ownerId.toString()];
-    }
-  } else if (role === 'team_lead') {
-    scopeType = 'team';
-
-    // Own team = direct reports (reportsToIds contains userId) + same department + self
-    const teamQuery = {
-      $or: [
-        { _id: userId },
-        { reportsToIds: userId },
-      ],
-      status: { $ne: 'suspended' },
-    };
-
-    if (user.departmentId) {
-      teamQuery.$or.push({ departmentId: user.departmentId });
-    }
-
-    const teamMembers = await Person.find(teamQuery, '_id').lean();
-    const teamIds = teamMembers.map((m) => m._id.toString());
-    if (!teamIds.includes(userId)) {
-      teamIds.push(userId);
-    }
-
-    if (filters.ownerId) {
-      const reqOwnerId = filters.ownerId.toString();
-      if (teamIds.includes(reqOwnerId)) {
-        allowedPersonIds = [reqOwnerId];
-      } else {
-        allowedPersonIds = [];
-        isAllowed = false;
-      }
-    } else {
-      allowedPersonIds = teamIds;
     }
   } else {
     // team_member: self only
@@ -172,18 +139,18 @@ export async function resolveScope(user, filters = {}) {
 
   const canAccessProfile = (profileId) => {
     if (!profileId) return false;
-    if (role === 'admin') return true;
+    if (role === 'admin' || role === 'creative_head') return true;
     return userProfileAccess.includes(profileId.toString());
   };
 
   const canAccessPerson = (personId) => {
     if (!personId) return false;
-    if (role === 'admin' || role === 'marketing_head' || role === 'executive') return true;
+    if (role === 'admin' || role === 'creative_head' || role === 'executive' || role === 'sm_manager') return true;
     if (allowedPersonIds === null) return true;
     return allowedPersonIds.includes(personId.toString());
   };
 
-  const canAccessAllProfiles = role === 'admin' || role === 'marketing_head';
+  const canAccessAllProfiles = role === 'admin' || role === 'creative_head';
 
   return {
     isAllowed,

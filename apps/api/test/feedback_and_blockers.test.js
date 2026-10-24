@@ -5,8 +5,6 @@ import { app } from '../src/server.js';
 import { Person } from '../src/modules/people/model.js';
 import { Department } from '../src/modules/departments/model.js';
 import { Profile } from '../src/modules/referenceData/profile.model.js';
-import { MonthlyTarget } from '../src/modules/targets/model.js';
-import { Campaign } from '../src/modules/campaigns/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { FeedbackEntry, RevisionFlag } from '../src/modules/feedback/model.js';
 import { Blocker } from '../src/modules/blockers/model.js';
@@ -25,7 +23,7 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
   let adminUser, leadUser, memberUser, dependencyOwner;
   let adminToken, leadToken, memberToken, dependencyToken;
   let profileHaca, deptDesign;
-  let testTarget, testCampaign, testWorkItem;
+  let testWorkItem;
 
   beforeAll(async () => {
     const mongoUri =
@@ -39,8 +37,6 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
     await RevisionFlag.deleteMany({});
     await Blocker.deleteMany({});
     await WorkItem.deleteMany({});
-    await Campaign.deleteMany({});
-    await MonthlyTarget.deleteMany({});
     await ActivityEvent.deleteMany({});
     await Person.deleteMany({ email: /@feedback-test\.com$/ });
     await Department.deleteMany({ code: 'test_feedback_dept' });
@@ -68,10 +64,9 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
     });
 
     leadUser = await Person.create({
-      name: 'Design Lead Reviewer',
+      name: 'Creative Head Reviewer',
       email: 'lead@feedback-test.com',
-      role: 'team_lead',
-      jobRole: 'Design Lead (TL)',
+      role: 'creative_head',
       departmentId: deptDesign._id,
       profileAccess: [profileHaca._id],
       status: 'active',
@@ -105,37 +100,10 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
     memberToken = makeToken(memberUser);
     dependencyToken = makeToken(dependencyOwner);
 
-    testTarget = await MonthlyTarget.create({
-      month: '2026-11',
-      profileId: profileHaca._id,
-      revenueTarget: 800000,
-      leadsTarget: 150,
-      createdBy: adminUser._id,
-    });
-
-    testCampaign = await Campaign.create({
-      name: 'Design Sprint Campaign P5',
-      profileId: profileHaca._id,
-      departmentId: deptDesign._id,
-      targetId: testTarget._id,
-      startDate: new Date('2026-11-01'),
-      endDate: new Date('2026-11-30'),
-      goalType: 'Leads',
-      expectedOutcome: 'Lead Generation',
-      budgetAllocated: 50000,
-      relatedOKR: 'Double design asset conversions',
-      status: 'In Progress',
-      ownerId: adminUser._id,
-      createdBy: adminUser._id,
-    });
-
     testWorkItem = await WorkItem.create({
       title: 'Phase 5 Carousel Deliverable',
-      campaignId: testCampaign._id,
       profileId: profileHaca._id,
       departmentId: deptDesign._id,
-      relatedOKR: 'Double design asset conversions',
-      relatedTarget: testTarget._id,
       ownerId: memberUser._id,
       workType: 'Carousel',
       deadline: new Date(Date.now() + 5 * 24 * 3600 * 1000),
@@ -152,8 +120,6 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
     await RevisionFlag.deleteMany({});
     await Blocker.deleteMany({});
     await WorkItem.deleteMany({});
-    await Campaign.deleteMany({});
-    await MonthlyTarget.deleteMany({});
     await Person.deleteMany({ email: /@feedback-test\.com$/ });
     await Department.deleteMany({ code: 'test_feedback_dept' });
     await Profile.deleteMany({ code: 'test_feedback_profile' });
@@ -303,7 +269,7 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
       expect(res.status).toBe(400);
     });
 
-    it('allows Team Lead to classify root cause with 1 of 7 fixed values', async () => {
+    it('allows Creative Head to classify root cause with 1 of 7 fixed values', async () => {
       const flag = await RevisionFlag.findOne({ workItemId: testWorkItem._id });
       const res = await request(app)
         .post(`/api/revisions/flags/${flag._id}/classify`)
@@ -343,11 +309,8 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
       const pastDate = new Date(Date.now() - 50 * 3600 * 1000);
       const staleWorkItem = await WorkItem.create({
         title: 'Stale Deliverable for Escalation',
-        campaignId: testCampaign._id,
         profileId: profileHaca._id,
         departmentId: deptDesign._id,
-        relatedOKR: 'Double design asset conversions',
-        relatedTarget: testTarget._id,
         ownerId: memberUser._id,
         workType: 'Post',
         deadline: new Date(Date.now() + 2 * 24 * 3600 * 1000),
@@ -385,11 +348,8 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
     beforeAll(async () => {
       blockerWorkItem = await WorkItem.create({
         title: 'Ad Set Deliverable for Blocker Test',
-        campaignId: testCampaign._id,
         profileId: profileHaca._id,
         departmentId: deptDesign._id,
-        relatedOKR: 'Double design asset conversions',
-        relatedTarget: testTarget._id,
         ownerId: memberUser._id,
         workType: 'Ad Set',
         deadline: new Date(Date.now() + 3 * 24 * 3600 * 1000),

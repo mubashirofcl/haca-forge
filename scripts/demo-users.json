@@ -11,6 +11,28 @@
     "description": "Full system administrator with unrestricted access to all settings, user administration, and system controls."
   },
   {
+    "name": "Demo Creative Head",
+    "email": "creative.head@demo.haca.local",
+    "role": "creative_head",
+    "jobRole": null,
+    "department": null,
+    "brandCodes": ["ALL"],
+    "reportsTo": [],
+    "workPreferences": ["Content", "Script", "Post"],
+    "description": "Creative director with creative approval authority, department and job role assignments for team members, and full feedback review authority."
+  },
+  {
+    "name": "Demo SM Manager",
+    "email": "sm.manager@demo.haca.local",
+    "role": "sm_manager",
+    "jobRole": "Social Media Manager",
+    "department": "Social Media",
+    "brandCodes": ["ALL"],
+    "reportsTo": [],
+    "workPreferences": ["Post", "Content"],
+    "description": "Social Media Manager planning calendar items, managing team workload, and tracking delivery across brands."
+  },
+  {
     "name": "Demo Executive",
     "email": "executive@demo.haca.local",
     "role": "executive",
@@ -22,59 +44,15 @@
     "description": "Company leadership (CEO, Business Head, Directors). Read-only complete portal view across all 7 brand profiles. Excluded from workload and operational task pools."
   },
   {
-    "name": "Demo Marketing Head",
-    "email": "head@demo.haca.local",
-    "role": "marketing_head",
-    "jobRole": null,
-    "department": null,
-    "brandCodes": ["ALL"],
-    "reportsTo": [],
-    "workPreferences": ["Content", "Script", "Post"],
-    "description": "Marketing department director with complete brand oversight, target configuration, and full operational authority."
-  },
-  {
-    "name": "Demo Design Lead",
-    "email": "lead.design@demo.haca.local",
-    "role": "team_lead",
-    "jobRole": "Design Lead (TL)",
-    "department": "Design",
-    "brandCodes": ["haca_design_school", "haca_design_school_en"],
-    "reportsTo": [],
-    "workPreferences": ["Design"],
-    "description": "Team lead overseeing graphic design and visual identity deliverables."
-  },
-  {
-    "name": "Demo Creative Manager",
-    "email": "manager.creative@demo.haca.local",
-    "role": "team_lead",
-    "jobRole": "Creative Manager (TL)",
-    "department": "Video Production",
-    "brandCodes": ["haca", "haca_design_school"],
-    "reportsTo": [],
-    "workPreferences": ["Script", "Shoot", "Edit"],
-    "description": "Creative manager supervising multimedia, video production, copywriting, and performance marketing workers. Acts as primary stage approver."
-  },
-  {
-    "name": "Demo SM Manager",
-    "email": "sm.manager@demo.haca.local",
-    "role": "team_lead",
-    "jobRole": "Social Media Manager",
-    "department": "Social Media",
-    "brandCodes": ["ALL"],
-    "reportsTo": [],
-    "workPreferences": ["Post", "Content"],
-    "description": "Social Media Manager planning content calendar rows, assigning cross-department stage owners, and tracking delivery across brands."
-  },
-  {
     "name": "Demo UI Designer",
     "email": "ui.designer@demo.haca.local",
     "role": "team_member",
     "jobRole": "UI Designer",
     "department": "Design",
     "brandCodes": ["haca_design_school", "haca_design_school_en"],
-    "reportsTo": ["lead.design@demo.haca.local", "manager.creative@demo.haca.local"],
+    "reportsTo": [],
     "workPreferences": ["Design"],
-    "description": "Dual-reporting UI designer creating interface assets for design school properties."
+    "description": "UI designer creating interface assets for design school properties."
   },
   {
     "name": "Demo Designer",
@@ -83,7 +61,7 @@
     "jobRole": "Designer",
     "department": "Design",
     "brandCodes": ["haca_design_school"],
-    "reportsTo": ["lead.design@demo.haca.local"],
+    "reportsTo": [],
     "workPreferences": ["Design"],
     "description": "Graphic designer assigned to HACA Design School."
   },
@@ -94,7 +72,7 @@
     "jobRole": "Video Editor",
     "department": "Video Production",
     "brandCodes": ["haca", "haca_design_school"],
-    "reportsTo": ["manager.creative@demo.haca.local"],
+    "reportsTo": [],
     "workPreferences": ["Edit", "Shoot"],
     "description": "Video editor cutting motion assets and social video campaigns."
   },
@@ -105,7 +83,7 @@
     "jobRole": "Writer",
     "department": "SEO & Content",
     "brandCodes": ["haca", "haca_design_school", "haca_marketing_school"],
-    "reportsTo": ["manager.creative@demo.haca.local"],
+    "reportsTo": [],
     "workPreferences": ["Content", "Script"],
     "description": "Content writer generating SEO articles, newsletter copy, and ad headlines."
   },
@@ -116,7 +94,7 @@
     "jobRole": "WhatsApp Marketer",
     "department": "WhatsApp",
     "brandCodes": ["haca"],
-    "reportsTo": ["manager.creative@demo.haca.local"],
+    "reportsTo": [],
     "workPreferences": ["Post", "Content"],
     "description": "Direct response marketer running broadcast messaging campaigns."
   },
@@ -127,7 +105,7 @@
     "jobRole": "Performance Marketer",
     "department": "Performance Marketing",
     "brandCodes": ["haca", "haca_mideast"],
-    "reportsTo": ["manager.creative@demo.haca.local"],
+    "reportsTo": [],
     "workPreferences": ["Post"],
     "description": "Performance marketer optimizing paid Meta and Google ad pipelines."
   }

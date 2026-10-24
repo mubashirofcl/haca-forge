@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import '../people/model.js';
+import '../calendar/plan.model.js';
+import '../calendar/contentPiece.model.js';
 import {
   WORK_TYPES,
   WORK_ITEM_STATUSES,
@@ -9,27 +11,10 @@ import {
 
 const workItemSchema = new mongoose.Schema(
   {
-    campaignId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Campaign',
-      required: [true, 'Campaign linkage is strictly required'],
-      index: true,
-    },
     profileId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Profile',
       required: [true, 'Brand profile is required'],
-      index: true,
-    },
-    relatedOKR: {
-      type: String,
-      required: [true, 'Related OKR is required'],
-      trim: true,
-    },
-    relatedTarget: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'MonthlyTarget',
-      default: null,
       index: true,
     },
     title: {
@@ -53,8 +38,13 @@ const workItemSchema = new mongoose.Schema(
     ownerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Person',
-      required: [true, 'Assigned owner is required'],
+      default: null,
       index: true,
+    },
+    recommendedOwnerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Person',
+      default: null,
     },
     deadline: {
       type: Date,
@@ -138,6 +128,22 @@ const workItemSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isLocked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    calendarPlanId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CalendarPlan',
+      default: null,
+      index: true,
+    },
+    dueDate: {
+      type: Date,
+      default: null,
+      index: true,
+    },
     // Deliverable link fields
     contentLink: {
       type: String,
@@ -215,7 +221,6 @@ workItemSchema.virtual('isOverdue').get(function () {
 workItemSchema.index({ profileId: 1, status: 1 });
 workItemSchema.index({ ownerId: 1, status: 1 });
 workItemSchema.index({ departmentId: 1, status: 1 });
-workItemSchema.index({ campaignId: 1, status: 1 });
 workItemSchema.index({ deadline: 1, status: 1 });
 workItemSchema.index({ isBlocked: 1 });
 workItemSchema.index({ 'blocker.dependencyOwnerId': 1 });

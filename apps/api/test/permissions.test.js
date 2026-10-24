@@ -1,21 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_PERMISSIONS, ROLE_KEYS, PERMISSION_KEYS, LEGACY_ROLE_ALIASES } from '@mmp/shared';
+import { ROLE_PERMISSIONS, ROLE_KEYS, PERMISSION_KEYS, ROLE_LABELS } from '@mmp/shared';
 import { defineAbilityForUser } from '../src/lib/permissions.js';
 
-describe('Marketing OS Permissions & CASL Ability Tests (Phase 1 + Executive)', () => {
+describe('Marketing OS Permissions & CASL Ability Tests (R2 Canonical 5 Roles)', () => {
   it('should have exact 5 role keys defined in specification', () => {
-    const expectedRoles = ['admin', 'marketing_head', 'executive', 'team_lead', 'team_member'];
+    const expectedRoles = ['admin', 'creative_head', 'executive', 'sm_manager', 'team_member'];
     expect(ROLE_KEYS).toEqual(expectedRoles);
   });
 
-  it('should export legacy role aliases for smooth migration backward compatibility', () => {
-    expect(LEGACY_ROLE_ALIASES).toMatchObject({
-      lead: 'marketing_head',
-      head: 'marketing_head',
-      worker: 'team_member',
-      sm_manager: 'team_member',
-      management: 'executive',
-      viewer: 'executive',
+  it('should export ROLE_LABELS with Creative Head and SM Manager', () => {
+    expect(ROLE_LABELS).toMatchObject({
+      admin: 'Administrator',
+      creative_head: 'Creative Head',
+      executive: 'Executive',
+      sm_manager: 'SM Manager',
+      team_member: 'Team Member',
     });
   });
 
@@ -26,29 +25,34 @@ describe('Marketing OS Permissions & CASL Ability Tests (Phase 1 + Executive)', 
     expect(ROLE_PERMISSIONS.admin).toContain('user.approve');
     expect(ROLE_PERMISSIONS.admin).toContain('user.manage');
     expect(ROLE_PERMISSIONS.admin).toContain('people.assign');
-    expect(ROLE_PERMISSIONS.admin).toContain('reference.manage');
-    expect(ROLE_PERMISSIONS.admin).toContain('campaign.manage');
-    expect(ROLE_PERMISSIONS.admin).toContain('target.manage');
+    expect(ROLE_PERMISSIONS.admin).toContain('calendar.plan');
+    expect(ROLE_PERMISSIONS.admin).toContain('calendar.approve');
   });
 
-  it('marketing_head has full marketing operations permissions plus portal.view and people.view', () => {
-    const headPerms = ROLE_PERMISSIONS.marketing_head;
-    expect(headPerms).toContain('portal.view');
-    expect(headPerms).toContain('people.view');
-    expect(headPerms).toContain('work.create');
-    expect(headPerms).toContain('campaign.manage');
-    expect(headPerms).toContain('target.manage');
-    expect(headPerms).toContain('people.assign');
-    expect(headPerms).toContain('lead.view');
-    expect(headPerms).toContain('datacenter.view');
-    expect(headPerms).toContain('analytics.team');
-    expect(headPerms).toContain('report.configure');
-    expect(headPerms).toContain('automation.manage');
+  it('creative_head has authoritative creative & people ops permissions snapshot', () => {
+    const headPerms = ROLE_PERMISSIONS.creative_head;
+    const expectedHeadPerms = [
+      'portal.view',
+      'people.view',
+      'people.assign',
+      'calendar.approve',
+      'feedback.give',
+      'feedback.respond',
+      'revision.classify',
+      'assignment.override',
+      'work.update.own',
+      'analytics.team',
+      'report.view',
+      'report.configure',
+      'automation.manage',
+    ];
+    expect(headPerms).toEqual(expectedHeadPerms);
 
-    // Marketing Head CANNOT manage users or reference data or approve access requests
+    // Creative Head CANNOT manage users, create plans, or create raw work items
     expect(headPerms).not.toContain('user.manage');
     expect(headPerms).not.toContain('user.approve');
-    expect(headPerms).not.toContain('reference.manage');
+    expect(headPerms).not.toContain('calendar.plan');
+    expect(headPerms).not.toContain('work.create');
   });
 
   it('executive has portal.view, people.view and read-only view keys but zero write keys', () => {
@@ -56,9 +60,6 @@ describe('Marketing OS Permissions & CASL Ability Tests (Phase 1 + Executive)', 
     const expectedExecPerms = [
       'portal.view',
       'people.view',
-      'target.view',
-      'lead.view',
-      'datacenter.view',
       'analytics.team',
       'report.view',
     ];
@@ -71,52 +72,54 @@ describe('Marketing OS Permissions & CASL Ability Tests (Phase 1 + Executive)', 
     expect(execPerms).not.toContain('assignment.override');
     expect(execPerms).not.toContain('feedback.give');
     expect(execPerms).not.toContain('revision.classify');
-    expect(execPerms).not.toContain('campaign.manage');
-    expect(execPerms).not.toContain('target.manage');
     expect(execPerms).not.toContain('report.configure');
     expect(execPerms).not.toContain('automation.manage');
     expect(execPerms).not.toContain('user.approve');
     expect(execPerms).not.toContain('user.manage');
     expect(execPerms).not.toContain('people.assign');
-    expect(execPerms).not.toContain('reference.manage');
+    expect(execPerms).not.toContain('calendar.plan');
+    expect(execPerms).not.toContain('calendar.approve');
   });
 
-  it('team_lead has creative team permissions and views targets/reports but cannot manage targets or people.assign', () => {
-    const leadPerms = ROLE_PERMISSIONS.team_lead;
-    expect(leadPerms).toContain('work.create');
-    expect(leadPerms).toContain('work.update.own');
-    expect(leadPerms).toContain('feedback.give');
-    expect(leadPerms).toContain('revision.classify');
-    expect(leadPerms).toContain('campaign.manage');
-    expect(leadPerms).toContain('target.view');
-    expect(leadPerms).toContain('lead.view');
-    expect(leadPerms).toContain('datacenter.view');
-    expect(leadPerms).toContain('analytics.team');
-    expect(leadPerms).toContain('report.view');
+  it('sm_manager has planning, work creation and assignment override permissions snapshot', () => {
+    const smPerms = ROLE_PERMISSIONS.sm_manager;
+    const expectedSmPerms = [
+      'calendar.plan',
+      'work.create',
+      'assignment.override',
+      'work.update.own',
+      'feedback.respond',
+      'analytics.team',
+      'report.view',
+      'people.view',
+    ];
+    expect(smPerms).toEqual(expectedSmPerms);
 
-    // Team Lead CANNOT manage targets, assign people operational settings, or manage automation
-    expect(leadPerms).not.toContain('target.manage');
-    expect(leadPerms).not.toContain('people.assign');
-    expect(leadPerms).not.toContain('report.configure');
-    expect(leadPerms).not.toContain('automation.manage');
-    expect(leadPerms).not.toContain('user.manage');
+    // SM Manager CANNOT approve calendar plans or approve review stages, or people.assign
+    expect(smPerms).not.toContain('calendar.approve');
+    expect(smPerms).not.toContain('people.assign');
+    expect(smPerms).not.toContain('feedback.give');
+    expect(smPerms).not.toContain('revision.classify');
+    expect(smPerms).not.toContain('report.configure');
+    expect(smPerms).not.toContain('automation.manage');
+    expect(smPerms).not.toContain('user.manage');
   });
 
   it('team_member has personal work permissions only', () => {
     const memberPerms = ROLE_PERMISSIONS.team_member;
-    expect(memberPerms).toContain('work.request');
-    expect(memberPerms).toContain('work.update.own');
-    expect(memberPerms).toContain('feedback.respond');
-    expect(memberPerms).toContain('analytics.team');
+    const expectedMemberPerms = [
+      'work.update.own',
+      'work.request',
+      'feedback.respond',
+    ];
+    expect(memberPerms).toEqual(expectedMemberPerms);
 
-    // Team Member CANNOT create work, give feedback, manage campaigns, or view targets
+    // Team Member CANNOT create work, give feedback, plan calendar, or approve
     expect(memberPerms).not.toContain('work.create');
     expect(memberPerms).not.toContain('feedback.give');
-    expect(memberPerms).not.toContain('campaign.manage');
-    expect(memberPerms).not.toContain('target.view');
-    expect(memberPerms).not.toContain('lead.view');
-    expect(memberPerms).not.toContain('datacenter.view');
     expect(memberPerms).not.toContain('people.assign');
+    expect(memberPerms).not.toContain('calendar.plan');
+    expect(memberPerms).not.toContain('calendar.approve');
   });
 
   it('admin should have full ability to manage all in CASL', () => {
@@ -125,7 +128,6 @@ describe('Marketing OS Permissions & CASL Ability Tests (Phase 1 + Executive)', 
     expect(ability.can('manage', 'all')).toBe(true);
     expect(ability.can('user.approve', 'all')).toBe(true);
     expect(ability.can('user.manage', 'all')).toBe(true);
-    expect(ability.can('reference.manage', 'all')).toBe(true);
   });
 
   it('suspended user should have zero permissions in CASL', () => {

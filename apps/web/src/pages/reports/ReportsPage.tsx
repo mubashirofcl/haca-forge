@@ -260,7 +260,7 @@ export const ReportsPage: React.FC = () => {
             <BarChart3 className="w-3.5 h-3.5" />
             Report Definitions
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'reports' ? 'bg-purple-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
-              {reportDefs.length || 6}
+              {reportDefs.length || 4}
             </span>
           </button>
 
@@ -275,7 +275,7 @@ export const ReportsPage: React.FC = () => {
             <Zap className="w-3.5 h-3.5" />
             Automation Rules
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'rules' ? 'bg-purple-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
-              {rules.length || 7}
+              {rules.length || 6}
             </span>
           </button>
 
@@ -402,7 +402,7 @@ export const ReportsPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-purple-600" />
               <span className="text-xs font-bold text-slate-800">
-                BullMQ Automation Dispatcher &bull; 7 Fixed Marketing OS Rules
+                BullMQ Automation Dispatcher &bull; 6 Fixed Marketing OS Rules
               </span>
             </div>
             <span className="text-[11px] text-slate-500">

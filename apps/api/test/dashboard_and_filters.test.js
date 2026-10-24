@@ -5,8 +5,6 @@ import { app } from '../src/server.js';
 import { Person } from '../src/modules/people/model.js';
 import { Department } from '../src/modules/departments/model.js';
 import { Profile } from '../src/modules/referenceData/profile.model.js';
-import { MonthlyTarget } from '../src/modules/targets/model.js';
-import { Campaign } from '../src/modules/campaigns/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { Blocker } from '../src/modules/blockers/model.js';
 import { RevisionFlag } from '../src/modules/feedback/model.js';
@@ -26,8 +24,6 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
   let adminToken, leadToken, memberToken;
   let profileAlpha, profileBeta;
   let deptDesign, deptVideo;
-  let targetAlpha, targetBeta;
-  let campaignAlpha;
   let workItemAlpha1, workItemAlpha2, workItemBeta;
 
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -41,8 +37,6 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
 
     // Clean test collections
     await WorkItem.deleteMany({});
-    await Campaign.deleteMany({});
-    await MonthlyTarget.deleteMany({});
     await Blocker.deleteMany({});
     await RevisionFlag.deleteMany({});
     await ActivityEvent.deleteMany({});
@@ -88,8 +82,8 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
     leadUser = await Person.create({
       name: 'Design Lead P6',
       email: 'lead@dashboard-test.com',
-      role: 'team_lead',
-      jobRole: 'Design Lead (TL)',
+      role: 'sm_manager',
+      jobRole: 'Social Media Manager',
       departmentId: deptDesign._id,
       profileAccess: [profileAlpha._id],
       status: 'active',
@@ -111,52 +105,11 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
     leadToken = makeToken(leadUser);
     memberToken = makeToken(memberUser);
 
-    // Seed Targets
-    targetAlpha = await MonthlyTarget.create({
-      month: currentMonth,
-      profileId: profileAlpha._id,
-      revenueTarget: 500000,
-      leadsTarget: 200,
-      qualifiedLeadsTarget: 80,
-      budget: 30000,
-      createdBy: adminUser._id,
-    });
-
-    targetBeta = await MonthlyTarget.create({
-      month: currentMonth,
-      profileId: profileBeta._id,
-      revenueTarget: 300000,
-      leadsTarget: 100,
-      qualifiedLeadsTarget: 40,
-      budget: 15000,
-      createdBy: adminUser._id,
-    });
-
-    // Seed Campaign
-    campaignAlpha = await Campaign.create({
-      name: 'Alpha Q4 Growth Sprint',
-      profileId: profileAlpha._id,
-      departmentId: deptDesign._id,
-      targetId: targetAlpha._id,
-      startDate: new Date('2026-11-01'),
-      endDate: new Date('2026-11-30'),
-      goalType: 'Leads',
-      expectedOutcome: 'Lead Generation',
-      budgetAllocated: 25000,
-      relatedOKR: 'Increase organic lead capture',
-      status: 'In Progress',
-      ownerId: leadUser._id,
-      createdBy: adminUser._id,
-    });
-
     // Seed Work Items
     workItemAlpha1 = await WorkItem.create({
       title: 'Alpha Reel Video',
-      campaignId: campaignAlpha._id,
       profileId: profileAlpha._id,
       departmentId: deptDesign._id,
-      relatedOKR: 'Increase organic lead capture',
-      relatedTarget: targetAlpha._id,
       ownerId: memberUser._id,
       workType: 'Reel',
       deadline: new Date(Date.now() - 24 * 3600 * 1000), // Overdue!
@@ -169,11 +122,8 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
 
     workItemAlpha2 = await WorkItem.create({
       title: 'Alpha Carousel Post',
-      campaignId: campaignAlpha._id,
       profileId: profileAlpha._id,
       departmentId: deptDesign._id,
-      relatedOKR: 'Increase organic lead capture',
-      relatedTarget: targetAlpha._id,
       ownerId: memberUser._id,
       workType: 'Carousel',
       deadline: new Date(Date.now() + 2 * 24 * 3600 * 1000),
@@ -186,11 +136,8 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
 
     workItemBeta = await WorkItem.create({
       title: 'Beta Ad Creative',
-      campaignId: campaignAlpha._id,
       profileId: profileBeta._id,
       departmentId: deptVideo._id,
-      relatedOKR: 'Increase organic lead capture',
-      relatedTarget: targetBeta._id,
       ownerId: adminUser._id,
       workType: 'Ad Creative',
       deadline: new Date(Date.now() + 4 * 24 * 3600 * 1000),
@@ -236,8 +183,6 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
 
   afterAll(async () => {
     await WorkItem.deleteMany({});
-    await Campaign.deleteMany({});
-    await MonthlyTarget.deleteMany({});
     await Blocker.deleteMany({});
     await RevisionFlag.deleteMany({});
     await ActivityEvent.deleteMany({});
@@ -246,7 +191,7 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
     await Profile.deleteMany({ code: { $in: ['test_dash_alpha', 'test_dash_beta'] } });
   });
 
-  it('GET /api/dashboard/overview returns all 9 sections for authenticated admin', async () => {
+  it('GET /api/dashboard/overview returns all 6 sections for authenticated admin', async () => {
     const res = await request(app)
       .get('/api/dashboard/overview')
       .set('Authorization', `Bearer ${adminToken}`);
@@ -255,48 +200,40 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
     expect(res.body.success).toBe(true);
 
     const d = res.body.data;
-    // Verify 9 sections are present
-    expect(d.targets).toBeDefined();
+    // Verify 6 active sections are present
     expect(d.kpis).toBeDefined();
     expect(d.priorities).toBeDefined();
     expect(d.creativeStats).toBeDefined();
-    expect(d.campaigns).toBeDefined();
     expect(d.workload).toBeDefined();
-    expect(d.leadFunnel).toBeDefined();
     expect(d.issues).toBeDefined();
     expect(d.recentActivity).toBeDefined();
 
-    // Verify Section 1: Targets aggregation
-    expect(d.targets.targetCount).toBe(2);
-    expect(d.targets.revenueTarget).toBe(800000); // 500k + 300k
-    expect(d.targets.leadsTarget).toBe(300); // 200 + 100
+    // Verify removed sections are absent
+    expect(d.targets).toBeUndefined();
+    expect(d.campaigns).toBeUndefined();
+    expect(d.leadFunnel).toBeUndefined();
 
-    // Verify Section 2: KPIs strip
+    // Verify KPIs strip
     expect(d.kpis.totalWorkItems).toBe(3);
     expect(d.kpis.inProgress).toBe(2);
     expect(d.kpis.approved).toBe(1);
     expect(d.kpis.overdue).toBe(1); // workItemAlpha1 has passed deadline
 
-    // Verify Section 8: Issues
+    // Verify Issues
     expect(d.issues.activeBlockersCount).toBeGreaterThanOrEqual(1);
     expect(d.issues.activeFlagsCount).toBeGreaterThanOrEqual(1);
 
-    // Verify Section 9: Recent Activity
+    // Verify Recent Activity
     expect(d.recentActivity.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('updates all 9 widgets simultaneously when changing Profile filter to Brand Alpha', async () => {
+  it('updates widgets when changing Profile filter to Brand Alpha', async () => {
     const res = await request(app)
       .get(`/api/dashboard/overview?profileId=${profileAlpha._id}`)
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
     const d = res.body.data;
-
-    // Targets strip should only reflect Brand Alpha
-    expect(d.targets.targetCount).toBe(1);
-    expect(d.targets.revenueTarget).toBe(500000);
-    expect(d.targets.leadsTarget).toBe(200);
 
     // KPIs should only reflect the 2 Brand Alpha items
     expect(d.kpis.totalWorkItems).toBe(2);
@@ -311,15 +248,11 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
     }
   });
 
-  it('scopes team member overview to assigned deliverables', async () => {
+  it('denies team member access to team dashboard with 403 Forbidden', async () => {
     const res = await request(app)
       .get('/api/dashboard/overview')
       .set('Authorization', `Bearer ${memberToken}`);
 
-    expect(res.status).toBe(200);
-    const d = res.body.data;
-
-    // Team member should only see deliverables assigned to them (2 items)
-    expect(d.kpis.totalWorkItems).toBe(2);
+    expect(res.status).toBe(403);
   });
 });

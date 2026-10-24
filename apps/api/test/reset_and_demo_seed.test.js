@@ -91,14 +91,14 @@ describe('Phase 1b: Database Reset Script Guards & Demo Seed', () => {
   });
 
   describe('Part C: Demo Users Seeding', () => {
-    it('creates all 11 demo users with correct roles, job roles, work preferences and supervisor hierarchies', async () => {
+    it('creates all 9 demo users with correct roles, job roles, work preferences and supervisor hierarchies', async () => {
       const result = await seedDemoUsers();
-      expect(result.users.length).toBe(11);
+      expect(result.users.length).toBe(9);
 
-      // Verify Marketing Head
-      const head = await Person.findOne({ email: 'head@demo.haca.local' });
+      // Verify Creative Head
+      const head = await Person.findOne({ email: 'creative.head@demo.haca.local' });
       expect(head).toBeDefined();
-      expect(head.role).toBe('marketing_head');
+      expect(head.role).toBe('creative_head');
       expect(head.profileAccess.length).toBe(7); // Access to all 7 brands
       expect(head.workPreferences).toEqual(['Content', 'Script', 'Post']);
 
@@ -111,53 +111,36 @@ describe('Phase 1b: Database Reset Script Guards & Demo Seed', () => {
       expect(executive.departmentId).toBeNull();
       expect(executive.workPreferences).toEqual([]);
 
-      // Verify Design Lead
-      const designLead = await Person.findOne({ email: 'lead.design@demo.haca.local' });
-      expect(designLead).toBeDefined();
-      expect(designLead.role).toBe('team_lead');
-      expect(designLead.jobRole).toBe('Design Lead (TL)');
-      expect(designLead.profileAccess.length).toBe(2);
-      expect(designLead.workPreferences).toEqual(['Design']);
-
-      // Verify Creative Manager
-      const creativeManager = await Person.findOne({ email: 'manager.creative@demo.haca.local' });
-      expect(creativeManager).toBeDefined();
-      expect(creativeManager.role).toBe('team_lead');
-      expect(creativeManager.jobRole).toBe('Creative Manager (TL)');
-      expect(creativeManager.profileAccess.length).toBe(2);
-      expect(creativeManager.workPreferences).toEqual(['Script', 'Shoot', 'Edit']);
-
       // Verify Demo SM Manager
       const smManager = await Person.findOne({ email: 'sm.manager@demo.haca.local' });
       expect(smManager).toBeDefined();
-      expect(smManager.role).toBe('team_lead');
+      expect(smManager.role).toBe('sm_manager');
       expect(smManager.jobRole).toBe('Social Media Manager');
       expect(smManager.workPreferences).toEqual(['Post', 'Content']);
 
-      // Verify UI Designer reports to BOTH Design Lead AND Creative Manager
+      // Verify UI Designer
       const uiDesigner = await Person.findOne({ email: 'ui.designer@demo.haca.local' });
       expect(uiDesigner).toBeDefined();
       expect(uiDesigner.role).toBe('team_member');
       expect(uiDesigner.jobRole).toBe('UI Designer');
       expect(uiDesigner.workPreferences).toEqual(['Design']);
-      expect(uiDesigner.reportsToIds.length).toBe(2);
-      const leadIdStrs = uiDesigner.reportsToIds.map((id) => id.toString());
-      expect(leadIdStrs).toContain(designLead._id.toString());
-      expect(leadIdStrs).toContain(creativeManager._id.toString());
 
-      // Verify Designer reports to Design Lead
+      // Verify Designer
       const designer = await Person.findOne({ email: 'designer@demo.haca.local' });
-      expect(designer.reportsToIds[0]?.toString()).toBe(designLead._id.toString());
+      expect(designer).toBeDefined();
+      expect(designer.role).toBe('team_member');
       expect(designer.workPreferences).toEqual(['Design']);
 
-      // Verify Video Editor reports to Creative Manager
+      // Verify Video Editor
       const videoEditor = await Person.findOne({ email: 'video.editor@demo.haca.local' });
-      expect(videoEditor.reportsToIds[0]?.toString()).toBe(creativeManager._id.toString());
+      expect(videoEditor).toBeDefined();
+      expect(videoEditor.role).toBe('team_member');
       expect(videoEditor.workPreferences).toEqual(['Edit', 'Shoot']);
 
-      // Verify Writer reports to Creative Manager
+      // Verify Writer
       const writer = await Person.findOne({ email: 'writer@demo.haca.local' });
-      expect(writer.reportsToIds[0]?.toString()).toBe(creativeManager._id.toString());
+      expect(writer).toBeDefined();
+      expect(writer.role).toBe('team_member');
       expect(writer.workPreferences).toEqual(['Content', 'Script']);
 
       // Verify sample pending AccessRequests exist
@@ -165,7 +148,7 @@ describe('Phase 1b: Database Reset Script Guards & Demo Seed', () => {
       expect(sampleReqs.length).toBe(2);
       const roles = sampleReqs.map((r) => r.requestedRole);
       expect(roles).toContain('team_member');
-      expect(roles).toContain('team_lead');
+      expect(roles).toContain('sm_manager');
     });
 
     it('is completely idempotent on a second run without duplicating users', async () => {
@@ -183,7 +166,7 @@ describe('Phase 1b: Database Reset Script Guards & Demo Seed', () => {
 
     it('cleans up all demo users and access requests with --remove-demo', async () => {
       const removeResult = await seedDemoUsers({ remove: true });
-      expect(removeResult.removedUsers).toBeGreaterThanOrEqual(11);
+      expect(removeResult.removedUsers).toBeGreaterThanOrEqual(9);
       expect(removeResult.removedRequests).toBe(2);
 
       const remainingDemoUsers = await Person.countDocuments({ email: /@demo\.haca\.local$/i });

@@ -5,14 +5,13 @@ import { logActivity } from '../activity/service.js';
 import { createNotification } from '../notifications/service.js';
 import { calculateMemberWorkloadMetrics } from '../assignment/service.js';
 import { resolveScope } from '../../lib/scope.js';
-import { REVISION_ROOT_CAUSES, APPROVER_JOB_ROLES, normalizeRole } from '@mmp/shared';
+import { REVISION_ROOT_CAUSES, normalizeRole } from '@mmp/shared';
 
 /**
  * Get full feedback thread and revision flag status for a work item
  */
 export async function getFeedbackForWorkItem(workItemId, user) {
   const workItem = await WorkItem.findById(workItemId)
-    .populate('campaignId', 'name relatedOKR status budget')
     .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole');
@@ -93,7 +92,6 @@ export async function createFeedbackEntry(data, user) {
   let { round, roundStatus = 'Revision Required', isResponse = false } = data;
 
   const workItem = await WorkItem.findById(workItemId)
-    .populate('campaignId', 'name')
     .populate('ownerId', 'name email role jobRole');
 
   if (!workItem) {
@@ -115,8 +113,8 @@ export async function createFeedbackEntry(data, user) {
   }
 
   const ownerIdStr = workItem.ownerId?._id?.toString() || workItem.ownerId?.toString();
-  const isAdminOrHead = user.role === 'admin' || user.role === 'marketing_head';
-  const isTeamLead = user.role === 'team_lead';
+  const userRole = normalizeRole(user.role);
+  const isAdminOrHead = userRole === 'admin' || userRole === 'creative_head';
 
   // Determine round if not explicitly supplied
   const existingEntries = await FeedbackEntry.find({ workItemId }).sort({ round: -1, createdAt: -1 });
@@ -149,56 +147,34 @@ export async function createFeedbackEntry(data, user) {
   } else {
     // Reviewer feedback logic
     if (roundStatus === 'Approved') {
-      const fromPersonJobRole = fromPerson.jobRole || user.jobRole;
       const fromPersonRole = normalizeRole(fromPerson.role || user.role);
 
-      // CONTENT FLOW DELTA: Owner can NEVER approve their own stage
-      if (workItem.reviewRequired && (ownerIdStr === userId || ownerIdStr === fromPerson._id.toString())) {
+      // Task 4: The owner can NEVER approve their own stage
+      if (ownerIdStr === userId || ownerIdStr === fromPerson._id.toString()) {
         const error = new Error('The owner can never approve their own stage');
         error.statusCode = 403;
         error.code = 'FORBIDDEN_SELF_APPROVAL';
         throw error;
       }
 
-      if (workItem.reviewRequired) {
-        const isApproverLead =
-          fromPersonRole === 'team_lead' && APPROVER_JOB_ROLES.includes(fromPersonJobRole);
-        const isAllowedRole =
-          fromPersonRole === 'admin' || fromPersonRole === 'marketing_head' || isApproverLead;
+      // Task 4: Review stages can be approved only by creative_head and admin. sm_manager and owner cannot approve.
+      const isAllowedRole = fromPersonRole === 'admin' || fromPersonRole === 'creative_head';
+      if (!isAllowedRole) {
+        const error = new Error(
+          'Review stages can be approved only by Creative Head and Admin. SM Manager and the owner cannot approve.'
+        );
+        error.statusCode = 403;
+        error.code = 'FORBIDDEN_APPROVAL';
+        throw error;
+      }
 
-        if (!isAllowedRole) {
-          const error = new Error(
-            'For review-required stages, approvers must be team leads with an approver job role (Creative Manager (TL)), Marketing Head, or Administrator'
-          );
-          error.statusCode = 403;
-          error.code = 'FORBIDDEN_APPROVAL';
-          throw error;
-        }
-
-        const scope = await resolveScope(user);
-        const itemProfileIdStr = (workItem.profileId?._id || workItem.profileId)?.toString();
-        if (itemProfileIdStr && !scope.canAccessProfile(itemProfileIdStr)) {
-          const error = new Error('You do not have brand profile access to approve deliverables for this brand');
-          error.statusCode = 403;
-          error.code = 'FORBIDDEN_PROFILE_APPROVAL';
-          throw error;
-        }
-      } else {
-        if (!isAdminOrHead && !isTeamLead) {
-          const error = new Error('Only Team Leads, Marketing Heads, or Admins can mark deliverables Approved');
-          error.statusCode = 403;
-          error.code = 'FORBIDDEN_APPROVAL';
-          throw error;
-        }
-
-        const scope = await resolveScope(user);
-        const itemProfileIdStr = (workItem.profileId?._id || workItem.profileId)?.toString();
-        if (itemProfileIdStr && !scope.canAccessProfile(itemProfileIdStr)) {
-          const error = new Error('You do not have permission to approve deliverables for this brand profile');
-          error.statusCode = 403;
-          error.code = 'FORBIDDEN_PROFILE_APPROVAL';
-          throw error;
-        }
+      const scope = await resolveScope(user);
+      const itemProfileIdStr = (workItem.profileId?._id || workItem.profileId)?.toString();
+      if (itemProfileIdStr && !scope.canAccessProfile(itemProfileIdStr)) {
+        const error = new Error('You do not have brand profile access to approve deliverables for this brand');
+        error.statusCode = 403;
+        error.code = 'FORBIDDEN_PROFILE_APPROVAL';
+        throw error;
       }
     }
 
@@ -348,11 +324,11 @@ export async function checkAndCreateRevisionFlag(workItem, actor = null) {
       },
     });
 
-    // Alert Team Leads and Marketing Heads in the department
+    // Alert Creative Heads and SM Managers
     const alertPersons = await Person.find({
       $or: [
-        { role: 'marketing_head', active: true },
-        { role: 'team_lead', departmentId: workItem.departmentId, active: true },
+        { role: 'creative_head', status: 'active' },
+        { role: 'sm_manager', departmentId: workItem.departmentId, status: 'active' },
       ],
     });
 
@@ -452,9 +428,8 @@ export async function listRevisionFlags(filters = {}, user) {
   const flags = await RevisionFlag.find(query)
     .populate({
       path: 'workItemId',
-      select: 'title workType status deadline campaignId profileId departmentId revisions',
+      select: 'title workType status deadline profileId departmentId revisions',
       populate: [
-        { path: 'campaignId', select: 'name' },
         { path: 'profileId', select: 'name code' },
         { path: 'departmentId', select: 'name code' },
       ],
@@ -501,7 +476,6 @@ export async function listFeedbackThreads(filters = {}, user) {
   }
 
   const workItems = await WorkItem.find(workItemsQuery)
-    .populate('campaignId', 'name')
     .populate('profileId', 'name code')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole')

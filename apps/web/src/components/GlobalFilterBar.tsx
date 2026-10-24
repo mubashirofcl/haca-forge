@@ -1,17 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useGlobalFilter } from '../context/GlobalFilterContext';
 import { apiFetch } from '../lib/api';
-import { PROFILES, DEPARTMENTS, WORK_ITEM_STATUSES } from '@mmp/shared';
+import { DEPARTMENTS, WORK_ITEM_STATUSES } from '@mmp/shared';
 import {
   Filter,
   RotateCcw,
 } from 'lucide-react';
-
-interface ProfileOption {
-  _id: string;
-  name: string;
-  code: string;
-}
 
 interface DepartmentOption {
   _id: string;
@@ -22,27 +16,16 @@ interface DepartmentOption {
 export const GlobalFilterBar: React.FC = () => {
   const { filters, setFilter, resetFilters, activeFilterCount } = useGlobalFilter();
 
-  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
 
   useEffect(() => {
-    // Load dynamic profiles
-    apiFetch<{ data: ProfileOption[] }>('/api/reference-data/profiles')
-      .then((res) => setProfiles(res.data || []))
-      .catch(() => {
-        // Fallback to shared taxonomy
-        setProfiles(
-          PROFILES.map((p) => ({
-            _id: p.code,
-            name: p.name,
-            code: p.code,
-          }))
-        );
-      });
 
     // Load dynamic departments
     apiFetch<{ data: DepartmentOption[] }>('/api/departments')
-      .then((res) => setDepartments(res.data || []))
+      .then((res) => {
+        const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+        setDepartments(list);
+      })
       .catch(() => {
         // Fallback to shared taxonomy
         setDepartments(
@@ -83,22 +66,6 @@ export const GlobalFilterBar: React.FC = () => {
           )}
         </div>
 
-        {/* Brand Profile Selector */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-semibold text-slate-400">Brand:</span>
-          <select
-            value={filters.profileId}
-            onChange={(e) => setFilter('profileId', e.target.value)}
-            className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 transition-all cursor-pointer"
-          >
-            <option value="all">All Brands (Org-wide)</option>
-            {profiles.map((p) => (
-              <option key={p._id} value={p._id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
 
         {/* Department Selector */}
         <div className="flex items-center gap-1.5">
@@ -109,7 +76,7 @@ export const GlobalFilterBar: React.FC = () => {
             className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 transition-all cursor-pointer"
           >
             <option value="all">All Departments</option>
-            {departments.map((d) => (
+            {Array.isArray(departments) && departments.map((d) => (
               <option key={d._id} value={d._id}>
                 {d.name}
               </option>

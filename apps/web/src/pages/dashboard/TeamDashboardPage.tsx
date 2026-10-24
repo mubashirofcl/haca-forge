@@ -11,14 +11,15 @@ import {
   AlertTriangle,
   ShieldAlert,
   Users,
-  Target,
-  TrendingUp,
   ChevronRight,
   Plus,
-  BarChart3,
-  MessageSquare,
   Activity,
   Layers,
+  Calendar,
+  FileCheck,
+  TrendingUp,
+  AlertOctagon,
+  ArrowUpRight,
 } from 'lucide-react';
 
 interface DashboardData {
@@ -26,35 +27,38 @@ interface DashboardData {
     profileId: string;
     departmentId: string;
     ownerId: string;
-    campaignId: string;
     month: string;
     userRole: string;
   };
-  targets: {
-    month: string;
-    targetCount: number;
-    revenueTarget: number;
-    leadsTarget: number;
-    qualifiedLeadsTarget: number;
-    budgetAllocated: number;
-    targetsList: {
+  monthPlanStatus: {
+    selectedMonth: string;
+    activePlanStatus: string;
+    totalPlans: number;
+    plannedPieces: number;
+    donePieces: number;
+    completionRatePct: number;
+    velocity: string;
+    plans: {
       _id: string;
-      profileName: string;
-      revenueTarget: number;
-      leadsTarget: number;
-      qualifiedLeadsTarget: number;
-      budget: number;
+      code: string;
+      title: string;
+      kind: string;
+      status: string;
+      planned: number;
+      done: number;
+      createdByName?: string;
     }[];
   };
   kpis: {
-    totalWorkItems: number;
+    planned: number;
+    completed: number;
     inProgress: number;
-    inFeedback: number;
+    atRisk: number;
     blocked: number;
-    approved: number;
-    published: number;
+    pendingApproval: number;
     overdue: number;
-    completionRatePct: number;
+    totalWorkItems?: number;
+    completionRatePct?: number;
   };
   priorities: {
     _id: string;
@@ -64,7 +68,6 @@ interface DashboardData {
     status: string;
     priority: string;
     isOverdue?: boolean;
-    campaignId?: { _id: string; name: string };
     profileId?: { _id: string; name: string };
     ownerId?: { _id: string; name: string; role: string; jobRole?: string };
   }[];
@@ -79,18 +82,11 @@ interface DashboardData {
       inProgress: number;
       completed: number;
     }[];
+    weeklyTrend: {
+      weekLabel: string;
+      completed: number;
+    }[];
   };
-  campaigns: {
-    _id: string;
-    name: string;
-    profileName: string;
-    status: string;
-    goalType: string;
-    budgetAllocated: number;
-    totalItems: number;
-    completedItems: number;
-    progressPct: number;
-  }[];
   workload: {
     totalMembers: number;
     avgWorkloadPct: number;
@@ -99,6 +95,17 @@ interface DashboardData {
       high: number;
       overloaded: number;
     };
+    members: {
+      personId: string;
+      name: string;
+      role: string;
+      jobRole?: string;
+      departmentName: string;
+      workloadPct: number;
+      allocatedHours: number;
+      capacity: number;
+      capacityBand: string;
+    }[];
     overloadedMembers: {
       personId: string;
       name: string;
@@ -110,12 +117,6 @@ interface DashboardData {
       capacity: number;
       capacityBand: string;
     }[];
-  };
-  leadFunnel: {
-    totalLeadsTarget: number;
-    qualifiedLeadsTarget: number;
-    conversionRateTarget: number;
-    activeCampaignsWithGoals: number;
   };
   issues: {
     activeBlockersCount: number;
@@ -131,6 +132,36 @@ interface DashboardData {
       dependencyOwnerName?: string;
       blockedAt: string;
       durationHours: number;
+    }[];
+    revisionFlags?: {
+      _id: string;
+      workItemId: string;
+      deliverableTitle: string;
+      ownerName: string;
+      revisionsCount: number;
+      rootCause?: string;
+      isEscalated?: boolean;
+      flaggedAt: string;
+    }[];
+  };
+  waitingApproval: {
+    plansCount: number;
+    stagesCount: number;
+    totalPending: number;
+    plans: {
+      _id: string;
+      code: string;
+      title: string;
+      submittedAt: string;
+      createdByName: string;
+    }[];
+    stages: {
+      _id: string;
+      title: string;
+      workType: string;
+      currentStageKey?: string;
+      ownerName: string;
+      deadline?: string;
     }[];
   };
   recentActivity: {
@@ -152,13 +183,21 @@ export const TeamDashboardPage: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Requirement: team_member is redirected to My Work
+  useEffect(() => {
+    if (user?.role === 'team_member') {
+      navigate('/my-work', { replace: true });
+    }
+  }, [user, navigate]);
+
   const fetchDashboard = async () => {
     setIsLoading(true);
     try {
       const queryString = new URLSearchParams(queryParams).toString();
       const url = `/api/dashboard/overview${queryString ? `?${queryString}` : ''}`;
-      const res = await apiFetch<{ data: DashboardData }>(url);
-      setData(res.data);
+      const res = await apiFetch<{ data?: DashboardData } | DashboardData>(url);
+      const dashboardData = (res as any).data || res;
+      setData(dashboardData);
     } catch (err) {
       console.error('Failed to load dashboard overview', err);
     } finally {
@@ -167,19 +206,21 @@ export const TeamDashboardPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchDashboard();
-  }, [queryParams]);
+    if (user && user.role !== 'team_member') {
+      fetchDashboard();
+    }
+  }, [queryParams, user]);
 
   const getRoleDisplayName = (role?: string) => {
     switch (role) {
       case 'admin':
         return 'Administrator';
-      case 'marketing_head':
-        return 'Marketing Head';
+      case 'creative_head':
+        return 'Creative Head';
       case 'executive':
         return 'Executive';
-      case 'team_lead':
-        return 'Team Lead';
+      case 'sm_manager':
+        return 'SM Manager';
       case 'team_member':
         return 'Team Member';
       default:
@@ -187,8 +228,23 @@ export const TeamDashboardPage: React.FC = () => {
     }
   };
 
+  const getPlanStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Approved':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'Submitted':
+        return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+      case 'Changes requested':
+        return 'bg-rose-100 text-rose-800 border-rose-200';
+      case 'Approved with pending rows':
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
   return (
-    <div className="space-y-6 pb-12 animate-fadeIn">
+    <div className="space-y-6 pb-16 animate-fadeIn">
       {/* Top Welcome Cockpit */}
       <div className="bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white p-6 rounded-3xl shadow-xl border border-white/10 backdrop-blur-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -196,7 +252,7 @@ export const TeamDashboardPage: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-purple-500/30 text-purple-200 border border-purple-400/30">
-                Screen 2 • Command Center
+                Command Center
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-200">
                 {getRoleDisplayName(user?.role)}
@@ -207,7 +263,7 @@ export const TeamDashboardPage: React.FC = () => {
               Welcome back, {user?.name || 'Marketer'}
             </h1>
             <p className="text-sm text-purple-200/70 mt-1 max-w-2xl">
-              Live operational pulse across targets, deliverables, workload bands, issues, and creative throughput.
+              Live operational pulse: calendar plans, production velocity, workload capacity, blockers, and sign-offs.
             </p>
           </div>
 
@@ -215,18 +271,19 @@ export const TeamDashboardPage: React.FC = () => {
             {hasPermission('work.create') && (
               <button
                 onClick={() => navigate('/work')}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-900/30 transition-all flex items-center gap-2"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-md transition-all"
               >
                 <Plus className="w-4 h-4" />
                 <span>New Deliverable</span>
               </button>
             )}
+
             <button
               onClick={() => navigate('/calendar')}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all flex items-center gap-2 shadow-sm"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-md border border-white/10 transition-colors"
             >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Calendar</span>
+              <Calendar className="w-4 h-4" />
+              <span>Calendar &amp; Plans</span>
             </button>
           </div>
         </div>
@@ -237,7 +294,7 @@ export const TeamDashboardPage: React.FC = () => {
 
       {isLoading ? (
         <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-3xl border border-slate-200 shadow-sm">
-          Loading 9-section dashboard overview...
+          Loading operational dashboard overview...
         </div>
       ) : !data ? (
         <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-3xl border border-slate-200 shadow-sm">
@@ -245,162 +302,227 @@ export const TeamDashboardPage: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* SECTION 1: Targets Strip */}
-          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-purple-600" />
-                <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                  Section 1 • Monthly Targets ({data.targets.month})
-                </h2>
+          {/* ========================================================= */}
+          {/* SECTION 1: Month Plan Status */}
+          {/* ========================================================= */}
+          <div className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-sm relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700">
+                      Section 1 &bull; Month Plan Status
+                    </span>
+                    <span className="text-xs font-semibold text-slate-400">
+                      ({data.monthPlanStatus.selectedMonth})
+                    </span>
+                  </div>
+                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    Active Monthly Plan:{' '}
+                    <span
+                      className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${getPlanStatusBadge(
+                        data.monthPlanStatus.activePlanStatus
+                      )}`}
+                    >
+                      {data.monthPlanStatus.activePlanStatus}
+                    </span>
+                  </h2>
+                </div>
               </div>
-              <button
-                onClick={() => navigate('/campaigns')}
-                className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 transition-colors"
-              >
-                <span>View Campaigns</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => navigate('/calendar?tab=plans')}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold transition-colors"
+                >
+                  <span>View All Plans ({data.monthPlanStatus.totalPlans})</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div
-                onClick={() => navigate('/campaigns')}
-                className="p-3.5 rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-50/50 border border-purple-200/60 cursor-pointer hover:border-purple-300 transition-all"
-              >
-                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block mb-1">
-                  Revenue Target
-                </span>
-                <div className="text-lg font-black text-slate-900">
-                  ₹{data.targets.revenueTarget.toLocaleString()}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-5">
+              {/* Planned vs Done */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-600">Planned vs Published</span>
+                  <span className="font-extrabold text-slate-900">
+                    {data.monthPlanStatus.donePieces} / {data.monthPlanStatus.plannedPieces} Pieces
+                  </span>
                 </div>
-                <span className="text-[10px] text-slate-500 block mt-0.5">
-                  Across {data.targets.targetCount} Target Anchor{data.targets.targetCount === 1 ? '' : 's'}
-                </span>
+                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(100, data.monthPlanStatus.completionRatePct)}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+                  <span>{data.monthPlanStatus.completionRatePct}% Completed</span>
+                  <span>{data.monthPlanStatus.plannedPieces - data.monthPlanStatus.donePieces} Remaining</span>
+                </div>
               </div>
 
-              <div
-                onClick={() => navigate('/leads')}
-                className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50/50 border border-indigo-200/60 cursor-pointer hover:border-indigo-300 transition-all"
-              >
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block mb-1">
-                  Total Leads Target
+              {/* Velocity */}
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Publishing Velocity
                 </span>
-                <div className="text-lg font-black text-slate-900">
-                  {data.targets.leadsTarget.toLocaleString()}
+                <div className="text-base font-black text-slate-800">
+                  {data.monthPlanStatus.velocity}
                 </div>
-                <span className="text-[10px] text-slate-500 block mt-0.5">Top-of-funnel intake</span>
+                <p className="text-[11px] text-slate-500">
+                  Calculated against days elapsed in {data.monthPlanStatus.selectedMonth}.
+                </p>
               </div>
 
-              <div
-                onClick={() => navigate('/leads')}
-                className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50/50 border border-emerald-200/60 cursor-pointer hover:border-emerald-300 transition-all"
-              >
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block mb-1">
-                  Qualified Leads Target
+              {/* Plans breakdown pill list */}
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Active Plans In Period
                 </span>
-                <div className="text-lg font-black text-emerald-700">
-                  {data.targets.qualifiedLeadsTarget.toLocaleString()}
+                <div className="space-y-1.5 max-h-24 overflow-y-auto">
+                  {data.monthPlanStatus.plans.length === 0 ? (
+                    <span className="text-xs text-slate-400">No calendar plans uploaded for this month.</span>
+                  ) : (
+                    data.monthPlanStatus.plans.map((p) => (
+                      <div
+                        key={p._id}
+                        onClick={() => navigate(`/calendar?tab=plans`)}
+                        className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-slate-50 border border-slate-100 hover:bg-purple-50/60 cursor-pointer transition-colors"
+                      >
+                        <span className="font-bold text-slate-800 truncate mr-2">{p.title}</span>
+                        <span
+                          className={`text-[10px] px-2 py-0.2 rounded-full font-bold border shrink-0 ${getPlanStatusBadge(
+                            p.status
+                          )}`}
+                        >
+                          {p.status}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
-                <span className="text-[10px] text-slate-500 block mt-0.5">Admissions / High intent</span>
-              </div>
-
-              <div
-                onClick={() => navigate('/campaigns')}
-                className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer hover:border-slate-300 transition-all"
-              >
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                  Budget Allocated
-                </span>
-                <div className="text-lg font-black text-slate-900">
-                  ₹{data.targets.budgetAllocated.toLocaleString()}
-                </div>
-                <span className="text-[10px] text-slate-500 block mt-0.5">Marketing spend</span>
               </div>
             </div>
           </div>
 
-          {/* SECTION 2: KPI Strip & Execution Pulse */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          {/* ========================================================= */}
+          {/* SECTION 2: KPI Strip (7 core metrics, linking to filtered lists) */}
+          {/* ========================================================= */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+            {/* 1. Planned */}
             <div
-              onClick={() => navigate('/work')}
-              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-purple-300 transition-all"
+              onClick={() => navigate('/calendar?tab=tracker')}
+              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-purple-400 transition-all group"
             >
               <div className="flex items-center justify-between text-slate-400 mb-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider">All Items</span>
-                <Layers className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Planned</span>
+                <Layers className="w-3.5 h-3.5 text-purple-600 group-hover:scale-110 transition-transform" />
               </div>
-              <div className="text-2xl font-black text-slate-900">
-                {data.kpis.totalWorkItems}
-              </div>
-              <span className="text-[10px] text-purple-600 font-bold block mt-1">
-                {data.kpis.completionRatePct}% Completed
+              <div className="text-2xl font-black text-slate-900">{data.kpis.planned}</div>
+              <span className="text-[10px] text-purple-600 font-bold block mt-1 flex items-center gap-0.5">
+                <span>View all</span>
+                <ArrowUpRight className="w-3 h-3" />
               </span>
             </div>
 
+            {/* 2. Completed */}
             <div
-              onClick={() => navigate('/work?status=In Progress')}
-              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-indigo-300 transition-all"
+              onClick={() => navigate('/calendar?tab=tracker&status=Approved,Published')}
+              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-emerald-400 transition-all group"
+            >
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider">Completed</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+              </div>
+              <div className="text-2xl font-black text-emerald-600">{data.kpis.completed}</div>
+              <span className="text-[10px] text-emerald-700 font-bold block mt-1 flex items-center gap-0.5">
+                <span>Published/Approved</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </span>
+            </div>
+
+            {/* 3. In Progress */}
+            <div
+              onClick={() => navigate('/calendar?tab=tracker&status=In%20Progress')}
+              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-indigo-400 transition-all group"
             >
               <div className="flex items-center justify-between text-slate-400 mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider">In Progress</span>
-                <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                <Clock className="w-3.5 h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
               </div>
-              <div className="text-2xl font-black text-indigo-600">
-                {data.kpis.inProgress}
-              </div>
-              <span className="text-[10px] text-slate-400 block mt-1">Active execution</span>
+              <div className="text-2xl font-black text-indigo-600">{data.kpis.inProgress}</div>
+              <span className="text-[10px] text-indigo-700 font-bold block mt-1 flex items-center gap-0.5">
+                <span>Active stages</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </span>
             </div>
 
+            {/* 4. At Risk */}
             <div
-              onClick={() => navigate('/feedback')}
-              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-amber-300 transition-all"
+              onClick={() => navigate('/calendar?tab=tracker&filter=at_risk')}
+              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-amber-400 transition-all group"
             >
               <div className="flex items-center justify-between text-slate-400 mb-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider">In Feedback</span>
-                <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">At Risk</span>
+                <AlertOctagon className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" />
               </div>
-              <div className="text-2xl font-black text-amber-600">
-                {data.kpis.inFeedback}
+              <div className={`text-2xl font-black ${data.kpis.atRisk > 0 ? 'text-amber-600' : 'text-slate-800'}`}>
+                {data.kpis.atRisk}
               </div>
-              <span className="text-[10px] text-slate-400 block mt-1">Under review</span>
+              <span className="text-[10px] text-amber-700 font-bold block mt-1 flex items-center gap-0.5">
+                <span>Due in &le;72h</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </span>
             </div>
 
+            {/* 5. Blocked */}
             <div
-              onClick={() => navigate('/issues')}
-              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-rose-300 transition-all"
+              onClick={() => navigate('/calendar?tab=tracker&status=Blocked')}
+              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-rose-400 transition-all group"
             >
               <div className="flex items-center justify-between text-slate-400 mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider">Blocked</span>
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
               </div>
-              <div className="text-2xl font-black text-rose-600">
+              <div className={`text-2xl font-black ${data.kpis.blocked > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
                 {data.kpis.blocked}
               </div>
-              <span className="text-[10px] text-slate-400 block mt-1">Awaiting dependencies</span>
+              <span className="text-[10px] text-rose-700 font-bold block mt-1 flex items-center gap-0.5">
+                <span>Dependencies</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </span>
             </div>
 
+            {/* 6. Pending Approval */}
             <div
-              onClick={() => navigate('/work?status=Approved')}
-              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-emerald-300 transition-all"
+              onClick={() => navigate('/feedback')}
+              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-purple-400 transition-all group"
             >
               <div className="flex items-center justify-between text-slate-400 mb-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider">Approved</span>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Pending Appr.</span>
+                <FileCheck className="w-3.5 h-3.5 text-purple-600 group-hover:scale-110 transition-transform" />
               </div>
-              <div className="text-2xl font-black text-emerald-600">
-                {data.kpis.approved + data.kpis.published}
-              </div>
-              <span className="text-[10px] text-slate-400 block mt-1">Signed off / live</span>
+              <div className="text-2xl font-black text-purple-700">{data.kpis.pendingApproval}</div>
+              <span className="text-[10px] text-purple-700 font-bold block mt-1 flex items-center gap-0.5">
+                <span>In review</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </span>
             </div>
 
+            {/* 7. Overdue */}
             <div
-              onClick={() => navigate('/todo')}
-              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-rose-300 transition-all"
+              onClick={() => navigate('/calendar?tab=tracker&filter=overdue')}
+              className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm cursor-pointer hover:border-rose-400 transition-all group"
             >
               <div className="flex items-center justify-between text-slate-400 mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider">Overdue</span>
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
               </div>
               <div
                 className={`text-2xl font-black ${
@@ -409,112 +531,243 @@ export const TeamDashboardPage: React.FC = () => {
               >
                 {data.kpis.overdue}
               </div>
-              <span className="text-[10px] text-slate-400 block mt-1">Passed deadline</span>
+              <span className="text-[10px] text-rose-700 font-bold block mt-1 flex items-center gap-0.5">
+                <span>Past deadline</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </span>
             </div>
           </div>
 
-          {/* TWO COLUMN ROW: Section 3 (Today's Priorities) & Section 4 (Creative Production Stats) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Section 3: Today's Priorities (7 cols) */}
-            <div className="lg:col-span-7 p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          {/* ========================================================= */}
+          {/* SECTION 7: Waiting for Approval (Creative Head / Admin Sign-off Queue) */}
+          {/* ========================================================= */}
+          {(user?.role === 'creative_head' || user?.role === 'admin') && (
+            <div className="p-5 rounded-3xl bg-gradient-to-r from-purple-50 via-white to-indigo-50 border border-purple-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-purple-100">
                 <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-purple-600" />
-                  <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                    Section 3 • Today's Priorities & Urgent Focus
-                  </h2>
+                  <FileCheck className="w-5 h-5 text-purple-700" />
+                  <div>
+                    <h2 className="text-xs font-black uppercase tracking-wider text-purple-900">
+                      Section 7 &bull; Waiting for Creative Head Approval
+                    </h2>
+                    <span className="text-[11px] text-purple-700 font-semibold">
+                      {data.waitingApproval.totalPending} pending items requiring your sign-off
+                    </span>
+                  </div>
                 </div>
                 <button
-                  onClick={() => navigate('/todo')}
-                  className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 transition-colors"
+                  onClick={() => navigate('/feedback')}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-colors"
                 >
-                  <span>Open Todo Queue</span>
+                  <span>Open Approvals Console</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {data.priorities.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-400 italic">
-                  No urgent deliverables due today or overdue. Clean slate!
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {data.priorities.map((item) => (
-                    <div
-                      key={item._id}
-                      onClick={() => navigate(`/work/${item._id}`)}
-                      className="p-3.5 rounded-2xl bg-slate-50/70 hover:bg-purple-50/60 border border-slate-200/70 cursor-pointer transition-all flex items-center justify-between gap-3"
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Submitted Calendar Plans */}
+                <div className="p-3.5 rounded-2xl bg-white border border-purple-100 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                    <span>Submitted Plans ({data.waitingApproval.plans.length})</span>
+                    <button
+                      onClick={() => navigate('/calendar?tab=plans')}
+                      className="text-[11px] text-purple-600 hover:underline"
                     >
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-200">
-                            {item.workType}
+                      Review Plans
+                    </button>
+                  </div>
+                  {data.waitingApproval.plans.length === 0 ? (
+                    <span className="text-xs text-slate-400 italic">No plans waiting for approval.</span>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {data.waitingApproval.plans.map((p) => (
+                        <div
+                          key={p._id}
+                          onClick={() => navigate('/calendar?tab=plans')}
+                          className="flex items-center justify-between text-xs p-2 rounded-xl bg-purple-50/50 hover:bg-purple-100/60 cursor-pointer transition-colors"
+                        >
+                          <div>
+                            <span className="font-bold text-slate-900 block">{p.title}</span>
+                            <span className="text-[10px] text-slate-500">By {p.createdByName}</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                            Submitted
                           </span>
-                          {item.isOverdue ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300 animate-pulse">
-                              Overdue
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
-                              Due Today
-                            </span>
-                          )}
-                          {item.status === 'Blocked' && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
-                              Blocked
-                            </span>
-                          )}
                         </div>
-                        <h4 className="text-xs font-bold text-slate-900 truncate">
-                          {item.title}
-                        </h4>
-                        <span className="text-[10px] text-slate-400 block">
-                          Owner: <strong>{item.ownerId?.name || 'Unassigned'}</strong>
-                          {item.campaignId && ` • ${item.campaignId.name}`}
-                        </span>
-                      </div>
-
-                      <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
+
+                {/* Stages in Feedback */}
+                <div className="p-3.5 rounded-2xl bg-white border border-purple-100 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                    <span>Deliverable Review Stages ({data.waitingApproval.stages.length})</span>
+                    <button
+                      onClick={() => navigate('/feedback')}
+                      className="text-[11px] text-purple-600 hover:underline"
+                    >
+                      Review Stages
+                    </button>
+                  </div>
+                  {data.waitingApproval.stages.length === 0 ? (
+                    <span className="text-xs text-slate-400 italic">No deliverable review stages in feedback.</span>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {data.waitingApproval.stages.map((s) => (
+                        <div
+                          key={s._id}
+                          onClick={() => navigate('/feedback')}
+                          className="flex items-center justify-between text-xs p-2 rounded-xl bg-purple-50/50 hover:bg-purple-100/60 cursor-pointer transition-colors"
+                        >
+                          <div>
+                            <span className="font-bold text-slate-900 block">{s.title}</span>
+                            <span className="text-[10px] text-slate-500">
+                              {s.workType} &bull; {s.ownerName}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            Feedback
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TWO COLUMN ROW: Section 3 (Today's Priorities) & Section 4 (Production Stats & Trend) */}
+          {/* ========================================================= */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* SECTION 3: Today's Priorities */}
+            <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-purple-600" />
+                    <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                      Section 3 &bull; Today's Priorities
+                    </h2>
+                  </div>
+                  <button
+                    onClick={() => navigate('/todo')}
+                    className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 transition-colors"
+                  >
+                    <span>Todo List</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 mt-3">
+                  {data.priorities.length === 0 ? (
+                    <div className="text-center py-8 text-xs text-slate-400">
+                      No urgent tasks due today. All deadlines are clear!
+                    </div>
+                  ) : (
+                    data.priorities.map((item) => (
+                      <div
+                        key={item._id}
+                        onClick={() => navigate(`/work/${item._id}`)}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                          item.isOverdue
+                            ? 'bg-rose-50/50 border-rose-200 hover:bg-rose-50'
+                            : item.status === 'Blocked'
+                            ? 'bg-amber-50/50 border-amber-200 hover:bg-amber-50'
+                            : 'bg-slate-50 border-slate-200 hover:bg-white'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-bold text-slate-900 truncate">{item.title}</h4>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded font-bold uppercase bg-white border border-slate-200 text-slate-600">
+                              {item.workType}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                            {item.profileId?.name} &bull; {item.ownerId?.name || 'Unassigned'}
+                          </p>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full block mb-1 ${
+                              item.isOverdue
+                                ? 'bg-rose-600 text-white'
+                                : item.status === 'Blocked'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-slate-200 text-slate-800'
+                            }`}
+                          >
+                            {item.isOverdue ? 'Overdue' : item.status}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {item.deadline ? new Date(item.deadline).toLocaleDateString() : 'No date'}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* Section 4: Creative Production Stats (5 cols) */}
-            <div className="lg:col-span-5 p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
+            {/* SECTION 4: Production Stats & Trend */}
+            <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-purple-600" />
+                  <TrendingUp className="w-4 h-4 text-purple-600" />
                   <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                    Section 4 • Creative Production
+                    Section 4 &bull; Production Stats &amp; Trend
                   </h2>
                 </div>
                 <button
-                  onClick={() => navigate('/work')}
+                  onClick={() => navigate('/calendar?tab=tracker')}
                   className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 transition-colors"
                 >
-                  <span>Work Board</span>
+                  <span>Content Tracker</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              <div className="space-y-3">
-                <span className="text-[11px] font-bold uppercase text-slate-400 block">
-                  Deliverables by Work Type:
-                </span>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {Object.entries(data.creativeStats.byWorkType).map(([type, count]) => (
-                    <div
-                      key={type}
-                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between"
-                    >
-                      <span className="font-semibold text-slate-700 truncate">{type}</span>
-                      <strong className="text-purple-700 font-bold ml-1">{count}</strong>
-                    </div>
-                  ))}
+              <div className="space-y-4">
+                {/* Work Type Matrix */}
+                <div>
+                  <span className="text-[11px] font-bold uppercase text-slate-400 block mb-2">
+                    Output by Deliverable Type:
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                    {Object.entries(data.creativeStats.byWorkType).map(([type, count]) => (
+                      <div
+                        key={type}
+                        className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between"
+                      >
+                        <span className="font-semibold text-slate-700 truncate">{type}</span>
+                        <strong className="text-purple-700 font-bold ml-1">{count}</strong>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
+                {/* 4-Week Completion Trend */}
+                <div className="pt-2 border-t border-slate-100">
+                  <span className="text-[11px] font-bold uppercase text-slate-400 block mb-2">
+                    4-Week Completion Trend:
+                  </span>
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    {data.creativeStats.weeklyTrend.map((t) => (
+                      <div key={t.weekLabel} className="p-2 rounded-xl bg-purple-50/60 border border-purple-100">
+                        <span className="text-[10px] text-purple-700 font-bold block">{t.weekLabel}</span>
+                        <strong className="text-base font-black text-purple-900">{t.completed}</strong>
+                        <span className="text-[9px] text-slate-400 block">published</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Departmental Throughput */}
                 <div className="pt-2 border-t border-slate-100 space-y-2">
                   <span className="text-[11px] font-bold uppercase text-slate-400 block">
                     Departmental Throughput:
@@ -524,7 +777,8 @@ export const TeamDashboardPage: React.FC = () => {
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-bold text-slate-700">{dept.name}</span>
                         <span className="text-slate-500">
-                          {dept.completed}/{dept.total} ({dept.total > 0 ? Math.round((dept.completed / dept.total) * 100) : 0}%)
+                          {dept.completed}/{dept.total} (
+                          {dept.total > 0 ? Math.round((dept.completed / dept.total) * 100) : 0}%)
                         </span>
                       </div>
                       <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -542,243 +796,166 @@ export const TeamDashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* TWO COLUMN ROW: Section 5 (Campaign Progress) & Section 6 (Team Workload) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Section 5: Campaign Progress (7 cols) */}
-            <div className="lg:col-span-7 p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-purple-600" />
+          {/* ========================================================= */}
+          {/* SECTION 5: Team Workload (Real % text, capped bar, bands: <65, 65-85, >85) */}
+          {/* ========================================================= */}
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-purple-600" />
+                <div>
                   <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                    Section 5 • Active Campaign Sprints
+                    Section 5 &bull; Team Workload
                   </h2>
+                  <span className="text-[11px] text-slate-400">
+                    Real utilization percentage &bull; Capacity Bands: &lt;65%, 65-85%, &gt;85%
+                  </span>
                 </div>
-                <button
-                  onClick={() => navigate('/campaigns')}
-                  className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 transition-colors"
-                >
-                  <span>All Campaigns</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+              </div>
+              <button
+                onClick={() => navigate('/workload')}
+                className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 transition-colors"
+              >
+                <span>Capacity Console</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Capacity Band Summary Cards */}
+              <div className="grid grid-cols-3 gap-3 text-center text-xs">
+                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
+                  <span className="text-[10px] text-emerald-700 font-bold block uppercase tracking-wider">
+                    Healthy (&lt;65%)
+                  </span>
+                  <strong className="text-2xl font-black text-emerald-800">
+                    {data.workload.bandCounts.healthy}
+                  </strong>
+                  <span className="text-[10px] text-emerald-600 block mt-0.5">members</span>
+                </div>
+                <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200">
+                  <span className="text-[10px] text-amber-700 font-bold block uppercase tracking-wider">
+                    High (65-85%)
+                  </span>
+                  <strong className="text-2xl font-black text-amber-800">
+                    {data.workload.bandCounts.high}
+                  </strong>
+                  <span className="text-[10px] text-amber-600 block mt-0.5">members</span>
+                </div>
+                <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200">
+                  <span className="text-[10px] text-rose-700 font-bold block uppercase tracking-wider">
+                    Overload (&gt;85%)
+                  </span>
+                  <strong className="text-2xl font-black text-rose-800">
+                    {data.workload.bandCounts.overloaded}
+                  </strong>
+                  <span className="text-[10px] text-rose-600 block mt-0.5">members</span>
+                </div>
               </div>
 
-              {data.campaigns.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-400 italic">
-                  No active campaigns matching filters.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {data.campaigns.map((camp) => (
-                    <div
-                      key={camp._id}
-                      onClick={() => navigate(`/campaigns/${camp._id}`)}
-                      className="p-3.5 rounded-2xl bg-slate-50/70 hover:bg-purple-50/50 border border-slate-200/80 cursor-pointer transition-all space-y-2"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900 line-clamp-1">
-                            {camp.name}
-                          </h4>
-                          <span className="text-[10px] text-slate-400">
-                            {camp.profileName} • Goal: {camp.goalType} • ₹{camp.budgetAllocated.toLocaleString()}
+              {/* Members Capacity List with Real % and Capped Bar */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold uppercase text-slate-400 block">
+                  Member Utilization Snapshot:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {(data.workload.members || []).slice(0, 6).map((m) => {
+                    const isOverloaded = m.workloadPct > 85;
+                    const isHigh = m.workloadPct >= 65 && m.workloadPct <= 85;
+                    const barColor = isOverloaded ? 'bg-rose-500' : isHigh ? 'bg-amber-500' : 'bg-emerald-500';
+                    const badgeBg = isOverloaded
+                      ? 'bg-rose-100 text-rose-800'
+                      : isHigh
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-emerald-100 text-emerald-800';
+
+                    return (
+                      <div
+                        key={m.personId}
+                        onClick={() => navigate('/workload')}
+                        className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 hover:bg-white hover:border-purple-300 transition-all cursor-pointer space-y-2"
+                      >
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-900 truncate">{m.name}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${badgeBg}`}>
+                            {m.capacityBand}
                           </span>
                         </div>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            camp.status === 'Completed'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : camp.status === 'At Risk'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-purple-50 text-purple-700 border-purple-200'
-                          }`}
-                        >
-                          {camp.status}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1 text-[11px]">
-                        <div className="flex items-center justify-between text-slate-500">
-                          <span>{camp.completedItems} of {camp.totalItems} deliverables published</span>
-                          <span className="font-bold text-slate-800">{camp.progressPct}%</span>
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                          <span>{m.departmentName}</span>
+                          {/* Requirement 4: Show REAL percentage in text */}
+                          <strong className="font-extrabold text-slate-900">{m.workloadPct}% Workload</strong>
                         </div>
-                        <div className="h-1.5 w-full bg-slate-200/80 rounded-full overflow-hidden">
+                        {/* Requirement 4: Cap only the progress bar width at 100% */}
+                        <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
                           <div
-                            className="h-full bg-purple-600 rounded-full"
-                            style={{ width: `${camp.progressPct}%` }}
+                            className={`h-full rounded-full ${barColor}`}
+                            style={{ width: `${Math.min(100, m.workloadPct)}%` }}
                           />
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Section 6: Team Workload Snapshot (5 cols) */}
-            <div className="lg:col-span-5 p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-purple-600" />
-                  <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                    Section 6 • Team Workload
-                  </h2>
-                </div>
-                <button
-                  onClick={() => navigate('/workload')}
-                  className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 transition-colors"
-                >
-                  <span>Workload Monitor</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                    <span className="text-[10px] text-emerald-700 font-bold block">Healthy (&lt;65%)</span>
-                    <strong className="text-lg font-black text-emerald-800">
-                      {data.workload.bandCounts.healthy}
-                    </strong>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200">
-                    <span className="text-[10px] text-amber-700 font-bold block">High (65-85%)</span>
-                    <strong className="text-lg font-black text-amber-800">
-                      {data.workload.bandCounts.high}
-                    </strong>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200">
-                    <span className="text-[10px] text-rose-700 font-bold block">Overload (&gt;85%)</span>
-                    <strong className="text-lg font-black text-rose-800">
-                      {data.workload.bandCounts.overloaded}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
-                  <span className="text-[10px] text-slate-400 font-semibold block mb-1">
-                    Overloaded Team Alert:
-                  </span>
-                  {data.workload.overloadedMembers.length === 0 ? (
-                    <span className="text-emerald-700 font-bold text-[11px] flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      All active team members are within capacity!
-                    </span>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {data.workload.overloadedMembers.map((m) => (
-                        <div
-                          key={m.personId}
-                          onClick={() => navigate('/workload')}
-                          className="flex items-center justify-between text-[11px] p-1.5 rounded-lg bg-rose-50/70 text-rose-900 border border-rose-200 cursor-pointer hover:bg-rose-100"
-                        >
-                          <span className="font-bold">{m.name} ({m.departmentName})</span>
-                          <span className="font-black text-rose-700">{m.workloadPct}% Workload</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* THREE COLUMN ROW: Section 7 (Lead Funnel), Section 8 (Issues), Section 9 (Recent Activity) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Section 7: Lead Funnel Snapshot */}
-            <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <Target className="w-4 h-4 text-purple-600" />
-                  <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                    Section 7 • Lead Funnel
-                  </h2>
-                </div>
-                <button
-                  onClick={() => navigate('/leads')}
-                  className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 transition-colors"
-                >
-                  <span>Funnel</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <div className="p-3 rounded-2xl bg-indigo-50/60 border border-indigo-200">
-                  <span className="text-[10px] font-bold uppercase text-indigo-700 block mb-0.5">
-                    Target Conversion Rate:
-                  </span>
-                  <strong className="text-lg font-black text-slate-900">
-                    {data.leadFunnel.conversionRateTarget}%
-                  </strong>
-                  <span className="text-[10px] text-slate-500 block">
-                    Qualified / Total Leads Intake
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-center text-xs">
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] text-slate-400 font-semibold block">Total Leads</span>
-                    <strong className="text-slate-800">{data.leadFunnel.totalLeadsTarget}</strong>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="text-[10px] text-slate-400 font-semibold block">Qualified</span>
-                    <strong className="text-emerald-700">{data.leadFunnel.qualifiedLeadsTarget}</strong>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Section 8: Issues & Blockers */}
+          {/* ========================================================= */}
+          {/* TWO COLUMN ROW: Section 6 (Issues & Blockers) & Section 8 (Recent Activity) */}
+          {/* ========================================================= */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* SECTION 6: Issues & Blockers */}
             <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="w-4 h-4 text-rose-600" />
                   <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                    Section 8 • Issues & Blockers
+                    Section 6 &bull; Issues &amp; Blockers
                   </h2>
                 </div>
                 <button
                   onClick={() => navigate('/issues')}
                   className="text-xs font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 transition-colors"
                 >
-                  <span>Console</span>
+                  <span>Issues Console</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
 
               <div className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-2 text-center text-xs">
-                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200">
-                    <span className="text-[10px] text-rose-700 font-bold block">Active Blockers</span>
-                    <strong className="text-lg font-black text-rose-800">
-                      {data.issues.activeBlockersCount}
-                    </strong>
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-rose-50/60 border border-rose-200">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
+                    <span className="font-bold text-rose-900">Active Unresolved Blockers</span>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200">
-                    <span className="text-[10px] text-amber-700 font-bold block">Revision Flags</span>
-                    <strong className="text-lg font-black text-amber-800">
-                      {data.issues.activeFlagsCount}
-                    </strong>
-                  </div>
+                  <strong className="text-base font-black text-rose-900">
+                    {data.issues.activeBlockersCount}
+                  </strong>
                 </div>
 
                 {data.issues.blockersList.length === 0 ? (
-                  <div className="p-3 rounded-xl bg-emerald-50 text-emerald-800 text-[11px] font-semibold text-center">
-                    Zero active blockers!
+                  <div className="text-center py-6 text-xs text-slate-400">
+                    No active dependency blockers currently reported.
                   </div>
                 ) : (
-                  <div className="space-y-1.5">
-                    {data.issues.blockersList.slice(0, 3).map((b) => (
+                  <div className="space-y-2">
+                    {data.issues.blockersList.map((blocker) => (
                       <div
-                        key={b._id}
+                        key={blocker._id}
                         onClick={() => navigate('/issues')}
-                        className="p-2 rounded-xl bg-slate-50 hover:bg-rose-50 border border-slate-200 cursor-pointer transition-colors text-[11px]"
+                        className="p-3 rounded-2xl bg-slate-50 border border-slate-200 hover:border-rose-300 transition-colors cursor-pointer space-y-1"
                       >
-                        <div className="font-bold text-slate-800 truncate">{b.deliverableTitle}</div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
-                          <span className="text-rose-700 font-semibold">{b.reason}</span>
-                          <span>{b.durationHours}h</span>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900">{blocker.deliverableTitle}</span>
+                          <span className="text-[10px] font-bold text-rose-700 px-2 py-0.5 rounded-full bg-rose-100">
+                            {blocker.durationHours}h Blocked
+                          </span>
                         </div>
+                        <p className="text-[11px] text-slate-600">Reason: {blocker.reason}</p>
+                        <span className="text-[10px] text-slate-400 block">
+                          Dependency Owner: {blocker.dependencyOwnerName || 'Unassigned'}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -786,36 +963,53 @@ export const TeamDashboardPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Section 9: Recent Activity Feed */}
+            {/* SECTION 8: Recent Activity Feed */}
             <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <Activity className="w-4 h-4 text-purple-600" />
                   <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                    Section 9 • Recent Activity
+                    Section 8 &bull; Recent Activity Feed
                   </h2>
                 </div>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Audit Feed
+                </span>
               </div>
 
-              {data.recentActivity.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-400 italic">
-                  No activity events recorded yet.
-                </div>
-              ) : (
-                <div className="space-y-2.5 text-xs">
-                  {data.recentActivity.slice(0, 5).map((act) => (
-                    <div key={act._id} className="p-2 rounded-xl bg-slate-50/70 border border-slate-200/60 text-[11px] space-y-0.5">
-                      <div className="flex items-center justify-between text-slate-400 text-[10px]">
-                        <span className="font-bold text-slate-700">{act.actorId?.name || 'System'}</span>
-                        <span>{new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <div className="space-y-3">
+                {data.recentActivity.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-slate-400">
+                    No recent audit activity recorded.
+                  </div>
+                ) : (
+                  data.recentActivity.map((event) => (
+                    <div
+                      key={event._id}
+                      className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3 text-xs"
+                    >
+                      <div className="w-2 h-2 rounded-full bg-purple-600 mt-1.5 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900 truncate">
+                            {event.actorId?.name || 'System Automation'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 shrink-0">
+                            {new Date(event.timestamp).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-0.5">
+                          {event.action.replace('_', ' ').replace('.', ' ')}
+                          {event.fromStatus && event.toStatus && ` (${event.fromStatus} -> ${event.toStatus})`}
+                        </p>
                       </div>
-                      <p className="text-slate-800 font-medium">
-                        {act.action.replace(/_/g, ' ').replace(/\./g, ' • ')}
-                      </p>
                     </div>
-                  ))}
-                </div>
-              )}
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -823,3 +1017,4 @@ export const TeamDashboardPage: React.FC = () => {
     </div>
   );
 };
+export default TeamDashboardPage;

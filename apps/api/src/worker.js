@@ -10,10 +10,12 @@ import {
   scheduledJobsQueue,
 } from './lib/queue.js';
 import {
-  runDeadlineRemindersJob,
-  runRecurringRequestsJob,
-  runDailyDigestJob,
-  runCapacityGapJob,
+  runOverdueEscalationJob,
+  runTodoEscalationJob,
+  runBlockerAlertsJob,
+  runRevisionPatternFlagJob,
+  runWeeklyReportJob,
+  runMonthEndReportJob,
 } from './modules/jobs/processors.js';
 import { fileURLToPath } from 'url';
 
@@ -57,14 +59,26 @@ export async function startWorker() {
       async (job) => {
         logger.info({ jobName: job.name }, 'Executing scheduled background job');
         switch (job.name) {
+          case 'overdue_escalation':
+          case 'overdue-escalation':
           case 'deadline-reminders':
-            return runDeadlineRemindersJob();
-          case 'recurring-requests':
-            return runRecurringRequestsJob();
+            return runOverdueEscalationJob(job);
+          case 'todo_escalation':
+          case 'todo-escalation':
           case 'daily-digest':
-            return runDailyDigestJob();
-          case 'capacity-gap':
-            return runCapacityGapJob();
+            return runTodoEscalationJob(job);
+          case 'blocker_dependency_alert':
+          case 'blocker-dependency-alert':
+            return runBlockerAlertsJob(job);
+          case 'revision_pattern_flag':
+          case 'revision-pattern-flag':
+            return runRevisionPatternFlagJob(job);
+          case 'weekly_report':
+          case 'weekly-report':
+            return runWeeklyReportJob(job);
+          case 'month_end_report':
+          case 'month-end-report':
+            return runMonthEndReportJob(job);
           default:
             logger.warn({ jobName: job.name }, 'Unknown scheduled job name');
         }
@@ -72,11 +86,11 @@ export async function startWorker() {
       { connection, concurrency: 2 }
     );
 
-    // Register repeatable jobs in BullMQ
+    // Register repeatable jobs in BullMQ for all 6 Marketing OS automation rules
     if (scheduledJobsQueue) {
-      // Deadline reminders: every 15 minutes
+      // 1. Overdue escalation: every 15 minutes
       await scheduledJobsQueue.add(
-        'deadline-reminders',
+        'overdue_escalation',
         {},
         {
           repeat: { pattern: '*/15 * * * *' },
@@ -84,57 +98,89 @@ export async function startWorker() {
         }
       );
 
-      // Recurring requests: every day at midnight (00:05)
+      // 2. Stale todo escalation: every morning at 09:00
       await scheduledJobsQueue.add(
-        'recurring-requests',
+        'todo_escalation',
         {},
         {
-          repeat: { pattern: '5 0 * * *' },
+          repeat: { pattern: '0 9 * * *' },
           removeOnComplete: true,
         }
       );
 
-      // Daily digest: every morning at 08:00
+      // 3. Blocker dependency alerts: every morning at 10:00
       await scheduledJobsQueue.add(
-        'daily-digest',
+        'blocker_dependency_alert',
         {},
         {
-          repeat: { pattern: '0 8 * * *' },
+          repeat: { pattern: '0 10 * * *' },
           removeOnComplete: true,
         }
       );
 
-      // Capacity gap alerts: every Monday at 07:00
+      // 4. Revision pattern flag & audit: hourly
       await scheduledJobsQueue.add(
-        'capacity-gap',
+        'revision_pattern_flag',
         {},
         {
-          repeat: { pattern: '0 7 * * 1' },
+          repeat: { pattern: '0 * * * *' },
           removeOnComplete: true,
         }
       );
 
-      logger.info('BullMQ repeatable jobs registered');
+      // 5. Weekly marketing report: every Monday at 08:00
+      await scheduledJobsQueue.add(
+        'weekly_report',
+        {},
+        {
+          repeat: { pattern: '0 8 * * 1' },
+          removeOnComplete: true,
+        }
+      );
+
+      // 6. Month-end performance scorecard: 23:59 on last day of month
+      await scheduledJobsQueue.add(
+        'month_end_report',
+        {},
+        {
+          repeat: { pattern: '59 23 28-31 * *' },
+          removeOnComplete: true,
+        }
+      );
+
+      logger.info('BullMQ repeatable jobs registered for 6 automation rules');
     }
   } else {
     logger.info('Running in lightweight standalone worker mode (in-memory interval scheduler)');
 
     // In-memory intervals for local development without Redis
     // Run initial scan once at startup
-    runDeadlineRemindersJob().catch((err) => logger.warn({ err: err.message }, 'Initial deadline check warning'));
-    runRecurringRequestsJob().catch((err) => logger.warn({ err: err.message }, 'Initial recurring request check warning'));
+    runOverdueEscalationJob().catch((err) => logger.warn({ err: err.message }, 'Initial overdue check warning'));
+    runTodoEscalationJob().catch((err) => logger.warn({ err: err.message }, 'Initial todo check warning'));
+    runBlockerAlertsJob().catch((err) => logger.warn({ err: err.message }, 'Initial blocker check warning'));
+    runRevisionPatternFlagJob().catch((err) => logger.warn({ err: err.message }, 'Initial revision pattern check warning'));
 
-    // Check deadlines every 15 minutes
-    const deadlineInterval = setInterval(() => {
-      runDeadlineRemindersJob().catch((err) => logger.error({ err: err.message }, 'Deadline reminders error'));
+    // Check overdue deliverables every 15 minutes
+    const overdueInterval = setInterval(() => {
+      runOverdueEscalationJob().catch((err) => logger.error({ err: err.message }, 'Overdue escalation error'));
     }, 15 * 60 * 1000);
 
-    // Check recurring requests every 60 minutes
-    const recurringInterval = setInterval(() => {
-      runRecurringRequestsJob().catch((err) => logger.error({ err: err.message }, 'Recurring requests error'));
+    // Stale todo escalation check every 60 minutes
+    const todoInterval = setInterval(() => {
+      runTodoEscalationJob().catch((err) => logger.error({ err: err.message }, 'Todo escalation error'));
     }, 60 * 60 * 1000);
 
-    inMemoryIntervals.push(deadlineInterval, recurringInterval);
+    // Blocker SLA check every 60 minutes
+    const blockerInterval = setInterval(() => {
+      runBlockerAlertsJob().catch((err) => logger.error({ err: err.message }, 'Blocker alert error'));
+    }, 60 * 60 * 1000);
+
+    // Revision pattern check every 60 minutes
+    const revisionInterval = setInterval(() => {
+      runRevisionPatternFlagJob().catch((err) => logger.error({ err: err.message }, 'Revision pattern error'));
+    }, 60 * 60 * 1000);
+
+    inMemoryIntervals.push(overdueInterval, todoInterval, blockerInterval, revisionInterval);
   }
 
   logger.info('✅ Marketing Portal Background Worker running and ready');

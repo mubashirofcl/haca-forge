@@ -1,46 +1,41 @@
 import { z } from "zod";
 
 // ==========================================
-// 1. Roles & Permissions (4-Role Marketing OS Model)
+// 1. Roles & Permissions (5-Role Marketing OS Model)
 // ==========================================
 
 export const ROLE_KEYS = [
   "admin",
-  "marketing_head",
+  "creative_head",
   "executive",
-  "team_lead",
+  "sm_manager",
   "team_member",
 ] as const;
 
 export type UserRole = (typeof ROLE_KEYS)[number];
 
-export const LEGACY_ROLE_ALIASES = {
-  lead: "marketing_head",
-  head: "marketing_head",
-  worker: "team_member",
-  sm_manager: "team_member",
-  management: "executive",
-  dept_lead: "team_member",
-  dept_staff: "team_member",
-  viewer: "executive",
-} as const;
-
-export type LegacyRoleAlias = keyof typeof LEGACY_ROLE_ALIASES;
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: "Administrator",
+  creative_head: "Creative Head",
+  executive: "Executive",
+  sm_manager: "SM Manager",
+  team_member: "Team Member",
+};
 
 export function normalizeRole(
   role: string | null | undefined,
 ): UserRole | string {
   if (!role) return role as string;
-  if (role in LEGACY_ROLE_ALIASES) {
-    return LEGACY_ROLE_ALIASES[role as LegacyRoleAlias];
-  }
   return role;
 }
 
-// Canonical Permission Keys (Spec Section 13.1 + Executive Read View)
+// Canonical Permission Keys (Marketing OS Model)
 export const PERMISSION_KEYS = [
   "portal.view",
   "people.view",
+  "people.assign",
+  "calendar.plan",
+  "calendar.approve",
   "work.create",
   "work.request",
   "work.update.own",
@@ -48,77 +43,55 @@ export const PERMISSION_KEYS = [
   "feedback.give",
   "feedback.respond",
   "revision.classify",
-  "campaign.manage",
-  "target.manage",
-  "target.view",
-  "lead.view",
-  "datacenter.view",
   "analytics.team",
   "report.view",
   "report.configure",
   "automation.manage",
   "user.approve",
   "user.manage",
-  "people.assign",
-  "reference.manage",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 
-// Role-to-Permission Mapping Matrix (Spec Section 13.1)
+// Role-to-Permission Mapping Matrix (Spec Section 13.1 / Scope Reset R2)
 // Admin is dynamically derived from PERMISSION_KEYS so any new keys are automatically granted
 export const ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
   admin: [...PERMISSION_KEYS],
-  marketing_head: [
+  creative_head: [
     "portal.view",
     "people.view",
-    "work.create",
-    "work.request",
-    "work.update.own",
-    "assignment.override",
+    "people.assign",
+    "calendar.approve",
     "feedback.give",
     "feedback.respond",
     "revision.classify",
-    "campaign.manage",
-    "target.manage",
-    "target.view",
-    "lead.view",
-    "datacenter.view",
+    "assignment.override",
+    "work.update.own",
     "analytics.team",
     "report.view",
     "report.configure",
     "automation.manage",
-    "people.assign",
+  ],
+  sm_manager: [
+    "calendar.plan",
+    "work.create",
+    "assignment.override",
+    "work.update.own",
+    "feedback.respond",
+    "analytics.team",
+    "report.view",
+    "people.view",
   ],
   executive: [
     "portal.view",
     "people.view",
-    "target.view",
-    "lead.view",
-    "datacenter.view",
-    "analytics.team",
-    "report.view",
-  ],
-  team_lead: [
-    "work.create",
-    "work.request",
-    "work.update.own",
-    "assignment.override",
-    "feedback.give",
-    "feedback.respond",
-    "revision.classify",
-    "campaign.manage",
-    "target.view",
-    "lead.view",
-    "datacenter.view",
     "analytics.team",
     "report.view",
   ],
   team_member: [
-    "work.request",
     "work.update.own",
+    "work.request",
     "feedback.respond",
-    "analytics.team",
   ],
 };
 
@@ -172,9 +145,7 @@ export const JOB_ROLES = [
 ] as const;
 export type JobRole = (typeof JOB_ROLES)[number];
 
-// Phase 5b Content Flow Approvers & Stage Work Preferences
-export const APPROVER_JOB_ROLES = ["Creative Manager (TL)"] as const;
-export type ApproverJobRole = (typeof APPROVER_JOB_ROLES)[number];
+// Stage Work Preferences
 
 export const WORK_PREFERENCES = [
   "Content",
@@ -279,28 +250,6 @@ export const WORK_TYPE_DEPARTMENT_MAP: Record<WorkType, DepartmentCode> = {
 export const PRIORITIES = ["High", "Medium", "Low"] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
-export const CAMPAIGN_STATUSES = [
-  "In Progress",
-  "At Risk",
-  "Completed",
-] as const;
-export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
-
-export const GOAL_TYPES = ["Leads", "Reactivations", "Enrollments"] as const;
-export type GoalType = (typeof GOAL_TYPES)[number];
-
-export const EXPECTED_OUTCOMES = [
-  "Lead Generation",
-  "Brand Awareness",
-  "Engagement",
-  "SEO Ranking",
-  "Nurture",
-  "Conversion",
-  "Reactivation",
-  "Ops",
-] as const;
-export type ExpectedOutcome = (typeof EXPECTED_OUTCOMES)[number];
-
 export const BLOCKER_REASONS = [
   "Waiting for feedback",
   "Waiting for content",
@@ -331,45 +280,6 @@ export const REVISION_ROOT_CAUSES = [
   "Client/business requirement changed",
 ] as const;
 export type RevisionRootCause = (typeof REVISION_ROOT_CAUSES)[number];
-
-export const LEAD_SOURCES = [
-  "SMM YouTube",
-  "SMM Instagram",
-  "Online Campaigns (SMM)",
-  "Facebook Lead Ads",
-  "Social Media Re-engaged Leads",
-  "Meta Re-Engaged Leads",
-  "Google Ads",
-  "Inbound Phone Calls",
-  "WhatsApp Reactivation",
-  "WhatsApp Inbound",
-  "Student Referral",
-  "Staff Referral",
-  "SEO",
-  "PR",
-  "Website Leads",
-  "Offline Campaigns",
-  "Walk-in",
-  "Outbound Phone Calls",
-  "Workshops/Webinars",
-] as const;
-export type LeadSource = (typeof LEAD_SOURCES)[number];
-
-export const FUNNEL_STAGES = [
-  "Total Leads",
-  "Not Contacted",
-  "Not Answered",
-  "Interested",
-  "Qualified Leads",
-  "Call Back",
-  "Payment Received",
-  "Not Interested",
-  "Not a Potential",
-  "Not Answered (Multiple)",
-  "Reconnected",
-  "Not Eligible",
-] as const;
-export type FunnelStage = (typeof FUNNEL_STAGES)[number];
 
 export const WORK_ITEM_STATUSES = [
   "Not Started",
@@ -457,7 +367,7 @@ export const refreshTokenSchema = z.object({
   refreshToken: z.string().optional(),
 });
 
-export const REQUESTABLE_ROLES = ["team_member", "team_lead"] as const;
+export const REQUESTABLE_ROLES = ["team_member", "sm_manager"] as const;
 export type RequestableRole = (typeof REQUESTABLE_ROLES)[number];
 
 export const requestAccessSchema = z.object({
@@ -468,7 +378,7 @@ export const requestAccessSchema = z.object({
   jobRole: z.string().trim().min(1, "Job role is required"),
   requestedRole: z.enum(REQUESTABLE_ROLES, {
     errorMap: () => ({
-      message: "Only Team Member or Team Lead can be requested",
+      message: "Only Team Member or SM Manager can be requested",
     }),
   }),
   requestedProfileCodes: z
@@ -564,57 +474,7 @@ export const signUploadSchema = z.object({
 });
 export type SignUploadInput = z.infer<typeof signUploadSchema>;
 
-// Phase 2: Monthly Targets & Campaigns Schemas
-export const monthlyTargetSchema = z.object({
-  month: z
-    .string()
-    .regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format (e.g. 2026-11)"),
-  profileId: z.string().optional().nullable(),
-  revenueTarget: z
-    .number()
-    .min(0, "Revenue target must be non-negative")
-    .default(0),
-  leadsTarget: z
-    .number()
-    .min(0, "Leads target must be non-negative")
-    .default(0),
-  qualifiedLeadsTarget: z
-    .number()
-    .min(0, "Qualified leads target must be non-negative")
-    .default(0),
-  budget: z.number().min(0, "Budget must be non-negative").default(0),
-});
-export type MonthlyTargetInput = z.infer<typeof monthlyTargetSchema>;
-
-export const monthlyTargetUpdateSchema = monthlyTargetSchema.partial();
-export type MonthlyTargetUpdateInput = z.infer<
-  typeof monthlyTargetUpdateSchema
->;
-
-export const campaignSchema = z.object({
-  name: z.string().trim().min(2, "Campaign name must be at least 2 characters"),
-  profileId: z.string().min(1, "Profile / Brand is required"),
-  targetId: z.string().min(1, "Target linkage is strictly required"),
-  relatedOKR: z.string().trim().min(3, "Related OKR is strictly required"),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
-  status: z.enum(CAMPAIGN_STATUSES).default("In Progress"),
-  goalType: z.enum(GOAL_TYPES),
-  goalValue: z.number().min(0).default(0),
-  expectedOutcome: z.enum(EXPECTED_OUTCOMES).optional(),
-  budget: z.number().min(0).default(0),
-  spend: z.number().min(0).default(0),
-  leadsActual: z.number().min(0).default(0),
-  qualifiedLeadsActual: z.number().min(0).default(0),
-  ownerId: z.string().min(1, "Campaign owner is required"),
-  progressPct: z.number().min(0).max(100).default(0).optional(),
-});
-export type CampaignInput = z.infer<typeof campaignSchema>;
-
-export const campaignUpdateSchema = campaignSchema.partial();
-export type CampaignUpdateInput = z.infer<typeof campaignUpdateSchema>;
-
-// Phase 3: Work Items Schemas
+// Work Items Schemas
 export const briefSchema = z.object({
   description: z.string().optional().default(""),
   contentLink: z.string().optional().default(""),
@@ -623,7 +483,6 @@ export const briefSchema = z.object({
 export type BriefInput = z.infer<typeof briefSchema>;
 
 export const workItemCreateSchema = z.object({
-  campaignId: z.string().min(1, "Campaign linkage is strictly required"),
   title: z.string().trim().min(2, "Work item title is required"),
   workType: z.enum(WORK_TYPES),
   departmentId: z.string().min(1, "Department is required"),
@@ -638,8 +497,6 @@ export const workItemCreateSchema = z.object({
   blockerReason: z.enum(BLOCKER_REASONS).optional(),
   blockerNote: z.string().optional(),
   profileId: z.string().optional(),
-  relatedOKR: z.string().optional(),
-  relatedTarget: z.string().optional(),
   // Content Flow stage fields (Phase 3 delta)
   contentPieceId: z.string().optional().nullable(),
   stageKey: z.string().optional().nullable(),
@@ -666,13 +523,12 @@ export const workItemTransitionSchema = z.object({
 });
 export type WorkItemTransitionInput = z.infer<typeof workItemTransitionSchema>;
 
-// Phase 4: Auto-Assignment & Workload Schemas
+// Auto-Assignment & Workload Schemas
 export const CAPACITY_BANDS = ["Healthy", "High", "Overloaded"] as const;
 export type CapacityBand = (typeof CAPACITY_BANDS)[number];
 
 export const assignmentRecommendSchema = z.object({
   workType: z.enum(WORK_TYPES).optional(),
-  campaignId: z.string().optional(),
   profileId: z.string().optional(),
   departmentId: z.string().optional(),
   deadline: z.coerce.date().optional(),
@@ -693,7 +549,7 @@ export const assignmentOverrideSchema = z.object({
 });
 export type AssignmentOverrideInput = z.infer<typeof assignmentOverrideSchema>;
 
-// Phase 5: Feedback Loops, Revision Flags & Blockers Schemas
+// Feedback Loops, Revision Flags & Blockers Schemas
 export const FEEDBACK_ROUND_STATUSES = [
   "Revision Required",
   "Approved",
@@ -758,7 +614,7 @@ export const blockerResolveSchema = z.object({
 export type BlockerResolveInput = z.infer<typeof blockerResolveSchema>;
 
 // ==========================================
-// Phase 7: Automation Rules & Report Definitions
+// Automation Rules & Report Definitions
 // ==========================================
 
 export const AUTOMATION_RULE_KEYS = [
@@ -767,7 +623,6 @@ export const AUTOMATION_RULE_KEYS = [
   "todo_escalation",
   "blocker_dependency_alert",
   "revision_pattern_flag",
-  "lsq_live_sync",
   "weekly_report",
 ] as const;
 export type AutomationRuleKey = (typeof AUTOMATION_RULE_KEYS)[number];
@@ -789,9 +644,7 @@ export const REPORT_KEYS = [
   "weekly_marketing",
   "monthly_scorecard",
   "creative_production",
-  "lead_funnel_cpl",
   "team_performance",
-  "campaign_deepdive",
 ] as const;
 export type ReportKey = (typeof REPORT_KEYS)[number];
 
@@ -805,33 +658,243 @@ export const reportGenerateSchema = z.object({
     .optional(),
   profileId: z.string().optional(),
   departmentId: z.string().optional(),
-  campaignId: z.string().optional(),
   sendEmail: z.boolean().default(false),
 });
 export type ReportGenerateInput = z.infer<typeof reportGenerateSchema>;
 
 // ==========================================
-// Phase 8: LeadSquared (LSQ) Integration & Data Center
+// 4. Content Flow & Pipelines (Scope Reset R3)
 // ==========================================
 
-export const PAID_AD_LEAD_SOURCES = [
-  "Facebook Lead Ads",
-  "Google Ads",
-  "Online Campaigns (SMM)",
-  "Meta Re-Engaged Leads",
-] as const;
+export const PIPELINES = {
+  DESIGN: "design",
+  REEL_A: "reel_a",
+  REEL_B: "reel_b",
+  REEL_C: "reel_c",
+} as const;
+export type PipelineKey = (typeof PIPELINES)[keyof typeof PIPELINES];
 
-export const leadDiscrepancyResolveSchema = z.object({
-  profileId: z.string().optional(),
-  leadSource: z.enum(LEAD_SOURCES).optional(),
-  note: z.string().optional(),
+export const STAGE_KEYS = [
+  "Content",
+  "Script",
+  "Design",
+  "Shoot",
+  "Edit",
+  "Post",
+] as const;
+export type StageKey = (typeof STAGE_KEYS)[number];
+
+export const REVIEW_STAGES: StageKey[] = ["Content", "Script", "Design", "Edit"];
+export const NON_REVIEW_STAGES: StageKey[] = ["Shoot", "Post"];
+
+export const POSTABLE_WORK_TYPES: WorkType[] = [
+  "Reel",
+  "Static Post",
+  "Carousel Post",
+  "Story",
+  "Poster",
+];
+
+export const NON_POSTABLE_WORK_TYPES: WorkType[] = [
+  "Cover Image",
+  "Thumbnail",
+  "Meta Ad Creative",
+  "Class Announcement",
+  "Orientation Creative",
+  "Graduation Creative",
+  "Offer Creative",
+  "Brochure",
+  "Certificate",
+  "Placement Poster",
+  "Custom Request",
+];
+
+export function isPostableWorkType(type: string): boolean {
+  const norm = normalizeWorkType(type);
+  return POSTABLE_WORK_TYPES.includes(norm as WorkType);
+}
+
+export function getPipelineForContent({
+  contentType,
+  needsScript,
+  needsShoot,
+}: {
+  contentType: string;
+  needsScript?: boolean;
+  needsShoot?: boolean;
+}): {
+  pipeline: PipelineKey;
+  stages: StageKey[];
+  hasPostStage: boolean;
+} {
+  const norm = normalizeWorkType(contentType);
+  if (norm === "Reel") {
+    const withScript = Boolean(needsScript);
+    const withShoot = Boolean(needsShoot);
+    if (withScript && withShoot) {
+      return {
+        pipeline: "reel_a",
+        stages: ["Script", "Shoot", "Edit", "Post"],
+        hasPostStage: true,
+      };
+    }
+    if (!withScript && withShoot) {
+      return {
+        pipeline: "reel_b",
+        stages: ["Shoot", "Edit", "Post"],
+        hasPostStage: true,
+      };
+    }
+    return {
+      pipeline: "reel_c",
+      stages: ["Edit", "Post"],
+      hasPostStage: true,
+    };
+  }
+  const postable = isPostableWorkType(norm);
+  const stages: StageKey[] = postable
+    ? ["Content", "Design", "Post"]
+    : ["Content", "Design"];
+  return { pipeline: "design", stages, hasPostStage: postable };
+}
+
+// Due-date offsets (counted back in days from final date F)
+export const STAGE_DUE_OFFSETS: Record<string, Record<string, number>> = {
+  design_postable: { Content: 6, Design: 3, Post: 0 },
+  design_non_postable: { Content: 5, Design: 2 },
+  reel_a: { Script: 10, Shoot: 7, Edit: 4, Post: 0 },
+  reel_b: { Shoot: 7, Edit: 4, Post: 0 },
+  reel_c: { Edit: 4, Post: 0 },
+};
+
+export function calculateStageDueDate(
+  finalDate: Date,
+  pipeline: string,
+  stage: StageKey,
+  hasPostStage: boolean = true
+): Date {
+  let key = pipeline;
+  if (pipeline === "design") {
+    key = hasPostStage ? "design_postable" : "design_non_postable";
+  }
+  const offsetDays = STAGE_DUE_OFFSETS[key]?.[stage] ?? 0;
+  const dueDate = new Date(finalDate);
+  dueDate.setDate(dueDate.getDate() - offsetDays);
+  return dueDate;
+}
+
+export const DISPLAY_WORDS = {
+  DONE: "Done",
+  APPROVED: "Approved",
+  REVISION_REQUESTED: "Revision requested",
+} as const;
+
+export const CALENDAR_PLAN_KINDS = ["monthly", "project"] as const;
+export type CalendarPlanKind = (typeof CALENDAR_PLAN_KINDS)[number];
+
+export const CALENDAR_PLAN_STATUSES = [
+  "Draft",
+  "Submitted",
+  "Changes requested",
+  "Approved",
+  "Approved with pending rows",
+] as const;
+export type CalendarPlanStatus = (typeof CALENDAR_PLAN_STATUSES)[number];
+
+export const ROW_STATUSES = [
+  "draft",
+  "submitted",
+  "changes_requested",
+  "approved",
+] as const;
+export type RowStatus = (typeof ROW_STATUSES)[number];
+
+export function derivePlanStatus(
+  rows: { rowStatus: RowStatus }[],
+  submittedAt?: Date | null
+): CalendarPlanStatus {
+  if (!rows || rows.length === 0) {
+    return submittedAt ? "Submitted" : "Draft";
+  }
+  const total = rows.length;
+  const approvedCount = rows.filter((r) => r.rowStatus === "approved").length;
+  const changesCount = rows.filter(
+    (r) => r.rowStatus === "changes_requested"
+  ).length;
+  const submittedCount = rows.filter((r) => r.rowStatus === "submitted").length;
+  const draftCount = rows.filter((r) => r.rowStatus === "draft").length;
+
+  if (approvedCount === total) return "Approved";
+  if (
+    approvedCount > 0 &&
+    (draftCount > 0 || submittedCount > 0 || changesCount > 0)
+  ) {
+    return "Approved with pending rows";
+  }
+  if (changesCount > 0) return "Changes requested";
+  if (submittedCount > 0 || submittedAt) return "Submitted";
+  return "Draft";
+}
+
+// Calendar Plan Schemas
+export const calendarPlanRowCreateSchema = z.object({
+  postingDate: z.coerce.date(),
+  topic: z.string().trim().min(2, "Topic must be at least 2 characters"),
+  contentType: z.string().trim().min(1, "Content type is required"),
+  needsScript: z.boolean().default(false).optional(),
+  needsShoot: z.boolean().default(false).optional(),
+  contentLink: z.string().optional().default(""),
+  remarks: z.string().optional().default(""),
 });
-export type LeadDiscrepancyResolveInput = z.infer<
-  typeof leadDiscrepancyResolveSchema
+export type CalendarPlanRowCreateInput = z.infer<
+  typeof calendarPlanRowCreateSchema
 >;
 
-export const lsqSyncTriggerSchema = z.object({
-  batchSize: z.number().int().min(1).max(500).default(50),
-  simulateDiscrepancies: z.boolean().default(false),
+export const calendarPlanCreateSchema = z.object({
+  code: z.string().optional(),
+  title: z.string().trim().min(2, "Plan title is required"),
+  kind: z.enum(CALENDAR_PLAN_KINDS).default("monthly"),
+  periodStart: z.coerce.date(),
+  periodEnd: z.coerce.date(),
+  comment: z.string().optional().default(""),
+  rows: z.array(calendarPlanRowCreateSchema).optional().default([]),
 });
-export type LsqSyncTriggerInput = z.infer<typeof lsqSyncTriggerSchema>;
+export type CalendarPlanCreateInput = z.infer<typeof calendarPlanCreateSchema>;
+
+export const calendarPlanReviewSchema = z.object({
+  action: z.enum(["approve_all", "approve_selected", "request_changes"]),
+  approvedRowIds: z.array(z.string()).optional().default([]),
+  selectedRowIds: z.array(z.string()).optional(),
+  comments: z.record(z.string()).optional(),
+  changes: z
+    .array(
+      z.object({
+        rowId: z.string().min(1, "Row ID is required"),
+        comment: z.string().trim().min(1, "Change request comment is required"),
+      })
+    )
+    .optional()
+    .default([]),
+});
+export type CalendarPlanReviewInput = z.infer<typeof calendarPlanReviewSchema>;
+
+export const contentPieceAssignSchema = z.object({
+  assignments: z.array(
+    z.object({
+      workItemId: z.string().min(1, "Work item ID is required"),
+      assigneeId: z.string().min(1, "Assignee ID is required"),
+      overrideReason: z.string().optional(),
+    })
+  ),
+});
+export type ContentPieceAssignInput = z.infer<typeof contentPieceAssignSchema>;
+
+export const contentPieceRescheduleSchema = z.object({
+  postingDate: z.coerce.date(),
+  shiftUnstartedStages: z.boolean().default(true).optional(),
+});
+export type ContentPieceRescheduleInput = z.infer<
+  typeof contentPieceRescheduleSchema
+>;
+
+

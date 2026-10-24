@@ -44,7 +44,7 @@ export async function toggleAutomationRuleHandler(req, res, next) {
     }
 
     const rule = await toggleAutomationRule(req.params.id, parsed.data.active, req.user);
-    return res.status(200).json({ rule });
+    return res.status(200).json({ success: true, rule, data: rule });
   } catch (err) {
     next(err);
   }
@@ -56,7 +56,7 @@ export async function runAutomationRuleHandler(req, res, next) {
     const options = parsed.success ? parsed.data : {};
 
     const result = await runAutomationRule(req.params.id, options, req.user);
-    return res.status(200).json({ result });
+    return res.status(200).json({ success: true, result, data: result });
   } catch (err) {
     next(err);
   }

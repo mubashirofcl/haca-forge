@@ -1,6 +1,6 @@
 import { env } from "../../config/env.js";
 import * as authService from "./service.js";
-import { User } from "../users/model.js";
+import { User } from "../people/model.js";
 import { ROLE_PERMISSIONS, normalizeRole } from "@mmp/shared";
 
 function getCookieOptions(maxAgeMs) {
@@ -34,6 +34,7 @@ export async function login(req, res, next) {
       user: result.user,
       permissions: result.permissions,
       accessToken: result.accessToken, // Optional fallback for clients
+      refreshToken: result.refreshToken,
     });
   } catch (error) {
     next(error);
@@ -60,6 +61,7 @@ export async function refresh(req, res, next) {
       user: result.user,
       permissions: result.permissions,
       accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
     });
   } catch (error) {
     next(error);

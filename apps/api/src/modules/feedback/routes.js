@@ -17,7 +17,7 @@ feedbackRouter.get(
 // Feedback per work item
 feedbackRouter.get(
   '/work-item/:workItemId',
-  requireAnyPermission('analytics.team', 'portal.view'),
+  requireAnyPermission('feedback.respond', 'feedback.give', 'portal.view'),
   feedbackController.getFeedbackForWorkItem
 );
 feedbackRouter.post(

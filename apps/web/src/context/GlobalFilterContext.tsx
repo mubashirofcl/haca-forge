@@ -5,7 +5,6 @@ export interface GlobalFilterState {
   profileId: string;
   departmentId: string;
   ownerId: string;
-  campaignId: string;
   month: string;
   status: string;
 }
@@ -22,7 +21,6 @@ export const defaultFilters: GlobalFilterState = {
   profileId: 'all',
   departmentId: 'all',
   ownerId: 'all',
-  campaignId: 'all',
   month: new Date().toISOString().slice(0, 7),
   status: 'all',
 };
@@ -37,7 +35,6 @@ export const GlobalFilterProvider: React.FC<{ children: React.ReactNode }> = ({ 
     profileId: searchParams.get('profileId') || 'all',
     departmentId: searchParams.get('departmentId') || 'all',
     ownerId: searchParams.get('ownerId') || 'all',
-    campaignId: searchParams.get('campaignId') || 'all',
     month: searchParams.get('month') || new Date().toISOString().slice(0, 7),
     status: searchParams.get('status') || 'all',
   }), [searchParams]);
@@ -67,7 +64,6 @@ export const GlobalFilterProvider: React.FC<{ children: React.ReactNode }> = ({ 
         next.delete('profileId');
         next.delete('departmentId');
         next.delete('ownerId');
-        next.delete('campaignId');
         next.delete('month');
         next.delete('status');
         return next;
@@ -81,7 +77,6 @@ export const GlobalFilterProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (filters.profileId !== 'all') count++;
     if (filters.departmentId !== 'all') count++;
     if (filters.ownerId !== 'all') count++;
-    if (filters.campaignId !== 'all') count++;
     if (filters.status !== 'all') count++;
     return count;
   }, [filters]);
@@ -91,7 +86,6 @@ export const GlobalFilterProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (filters.profileId !== 'all') params.profileId = filters.profileId;
     if (filters.departmentId !== 'all') params.departmentId = filters.departmentId;
     if (filters.ownerId !== 'all') params.ownerId = filters.ownerId;
-    if (filters.campaignId !== 'all') params.campaignId = filters.campaignId;
     if (filters.month) params.month = filters.month;
     if (filters.status !== 'all') params.status = filters.status;
     return params;

@@ -35,12 +35,6 @@ const UsersPage = React.lazy(() =>
 const NotificationsPage = React.lazy(() =>
   import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage }))
 );
-const CampaignsListPage = React.lazy(() =>
-  import('./pages/campaigns/CampaignsListPage').then((m) => ({ default: m.CampaignsListPage }))
-);
-const CampaignDetailPage = React.lazy(() =>
-  import('./pages/campaigns/CampaignDetailPage').then((m) => ({ default: m.CampaignDetailPage }))
-);
 const MyWorkPage = React.lazy(() =>
   import('./pages/work/MyWorkPage').then((m) => ({ default: m.MyWorkPage }))
 );
@@ -67,12 +61,6 @@ const IssuesBlockersPage = React.lazy(() =>
 );
 const ReportsPage = React.lazy(() =>
   import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
-);
-const LeadFunnelPage = React.lazy(() =>
-  import('./pages/leads/LeadFunnelPage').then((m) => ({ default: m.LeadFunnelPage }))
-);
-const DataCenterPage = React.lazy(() =>
-  import('./pages/datacenter/DataCenterPage').then((m) => ({ default: m.DataCenterPage }))
 );
 const MyAccountPage = React.lazy(() =>
   import('./pages/MyAccountPage').then((m) => ({ default: m.MyAccountPage }))
@@ -158,30 +146,6 @@ export const App: React.FC = () => {
                   }
                 />
 
-                {/* Screen 5: Projects / Campaigns (Phase 2) */}
-                <Route
-                  path="/campaigns"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <CampaignsListPage />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-
-                {/* Screen 6: Project Detail (Phase 2) */}
-                <Route
-                  path="/campaigns/:id"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <CampaignDetailPage />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-
                 {/* Work List (Phase 3) */}
                 <Route
                   path="/work"
@@ -249,30 +213,6 @@ export const App: React.FC = () => {
                     <ProtectedRoute>
                       <Layout>
                         <IssuesBlockersPage />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-
-                {/* Screen 12: Lead Funnel (Phase 8) */}
-                <Route
-                  path="/leads"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <LeadFunnelPage />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-
-                {/* Screen 13: Data Center / LSQ (Phase 8) */}
-                <Route
-                  path="/data-center"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <DataCenterPage />
                       </Layout>
                     </ProtectedRoute>
                   }

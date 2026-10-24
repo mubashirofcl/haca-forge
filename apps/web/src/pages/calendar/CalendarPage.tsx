@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -23,7 +23,11 @@ import {
   CalendarRange,
   ListFilter,
   Sparkles,
+  FileSpreadsheet,
+  Table,
 } from 'lucide-react';
+import { PlansTab } from './PlansTab';
+import { TrackerTab } from './TrackerTab';
 
 interface WorkItemCalendar {
   _id: string;
@@ -35,17 +39,9 @@ interface WorkItemCalendar {
   priority: Priority;
   revisions: number;
   isOverdue?: boolean;
-  deliverableUrl?: string;
-  campaignId: { _id: string; name: string };
   profileId: { _id: string; name: string; code: string };
   departmentId?: { _id: string; name: string };
   ownerId?: { _id: string; name: string; email: string; jobRole?: string };
-}
-
-interface CampaignOption {
-  _id: string;
-  name: string;
-  profileId?: { _id: string; name: string; code: string };
 }
 
 interface UserOption {
@@ -92,7 +88,16 @@ const STATUS_COLORS: Record<WorkItemStatus, { bg: string; text: string; border: 
 
 export const CalendarPage: React.FC = () => {
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user, hasPermission } = useAuth();
+
+  const tabParam = searchParams.get('tab');
+  const activeTab: 'month' | 'plans' | 'tracker' =
+    tabParam === 'plans' || tabParam === 'tracker' ? tabParam : 'month';
+
+  const handleTabChange = (newTab: 'month' | 'plans' | 'tracker') => {
+    setSearchParams({ tab: newTab });
+  };
 
   // Calendar Date State (Default: current date)
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -106,7 +111,6 @@ export const CalendarPage: React.FC = () => {
 
   // Data States
   const [items, setItems] = useState<WorkItemCalendar[]>([]);
-  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -117,7 +121,6 @@ export const CalendarPage: React.FC = () => {
 
   // Create Form State
   const [newTitle, setNewTitle] = useState('');
-  const [newCampaignId, setNewCampaignId] = useState('');
   const [newWorkType, setNewWorkType] = useState<WorkType>('Reel');
   const [newDeadline, setNewDeadline] = useState('');
   const [newEffort, setNewEffort] = useState(4);
@@ -132,16 +135,14 @@ export const CalendarPage: React.FC = () => {
 
   const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  // Fetch Aux Data (campaigns, users, departments)
+  // Fetch Aux Data (users, departments)
   useEffect(() => {
     const fetchAux = async () => {
       try {
-        const [cRes, uRes, dRes] = await Promise.all([
-          apiFetch<{ data: CampaignOption[] }>('/api/campaigns?limit=100'),
+        const [uRes, dRes] = await Promise.all([
           apiFetch<{ data: UserOption[] }>('/api/users?limit=100'),
           apiFetch<{ data: DepartmentOption[] }>('/api/departments?limit=50').catch(() => ({ data: [] })),
         ]);
-        setCampaigns(cRes.data || []);
         setUsers(uRes.data || []);
         setDepartments(dRes.data || []);
       } catch (err) {
@@ -290,10 +291,6 @@ export const CalendarPage: React.FC = () => {
       setCreateError('Deliverable title is required');
       return;
     }
-    if (!newCampaignId) {
-      setCreateError('Please link this deliverable to an active campaign');
-      return;
-    }
     if (!newDeadline) {
       setCreateError('Deadline is required');
       return;
@@ -307,7 +304,6 @@ export const CalendarPage: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           title: newTitle.trim(),
-          campaignId: newCampaignId,
           workType: newWorkType,
           deadline: new Date(newDeadline).toISOString(),
           estimatedEffortHrs: Number(newEffort),
@@ -318,7 +314,6 @@ export const CalendarPage: React.FC = () => {
 
       setIsCreateOpen(false);
       setNewTitle('');
-      setNewCampaignId('');
       fetchCalendarItems();
     } catch (err: any) {
       setCreateError(err.message || 'Failed to create deliverable');
@@ -329,7 +324,73 @@ export const CalendarPage: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 animate-fadeIn">
-      {/* Top Banner / Cockpit Bar */}
+      {/* Scope Reset R3 Top Tab Navigation */}
+      <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
+        <button
+          onClick={() => handleTabChange('month')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'month'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-200'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <CalendarIcon className="w-4 h-4" />
+          Month (Deadlines)
+        </button>
+
+        <button
+          onClick={() => handleTabChange('plans')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'plans'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-200'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          Plans & Approval
+        </button>
+
+        <button
+          onClick={() => handleTabChange('tracker')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'tracker'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-200'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Table className="w-4 h-4" />
+          Content Flow Tracker
+        </button>
+      </div>
+
+      {/* Creative Team Member Notice */}
+      {user?.role === 'team_member' && (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span>
+              Creative Team Members view their personal stage assignments, deliverables, and submissions directly in the <strong>My Work</strong> portal.
+            </span>
+          </div>
+          <button
+            onClick={() => navigate('/my-work')}
+            className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs whitespace-nowrap"
+          >
+            Go to My Work
+          </button>
+        </div>
+      )}
+
+      {/* Tab Content: Plans */}
+      {activeTab === 'plans' && <PlansTab />}
+
+      {/* Tab Content: Tracker */}
+      {activeTab === 'tracker' && <TrackerTab />}
+
+      {/* Tab Content: Month View */}
+      {activeTab === 'month' && (
+        <>
+          {/* Top Banner / Cockpit Bar */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -754,7 +815,7 @@ export const CalendarPage: React.FC = () => {
                                 </div>
                                 <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{item.title}</h4>
                                 <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">
-                                  Campaign: <span className="font-semibold text-slate-700">{item.campaignId?.name}</span>
+                                  Brand: <span className="font-semibold text-slate-700">{item.profileId?.name}</span>
                                 </p>
                               </div>
 
@@ -801,7 +862,7 @@ export const CalendarPage: React.FC = () => {
 
             <h3 className="text-lg font-bold text-slate-900 mb-1">{selectedItem.title}</h3>
             <p className="text-xs text-slate-500 mb-4">
-              Campaign: <span className="font-semibold text-slate-800">{selectedItem.campaignId?.name}</span>
+              Brand: <span className="font-semibold text-slate-800">{selectedItem.profileId?.name}</span>
             </p>
 
             <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 mb-5 text-xs">
@@ -862,7 +923,7 @@ export const CalendarPage: React.FC = () => {
               Schedule New Deliverable
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              Add a marketing deliverable linked strictly to an active campaign.
+              Add a marketing deliverable for production.
             </p>
 
             {createError && (
@@ -885,25 +946,6 @@ export const CalendarPage: React.FC = () => {
                   onChange={(e) => setNewTitle(e.target.value)}
                   className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
                 />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Campaign *
-                </label>
-                <select
-                  required
-                  value={newCampaignId}
-                  onChange={(e) => setNewCampaignId(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                >
-                  <option value="">Select an active campaign...</option>
-                  {campaigns.map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.name} {c.profileId?.name ? `(${c.profileId.name})` : ''}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1005,6 +1047,8 @@ export const CalendarPage: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

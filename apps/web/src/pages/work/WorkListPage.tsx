@@ -15,7 +15,6 @@ import {
   Film,
   Plus,
   Search,
-  Layers,
   ArrowUpRight,
   X,
   AlertTriangle,
@@ -43,16 +42,9 @@ interface WorkItemRow {
     contentLink?: string;
     assetsLink?: string;
   };
-  campaignId: { _id: string; name: string };
   profileId: { _id: string; name: string; code: string };
   departmentId?: { _id: string; name: string };
   ownerId?: { _id: string; name: string; email: string; jobRole?: string };
-}
-
-interface CampaignOption {
-  _id: string;
-  name: string;
-  profileId?: { _id: string; name: string; code: string };
 }
 
 interface TeamMemberOption {
@@ -75,7 +67,6 @@ export const WorkListPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [items, setItems] = useState<WorkItemRow[]>([]);
-  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [owners, setOwners] = useState<TeamMemberOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -90,7 +81,6 @@ export const WorkListPage: React.FC = () => {
 
   // New Work Item Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [formCampaignId, setFormCampaignId] = useState('');
   const [formTitle, setFormTitle] = useState('');
   const [formWorkType, setFormWorkType] = useState<WorkType>('Ad Creative');
   const [formDepartmentId, setFormDepartmentId] = useState('');
@@ -130,19 +120,14 @@ export const WorkListPage: React.FC = () => {
 
   const fetchAuxiliary = async () => {
     try {
-      const [cRes, oRes, dRes] = await Promise.all([
-        apiFetch<{ data: CampaignOption[] }>('/api/campaigns').catch(() => ({ data: [] })),
+      const [oRes, dRes] = await Promise.all([
         apiFetch<{ data: TeamMemberOption[] }>('/api/people').catch(() => ({ data: [] })),
         apiFetch<{ data: DepartmentOption[] }>('/api/departments').catch(() => ({ data: [] })),
       ]);
 
-      setCampaigns(cRes.data || []);
       setOwners(oRes.data || []);
       setDepartments(dRes.data || []);
 
-      if (cRes.data?.length > 0 && !formCampaignId) {
-        setFormCampaignId(cRes.data[0]._id);
-      }
       if (dRes.data?.length > 0 && !formDepartmentId) {
         setFormDepartmentId(dRes.data[0]._id);
       }
@@ -166,17 +151,11 @@ export const WorkListPage: React.FC = () => {
     e.preventDefault();
     setCreateError(null);
 
-    if (!formCampaignId) {
-      setCreateError('Please select a Campaign. Work items cannot exist without a campaign link.');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       await apiFetch('/api/work', {
         method: 'POST',
         body: JSON.stringify({
-          campaignId: formCampaignId,
           title: formTitle,
           workType: formWorkType,
           departmentId: formDepartmentId,
@@ -224,7 +203,7 @@ export const WorkListPage: React.FC = () => {
             Work Items
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            All creative deliverables and marketing work items across 7 brand profiles with zero orphan items.
+            All creative deliverables and marketing work items across brand profiles.
           </p>
         </div>
 
@@ -370,7 +349,7 @@ export const WorkListPage: React.FC = () => {
               <thead className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase text-[10px]">
                 <tr>
                   <th className="py-3 px-4">Deliverable</th>
-                  <th className="py-3 px-4">Brand / Campaign</th>
+                  <th className="py-3 px-4">Brand Profile</th>
                   <th className="py-3 px-4">Owner</th>
                   <th className="py-3 px-4">Deadline</th>
                   <th className="py-3 px-4">Priority</th>
@@ -406,7 +385,6 @@ export const WorkListPage: React.FC = () => {
 
                       <td className="py-3.5 px-4">
                         <div className="text-slate-900 font-bold truncate max-w-xs">{it.profileId?.name}</div>
-                        <div className="text-[11px] text-slate-500 truncate max-w-xs">{it.campaignId?.name}</div>
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -515,11 +493,6 @@ export const WorkListPage: React.FC = () => {
                   <h3 className="text-sm font-extrabold text-slate-900 group-hover:text-[#7a6af6] transition-colors">
                     {it.title}
                   </h3>
-
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-2 font-medium">
-                    <Layers className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="truncate">{it.campaignId?.name}</span>
-                  </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
@@ -542,7 +515,7 @@ export const WorkListPage: React.FC = () => {
               <div>
                 <h3 className="text-base font-extrabold text-slate-900">Create Work Item</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Must link to an active Campaign. Auto-inherits brand profile & OKR.
+                  Define deliverable specifications, assignee, and schedule.
                 </p>
               </div>
               <button
@@ -560,26 +533,6 @@ export const WorkListPage: React.FC = () => {
             )}
 
             <form onSubmit={handleCreate} className="space-y-4">
-              {/* Linked Campaign */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Parent Campaign * (Zero Orphan Work)
-                </label>
-                <select
-                  required
-                  value={formCampaignId}
-                  onChange={(e) => setFormCampaignId(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
-                >
-                  <option value="">Select Campaign</option>
-                  {campaigns.map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.name} ({c.profileId?.name || 'Brand'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               {/* Title */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Deliverable Title *</label>

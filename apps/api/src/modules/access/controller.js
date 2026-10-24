@@ -37,6 +37,7 @@ export async function approveRequest(req, res, next) {
       status: 'approved',
       inviteLink: result.inviteLink,
       inviteToken: result.inviteToken,
+      user: result.user || result.person || result,
     });
   } catch (error) {
     next(error);

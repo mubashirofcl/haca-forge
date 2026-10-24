@@ -1,20 +1,16 @@
 import { WorkItem } from '../workItems/model.js';
 import { FeedbackEntry } from '../feedback/model.js';
-import { Campaign } from '../campaigns/model.js';
-import { Lead } from '../leads/model.js';
-import { MonthlyTarget } from '../targets/model.js';
 import { Person } from './model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logger } from '../../lib/logger.js';
 
 /**
- * Phase 9: Performance Dimensions Calculation Service
- * Computes the 5 canonical performance dimensions specified in Section 8.7:
- * 1. Output: Work completed, creative volume, campaigns executed
- * 2. Efficiency: Avg completion time, deadline adherence %, revision rate
- * 3. Quality: Approval rate, rejection rate, re-edit rate
- * 4. Collaboration: Feedback response time, blocker resolution time, dependency delays caused
- * 5. Business Impact: Attributable leads, qualified leads, conversion rate
+ * Performance Dimensions Calculation Service (Scope Reset R1)
+ * Computes the 4 canonical performance dimensions (25% weight each):
+ * 1. Output (25%): Work completed, deliverable volume, throughput
+ * 2. Efficiency (25%): Avg completion time, deadline adherence %, revision rate
+ * 3. Quality (25%): Approval rate, rejection rate, re-edit rate
+ * 4. Collaboration (25%): Feedback response time, blocker resolution time, dependency delays caused
  */
 
 export async function calculatePersonPerformance(personId, filters = {}, actor = null) {
@@ -73,11 +69,6 @@ export async function calculatePersonPerformance(personId, filters = {}, actor =
       w.workType
     )
   ).length;
-
-  const campaignIds = [
-    ...new Set(workItems.filter((w) => w.campaignId).map((w) => w.campaignId.toString())),
-  ];
-  const campaignsCount = campaignIds.length;
 
   // -------------------------------------------------------------
   // Dimension 2: Efficiency
@@ -211,34 +202,8 @@ export async function calculatePersonPerformance(personId, filters = {}, actor =
   );
 
   // -------------------------------------------------------------
-  // Dimension 5: Business Impact
-  // -------------------------------------------------------------
-  // Attributed leads from campaigns person executed or contributed to
-  let attributedLeadsCount = 0;
-  let attributedQualifiedLeadsCount = 0;
-
-  if (campaignIds.length > 0) {
-    const leads = await Lead.find({
-      profileId: { $in: person.profileAccess || [] },
-    }).lean();
-
-    // Attribute proportional share based on campaigns executed
-    const profileCount = Math.max((person.profileAccess || []).length, 1);
-    attributedLeadsCount = Math.round(leads.length / profileCount);
-    attributedQualifiedLeadsCount = Math.round(
-      leads.filter((l) =>
-        ['Qualified Leads', 'Call Back', 'Payment Received'].includes(l.stage)
-      ).length / profileCount
-    );
-  }
-
-  const qualificationRatePct = attributedLeadsCount > 0
-    ? Math.round((attributedQualifiedLeadsCount / attributedLeadsCount) * 100)
-    : 0;
-
-  // -------------------------------------------------------------
   // Composite Performance Index (0 - 100)
-  // Weights: Output 25%, Efficiency 25%, Quality 25%, Collaboration 15%, Impact 10%
+  // Weights: Output 25%, Efficiency 25%, Quality 25%, Collaboration 25%
   // -------------------------------------------------------------
   const outputSubScore = Math.min(100, completedCount * 10);
   const efficiencySubScore = Math.round(
@@ -246,14 +211,12 @@ export async function calculatePersonPerformance(personId, filters = {}, actor =
   );
   const qualitySubScore = Math.round(approvalRatePct * 0.8 + (100 - reEditRatePct) * 0.2);
   const collaborationSubScore = collaborationScore;
-  const impactSubScore = Math.min(100, attributedQualifiedLeadsCount * 4);
 
   const overallScore = Math.round(
     outputSubScore * 0.25 +
       efficiencySubScore * 0.25 +
       qualitySubScore * 0.25 +
-      collaborationSubScore * 0.15 +
-      impactSubScore * 0.1
+      collaborationSubScore * 0.25
   );
 
   return {
@@ -273,7 +236,6 @@ export async function calculatePersonPerformance(personId, filters = {}, actor =
         inProgress: inProgressCount,
         totalWorkItems,
         creativeOutputVolume,
-        campaignsExecuted: campaignsCount,
       },
       efficiency: {
         score: efficiencySubScore,
@@ -295,12 +257,6 @@ export async function calculatePersonPerformance(personId, filters = {}, actor =
         avgFeedbackResponseTimeHrs,
         avgBlockerResolutionTimeHrs,
         dependencyDelaysCausedCount,
-      },
-      businessImpact: {
-        score: impactSubScore,
-        attributedLeads: attributedLeadsCount,
-        attributedQualifiedLeads: attributedQualifiedLeadsCount,
-        qualificationRatePct,
       },
     },
   };

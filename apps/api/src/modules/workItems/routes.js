@@ -25,7 +25,7 @@ router.get('/:id', requireAnyPermission('work.request', 'work.update.own', 'port
 
 router.post(
   '/',
-  requirePermission('work.request'),
+  requirePermission('work.create'),
   validate(workItemCreateSchema),
   workItemController.createWorkItem
 );

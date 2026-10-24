@@ -27,7 +27,6 @@ export async function calculateMemberWorkloadMetrics(personId, personDoc = null)
     ownerId: person._id,
     status: { $nin: ['Approved', 'Published'] },
   })
-    .populate('campaignId', 'name relatedOKR')
     .populate('profileId', 'name code')
     .sort({ deadline: 1 });
 
@@ -60,6 +59,8 @@ export async function calculateMemberWorkloadMetrics(personId, personDoc = null)
   const availableHours = Math.max(0, capacity - allocatedHours);
 
   return {
+    _id: person._id,
+    name: person.name,
     person: {
       _id: person._id,
       name: person.name,
@@ -74,6 +75,7 @@ export async function calculateMemberWorkloadMetrics(personId, personDoc = null)
     availableHours,
     workloadPct,
     capacityBand,
+    band: capacityBand,
     avgRevisions,
     activeItemsCount: openItems.length,
     activeWorkItems: openItems,
@@ -382,7 +384,7 @@ export async function getTeamWorkload(filters = {}, user) {
     personQuery.departmentId = filters.departmentId;
   }
 
-  if (user.role === 'team_lead' && scope.allowedPersonIds) {
+  if (scope.allowedPersonIds && scope.allowedPersonIds.length > 0) {
     personQuery._id = { $in: scope.allowedPersonIds };
   }
 
@@ -488,6 +490,8 @@ export async function getTeamWorkload(filters = {}, user) {
       totalOpenItems: totalOpenItemsOverall,
     },
     departments: departmentsResult,
+    members: memberMetrics,
+    team: memberMetrics,
   };
 }
 

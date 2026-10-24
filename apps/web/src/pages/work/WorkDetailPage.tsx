@@ -6,7 +6,6 @@ import {
   WORK_TYPES,
   PRIORITIES,
   BLOCKER_REASONS,
-  APPROVER_JOB_ROLES,
   type WorkType,
   type WorkItemStatus,
   type Priority,
@@ -19,7 +18,6 @@ import {
   Send,
   Ban,
   CheckCircle2,
-  Sparkles,
   ExternalLink,
   Edit3,
   Trash2,
@@ -63,11 +61,27 @@ interface WorkItemDetail {
     contentLink?: string;
     assetsLink?: string;
   };
-  campaignId: { _id: string; name: string; relatedOKR?: string };
+  suggestedDependencyOwner?: {
+    _id: string;
+    name: string;
+    email: string;
+    jobRole?: string;
+  };
+  previousStage?: {
+    stageKey: string;
+    deliverableUrl?: string;
+    publishedUrl?: string;
+    status: string;
+    owner?: {
+      _id: string;
+      name: string;
+      email: string;
+      jobRole?: string;
+    };
+  };
   profileId: { _id: string; name: string; code: string };
   departmentId: { _id: string; name: string; code: string };
   ownerId: { _id: string; name: string; email: string; jobRole?: string; role?: string };
-  relatedTarget?: { _id: string; month: string; leadsTarget?: number; revenueTarget?: number };
   createdAt: string;
   updatedAt: string;
 }
@@ -106,6 +120,7 @@ export const WorkDetailPage: React.FC = () => {
   const [showBlockerModal, setShowBlockerModal] = useState(false);
   const [blockerReason, setBlockerReason] = useState<BlockerReason>('Waiting for feedback');
   const [blockerNote, setBlockerNote] = useState('');
+  const [dependencyOwnerId, setDependencyOwnerId] = useState('');
   const [isBlocking, setIsBlocking] = useState(false);
 
   // Edit Modal
@@ -125,7 +140,7 @@ export const WorkDetailPage: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const isPrivileged =
-    user?.role === 'admin' || user?.role === 'marketing_head' || user?.role === 'team_lead';
+    user?.role === 'admin' || user?.role === 'creative_head' || user?.role === 'sm_manager';
 
   const fetchItemData = async () => {
     if (!id) return;
@@ -187,6 +202,7 @@ export const WorkDetailPage: React.FC = () => {
           toStatus: 'Blocked',
           blockerReason,
           blockerNote,
+          dependencyOwnerId: dependencyOwnerId || undefined,
         }),
       });
       setShowBlockerModal(false);
@@ -282,36 +298,32 @@ export const WorkDetailPage: React.FC = () => {
   const itemProfileId = (item.profileId?._id || item.profileId)?.toString();
   const holdsBrand = Boolean(
     user?.role === 'admin' ||
-    (user?.role === 'marketing_head' && (!user?.profileAccess || user.profileAccess.length === 0)) ||
+    user?.role === 'creative_head' ||
+    user?.role === 'sm_manager' ||
+    (!user?.profileAccess || user.profileAccess.length === 0) ||
     (user?.profileAccess && itemProfileId && user.profileAccess.some((p: any) => (p?._id || p)?.toString() === itemProfileId))
   );
 
-  const isApproverLead =
-    user?.role === 'team_lead' &&
-    Boolean(user?.jobRole && (APPROVER_JOB_ROLES as readonly string[]).includes(user.jobRole));
+  const isApproverRole = user?.role === 'admin' || user?.role === 'creative_head';
 
   const canApprove = (() => {
-    // CONTENT FLOW DELTA: The owner can never approve their own stage
-    if (item.reviewRequired && isOwner) {
+    // Stage review: only creative_head and admin can approve; owner and sm_manager cannot approve
+    if (isOwner) {
       return false;
     }
 
     if (item.reviewRequired) {
-      const isAllowedRole =
-        user?.role === 'admin' || user?.role === 'marketing_head' || isApproverLead;
-      return isAllowedRole && holdsBrand;
+      return isApproverRole && holdsBrand;
     }
 
     // Standalone or non-review items
-    return isPrivileged && holdsBrand;
+    return isApproverRole && holdsBrand;
   })();
 
   const canRequestChanges = (() => {
-    if (item.reviewRequired && isOwner) return false;
+    if (isOwner) return false;
     if (item.reviewRequired) {
-      const isAllowedRole =
-        user?.role === 'admin' || user?.role === 'marketing_head' || isApproverLead;
-      return isAllowedRole && holdsBrand;
+      return (isApproverRole || user?.role === 'sm_manager') && holdsBrand;
     }
     return isPrivileged && holdsBrand;
   })();
@@ -404,36 +416,21 @@ export const WorkDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Strategic Traceability Banner */}
+      {/* 2. Brand & Production Scope Banner */}
       <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-700 text-white shadow-lg shadow-indigo-500/10 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-violet-200">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
-            <span>Traceability Chain</span>
+            <span>Brand Profile</span>
             <span>➔</span>
             <span>{item.profileId?.name}</span>
           </div>
           <div className="text-xs sm:text-sm font-extrabold flex items-center gap-2">
-            <span>Campaign:</span>
-            <span
-              onClick={() => navigate(`/campaigns/${item.campaignId._id}`)}
-              className="underline hover:text-violet-100 cursor-pointer"
-            >
-              {item.campaignId?.name}
-            </span>
-          </div>
-          <div className="text-xs text-violet-100/90 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-violet-300 flex-shrink-0" />
-            <span>OKR: {item.campaignId?.relatedOKR || 'Strategic Objective'}</span>
+            <span>{item.workType}</span>
+            <span>•</span>
+            <span>{item.departmentId?.name || 'Creative Production'}</span>
           </div>
         </div>
-
-        {item.relatedTarget && (
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/20 text-xs self-start md:self-auto flex-shrink-0">
-            <div className="text-[10px] uppercase font-bold text-violet-200">Linked Anchor</div>
-            <div className="font-extrabold text-white">{item.relatedTarget.month} Target</div>
-          </div>
-        )}
       </div>
 
       {/* 3. Workflow State Stepper & Action Triggers */}
@@ -492,7 +489,11 @@ export const WorkDetailPage: React.FC = () => {
                   Submit for Lead Review
                 </button>
                 <button
-                  onClick={() => setShowBlockerModal(true)}
+                  onClick={() => {
+                    const prevOwner = item.suggestedDependencyOwner || item.previousStage?.owner;
+                    setDependencyOwnerId(prevOwner?._id || '');
+                    setShowBlockerModal(true);
+                  }}
                   className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition-all border border-rose-200 flex items-center gap-1.5"
                 >
                   <Ban className="w-3.5 h-3.5" />
@@ -743,7 +744,7 @@ export const WorkDetailPage: React.FC = () => {
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed whitespace-pre-line">
                   {item.description ||
                     item.brief?.description ||
-                    'No detailed brief text provided. Execute in accordance with campaign OKR guidelines.'}
+                    'No detailed brief text provided. Execute in accordance with brand deliverable guidelines.'}
                 </p>
               </div>
 
@@ -956,6 +957,27 @@ export const WorkDetailPage: React.FC = () => {
             </div>
 
             <form onSubmit={submitBlocker} className="space-y-4">
+              {/* Suggested Previous Stage Dependency Owner */}
+              {(item?.suggestedDependencyOwner || item?.previousStage?.owner) && (
+                <div className="p-3 bg-purple-50/90 border border-purple-200/90 rounded-xl text-xs">
+                  <span className="font-bold text-purple-900 block mb-1">
+                    Suggested Dependency Owner (Previous Stage):
+                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-800 truncate">
+                      {item?.suggestedDependencyOwner?.name || item?.previousStage?.owner?.name} ({item?.previousStage?.stageKey || 'Previous'} stage owner)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDependencyOwnerId(item?.suggestedDependencyOwner?._id || item?.previousStage?.owner?._id || '')}
+                      className="text-[11px] font-bold text-purple-600 hover:text-purple-800 bg-white px-2 py-0.5 rounded border border-purple-200 shadow-2xs whitespace-nowrap"
+                    >
+                      {dependencyOwnerId === (item?.suggestedDependencyOwner?._id || item?.previousStage?.owner?._id) ? 'Selected ✓' : 'Select'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Reason for Blocker *</label>
                 <select

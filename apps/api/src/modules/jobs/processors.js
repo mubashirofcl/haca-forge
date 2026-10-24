@@ -31,9 +31,9 @@ export async function runMonthEndReportJob(job) {
   return executeAutomationRule('month_end_report', null);
 }
 
-export async function runLsqSyncJob(job) {
-  logger.info({ jobId: job?.id }, '[BullMQ] Running LeadSquared Live Sync Automation Rule');
-  return executeAutomationRule('lsq_live_sync', null);
+export async function runRevisionPatternFlagJob(job) {
+  logger.info({ jobId: job?.id }, '[BullMQ] Running Revision Pattern Flag Automation Rule');
+  return executeAutomationRule('revision_pattern_flag', null);
 }
 
 // Backward compatibility stubs for legacy queue registrations

@@ -5,6 +5,7 @@ import {
   JOB_ROLES,
   PROFILES,
   ROLE_KEYS,
+  ROLE_LABELS,
   type UserRole,
 } from '@mmp/shared';
 import {
@@ -47,17 +48,8 @@ interface AccessRequestItem {
   infoQuestion?: string;
 }
 
-interface TeamLeadOption {
-  _id: string;
-  name: string;
-  email: string;
-  jobRole?: string;
-  role: string;
-}
-
 export const AccessRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<AccessRequestItem[]>([]);
-  const [teamLeads, setTeamLeads] = useState<TeamLeadOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters
@@ -122,15 +114,6 @@ export const AccessRequestsPage: React.FC = () => {
     }
   };
 
-  const fetchTeamLeads = async () => {
-    try {
-      const res = await apiFetch<{ data: TeamLeadOption[] }>('/people?role=team_lead');
-      setTeamLeads(res.data || []);
-    } catch (err) {
-      // Non-blocking
-    }
-  };
-
   const fetchRequests = async () => {
     setIsLoading(true);
     try {
@@ -152,7 +135,6 @@ export const AccessRequestsPage: React.FC = () => {
 
   useEffect(() => {
     fetchRequests();
-    fetchTeamLeads();
   }, [statusFilter, deptFilter, brandFilter]);
 
   const openApproveModal = (req: AccessRequestItem) => {
@@ -606,12 +588,12 @@ export const AccessRequestsPage: React.FC = () => {
                         >
                           {ROLE_KEYS.map((rk) => (
                             <option key={rk} value={rk}>
-                              {rk.replace('_', ' ')}
+                              {ROLE_LABELS[rk] || rk.replace('_', ' ')}
                             </option>
                           ))}
                         </select>
                         <p className="text-[10px] text-slate-400 mt-1 pl-2">
-                          Requested: {selectedRequest.requestedRole?.replace('_', ' ')}
+                          Requested: {selectedRequest.requestedRole ? (ROLE_LABELS[selectedRequest.requestedRole as keyof typeof ROLE_LABELS] || selectedRequest.requestedRole.replace('_', ' ')) : ''}
                         </p>
                       </div>
 
@@ -702,31 +684,6 @@ export const AccessRequestsPage: React.FC = () => {
                           );
                         })}
                       </div>
-                    </div>
-
-                    {/* Reports To (Team Leads only, optional) */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Reports To (Team Leads only, optional)
-                      </label>
-                      <select
-                        value={assignedReportsTo[0] || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setAssignedReportsTo(val ? [val] : []);
-                        }}
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
-                      >
-                        <option value="">No supervisor assigned</option>
-                        {teamLeads.map((tl) => (
-                          <option key={tl._id} value={tl._id}>
-                            {tl.name} ({tl.jobRole || 'Team Lead'})
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-[10px] text-slate-400 mt-1 pl-2">
-                        Associates team member to a Team Lead for feedback and review scoping.
-                      </p>
                     </div>
                   </>
                 ) : (

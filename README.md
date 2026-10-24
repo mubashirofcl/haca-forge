@@ -1,6 +1,6 @@
-# Marketing Workflow and Content Management Portal
+# HACA Marketing OS
 
-A decoupled enterprise web application for managing marketing operations, request triage, content calendar planning, multi-team production pipelines, review loops, and analytics.
+The internal operations operating system for HACA, managing WORK (content pieces, deliverables, production workflows, feedback, blockers) and TEAM (capacities, auto-assignment, workload, performance digest) exclusively for HACA.
 
 ---
 

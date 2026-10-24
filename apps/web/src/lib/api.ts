@@ -30,14 +30,33 @@ function isAuthEndpoint(url: string): boolean {
 
 async function executeTokenRefresh(): Promise<boolean> {
   try {
+    const refreshToken =
+      typeof window !== "undefined"
+        ? localStorage.getItem("refreshToken")
+        : null;
+
     const res = await fetch("/api/auth/refresh", {
       method: "POST",
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
+      body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
     });
-    return res.ok;
+
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (typeof window !== "undefined") {
+        if (data?.accessToken) {
+          localStorage.setItem("accessToken", data.accessToken);
+        }
+        if (data?.refreshToken) {
+          localStorage.setItem("refreshToken", data.refreshToken);
+        }
+      }
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -58,6 +77,15 @@ export async function apiFetch<T = any>(
     headers.set("Content-Type", "application/json");
   }
 
+  // Inject Authorization Bearer header if token exists in localStorage and not explicitly passed
+  if (!headers.has("Authorization") && typeof window !== "undefined") {
+    const token =
+      localStorage.getItem("accessToken") || localStorage.getItem("token");
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+  }
+
   const { _isRetry, ...fetchOptions } = options;
 
   const response = await fetch(url, {
@@ -76,26 +104,40 @@ export async function apiFetch<T = any>(
 
     const refreshed = await refreshPromise;
     if (refreshed) {
+      // Create new headers with fresh token if available
+      const retryHeaders = new Headers(options.headers || {});
+      if (typeof window !== "undefined") {
+        const freshToken =
+          localStorage.getItem("accessToken") || localStorage.getItem("token");
+        if (freshToken) {
+          retryHeaders.set("Authorization", `Bearer ${freshToken}`);
+        }
+      }
       return apiFetch<T>(endpoint, {
         ...options,
+        headers: retryHeaders,
         _isRetry: true,
       });
     }
 
-    // Refresh failed - redirect to login in browser environment
-    if (
-      typeof window !== "undefined" &&
-      window.location &&
-      !window.location.pathname.startsWith("/login") &&
-      !window.location.pathname.startsWith("/set-password")
-    ) {
-      try {
-        const returnUrl = encodeURIComponent(
-          window.location.pathname + window.location.search,
-        );
-        window.location.href = `/login?from=${returnUrl}`;
-      } catch {
-        // Navigation not implemented in test environments (e.g. jsdom)
+    // Refresh failed - clear any stale tokens and redirect to login
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("token");
+      if (
+        window.location &&
+        !window.location.pathname.startsWith("/login") &&
+        !window.location.pathname.startsWith("/set-password")
+      ) {
+        try {
+          const returnUrl = encodeURIComponent(
+            window.location.pathname + window.location.search,
+          );
+          window.location.href = `/login?from=${returnUrl}`;
+        } catch {
+          // Navigation not implemented in test environments (e.g. jsdom)
+        }
       }
     }
   }

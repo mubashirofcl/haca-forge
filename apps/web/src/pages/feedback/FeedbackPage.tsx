@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import {
   REVISION_ROOT_CAUSES,
-  APPROVER_JOB_ROLES,
   type RevisionRootCause,
   type FeedbackRoundStatus,
 } from '@mmp/shared';
@@ -20,7 +19,9 @@ import {
   X,
   ExternalLink,
   MessageSquare,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { PlansApprovalTab } from './PlansApprovalTab';
 
 interface FeedbackThreadItem {
   workItem: {
@@ -30,7 +31,6 @@ interface FeedbackThreadItem {
     deadline: string;
     status: string;
     revisions: number;
-    campaignId?: { _id: string; name: string };
     profileId?: { _id: string; name: string; code: string };
     departmentId?: { _id: string; name: string; code: string };
     ownerId?: { _id: string; name: string; email: string; role: string; jobRole?: string };
@@ -90,6 +90,14 @@ interface RoundDetail {
 export const FeedbackPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const tabParam = searchParams.get('tab');
+  const mainTab: 'plans' | 'stages' = tabParam === 'plans' ? 'plans' : 'stages';
+
+  const handleMainTabChange = (t: 'plans' | 'stages') => {
+    setSearchParams({ tab: t });
+  };
 
   const [threads, setThreads] = useState<FeedbackThreadItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -248,9 +256,9 @@ export const FeedbackPage: React.FC = () => {
     }
   };
 
-  // Filtered Threads
+  // Filtered Threads (Sorted Oldest First)
   const filteredThreads = useMemo(() => {
-    return threads.filter((t) => {
+    const list = threads.filter((t) => {
       if (activeTab === 'feedback' && t.workItem.status !== 'Feedback') return false;
       if (activeTab === 'flagged' && !t.flag) return false;
       if (activeTab === 'approved' && t.workItem.status !== 'Approved') return false;
@@ -259,10 +267,15 @@ export const FeedbackPage: React.FC = () => {
         const q = searchQuery.toLowerCase();
         const matchTitle = t.workItem.title.toLowerCase().includes(q);
         const matchOwner = t.workItem.ownerId?.name.toLowerCase().includes(q);
-        const matchCampaign = t.workItem.campaignId?.name.toLowerCase().includes(q);
-        if (!matchTitle && !matchOwner && !matchCampaign) return false;
+        if (!matchTitle && !matchOwner) return false;
       }
       return true;
+    });
+
+    return list.sort((a, b) => {
+      const dateA = new Date(a.latestEntry?.createdAt || a.workItem.deadline).getTime();
+      const dateB = new Date(b.latestEntry?.createdAt || b.workItem.deadline).getTime();
+      return dateA - dateB; // Oldest first
     });
   }, [threads, activeTab, searchQuery]);
 
@@ -277,23 +290,49 @@ export const FeedbackPage: React.FC = () => {
     return { totalActive, totalFlagged, totalEscalated, totalApproved };
   }, [threads]);
 
-  const isApproverLead =
-    user?.role === 'team_lead' &&
-    Boolean(user?.jobRole && (APPROVER_JOB_ROLES as readonly string[]).includes(user.jobRole));
-
-  const canApprove =
-    user?.role === 'admin' ||
-    user?.role === 'marketing_head' ||
-    isApproverLead;
-
-  const isLeadOrAdmin = user?.role === 'admin' || user?.role === 'marketing_head' || user?.role === 'team_lead';
   const isAssignedOwner =
     activeThread?.workItem.ownerId?._id === user?._id ||
     activeThread?.workItem.ownerId?._id === (user as any)?.userId;
 
+  const canApprove =
+    (user?.role === 'admin' || user?.role === 'creative_head') && !isAssignedOwner;
+
+  const isLeadOrAdmin = user?.role === 'admin' || user?.role === 'creative_head' || user?.role === 'sm_manager';
+
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
-      {/* Top Cockpit Header */}
+      {/* Scope Reset R3 Top Tab Navigation for Creative Head */}
+      <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
+        <button
+          onClick={() => handleMainTabChange('plans')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            mainTab === 'plans'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-200'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          Plans waiting for approval
+        </button>
+
+        <button
+          onClick={() => handleMainTabChange('stages')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            mainTab === 'stages'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-200'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          Stages waiting for approval
+        </button>
+      </div>
+
+      {mainTab === 'plans' && <PlansApprovalTab />}
+
+      {mainTab === 'stages' && (
+        <>
+          {/* Top Cockpit Header */}
       <div className="bg-gradient-to-r from-purple-900/90 via-indigo-900/80 to-slate-900/90 text-white p-6 rounded-3xl shadow-xl border border-white/10 backdrop-blur-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -409,7 +448,7 @@ export const FeedbackPage: React.FC = () => {
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search title, owner, or campaign..."
+                placeholder="Search title or owner..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20"
@@ -523,9 +562,9 @@ export const FeedbackPage: React.FC = () => {
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
                         {activeThread.workItem.workType}
                       </span>
-                      {activeThread.workItem.campaignId && (
+                      {activeThread.workItem.profileId && (
                         <span className="text-[10px] font-semibold text-slate-500">
-                          Campaign: <strong>{activeThread.workItem.campaignId.name}</strong>
+                          Brand: <strong>{activeThread.workItem.profileId.name}</strong>
                         </span>
                       )}
                     </div>
@@ -795,6 +834,8 @@ export const FeedbackPage: React.FC = () => {
           )}
         </div>
       </div>
+        </>
+      )}
 
       {/* Root Cause Classification Modal */}
       {isClassifyModalOpen && (

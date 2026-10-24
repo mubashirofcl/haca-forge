@@ -57,7 +57,7 @@ export const openApiSpec = {
           email: { type: 'string', format: 'email' },
           role: {
             type: 'string',
-            enum: ['admin', 'management', 'head', 'team_lead', 'worker', 'sm_manager', 'dept_lead', 'dept_staff'],
+            enum: ['admin', 'creative_head', 'sm_manager', 'team_member', 'executive'],
           },
           department: { type: 'string' },
           teamId: { type: 'string' },

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { normalizeRole } from '@mmp/shared';
 import { env } from '../config/env.js';
-import { User } from '../modules/users/model.js';
+import { User } from '../modules/people/model.js';
 import { defineAbilityForUser } from '../lib/permissions.js';
 
 export async function authenticate(req, res, next) {

@@ -3,6 +3,7 @@ import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import {
   ROLE_KEYS,
+  ROLE_LABELS,
   JOB_ROLES,
   PROFILES,
   DEPARTMENTS,
@@ -65,10 +66,10 @@ interface ReferenceData {
 export const UsersPage: React.FC = () => {
   const { user: currentUser, hasPermission } = useAuth();
   const isAdmin = currentUser?.role === 'admin';
-  const isMarketingHead = currentUser?.role === 'marketing_head';
+  const isCreativeHead = currentUser?.role === 'creative_head';
   const isExecutive = currentUser?.role === 'executive';
   const canManageUsers = (isAdmin || hasPermission('user.manage')) && !isExecutive;
-  const canAssignPeople = (canManageUsers || isMarketingHead || hasPermission('people.assign')) && !isExecutive;
+  const canAssignPeople = (canManageUsers || isCreativeHead || hasPermission('people.assign')) && !isExecutive;
 
   const [people, setPeople] = useState<PersonRecord[]>([]);
   const [referenceData, setReferenceData] = useState<ReferenceData>({
@@ -162,10 +163,6 @@ export const UsersPage: React.FC = () => {
     });
   }, [people, searchTerm, roleFilter, deptFilter, statusFilter]);
 
-  // Available Team Leads for Reports To dropdown
-  const availableTeamLeads = useMemo(() => {
-    return people.filter((p) => p.role === 'team_lead' && p.status === 'active');
-  }, [people]);
 
   // Open Edit Modal
   const openEditModal = (p: PersonRecord) => {
@@ -304,9 +301,9 @@ export const UsersPage: React.FC = () => {
         return 'bg-purple-500/10 text-purple-600 border border-purple-200 dark:border-purple-500/30';
       case 'executive':
         return 'bg-indigo-500/10 text-indigo-600 border border-indigo-200 dark:border-indigo-500/30';
-      case 'marketing_head':
+      case 'creative_head':
         return 'bg-amber-500/10 text-amber-600 border border-amber-200 dark:border-amber-500/30';
-      case 'team_lead':
+      case 'sm_manager':
         return 'bg-blue-500/10 text-blue-600 border border-blue-200 dark:border-blue-500/30';
       case 'team_member':
       default:
@@ -388,7 +385,7 @@ export const UsersPage: React.FC = () => {
             <option value="all">All Roles</option>
             {ROLE_KEYS.map((rk) => (
               <option key={rk} value={rk}>
-                {rk.replace('_', ' ')}
+                {ROLE_LABELS[rk] || rk.replace('_', ' ')}
               </option>
             ))}
           </select>
@@ -442,7 +439,7 @@ export const UsersPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredPeople.map((person) => {
             const isSelf = person._id === currentUser?.id;
-            const isProtectedAccount = !isAdmin && (person.role === 'admin' || person.role === 'marketing_head' || person.role === 'executive');
+            const isProtectedAccount = !isAdmin && (person.role === 'admin' || person.role === 'creative_head' || person.role === 'executive');
             const canEditThisPerson = canAssignPeople && !isProtectedAccount && !isExecutive;
 
             const deptName = typeof person.departmentId === 'object' && person.departmentId !== null
@@ -479,9 +476,11 @@ export const UsersPage: React.FC = () => {
                             </span>
                           )}
                         </h3>
-                        {!isExecutive && person.email && (
+                        {isExecutive ? (
+                          <p className="text-xs text-slate-400 font-mono tracking-wider">••••••••••••</p>
+                        ) : person.email ? (
                           <p className="text-xs text-slate-500">{person.email}</p>
-                        )}
+                        ) : null}
                       </div>
                     </div>
 
@@ -490,7 +489,7 @@ export const UsersPage: React.FC = () => {
                         person.role
                       )}`}
                     >
-                      {person.role.replace('_', ' ')}
+                      {ROLE_LABELS[person.role] || person.role.replace('_', ' ')}
                     </span>
                   </div>
 
@@ -671,7 +670,7 @@ export const UsersPage: React.FC = () => {
                   >
                     {ROLE_KEYS.map((rk) => (
                       <option key={rk} value={rk}>
-                        {rk.replace('_', ' ')}
+                        {ROLE_LABELS[rk] || rk.replace('_', ' ')}
                       </option>
                     ))}
                   </select>
@@ -730,59 +729,36 @@ export const UsersPage: React.FC = () => {
                 />
               </div>
 
-              {/* Profile Access Checkboxes */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Profile (Brand) Scoping
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50/70 p-3 rounded-2xl border border-slate-100 max-h-36 overflow-y-auto">
-                  {referenceData.profiles.map((p) => {
-                    const checked = editProfileAccess.includes(p._id);
-                    return (
-                      <label key={p._id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setEditProfileAccess([...editProfileAccess, p._id]);
-                            } else {
-                              setEditProfileAccess(editProfileAccess.filter((id) => id !== p._id));
-                            }
-                          }}
-                          className="rounded text-purple-600 focus:ring-purple-500/30"
-                        />
-                        <span className="truncate">{p.name}</span>
-                      </label>
-                    );
-                  })}
+              {/* Profile Access Checkboxes (Admin only) */}
+              {isAdmin && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Profile (Brand) Scoping
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50/70 p-3 rounded-2xl border border-slate-100 max-h-36 overflow-y-auto">
+                    {referenceData.profiles.map((p) => {
+                      const checked = editProfileAccess.includes(p._id);
+                      return (
+                        <label key={p._id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditProfileAccess([...editProfileAccess, p._id]);
+                              } else {
+                                setEditProfileAccess(editProfileAccess.filter((id) => id !== p._id));
+                              }
+                            }}
+                            className="rounded text-purple-600 focus:ring-purple-500/30"
+                          />
+                          <span className="truncate">{p.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-
-              {/* Reports To (Team Leads) */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Reports To (Team Lead)
-                </label>
-                <select
-                  multiple
-                  value={editReportsToIds}
-                  onChange={(e) => {
-                    const selected = Array.from(e.target.selectedOptions, (option) => option.value);
-                    setEditReportsToIds(selected);
-                  }}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 h-24"
-                >
-                  {availableTeamLeads.map((tl) => (
-                    <option key={tl._id} value={tl._id}>
-                      {tl.name} ({tl.jobRole || 'Team Lead'})
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  Hold Ctrl/Cmd to select multiple Team Leads.
-                </span>
-              </div>
+              )}
 
               {/* Work Preferences (Content Flow) */}
               <div>
@@ -891,7 +867,7 @@ export const UsersPage: React.FC = () => {
                   >
                     {ROLE_KEYS.map((rk) => (
                       <option key={rk} value={rk}>
-                        {rk.replace('_', ' ')}
+                        {ROLE_LABELS[rk] || rk.replace('_', ' ')}
                       </option>
                     ))}
                   </select>

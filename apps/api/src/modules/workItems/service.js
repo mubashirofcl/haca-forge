@@ -1,40 +1,21 @@
 import mongoose from 'mongoose';
 import { WorkItem } from './model.js';
-import { Campaign } from '../campaigns/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logActivity, listRecentActivities } from '../activity/service.js';
 import { resolveProfileObjectId } from '../referenceData/service.js';
 import { normalizeWorkType } from '@mmp/shared';
 
 export async function createWorkItem(data, user) {
-  // 1. Strict Campaign Linkage Verification
-  if (!data.campaignId) {
-    const error = new Error('Work item creation strictly requires a valid campaignId');
-    error.statusCode = 400;
-    error.code = 'CAMPAIGN_REQUIRED';
-    throw error;
-  }
-
-  const campaign = await Campaign.findById(data.campaignId);
-  if (!campaign) {
-    const error = new Error(`Linked campaign with ID "${data.campaignId}" does not exist`);
-    error.statusCode = 400;
-    error.code = 'INVALID_CAMPAIGN';
-    throw error;
-  }
-
-  // 2. Inherit strategic attributes from campaign if not explicitly passed
+  // 1. Resolve Profile ID (Default to HACA if not passed)
   let resolvedProfileId = null;
   if (data.profileId) {
     resolvedProfileId = await resolveProfileObjectId(data.profileId);
   }
-  if (!resolvedProfileId && campaign.profileId) {
-    resolvedProfileId = campaign.profileId;
+  if (!resolvedProfileId) {
+    resolvedProfileId = await resolveProfileObjectId('haca');
   }
-  const relatedOKR = data.relatedOKR || campaign.relatedOKR;
-  const relatedTarget = data.relatedTarget || campaign.targetId;
 
-  // 3. Profile Scoping Check
+  // 2. Profile Scoping Check
   const scope = await resolveScope(user);
   const profileIdStr = (resolvedProfileId?._id || resolvedProfileId)?.toString();
 
@@ -55,10 +36,7 @@ export async function createWorkItem(data, user) {
   const assetsLink = data.assetsLink || data.brief?.assetsLink || '';
 
   const workItem = await WorkItem.create({
-    campaignId: campaign._id,
     profileId: resolvedProfileId,
-    relatedOKR,
-    relatedTarget,
     title: data.title.trim(),
     workType: normalizeWorkType(data.workType) || data.workType,
     departmentId: data.departmentId,
@@ -97,7 +75,6 @@ export async function createWorkItem(data, user) {
     toStatus: workItem.status,
     metadata: {
       title: workItem.title,
-      campaignId: workItem.campaignId,
       workType: workItem.workType,
       ownerId: workItem.ownerId,
       deadline: workItem.deadline,
@@ -105,11 +82,9 @@ export async function createWorkItem(data, user) {
   });
 
   return WorkItem.findById(workItem._id)
-    .populate('campaignId', 'name relatedOKR status budget')
     .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
-    .populate('ownerId', 'name email role jobRole')
-    .populate('relatedTarget', 'month revenueTarget leadsTarget');
+    .populate('ownerId', 'name email role jobRole');
 }
 
 export async function listWorkItems(filters = {}, user) {
@@ -141,10 +116,6 @@ export async function listWorkItems(filters = {}, user) {
     query.ownerId = userId;
   } else if (filters.ownerId && filters.ownerId !== 'all') {
     query.ownerId = filters.ownerId;
-  }
-
-  if (filters.campaignId) {
-    query.campaignId = filters.campaignId;
   }
 
   if (filters.departmentId && filters.departmentId !== 'all') {
@@ -183,11 +154,9 @@ export async function listWorkItems(filters = {}, user) {
   }
 
   const items = await WorkItem.find(query)
-    .populate('campaignId', 'name relatedOKR status budget')
     .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole')
-    .populate('relatedTarget', 'month revenueTarget leadsTarget')
     .sort({ deadline: 1, createdAt: -1 });
 
   return items;
@@ -195,11 +164,9 @@ export async function listWorkItems(filters = {}, user) {
 
 export async function getWorkItemById(id, user) {
   const workItem = await WorkItem.findById(id)
-    .populate('campaignId', 'name relatedOKR status budget')
     .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
-    .populate('ownerId', 'name email role jobRole')
-    .populate('relatedTarget', 'month revenueTarget leadsTarget');
+    .populate('ownerId', 'name email role jobRole');
 
   if (!workItem) {
     const error = new Error('Work item not found');
@@ -216,7 +183,28 @@ export async function getWorkItemById(id, user) {
     throw error;
   }
 
-  return workItem;
+  const result = workItem.toObject();
+  if (result.contentPieceId && result.stageOrder > 1) {
+    const prevStage = await WorkItem.findOne({
+      contentPieceId: result.contentPieceId,
+      stageOrder: result.stageOrder - 1,
+    })
+      .select('stageKey deliverableUrl publishedUrl status title ownerId')
+      .populate('ownerId', 'name email role jobRole');
+
+    result.previousStage = prevStage ? {
+      stageKey: prevStage.stageKey,
+      deliverableUrl: prevStage.deliverableUrl,
+      publishedUrl: prevStage.publishedUrl,
+      status: prevStage.status,
+      owner: prevStage.ownerId,
+    } : null;
+    if (prevStage?.ownerId) {
+      result.suggestedDependencyOwner = prevStage.ownerId;
+    }
+  }
+
+  return result;
 }
 
 export async function updateWorkItem(id, data, user) {
@@ -306,11 +294,9 @@ export async function updateWorkItem(id, data, user) {
   });
 
   return WorkItem.findById(workItem._id)
-    .populate('campaignId', 'name relatedOKR status budget')
     .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
-    .populate('ownerId', 'name email role jobRole')
-    .populate('relatedTarget', 'month revenueTarget leadsTarget');
+    .populate('ownerId', 'name email role jobRole');
 }
 
 export async function deleteWorkItem(id, user) {
@@ -355,10 +341,10 @@ export async function getMyWork(user) {
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   const endOfThisWeek = new Date(startOfToday.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  const items = await WorkItem.find({ ownerId: userId })
-    .populate('campaignId', 'name relatedOKR status')
+  const rawItems = await WorkItem.find({ ownerId: userId })
     .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
+    .populate('contentPieceId', 'topic contentType postingDate liveUrl')
     .sort({ deadline: 1 });
 
   const overdue = [];
@@ -367,14 +353,41 @@ export async function getMyWork(user) {
   const upcoming = [];
   const completed = [];
 
-  for (const item of items) {
+  for (const rawItem of rawItems) {
+    const item = rawItem.toObject();
+    if (item.contentPieceId && item.stageOrder > 1) {
+      const prevStage = await WorkItem.findOne({
+        contentPieceId: item.contentPieceId._id || item.contentPieceId,
+        stageOrder: item.stageOrder - 1,
+      })
+        .select('stageKey deliverableUrl publishedUrl status title ownerId')
+        .populate('ownerId', 'name email role jobRole');
+
+      item.previousStage = prevStage ? {
+        stageKey: prevStage.stageKey,
+        deliverableUrl: prevStage.deliverableUrl,
+        publishedUrl: prevStage.publishedUrl,
+        status: prevStage.status,
+        owner: prevStage.ownerId,
+      } : null;
+      if (prevStage?.ownerId) {
+        item.suggestedDependencyOwner = prevStage.ownerId;
+      }
+    }
+
     const isCompleted = item.status === 'Approved' || item.status === 'Published';
     if (isCompleted) {
       completed.push(item);
       continue;
     }
 
-    const deadline = new Date(item.deadline);
+    // Locked stages belong under Upcoming (rendered greyed out in UI)
+    if (item.isLocked) {
+      upcoming.push(item);
+      continue;
+    }
+
+    const deadline = new Date(item.deadline || item.dueDate);
     if (deadline < startOfToday) {
       overdue.push(item);
     } else if (deadline <= endOfToday) {
@@ -387,8 +400,8 @@ export async function getMyWork(user) {
   }
 
   const activeCount = overdue.length + today.length + thisWeek.length + upcoming.length;
-  const totalRevisions = items.reduce((acc, it) => acc + (it.revisions || 0), 0);
-  const avgRevisions = items.length > 0 ? Number((totalRevisions / items.length).toFixed(1)) : 0;
+  const totalRevisions = rawItems.reduce((acc, it) => acc + (it.revisions || 0), 0);
+  const avgRevisions = rawItems.length > 0 ? Number((totalRevisions / rawItems.length).toFixed(1)) : 0;
 
   return {
     overdue,
@@ -424,10 +437,6 @@ export async function getCalendarWorkItems(filters = {}, user) {
     query.ownerId = filters.ownerId;
   }
 
-  if (filters.campaignId) {
-    query.campaignId = filters.campaignId;
-  }
-
   if (filters.status && filters.status !== 'all') {
     query.status = filters.status;
   }
@@ -440,7 +449,6 @@ export async function getCalendarWorkItems(filters = {}, user) {
   }
 
   return WorkItem.find(query)
-    .populate('campaignId', 'name relatedOKR status')
     .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole')
@@ -458,10 +466,8 @@ export async function getTodoItems(user) {
   if (user.role === 'team_member') {
     const userId = (user._id || user.id || user.userId)?.toString();
     query.ownerId = userId;
-  } else if (user.role === 'team_lead') {
-    if (scope.allowedPersonIds) {
-      query.ownerId = { $in: scope.allowedPersonIds };
-    }
+  } else if (scope.allowedPersonIds) {
+    query.ownerId = { $in: scope.allowedPersonIds };
   }
 
   query.status = { $nin: ['Approved', 'Published'] };
@@ -471,7 +477,6 @@ export async function getTodoItems(user) {
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
   const items = await WorkItem.find(query)
-    .populate('campaignId', 'name relatedOKR status')
     .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole')

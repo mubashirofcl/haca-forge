@@ -38,9 +38,9 @@ export async function resolveDepartmentObjectId(rawDept) {
 export async function submitAccessRequest(data) {
   const normalizedEmail = data.email ? data.email.toLowerCase().trim() : '';
 
-  // Server-side guard: public request form strictly allows team_member and team_lead only
+  // Server-side guard: public request form strictly allows team_member and sm_manager only
   if (!REQUESTABLE_ROLES.includes(data.requestedRole)) {
-    const error = new Error('Only Team Member or Team Lead can be requested');
+    const error = new Error('Only Team Member or SM Manager can be requested');
     error.code = 'INVALID_REQUESTED_ROLE';
     error.statusCode = 400;
     throw error;
@@ -212,9 +212,9 @@ export async function approveAccessRequest(id, reviewData = {}, adminUser) {
 
   const assignedRole = reviewData.assignedRole || accessReq.requestedRole || 'team_member';
 
-  // Only admin may grant admin, marketing_head, or executive
-  if (['admin', 'marketing_head', 'executive'].includes(assignedRole) && adminUser.role !== 'admin') {
-    const error = new Error('Only full Administrators can grant Admin, Marketing Head, or Executive roles');
+  // Only admin may grant admin, creative_head, or executive
+  if (['admin', 'creative_head', 'executive'].includes(assignedRole) && adminUser.role !== 'admin') {
+    const error = new Error('Only full Administrators can grant Admin, Creative Head, or Executive roles');
     error.code = 'UNAUTHORIZED_ROLE_ASSIGNMENT';
     error.statusCode = 403;
     throw error;

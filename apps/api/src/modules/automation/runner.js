@@ -67,17 +67,6 @@ export const DEFAULT_AUTOMATION_RULES = [
     config: { thresholdRound: 4 },
   },
   {
-    ruleKey: 'lsq_live_sync',
-    name: 'LeadSquared (LSQ) Inbound Lead Sync',
-    description: 'Polls LeadSquared API for inbound lead updates, verifies funnel stage transitions, and audits lead assignment health.',
-    trigger: 'cron',
-    schedule: 'Every 15 minutes',
-    cronExpression: '*/15 * * * *',
-    action: 'Fetch and ingest latest LSQ leads into marketing data center',
-    active: true,
-    config: { batchSize: 50 },
-  },
-  {
     ruleKey: 'weekly_report',
     name: 'Weekly Marketing Executive Digest',
     description: 'Generates the comprehensive Weekly Marketing Report every Monday at 08:00 AM, detailing planned vs completed output, department throughput, and open blockers.',
@@ -94,6 +83,8 @@ export const DEFAULT_AUTOMATION_RULES = [
  * Ensures standard 7 Automation Rules exist in the database.
  */
 export async function ensureAutomationRules() {
+  const validKeys = DEFAULT_AUTOMATION_RULES.map((r) => r.ruleKey);
+  await AutomationRule.deleteMany({ ruleKey: { $nin: validKeys } });
   for (const rule of DEFAULT_AUTOMATION_RULES) {
     await AutomationRule.findOneAndUpdate(
       { ruleKey: rule.ruleKey },
@@ -144,9 +135,6 @@ export async function executeAutomationRule(ruleKey, user = null, options = {}) 
         break;
       case 'revision_pattern_flag':
         result = await runRevisionPatternFlagRule(rule, user);
-        break;
-      case 'lsq_live_sync':
-        result = await runLsqLiveSyncRule(rule, user);
         break;
       case 'weekly_report':
         result = await runWeeklyReportRule(rule, user);
@@ -209,7 +197,7 @@ async function runMonthEndReportRule(rule, user) {
   const currentMonth = new Date().toISOString().slice(0, 7);
   const report = await generateReport('monthly_scorecard', { month: currentMonth }, user, {
     sendEmail: rule.config?.sendEmail ?? true,
-    recipients: rule.config?.recipients || ['marketing_head@hacaforge.com'],
+    recipients: rule.config?.recipients || ['creative_head@hacaforge.com'],
   });
 
   return {
@@ -285,7 +273,7 @@ async function runOverdueEscalationRule(rule, user) {
       // Find Team Lead for this department or Marketing Head
       const teamLead = await Person.findOne({
         departmentId: item.departmentId._id,
-        role: { $in: ['team_lead', 'marketing_head'] },
+        role: { $in: ['sm_manager', 'creative_head'] },
         status: { $ne: 'suspended' },
       }).lean();
 
@@ -468,43 +456,67 @@ async function runRevisionPatternFlagRule(rule, user) {
 
       await RevisionFlag.create({
         workItemId,
+        isFlagged: true,
         roundCount: highestRound,
+        revisionsCount: highestRound,
         rootCauseStatus: 'Unclassified',
         notifiedLead: true,
+        flaggedAt: new Date(),
       });
       flagsCreated++;
     }
   }
 
+  // Audit and escalate unclassified revision flags older than 48 hours
+  const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const unclassifiedFlags = await RevisionFlag.find({
+    isFlagged: true,
+    $or: [{ rootCause: null }, { rootCause: '' }, { rootCauseStatus: 'Unclassified' }],
+    isEscalated: { $ne: true },
+    flaggedAt: { $lt: fortyEightHoursAgo },
+  }).populate('workItemId', 'title');
+
+  let escalatedCount = 0;
+  const leaders = await Person.find({
+    role: { $in: ['creative_head', 'admin'] },
+    status: { $ne: 'suspended' },
+  }).lean();
+
+  for (const flag of unclassifiedFlags) {
+    flag.isEscalated = true;
+    await flag.save();
+
+    for (const leader of leaders) {
+      await Notification.create({
+        recipient: leader._id,
+        title: `[Escalation] Unclassified Revision Flag > 48h`,
+        message: `Revision flag on "${flag.workItemId?.title || 'Deliverable'}" has remained unclassified for >48h. Supervisory root-cause classification required.`,
+        type: 'alert',
+        link: `/feedback`,
+        metadata: {
+          flagId: flag._id,
+          type: 'unclassified_flag_escalation',
+        },
+      });
+    }
+    escalatedCount++;
+  }
+
   return {
-    summary: `Scanned revision rounds: flagged ${flagsCreated} deliverables exceeding round ${threshold}.`,
-    affectedCount: workItemIds.length,
+    summary: `Scanned revisions: flagged ${flagsCreated} deliverables exceeding round ${threshold}, escalated ${escalatedCount} unclassified flags (>48h).`,
+    affectedCount: workItemIds.length + unclassifiedFlags.length,
     flagsCreated,
+    escalatedCount,
   };
 }
 
 /**
- * 6. LeadSquared (LSQ) Inbound Sync Runner
- */
-async function runLsqLiveSyncRule(rule, user) {
-  // Sync simulation / health audit
-  const lastSyncTime = new Date();
-  const syncedLeads = 12; // Simulated batch size for live health check
-
-  return {
-    summary: `LeadSquared live sync audit pulse: ${syncedLeads} records checked. Integration health 100%.`,
-    affectedCount: syncedLeads,
-    syncTimestamp: lastSyncTime.toISOString(),
-  };
-}
-
-/**
- * 7. Weekly Report Rule
+ * 6. Weekly Report Rule
  */
 async function runWeeklyReportRule(rule, user) {
   const report = await generateReport('weekly_marketing', {}, user, {
     sendEmail: rule.config?.sendEmail ?? true,
-    recipients: rule.config?.recipients || ['marketing_head@hacaforge.com'],
+    recipients: rule.config?.recipients || ['creative_head@hacaforge.com'],
   });
 
   return {

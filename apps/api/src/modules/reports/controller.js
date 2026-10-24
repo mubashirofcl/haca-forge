@@ -1,6 +1,7 @@
 import {
   listReportDefinitions,
   getReportDefinition,
+  updateReportDefinition,
   generateReport,
   generateReportExport,
   createScheduledReport,
@@ -35,6 +36,18 @@ export async function getReportDefinitionHandler(req, res, next) {
   }
 }
 
+export async function updateReportDefinitionHandler(req, res, next) {
+  try {
+    const updated = await updateReportDefinition(req.params.key, req.body);
+    if (!updated) {
+      return res.status(404).json({ error: { message: 'Report definition not found' } });
+    }
+    return res.status(200).json({ success: true, definition: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function generateReportHandler(req, res, next) {
   try {
     const parsed = reportGenerateSchema.safeParse(req.body || {});
@@ -48,8 +61,6 @@ export async function generateReportHandler(req, res, next) {
     if (profileId && profileId !== 'all') filters.profileId = profileId;
     const departmentId = input.departmentId || req.query.departmentId;
     if (departmentId && departmentId !== 'all') filters.departmentId = departmentId;
-    const campaignId = input.campaignId || req.query.campaignId;
-    if (campaignId && campaignId !== 'all') filters.campaignId = campaignId;
 
     const report = await generateReport(reportKey, filters, req.user, {
       sendEmail: input.sendEmail,

@@ -38,7 +38,6 @@ interface TodoWorkItem {
   blockerReason?: BlockerReason;
   blockerNote?: string;
   deliverableUrl?: string;
-  campaignId: { _id: string; name: string };
   profileId: { _id: string; name: string; code: string };
   departmentId?: { _id: string; name: string };
   ownerId?: { _id: string; name: string; email: string; jobRole?: string };
@@ -187,7 +186,6 @@ export const TodoPrioritiesPage: React.FC = () => {
       (it) =>
         it.title.toLowerCase().includes(q) ||
         it.workType.toLowerCase().includes(q) ||
-        it.campaignId?.name?.toLowerCase().includes(q) ||
         it.profileId?.name?.toLowerCase().includes(q) ||
         it.ownerId?.name?.toLowerCase().includes(q)
     );
@@ -198,10 +196,10 @@ export const TodoPrioritiesPage: React.FC = () => {
   const upcomingFiltered = useMemo(() => filterList(data?.upcoming), [data, searchQuery]);
 
   const roleScopedSubtitle = useMemo(() => {
-    if (user?.role === 'marketing_head' || user?.role === 'admin') {
+    if (user?.role === 'creative_head' || user?.role === 'admin') {
       return 'Org-wide priorities and production deliverables across all teams.';
     }
-    if (user?.role === 'team_lead') {
+    if (user?.role === 'sm_manager') {
       return 'Team priorities and deliverables pending completion.';
     }
     return 'Your personal priority queue with one-click transitions and zero noise.';
@@ -209,7 +207,7 @@ export const TodoPrioritiesPage: React.FC = () => {
 
   // Card Component for Deliverables
   const renderItemCard = (item: TodoWorkItem, section: 'overdue' | 'today' | 'upcoming') => {
-    const isLeadOrAdmin = user?.role === 'team_lead' || user?.role === 'marketing_head' || user?.role === 'admin';
+    const isLeadOrAdmin = user?.role === 'sm_manager' || user?.role === 'creative_head' || user?.role === 'admin';
     const isOwner = (item.ownerId?._id || item.ownerId) === (user?._id || user?.id);
     const canTransition = (isLeadOrAdmin || isOwner) && user?.role !== 'executive';
 
@@ -269,7 +267,7 @@ export const TodoPrioritiesPage: React.FC = () => {
 
             <div className="flex flex-wrap items-center gap-y-1 gap-x-4 mt-2 text-xs text-slate-500">
               <span>
-                Campaign: <strong className="text-slate-700 font-semibold">{item.campaignId?.name}</strong>
+                Brand: <strong className="text-slate-700 font-semibold">{item.profileId?.name}</strong>
               </span>
               <span className="flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-slate-400" />

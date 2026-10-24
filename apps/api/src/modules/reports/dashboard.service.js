@@ -1,16 +1,19 @@
 import { WorkItem } from '../workItems/model.js';
-import { Campaign } from '../campaigns/model.js';
-import { MonthlyTarget } from '../targets/model.js';
 import { Person } from '../people/model.js';
 import { Department } from '../departments/model.js';
 import { Blocker } from '../blockers/model.js';
 import { RevisionFlag } from '../feedback/model.js';
 import { ActivityEvent } from '../activity/model.js';
+import { CalendarPlan } from '../calendar/plan.model.js';
+import { ContentPiece } from '../calendar/contentPiece.model.js';
 import { calculateMemberWorkloadMetrics } from '../assignment/service.js';
 import { resolveScope } from '../../lib/scope.js';
+import { derivePlanStatus } from '@mmp/shared';
 
 /**
- * 9-Section Team Dashboard Overview Service
+ * 8-Section Operational Dashboard Overview Service
+ * (admin, creative_head, sm_manager, executive; team_member redirected to /my-work)
+ * Strictly operational: NO target, funnel, or campaign sections!
  */
 export async function getDashboardOverview(filters = {}, user) {
   const scope = await resolveScope(user, filters);
@@ -46,44 +49,84 @@ export async function getDashboardOverview(filters = {}, user) {
   if (filters.departmentId && filters.departmentId !== 'all') {
     workItemQuery.departmentId = filters.departmentId;
   }
-  if (filters.campaignId && filters.campaignId !== 'all') {
-    workItemQuery.campaignId = filters.campaignId;
-  }
 
   // ----------------------------------------------------
-  // SECTION 1: Targets Strip
+  // SECTION 1: Month Plan Status
   // ----------------------------------------------------
-  const targetQuery = { month: currentMonthStr };
-  if (workItemQuery.profileId) {
-    targetQuery.profileId = workItemQuery.profileId;
+  const [yearStr, monthNumStr] = currentMonthStr.split('-');
+  const year = parseInt(yearStr, 10) || now.getFullYear();
+  const monthNum = parseInt(monthNumStr, 10) || now.getMonth() + 1;
+  const startOfMonth = new Date(Date.UTC(year, monthNum - 1, 1, 0, 0, 0, 0));
+  const endOfMonth = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
+
+  const planQuery = {
+    $or: [
+      { periodStart: { $lte: endOfMonth }, periodEnd: { $gte: startOfMonth } },
+      { periodStart: { $gte: startOfMonth, $lte: endOfMonth } },
+    ],
+  };
+  if (filters.profileId && filters.profileId !== 'all') {
+    planQuery.profileId = filters.profileId;
   }
 
-  const targets = await MonthlyTarget.find(targetQuery)
-    .populate('profileId', 'name code active')
+  const plans = await CalendarPlan.find(planQuery)
+    .populate('createdById', 'name email role')
+    .populate('approvedById', 'name email role')
+    .sort({ createdAt: -1 })
     .lean();
 
-  const targetsStrip = {
-    month: currentMonthStr,
-    targetCount: targets.length,
-    revenueTarget: targets.reduce((sum, t) => sum + (t.revenueTarget || 0), 0),
-    leadsTarget: targets.reduce((sum, t) => sum + (t.leadsTarget || 0), 0),
-    qualifiedLeadsTarget: targets.reduce((sum, t) => sum + (t.qualifiedLeadsTarget || 0), 0),
-    budgetAllocated: targets.reduce((sum, t) => sum + (t.budget || 0), 0),
-    targetsList: targets.map((t) => ({
-      _id: t._id,
-      profileName: t.profileId?.name || 'All Profiles',
-      revenueTarget: t.revenueTarget,
-      leadsTarget: t.leadsTarget,
-      qualifiedLeadsTarget: t.qualifiedLeadsTarget,
-      budget: t.budget,
-    })),
+  const planSummaries = [];
+  let totalPlannedRows = 0;
+  let totalDoneRows = 0;
+
+  for (const plan of plans) {
+    const rows = await ContentPiece.find({ planId: plan._id }).lean();
+    const status = derivePlanStatus(rows);
+    const planned = rows.length;
+    const done = rows.filter((r) => r.rowStatus === 'approved' || r.isPublished).length;
+    totalPlannedRows += planned;
+    totalDoneRows += done;
+
+    planSummaries.push({
+      _id: plan._id,
+      code: plan.code,
+      title: plan.title,
+      kind: plan.kind,
+      status,
+      periodStart: plan.periodStart,
+      periodEnd: plan.periodEnd,
+      planned,
+      done,
+      submittedAt: plan.submittedAt,
+      approvedAt: plan.approvedAt,
+      createdByName: plan.createdById?.name,
+    });
+  }
+
+  const daysInMonth = new Date(year, monthNum, 0).getDate();
+  const daysPassed = Math.min(daysInMonth, Math.max(1, now.getDate()));
+  const expectedPacePct = Math.round((daysPassed / daysInMonth) * 100);
+  const planCompletionPct = totalPlannedRows > 0 ? Math.round((totalDoneRows / totalPlannedRows) * 100) : 0;
+  const velocityText = `${totalDoneRows} done of ${totalPlannedRows} planned (${planCompletionPct}% vs ${expectedPacePct}% expected pace)`;
+
+  const monthPlanStatus = {
+    selectedMonth: currentMonthStr,
+    activePlanStatus: planSummaries[0]?.status || (plans.length > 0 ? 'Draft' : 'No Plans'),
+    totalPlans: plans.length,
+    planned: totalPlannedRows,
+    done: totalDoneRows,
+    plannedPieces: totalPlannedRows,
+    donePieces: totalDoneRows,
+    completionRatePct: planCompletionPct,
+    velocity: velocityText,
+    plans: planSummaries,
   };
 
   // ----------------------------------------------------
-  // SECTION 2: KPI Strip & Execution Pulse
+  // SECTION 2: KPI Strip (7 core operational metrics)
   // ----------------------------------------------------
   const allScopedWorkItems = await WorkItem.find(workItemQuery)
-    .select('status deadline estimatedEffortHrs workType revisions profileId departmentId')
+    .select('status deadline estimatedEffortHrs workType revisions profileId departmentId updatedAt createdAt')
     .lean();
 
   let inProgressCount = 0;
@@ -92,10 +135,19 @@ export async function getDashboardOverview(filters = {}, user) {
   let approvedCount = 0;
   let publishedCount = 0;
   let overdueCount = 0;
+  let atRiskCount = 0;
+
+  const in72h = new Date(now.getTime() + 72 * 60 * 60 * 1000);
 
   for (const item of allScopedWorkItems) {
     const isTerminal = item.status === 'Approved' || item.status === 'Published';
     const isOverdue = !isTerminal && item.deadline && new Date(item.deadline) < now;
+    const isAtRisk =
+      !isTerminal &&
+      item.status !== 'Feedback' &&
+      item.deadline &&
+      new Date(item.deadline) <= in72h &&
+      new Date(item.deadline) >= now;
 
     if (item.status === 'In Progress') inProgressCount++;
     else if (item.status === 'Feedback') inFeedbackCount++;
@@ -104,20 +156,28 @@ export async function getDashboardOverview(filters = {}, user) {
     else if (item.status === 'Published') publishedCount++;
 
     if (isOverdue) overdueCount++;
+    if (isAtRisk) atRiskCount++;
   }
 
-  const totalItems = allScopedWorkItems.length;
   const completedCount = approvedCount + publishedCount;
-  const completionRatePct = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
+  const plannedCount = Math.max(totalPlannedRows, allScopedWorkItems.length);
+  const completionRatePct = plannedCount > 0 ? Math.round((completedCount / plannedCount) * 100) : 0;
 
   const kpisStrip = {
-    totalWorkItems: totalItems,
+    // 7 Core Metrics
+    planned: plannedCount,
+    completed: completedCount,
     inProgress: inProgressCount,
-    inFeedback: inFeedbackCount,
+    atRisk: atRiskCount,
     blocked: blockedCount,
+    pendingApproval: inFeedbackCount,
+    overdue: overdueCount,
+
+    // Backward compatibility aliases
+    totalWorkItems: allScopedWorkItems.length,
+    inFeedback: inFeedbackCount,
     approved: approvedCount,
     published: publishedCount,
-    overdue: overdueCount,
     completionRatePct,
   };
 
@@ -132,11 +192,10 @@ export async function getDashboardOverview(filters = {}, user) {
     status: { $nin: ['Approved', 'Published'] },
     $or: [{ deadline: { $lte: endOfToday } }, { status: 'Blocked' }],
   })
-    .populate('campaignId', 'name')
     .populate('profileId', 'name code')
     .populate('ownerId', 'name email role jobRole')
     .sort({ deadline: 1 })
-    .limit(6)
+    .limit(8)
     .lean();
 
   const priorities = prioritiesItems.map((item) => ({
@@ -145,7 +204,7 @@ export async function getDashboardOverview(filters = {}, user) {
   }));
 
   // ----------------------------------------------------
-  // SECTION 4: Creative Production Stats
+  // SECTION 4: Production Stats & Trend
   // ----------------------------------------------------
   const workTypeBreakdown = {};
   for (const item of allScopedWorkItems) {
@@ -170,52 +229,35 @@ export async function getDashboardOverview(filters = {}, user) {
     };
   });
 
-  const creativeStats = {
-    totalDeliverables: totalItems,
-    byWorkType: workTypeBreakdown,
-    byDepartment: departmentBreakdown,
-  };
-
-  // ----------------------------------------------------
-  // SECTION 5: Campaign Progress
-  // ----------------------------------------------------
-  const campaignQuery = {};
-  if (workItemQuery.profileId) {
-    campaignQuery.profileId = workItemQuery.profileId;
+  // 4-Week completion trend
+  const weeklyTrend = [];
+  for (let w = 3; w >= 0; w--) {
+    const wStart = new Date(now.getTime() - (w + 1) * 7 * 24 * 60 * 60 * 1000);
+    const wEnd = new Date(now.getTime() - w * 7 * 24 * 60 * 60 * 1000);
+    const count = allScopedWorkItems.filter(
+      (i) =>
+        ['Approved', 'Published'].includes(i.status) &&
+        i.updatedAt &&
+        new Date(i.updatedAt) >= wStart &&
+        new Date(i.updatedAt) < wEnd
+    ).length;
+    weeklyTrend.push({
+      weekLabel: `Week -${w}`,
+      completed: count,
+    });
   }
 
-  const activeCampaigns = await Campaign.find(campaignQuery)
-    .populate('profileId', 'name code')
-    .populate('ownerId', 'name email')
-    .sort({ updatedAt: -1 })
-    .limit(6)
-    .lean();
+  const creativeStats = {
+    totalDeliverables: allScopedWorkItems.length,
+    byWorkType: workTypeBreakdown,
+    byDepartment: departmentBreakdown,
+    weeklyTrend,
+  };
 
-  const campaignsProgress = await Promise.all(
-    activeCampaigns.map(async (c) => {
-      const campItems = await WorkItem.find({ campaignId: c._id }).select('status').lean();
-      const campTotal = campItems.length;
-      const campDone = campItems.filter((i) => i.status === 'Approved' || i.status === 'Published').length;
-      const progressPct = campTotal > 0 ? Math.round((campDone / campTotal) * 100) : 0;
-
-      return {
-        _id: c._id,
-        name: c.name,
-        profileName: c.profileId?.name || 'Profile',
-        status: c.status,
-        goalType: c.goalType,
-        budgetAllocated: c.budgetAllocated || 0,
-        totalItems: campTotal,
-        completedItems: campDone,
-        progressPct,
-      };
-    })
-  );
-
-  // ----------------------------------------------------
-  // SECTION 6: Team Workload Snapshot
-  // ----------------------------------------------------
-  const personQuery = { active: true, role: { $in: ['team_member', 'team_lead'] } };
+  const personQuery = {
+    $or: [{ status: 'active' }, { active: true }],
+    role: { $in: ['team_member', 'sm_manager'] },
+  };
   if (workItemQuery.departmentId) {
     personQuery.departmentId = workItemQuery.departmentId;
   }
@@ -229,32 +271,35 @@ export async function getDashboardOverview(filters = {}, user) {
   let highCount = 0;
   let overloadedCount = 0;
   let sumWorkloadPct = 0;
-  const overloadedMembers = [];
+  const membersSnapshot = [];
 
   for (const person of activePeople) {
     try {
       const metrics = await calculateMemberWorkloadMetrics(person._id);
       sumWorkloadPct += metrics.workloadPct;
 
+      const memberInfo = {
+        personId: person._id,
+        name: person.name,
+        role: person.role,
+        jobRole: person.jobRole,
+        departmentName: person.departmentId?.name || 'General',
+        workloadPct: metrics.workloadPct, // Real un-capped percentage
+        allocatedHours: metrics.allocatedHours,
+        capacity: metrics.capacity,
+        capacityBand: metrics.capacityBand,
+      };
+
+      membersSnapshot.push(memberInfo);
+
       if (metrics.capacityBand === 'Overloaded') {
         overloadedCount++;
-        overloadedMembers.push({
-          personId: person._id,
-          name: person.name,
-          role: person.role,
-          jobRole: person.jobRole,
-          departmentName: person.departmentId?.name || 'Department',
-          workloadPct: metrics.workloadPct,
-          allocatedHours: metrics.allocatedHours,
-          capacity: metrics.capacity,
-          capacityBand: metrics.capacityBand,
-        });
       } else if (metrics.capacityBand === 'High') {
         highCount++;
       } else {
         healthyCount++;
       }
-    } catch (err) {
+    } catch (_err) {
       healthyCount++;
     }
   }
@@ -270,33 +315,19 @@ export async function getDashboardOverview(filters = {}, user) {
       high: highCount,
       overloaded: overloadedCount,
     },
-    overloadedMembers,
+    members: membersSnapshot,
+    overloadedMembers: membersSnapshot.filter((m) => m.capacityBand === 'Overloaded'),
   };
 
   // ----------------------------------------------------
-  // SECTION 7: Lead Funnel Snapshot
-  // ----------------------------------------------------
-  const totalLeadsTarget = targetsStrip.leadsTarget;
-  const qualifiedLeadsTarget = targetsStrip.qualifiedLeadsTarget;
-  const conversionRateTarget =
-    totalLeadsTarget > 0 ? Number(((qualifiedLeadsTarget / totalLeadsTarget) * 100).toFixed(1)) : 0;
-
-  const leadFunnelSnapshot = {
-    totalLeadsTarget,
-    qualifiedLeadsTarget,
-    conversionRateTarget,
-    activeCampaignsWithGoals: activeCampaigns.filter((c) => c.goalType === 'Leads').length,
-  };
-
-  // ----------------------------------------------------
-  // SECTION 8: Issues & Blockers
+  // SECTION 6: Issues & Blockers
   // ----------------------------------------------------
   const activeBlockers = await Blocker.find({ status: 'Active' })
     .populate('workItemId', 'title workType deadline profileId departmentId')
     .populate('dependencyOwnerId', 'name email role jobRole')
     .populate('blockedById', 'name email')
     .sort({ blockedAt: -1 })
-    .limit(5)
+    .limit(6)
     .lean();
 
   const longBlockedCount = activeBlockers.filter((b) => {
@@ -329,16 +360,64 @@ export async function getDashboardOverview(filters = {}, user) {
       blockedAt: b.blockedAt,
       durationHours: Math.round((now.getTime() - new Date(b.blockedAt).getTime()) / (1000 * 60 * 60)),
     })),
+    revisionFlags: activeFlags.map((f) => ({
+      _id: f._id,
+      workItemId: f.workItemId?._id,
+      deliverableTitle: f.workItemId?.title || 'Deliverable',
+      ownerName: f.ownerId?.name || 'Worker',
+      revisionsCount: f.revisionsCount,
+      rootCause: f.rootCause,
+      isEscalated: f.isEscalated,
+      flaggedAt: f.flaggedAt,
+    })),
   };
 
   // ----------------------------------------------------
-  // SECTION 9: Recent Activity Feed
+  // SECTION 7: Waiting for Approval (Plans & Stages)
+  // ----------------------------------------------------
+  const pendingApprovalPlans = plans
+    .filter((p) => p.submittedAt && !p.approvedAt)
+    .map((p) => ({
+      _id: p._id,
+      code: p.code,
+      title: p.title,
+      submittedAt: p.submittedAt,
+      createdByName: p.createdById?.name || 'SM Manager',
+    }));
+
+  const pendingApprovalStages = await WorkItem.find({
+    ...workItemQuery,
+    status: 'Feedback',
+  })
+    .populate('ownerId', 'name email jobRole')
+    .populate('profileId', 'name code')
+    .sort({ updatedAt: -1 })
+    .limit(8)
+    .lean();
+
+  const waitingApproval = {
+    plansCount: pendingApprovalPlans.length,
+    stagesCount: inFeedbackCount,
+    totalPending: pendingApprovalPlans.length + inFeedbackCount,
+    plans: pendingApprovalPlans,
+    stages: pendingApprovalStages.map((s) => ({
+      _id: s._id,
+      title: s.title,
+      workType: s.workType,
+      currentStageKey: s.currentStageKey,
+      ownerName: s.ownerId?.name || 'Assignee',
+      deadline: s.deadline,
+    })),
+  };
+
+  // ----------------------------------------------------
+  // SECTION 8: Recent Activity Feed
   // ----------------------------------------------------
   const recentActivities = await ActivityEvent.find({})
     .populate('actorId', 'name email role')
     .populate('profileId', 'name code')
     .sort({ timestamp: -1 })
-    .limit(8)
+    .limit(10)
     .lean();
 
   return {
@@ -346,18 +425,21 @@ export async function getDashboardOverview(filters = {}, user) {
       profileId: filters.profileId || 'all',
       departmentId: filters.departmentId || 'all',
       ownerId: filters.ownerId || 'all',
-      campaignId: filters.campaignId || 'all',
       month: currentMonthStr,
       userRole: user.role,
     },
-    targets: targetsStrip,
+    monthPlanStatus,
     kpis: kpisStrip,
     priorities,
+    todaysPriorities: priorities,
     creativeStats,
-    campaigns: campaignsProgress,
+    productionStats: creativeStats,
     workload: workloadSnapshot,
-    leadFunnel: leadFunnelSnapshot,
+    teamWorkload: workloadSnapshot,
     issues: issuesSnapshot,
+    issuesAndBlockers: issuesSnapshot,
+    waitingApproval,
+    waitingForApproval: waitingApproval,
     recentActivity: recentActivities,
   };
 }

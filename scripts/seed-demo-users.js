@@ -16,7 +16,6 @@ import { Profile } from '../apps/api/src/modules/referenceData/profile.model.js'
 import { Department } from '../apps/api/src/modules/departments/model.js';
 import { AccessRequest } from '../apps/api/src/modules/access/model.js';
 import { seedReferenceData } from '../apps/api/src/modules/referenceData/service.js';
-import { seedTargetsAndCampaigns } from '../apps/api/src/modules/targets/seed.js';
 
 export async function seedDemoUsers(options = {}) {
   const isRemove = options.remove || process.argv.includes('--remove-demo');
@@ -67,79 +66,15 @@ export async function seedDemoUsers(options = {}) {
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(demoPassword, salt);
 
-  // 1. Create Team Leads first so their _id can be referenced in reportsToIds
-  const designLead = await Person.findOneAndUpdate(
-    { email: 'lead.design@demo.haca.local' },
+  // 1. Create Creative Head
+  const creativeHead = await Person.findOneAndUpdate(
+    { email: 'creative.head@demo.haca.local' },
     {
       $set: {
-        name: 'Demo Design Lead',
-        email: 'lead.design@demo.haca.local',
+        name: 'Demo Creative Head',
+        email: 'creative.head@demo.haca.local',
         passwordHash,
-        role: 'team_lead',
-        jobRole: 'Design Lead (TL)',
-        departmentId: getDeptId('Design'),
-        profileAccess: getProfileIds(['haca_design_school', 'haca_design_school_en']),
-        reportsToIds: [],
-        weeklyCapacityHours: 40,
-        workPreferences: ['Design'],
-        status: 'active',
-        mustSetPassword: false,
-      },
-    },
-    { upsert: true, new: true }
-  );
-
-  const creativeManager = await Person.findOneAndUpdate(
-    { email: 'manager.creative@demo.haca.local' },
-    {
-      $set: {
-        name: 'Demo Creative Manager',
-        email: 'manager.creative@demo.haca.local',
-        passwordHash,
-        role: 'team_lead',
-        jobRole: 'Creative Manager (TL)',
-        departmentId: getDeptId('Video Production'),
-        profileAccess: getProfileIds(['haca', 'haca_design_school']),
-        reportsToIds: [],
-        weeklyCapacityHours: 40,
-        workPreferences: ['Script', 'Shoot', 'Edit'],
-        status: 'active',
-        mustSetPassword: false,
-      },
-    },
-    { upsert: true, new: true }
-  );
-
-  const smManager = await Person.findOneAndUpdate(
-    { email: 'sm.manager@demo.haca.local' },
-    {
-      $set: {
-        name: 'Demo SM Manager',
-        email: 'sm.manager@demo.haca.local',
-        passwordHash,
-        role: 'team_lead',
-        jobRole: 'Social Media Manager',
-        departmentId: getDeptId('Social Media'),
-        profileAccess: allProfiles.map((p) => p._id),
-        reportsToIds: [],
-        weeklyCapacityHours: 40,
-        workPreferences: ['Post', 'Content'],
-        status: 'active',
-        mustSetPassword: false,
-      },
-    },
-    { upsert: true, new: true }
-  );
-
-  // 2. Create Marketing Head
-  const marketingHead = await Person.findOneAndUpdate(
-    { email: 'head@demo.haca.local' },
-    {
-      $set: {
-        name: 'Demo Marketing Head',
-        email: 'head@demo.haca.local',
-        passwordHash,
-        role: 'marketing_head',
+        role: 'creative_head',
         jobRole: '',
         departmentId: null,
         profileAccess: allProfiles.map((p) => p._id),
@@ -153,7 +88,29 @@ export async function seedDemoUsers(options = {}) {
     { upsert: true, new: true }
   );
 
-  // 2b. Create Executive (CEO / Business Head / Director)
+  // 2. Create SM Manager
+  const smManager = await Person.findOneAndUpdate(
+    { email: 'sm.manager@demo.haca.local' },
+    {
+      $set: {
+        name: 'Demo SM Manager',
+        email: 'sm.manager@demo.haca.local',
+        passwordHash,
+        role: 'sm_manager',
+        jobRole: 'Social Media Manager',
+        departmentId: getDeptId('Social Media'),
+        profileAccess: allProfiles.map((p) => p._id),
+        reportsToIds: [],
+        weeklyCapacityHours: 40,
+        workPreferences: ['Post', 'Content'],
+        status: 'active',
+        mustSetPassword: false,
+      },
+    },
+    { upsert: true, new: true }
+  );
+
+  // 3. Create Executive (CEO / Business Head / Director)
   const executive = await Person.findOneAndUpdate(
     { email: 'executive@demo.haca.local' },
     {
@@ -175,7 +132,7 @@ export async function seedDemoUsers(options = {}) {
     { upsert: true, new: true }
   );
 
-  // 3. Create Team Members
+  // 4. Create Team Members across departments with work preferences
   const teamMembersData = [
     {
       name: 'Demo UI Designer',
@@ -184,7 +141,7 @@ export async function seedDemoUsers(options = {}) {
       jobRole: 'UI Designer',
       department: 'Design',
       brandCodes: ['haca_design_school', 'haca_design_school_en'],
-      reportsTo: [designLead._id, creativeManager._id],
+      reportsTo: [],
       workPreferences: ['Design'],
     },
     {
@@ -194,7 +151,7 @@ export async function seedDemoUsers(options = {}) {
       jobRole: 'Designer',
       department: 'Design',
       brandCodes: ['haca_design_school'],
-      reportsTo: [designLead._id],
+      reportsTo: [],
       workPreferences: ['Design'],
     },
     {
@@ -204,7 +161,7 @@ export async function seedDemoUsers(options = {}) {
       jobRole: 'Video Editor',
       department: 'Video Production',
       brandCodes: ['haca', 'haca_design_school'],
-      reportsTo: [creativeManager._id],
+      reportsTo: [],
       workPreferences: ['Edit', 'Shoot'],
     },
     {
@@ -214,7 +171,7 @@ export async function seedDemoUsers(options = {}) {
       jobRole: 'Writer',
       department: 'SEO & Content',
       brandCodes: ['haca', 'haca_design_school', 'haca_marketing_school'],
-      reportsTo: [creativeManager._id],
+      reportsTo: [],
       workPreferences: ['Content', 'Script'],
     },
     {
@@ -224,7 +181,7 @@ export async function seedDemoUsers(options = {}) {
       jobRole: 'WhatsApp Marketer',
       department: 'WhatsApp',
       brandCodes: ['haca'],
-      reportsTo: [creativeManager._id],
+      reportsTo: [],
       workPreferences: ['Post', 'Content'],
     },
     {
@@ -234,7 +191,7 @@ export async function seedDemoUsers(options = {}) {
       jobRole: 'Performance Marketer',
       department: 'Performance Marketing',
       brandCodes: ['haca', 'haca_mideast'],
-      reportsTo: [creativeManager._id],
+      reportsTo: [],
       workPreferences: ['Post'],
     },
   ];
@@ -313,7 +270,7 @@ export async function seedDemoUsers(options = {}) {
       department: 'Performance Marketing',
       departmentId: getDeptId('Performance Marketing'),
       jobRole: 'Performance Marketer',
-      requestedRole: 'team_lead',
+      requestedRole: 'sm_manager',
       requestedProfileCodes: ['haca', 'haca_mideast'],
       requestedProfileIds: getProfileIds(['haca', 'haca_mideast']),
       reason: 'Applying to coordinate and oversee paid media campaigns across Meta and Google Ads.',
@@ -329,15 +286,10 @@ export async function seedDemoUsers(options = {}) {
     );
   }
 
-  // 6. Seed Monthly Targets & Baseline Campaigns (Phase 2)
-  await seedTargetsAndCampaigns();
-
   const allDemoUsers = [
-    marketingHead,
-    executive,
-    designLead,
-    creativeManager,
+    creativeHead,
     smManager,
+    executive,
     ...seededMembers,
   ];
 

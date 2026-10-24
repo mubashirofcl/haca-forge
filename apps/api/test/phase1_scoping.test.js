@@ -43,18 +43,18 @@ describe('Phase 1: Profiles, People & Access Scoping Tests', () => {
     });
 
     headUser = await Person.create({
-      name: 'Marketing Head',
+      name: 'Creative Head',
       email: 'head@phase1test.com',
-      role: 'marketing_head',
+      role: 'creative_head',
       status: 'active',
       profileAccess: [profile1Id, profile2Id],
     });
 
     leadUser = await Person.create({
-      name: 'Design Team Lead',
+      name: 'SM Manager',
       email: 'lead@phase1test.com',
-      role: 'team_lead',
-      jobRole: 'Design Lead (TL)',
+      role: 'sm_manager',
+      jobRole: 'Social Media Manager',
       departmentId: designDeptId,
       status: 'active',
       profileAccess: [profile1Id], // Access to profile 1 only
@@ -98,7 +98,7 @@ describe('Phase 1: Profiles, People & Access Scoping Tests', () => {
       expect(scope.canAccessProfile(profile2Id)).toBe(true);
     });
 
-    it('marketing_head: returns assigned profiles and all people in scope', async () => {
+    it('creative_head: returns assigned profiles and all people in scope', async () => {
       const scope = await resolveScope(headUser);
       expect(scope.isAllowed).toBe(true);
       expect(scope.scopeType).toBe('all');
@@ -108,13 +108,13 @@ describe('Phase 1: Profiles, People & Access Scoping Tests', () => {
       expect(scope.canAccessProfile(profile2Id)).toBe(true);
     });
 
-    it('team_lead: returns assigned profiles and own team only (direct reports + same department + self)', async () => {
+    it('sm_manager: returns assigned profiles and all people in scope (R2 all scope)', async () => {
       const scope = await resolveScope(leadUser);
       expect(scope.isAllowed).toBe(true);
-      expect(scope.scopeType).toBe('team');
-      expect(scope.allowedPersonIds).toContain(leadUser._id.toString());
-      expect(scope.allowedPersonIds).toContain(member1User._id.toString());
-      expect(scope.allowedPersonIds).not.toContain(member2User._id.toString());
+      expect(scope.scopeType).toBe('all');
+      expect(scope.allowedPersonIds).toBeNull();
+      expect(scope.canAccessPerson(member1User._id)).toBe(true);
+      expect(scope.canAccessPerson(member2User._id)).toBe(true);
 
       // Profile access: only profile 1
       expect(scope.canAccessProfile(profile1Id)).toBe(true);
@@ -140,8 +140,8 @@ describe('Phase 1: Profiles, People & Access Scoping Tests', () => {
       expect(query).toEqual({ _id: { $exists: false } });
     });
 
-    it('denies access when team_lead requests an ownerId outside their team', async () => {
-      const scope = await resolveScope(leadUser, { ownerId: member2User._id.toString() });
+    it('denies access when team_member requests an ownerId other than self', async () => {
+      const scope = await resolveScope(member1User, { ownerId: member2User._id.toString() });
       expect(scope.isAllowed).toBe(false);
       expect(scope.allowedPersonIds).toEqual([]);
     });
@@ -153,15 +153,15 @@ describe('Phase 1: Profiles, People & Access Scoping Tests', () => {
         {
           name: 'New Head Candidate',
           email: 'newhead@phase1test.com',
-          role: 'marketing_head',
+          role: 'creative_head',
         },
         adminUser
       );
-      expect(newPerson.role).toBe('marketing_head');
+      expect(newPerson.role).toBe('creative_head');
       expect(newPerson.status).toBe('active');
     });
 
-    it('Marketing Head CANNOT create users', async () => {
+    it('Creative Head CANNOT create users', async () => {
       await expect(
         peopleService.createPerson(
           {
@@ -174,7 +174,7 @@ describe('Phase 1: Profiles, People & Access Scoping Tests', () => {
       ).rejects.toThrow(/only Administrator can create users/);
     });
 
-    it('Marketing Head CANNOT suspend users', async () => {
+    it('Creative Head CANNOT suspend users', async () => {
       await expect(peopleService.suspendPerson(member1User._id, headUser)).rejects.toThrow(
         /only Administrator can suspend users/
       );
@@ -189,31 +189,31 @@ describe('Phase 1: Profiles, People & Access Scoping Tests', () => {
       expect(active.status).toBe('active');
     });
 
-    it('Marketing Head CANNOT edit admin or marketing_head accounts', async () => {
+    it('Creative Head CANNOT edit admin, executive, or other creative_head accounts', async () => {
       await expect(
         peopleService.updatePerson(adminUser._id, { weeklyCapacityHours: 20 }, headUser)
-      ).rejects.toThrow(/Marketing Head cannot modify admin or marketing_head accounts/);
+      ).rejects.toThrow(/Creative Head cannot modify admin, executive, or other creative_head accounts/);
 
       await expect(
         peopleService.updatePerson(headUser._id, { weeklyCapacityHours: 20 }, headUser)
-      ).rejects.toThrow(/Marketing Head cannot modify admin or marketing_head accounts/);
+      ).rejects.toThrow(/Creative Head cannot modify admin, executive, or other creative_head accounts/);
     });
 
-    it('Marketing Head CANNOT change user roles or status or emails', async () => {
+    it('Creative Head CANNOT change user roles or status or emails', async () => {
       await expect(
-        peopleService.updatePerson(member1User._id, { role: 'team_lead' }, headUser)
-      ).rejects.toThrow(/Marketing Head cannot change user roles/);
+        peopleService.updatePerson(member1User._id, { role: 'sm_manager' }, headUser)
+      ).rejects.toThrow(/Creative Head cannot change user roles/);
 
       await expect(
         peopleService.updatePerson(member1User._id, { status: 'suspended' }, headUser)
-      ).rejects.toThrow(/Marketing Head cannot change user status/);
+      ).rejects.toThrow(/Creative Head cannot change user status/);
 
       await expect(
         peopleService.updatePerson(member1User._id, { email: 'newemail@phase1test.com' }, headUser)
-      ).rejects.toThrow(/Marketing Head can only edit operational fields/);
+      ).rejects.toThrow(/Creative Head can only edit operational fields/);
     });
 
-    it('Marketing Head CAN edit operational fields of team_lead and team_member', async () => {
+    it('Creative Head CAN edit operational fields of sm_manager and team_member', async () => {
       const updated = await peopleService.updatePerson(
         member1User._id,
         {

@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { env } from "../../config/env.js";
-import { User } from "../users/model.js";
+import { User } from "../people/model.js";
 import { AccessRequest } from "../access/model.js";
 import { ROLE_PERMISSIONS, normalizeRole } from "@mmp/shared";
 import { sendMail, templates } from "../../lib/mailer.js";

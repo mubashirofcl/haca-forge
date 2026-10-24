@@ -14,15 +14,19 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 import { seedReferenceData } from '../apps/api/src/modules/referenceData/service.js';
 import { seedDemoUsers } from './seed-demo-users.js';
 
-// Phase 1 Default Role Map
+// Marketing OS R2 Role Map
 const DEFAULT_ROLE_MAP = {
   admin: 'admin',
-  head: 'marketing_head',
-  lead: 'marketing_head',
-  team_lead: 'team_lead',
+  head: 'creative_head',
+  marketing_head: 'creative_head',
+  creative_head: 'creative_head',
+  lead: 'sm_manager',
+  team_lead: 'sm_manager',
+  sm_manager: 'sm_manager',
   worker: 'team_member',
-  sm_manager: 'team_member',
+  team_member: 'team_member',
   management: 'executive',
+  executive: 'executive',
   dept_lead: 'suspended',
   dept_staff: 'suspended',
   viewer: 'executive',

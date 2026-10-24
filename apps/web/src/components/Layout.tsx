@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -10,19 +10,18 @@ import {
   LogOut,
   ShieldCheck,
   Users,
-  Building2,
-  Layers,
   FileText,
   Film,
   Calendar,
   Clock,
   CheckSquare,
-  TrendingUp,
   ChevronDown,
   Menu,
   X,
   AlertCircle,
+  Bell,
 } from 'lucide-react';
+import { apiFetch } from '../lib/api';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationToastContainer } from './NotificationToast';
 import { MyAccountModal } from './MyAccountModal';
@@ -38,6 +37,7 @@ interface NavItem {
   description: string;
   icon: React.ElementType;
   show: boolean;
+  badge?: number;
   activeMatcher: (pathname: string) => boolean;
 }
 
@@ -47,8 +47,18 @@ interface NavCategory {
   items: NavItem[];
 }
 
+interface SidebarItem {
+  id: string;
+  icon: React.ElementType;
+  label: string;
+  path: string;
+  active: boolean;
+  show?: boolean;
+  badge?: number;
+}
+
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { user, logout, hasPermission } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,172 +108,245 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     setShowMobileMenu(false);
   }, [location.pathname]);
 
-  // Dashboard direct tab path
-  const dashboardPath = '/dashboard';
-  const isDashboardActive = ['/dashboard', '/'].includes(location.pathname);
+  // Role flags
+  const role = user?.role;
+  const isTeamMember = role === 'team_member';
+  const isSmManager = role === 'sm_manager';
+  const isCreativeHead = role === 'creative_head';
+  const isAdmin = role === 'admin';
 
-  // Grouped Navigation Categories for HACA Marketing OS
-  const navCategories: NavCategory[] = [
-    {
-      id: 'workspace',
-      label: 'Workspace',
-      items: [
+  // Pending Access Requests Count Badge for Admin
+  const [pendingAccessCount, setPendingAccessCount] = useState<number>(0);
+  useEffect(() => {
+    if (isAdmin) {
+      apiFetch<{ data: any[] }>('/admin/access-requests?status=pending')
+        .then((res) => {
+          setPendingAccessCount(res.data?.length || 0);
+        })
+        .catch(() => {});
+    }
+  }, [isAdmin]);
+
+  // Landing page path and label
+  const landingPath = isTeamMember ? '/my-work' : '/dashboard';
+  const landingLabel = isTeamMember ? 'My Work' : 'Dashboard';
+  const isLandingActive = isTeamMember
+    ? (location.pathname.startsWith('/my-work') || location.pathname === '/')
+    : (['/dashboard', '/'].includes(location.pathname));
+
+  // Role-specific Navigation Categories
+  const navCategories: NavCategory[] = useMemo(() => {
+    if (isTeamMember) {
+      return [
         {
-          id: 'dashboard',
-          label: 'Team Dashboard',
-          path: '/dashboard',
-          description: 'Monthly targets, KPIs & creative output',
-          icon: LayoutDashboard,
-          show: true,
-          activeMatcher: (p) => p === '/dashboard' || p === '/',
+          id: 'workspace',
+          label: 'Planning',
+          items: [
+            {
+              id: 'todo',
+              label: 'Todo',
+              path: '/todo',
+              description: 'Overdue, Today & Upcoming tasks',
+              icon: Clock,
+              show: true,
+              activeMatcher: (p: string) => p.startsWith('/todo'),
+            },
+            {
+              id: 'calendar',
+              label: 'Calendar',
+              path: '/calendar',
+              description: 'Own scheduled deliverables & deadlines',
+              icon: Calendar,
+              show: true,
+              activeMatcher: (p: string) => p.startsWith('/calendar'),
+            },
+            {
+              id: 'notifications',
+              label: 'Notifications',
+              path: '/notifications',
+              description: 'System alerts and assignments',
+              icon: Bell,
+              show: true,
+              activeMatcher: (p: string) => p.startsWith('/notifications'),
+            },
+          ],
+        },
+      ];
+    }
+
+    if (isSmManager) {
+      return [
+        {
+          id: 'schedule',
+          label: 'Schedule',
+          items: [
+            {
+              id: 'calendar',
+              label: 'Calendar',
+              path: '/calendar',
+              description: 'Monthly production & deliverable schedule',
+              icon: Calendar,
+              show: true,
+              activeMatcher: (p: string) => p.startsWith('/calendar'),
+            },
+            {
+              id: 'work-items',
+              label: 'Work',
+              path: '/work',
+              description: 'Production deliverables across profiles',
+              icon: Film,
+              show: true,
+              activeMatcher: (p: string) => p.startsWith('/work'),
+            },
+          ],
         },
         {
-          id: 'my-work',
-          label: 'My Work',
-          path: '/my-work',
-          description: 'Personal priority queue & actions',
-          icon: CheckSquare,
-          show: user?.role !== 'executive',
-          activeMatcher: (p) => p.startsWith('/my-work'),
+          id: 'operations',
+          label: 'Operations',
+          items: [
+            {
+              id: 'workload',
+              label: 'Team Workload',
+              path: '/workload',
+              description: 'Capacity rollups & workload bands',
+              icon: Users,
+              show: true,
+              activeMatcher: (p: string) => p.startsWith('/workload'),
+            },
+            {
+              id: 'issues',
+              label: 'Issues and Blockers',
+              path: '/issues',
+              description: 'Active blockers & revision flags',
+              icon: AlertCircle,
+              show: true,
+              activeMatcher: (p: string) => p.startsWith('/issues'),
+            },
+            {
+              id: 'reports',
+              label: 'Reports',
+              path: '/reports',
+              description: 'Deliverables & performance reporting',
+              icon: BarChart3,
+              show: true,
+              activeMatcher: (p: string) => p.startsWith('/reports'),
+            },
+          ],
         },
-        {
-          id: 'calendar',
-          label: 'Calendar',
-          path: '/calendar',
-          description: 'Monthly marketing campaign schedule',
-          icon: Calendar,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/calendar'),
-        },
-        {
-          id: 'todo',
-          label: 'Todo & Priorities',
-          path: '/todo',
-          description: 'Overdue, Today & Upcoming tasks',
-          icon: Clock,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/todo'),
-        },
-      ],
-    },
-    {
-      id: 'campaigns-work',
-      label: 'Campaigns & Work',
-      items: [
-        {
-          id: 'campaigns',
-          label: 'Campaigns',
-          path: '/campaigns',
-          description: 'Goals, budgets, pace & creatives',
-          icon: Layers,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/campaigns'),
-        },
-        {
-          id: 'work-items',
-          label: 'Work Items',
-          path: '/work',
-          description: 'Production deliverables across 7 profiles',
-          icon: Film,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/work'),
-        },
-        {
-          id: 'feedback',
-          label: 'Feedback & Revisions',
-          path: '/feedback',
-          description: 'Review threads & revision history',
-          icon: FileText,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/feedback'),
-        },
-        {
-          id: 'issues',
-          label: 'Issues & Blockers',
-          path: '/issues',
-          description: 'Active blockers & revision flags',
-          icon: AlertCircle,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/issues'),
-        },
-      ],
-    },
-    {
-      id: 'analytics-ops',
-      label: 'Analytics & Ops',
-      items: [
-        {
-          id: 'workload',
-          label: 'Team Workload',
-          path: '/workload',
-          description: 'Capacity rollups & workload bands',
-          icon: Users,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/workload'),
-        },
-        {
-          id: 'leads',
-          label: 'Lead Funnel',
-          path: '/leads',
-          description: '12-stage LSQ funnel & CPL metrics',
-          icon: TrendingUp,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/leads'),
-        },
-        {
-          id: 'data-center',
-          label: 'Data Center / LSQ',
-          path: '/data-center',
-          description: 'LeadSquared sync health & discrepancy log',
-          icon: Building2,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/data-center'),
-        },
-        {
-          id: 'reports',
-          label: 'Reports & Automation',
-          path: '/reports',
-          description: '6 Report definitions & 7 automation rules',
-          icon: BarChart3,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/reports'),
-        },
-      ],
-    },
-    {
-      id: 'people-access',
-      label: 'People & Access',
-      items: [
-        {
-          id: 'people',
-          label: 'People Setup',
-          path: '/people',
-          description: 'User accounts & operational assignments',
-          icon: Users,
-          show: true,
-          activeMatcher: (p) => p.startsWith('/people') || p.startsWith('/admin/users'),
-        },
-        {
-          id: 'access-requests',
-          label: 'Access Requests',
-          path: '/admin/access-requests',
-          description: 'Pending user access & onboarding invites',
-          icon: ShieldCheck,
-          show: hasPermission('user.approve'),
-          activeMatcher: (p) => p.startsWith('/admin/access-requests'),
-        },
-      ],
-    },
-  ];
+      ];
+    }
+
+    // creative_head, executive, admin
+    const cats: NavCategory[] = [
+      {
+        id: 'schedule',
+        label: 'Workspace',
+        items: [
+          {
+            id: 'calendar',
+            label: 'Calendar',
+            path: '/calendar',
+            description: 'Monthly production & deliverable schedule',
+            icon: Calendar,
+            show: true,
+            activeMatcher: (p: string) => p.startsWith('/calendar'),
+          },
+          {
+            id: 'work-items',
+            label: 'Work',
+            path: '/work',
+            description: 'Production deliverables across profiles',
+            icon: Film,
+            show: true,
+            activeMatcher: (p: string) => p.startsWith('/work'),
+          },
+          {
+            id: 'feedback',
+            label: 'Feedback and Revisions',
+            path: '/feedback',
+            description: 'Review threads & revision history',
+            icon: FileText,
+            show: true,
+            activeMatcher: (p: string) => p.startsWith('/feedback'),
+          },
+        ],
+      },
+      {
+        id: 'operations',
+        label: 'Operations',
+        items: [
+          {
+            id: 'workload',
+            label: 'Team Workload',
+            path: '/workload',
+            description: 'Capacity rollups & workload bands',
+            icon: Users,
+            show: true,
+            activeMatcher: (p: string) => p.startsWith('/workload'),
+          },
+          {
+            id: 'issues',
+            label: 'Issues and Blockers',
+            path: '/issues',
+            description: 'Active blockers & revision flags',
+            icon: AlertCircle,
+            show: true,
+            activeMatcher: (p: string) => p.startsWith('/issues'),
+          },
+          {
+            id: 'reports',
+            label: 'Reports and Automation',
+            path: '/reports',
+            description: '4 Report definitions & automation rules',
+            icon: BarChart3,
+            show: true,
+            activeMatcher: (p: string) => p.startsWith('/reports'),
+          },
+        ],
+      },
+      {
+        id: 'people-org',
+        label: 'Organization',
+        items: [
+          {
+            id: 'people',
+            label: 'People',
+            path: '/people',
+            description: isCreativeHead
+              ? 'Operating assignments & capacity'
+              : 'User accounts & operational assignments',
+            icon: Users,
+            show: true,
+            activeMatcher: (p: string) => p.startsWith('/people') || p.startsWith('/admin/users'),
+          },
+          ...(isAdmin
+            ? [
+                {
+                  id: 'access-requests',
+                  label: 'Access Requests',
+                  path: '/admin/access-requests',
+                  description: 'Pending user access & onboarding invites',
+                  icon: ShieldCheck,
+                  show: true,
+                  badge: pendingAccessCount > 0 ? pendingAccessCount : undefined,
+                  activeMatcher: (p: string) => p.startsWith('/admin/access-requests'),
+                },
+              ]
+            : []),
+        ],
+      },
+    ];
+    return cats;
+  }, [user?.role, isAdmin, isSmManager, isCreativeHead, isTeamMember, pendingAccessCount]);
 
   // Flatten accessible items for quick search jump
   const allSearchableItems = [
     {
-      id: 'dashboard',
-      label: 'Team Dashboard',
-      path: dashboardPath,
-      description: 'Monthly marketing targets & creative overview',
-      icon: LayoutDashboard,
+      id: isTeamMember ? 'my-work' : 'dashboard',
+      label: landingLabel,
+      path: landingPath,
+      description: isTeamMember ? 'Personal priority queue & actions' : 'KPIs, priorities & creative overview',
+      icon: isTeamMember ? CheckSquare : LayoutDashboard,
       category: 'Workspace',
     },
     ...navCategories.flatMap((cat) =>
@@ -285,112 +368,53 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       )
     : allSearchableItems.slice(0, 6);
 
-  // Left sidebar icons
-  const sidebarItems = [
-    {
-      id: 'dashboard',
-      icon: LayoutDashboard,
-      label: 'Dashboard',
-      path: dashboardPath,
-      active: isDashboardActive,
-    },
-    ...(user?.role !== 'executive'
-      ? [
-          {
-            id: 'my-work',
-            icon: CheckSquare,
-            label: 'My Work',
-            path: '/my-work',
-            active: location.pathname.startsWith('/my-work'),
-          },
-        ]
-      : []),
-    {
-      id: 'campaigns',
-      icon: Layers,
-      label: 'Campaigns',
-      path: '/campaigns',
-      active: location.pathname.startsWith('/campaigns'),
-    },
-    {
-      id: 'work',
-      icon: Film,
-      label: 'Work Items',
-      path: '/work',
-      active: location.pathname.startsWith('/work'),
-    },
-    {
-      id: 'calendar',
-      icon: Calendar,
-      label: 'Calendar',
-      path: '/calendar',
-      active: location.pathname.startsWith('/calendar'),
-    },
-    {
-      id: 'feedback',
-      icon: FileText,
-      label: 'Feedback',
-      path: '/feedback',
-      active: location.pathname.startsWith('/feedback'),
-    },
-    {
-      id: 'workload',
-      icon: Users,
-      label: 'Workload',
-      path: '/workload',
-      active: location.pathname.startsWith('/workload'),
-    },
-    {
-      id: 'todo',
-      icon: Clock,
-      label: 'Todo',
-      path: '/todo',
-      active: location.pathname.startsWith('/todo'),
-    },
-    {
-      id: 'issues',
-      icon: AlertCircle,
-      label: 'Issues',
-      path: '/issues',
-      active: location.pathname.startsWith('/issues'),
-    },
-    {
-      id: 'leads',
-      icon: TrendingUp,
-      label: 'Leads',
-      path: '/leads',
-      active: location.pathname.startsWith('/leads'),
-    },
-    {
-      id: 'data-center',
-      icon: Building2,
-      label: 'Data Center',
-      path: '/data-center',
-      active: location.pathname.startsWith('/data-center'),
-    },
-    {
-      id: 'reports',
-      icon: BarChart3,
-      label: 'Reports',
-      path: '/reports',
-      active: location.pathname.startsWith('/reports'),
-    },
-    {
-      id: 'people',
-      icon: Users,
-      label: 'People',
-      path: '/people',
-      active: location.pathname.startsWith('/people') || location.pathname.startsWith('/admin/users'),
-    },
-    {
-      id: 'access',
-      icon: ShieldCheck,
-      label: 'Access Requests',
-      path: '/admin/access-requests',
-      active: location.pathname.startsWith('/admin/access-requests'),
-      show: hasPermission('user.approve'),
-    },
-  ];
+  // Left sidebar icons per role
+  const sidebarItems: SidebarItem[] = useMemo(() => {
+    if (isTeamMember) {
+      return [
+        { id: 'my-work', icon: CheckSquare, label: 'My Work', path: '/my-work', active: location.pathname.startsWith('/my-work') },
+        { id: 'todo', icon: Clock, label: 'Todo', path: '/todo', active: location.pathname.startsWith('/todo') },
+        { id: 'calendar', icon: Calendar, label: 'Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
+        { id: 'notifications', icon: Bell, label: 'Notifications', path: '/notifications', active: location.pathname.startsWith('/notifications') },
+      ];
+    }
+
+    if (isSmManager) {
+      return [
+        { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', active: isLandingActive },
+        { id: 'calendar', icon: Calendar, label: 'Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
+        { id: 'work', icon: Film, label: 'Work', path: '/work', active: location.pathname.startsWith('/work') },
+        { id: 'workload', icon: Users, label: 'Team Workload', path: '/workload', active: location.pathname.startsWith('/workload') },
+        { id: 'issues', icon: AlertCircle, label: 'Issues and Blockers', path: '/issues', active: location.pathname.startsWith('/issues') },
+        { id: 'reports', icon: BarChart3, label: 'Reports', path: '/reports', active: location.pathname.startsWith('/reports') },
+      ];
+    }
+
+    // creative_head, executive, admin
+    const items: SidebarItem[] = [
+      { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', active: isLandingActive },
+      { id: 'calendar', icon: Calendar, label: 'Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
+      { id: 'work', icon: Film, label: 'Work', path: '/work', active: location.pathname.startsWith('/work') },
+      { id: 'feedback', icon: FileText, label: 'Feedback and Revisions', path: '/feedback', active: location.pathname.startsWith('/feedback') },
+      { id: 'workload', icon: Users, label: 'Team Workload', path: '/workload', active: location.pathname.startsWith('/workload') },
+      { id: 'issues', icon: AlertCircle, label: 'Issues and Blockers', path: '/issues', active: location.pathname.startsWith('/issues') },
+      { id: 'reports', icon: BarChart3, label: 'Reports and Automation', path: '/reports', active: location.pathname.startsWith('/reports') },
+      { id: 'people', icon: Users, label: 'People', path: '/people', active: location.pathname.startsWith('/people') || location.pathname.startsWith('/admin/users') },
+    ];
+
+    if (isAdmin) {
+      items.push({
+        id: 'access',
+        icon: ShieldCheck,
+        label: 'Access Requests',
+        path: '/admin/access-requests',
+        active: location.pathname.startsWith('/admin/access-requests'),
+        badge: pendingAccessCount > 0 ? pendingAccessCount : undefined,
+      });
+    }
+
+    return items;
+  }, [user?.role, location.pathname, isLandingActive, isTeamMember, isSmManager, isAdmin, pendingAccessCount]);
 
   return (
     <div className="min-h-screen flex flex-col text-slate-800">
@@ -422,16 +446,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             ref={navRef}
             className="hidden md:flex items-center p-1 glass-pill-container border border-white/90 relative shrink-0"
           >
-            {/* Dashboard Direct Tab */}
+            {/* Landing Direct Tab */}
             <Link
-              to={dashboardPath}
+              to={landingPath}
               className={`px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 ${
-                isDashboardActive
+                isLandingActive
                   ? 'pill-active'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
               }`}
             >
-              Dashboard
+              {landingLabel}
             </Link>
 
             {/* Categorized Dropdowns / Direct Tabs */}
@@ -447,13 +471,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <Link
                     key={singleItem.id}
                     to={singleItem.path}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 ${
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 ${
                       isActive
                         ? 'pill-active'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                     }`}
                   >
-                    {singleItem.label}
+                    <span>{singleItem.label}</span>
+                    {singleItem.badge !== undefined && singleItem.badge > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500 text-white shadow-xs">
+                        {singleItem.badge}
+                      </span>
+                    )}
                   </Link>
                 );
               }
@@ -515,8 +544,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold leading-tight truncate">
+                                  <span className="text-xs font-bold leading-tight truncate flex items-center gap-1.5">
                                     {item.label}
+                                    {item.badge !== undefined && item.badge > 0 && (
+                                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500 text-white shadow-xs">
+                                        {item.badge}
+                                      </span>
+                                    )}
                                   </span>
                                   {isItemActive && (
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#7a6af6]"></span>
@@ -603,14 +637,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="md:hidden glass-panel border-b border-white bg-white/95 px-4 py-4 space-y-4 animate-in slide-in-from-top duration-200 shadow-xl max-h-[calc(100vh-70px)] overflow-y-auto">
             <div className="space-y-1">
               <Link
-                to={dashboardPath}
+                to={landingPath}
                 onClick={() => setShowMobileMenu(false)}
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold ${
-                  isDashboardActive ? 'bg-[#0d0e12] text-white' : 'text-slate-700 hover:bg-slate-100'
+                  isLandingActive ? 'bg-[#0d0e12] text-white' : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                <LayoutDashboard className="w-4 h-4" />
-                <span>Dashboard</span>
+                {isTeamMember ? <CheckSquare className="w-4 h-4" /> : <LayoutDashboard className="w-4 h-4" />}
+                <span>{landingLabel}</span>
               </Link>
             </div>
 
@@ -630,14 +664,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                         key={it.id}
                         to={it.path}
                         onClick={() => setShowMobileMenu(false)}
-                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold ${
+                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold ${
                           isActive
                             ? 'bg-[#7a6af6]/10 text-[#7a6af6] font-bold'
                             : 'text-slate-700 hover:bg-slate-50'
                         }`}
                       >
-                        <Icon className="w-4 h-4 shrink-0" />
-                        <span className="truncate">{it.label}</span>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Icon className="w-4 h-4 shrink-0" />
+                          <span className="truncate">{it.label}</span>
+                        </div>
+                        {it.badge !== undefined && it.badge > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500 text-white">
+                            {it.badge}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}
@@ -663,13 +704,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     key={item.id}
                     to={item.path}
                     title={item.label}
-                    className={`w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center transition-all ${
+                    className={`w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center transition-all relative ${
                       item.active
                         ? 'bg-[#0d0e12] text-white shadow-md shadow-[#0d0e12]/20 scale-105'
                         : 'text-slate-500 hover:text-slate-900 hover:bg-white/70 hover:scale-105'
                     }`}
                   >
                     <Icon className="w-5 h-5" />
+                    {'badge' in item && item.badge !== undefined && item.badge > 0 && (
+                      <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500 text-white shadow-xs">
+                        {item.badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -677,17 +723,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           {/* Bottom helper icons */}
           <div className="flex flex-col items-center gap-2.5 w-full border-t border-slate-200/80 pt-3 shrink-0">
-            <Link
-              to="/admin/settings"
-              title="System Settings"
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                location.pathname.startsWith('/admin/settings')
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-400 hover:text-slate-700 hover:bg-white/60'
-              }`}
-            >
-              <Settings className="w-4 h-4" />
-            </Link>
+            {isAdmin && (
+              <Link
+                to="/admin/settings"
+                title="System Settings"
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                  location.pathname.startsWith('/admin/settings')
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-400 hover:text-slate-700 hover:bg-white/60'
+                }`}
+              >
+                <Settings className="w-4 h-4" />
+              </Link>
+            )}
             <button
               title="Help & Guides"
               className="w-10 h-10 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-white/60 flex items-center justify-center transition-colors"

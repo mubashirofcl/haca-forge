@@ -31,7 +31,6 @@ interface ActiveWorkItem {
   status: string;
   priority: string;
   isOverdue?: boolean;
-  campaignId?: { _id: string; name: string };
   profileId?: { _id: string; name: string };
 }
 
