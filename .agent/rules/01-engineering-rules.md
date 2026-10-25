@@ -3,8 +3,8 @@
 ## Stack (kept from HACA FORGE, do not swap without asking)
 - Monorepo with npm workspaces: apps/api, apps/web, packages/shared. Node 22 LTS.
 - Backend: Express 5, MongoDB with Mongoose, JavaScript (ESM). Do not convert the backend to TypeScript.
-- Frontend: React 18, Vite, TypeScript (strict), Tailwind, existing glass UI components, TanStack Query and Table,
-  React Hook Form + Zod, React Router, Recharts, FullCalendar.
+- Frontend: React 18, Vite, TypeScript (strict), Tailwind, existing glass UI components, TanStack Query,
+  React Router, Recharts, Lucide Icons.
 - packages/shared (@mmp/shared): role keys (`admin`, `creative_head`, `executive`, `sm_manager`, `team_member`),
   permission keys and role-to-permission map (admin has all keys derived from PERMISSION_KEYS; executive has read-only
   portal.view, people.view, calendar.view, work.view, feedback.view, analytics.team, report.view), enums, Zod schemas,
@@ -31,7 +31,7 @@
 
 ## Security (unchanged from FORGE)
 - JWT in httpOnly, Secure, SameSite cookies; short access token plus rotating refresh token with shared refresh-and-retry queue.
-- helmet, rate limits on login, mongo sanitize, hpp, strict CORS with credentials.
+- helmet, rate limits on login, hpp, strict CORS with credentials.
 - No default passwords or secrets in code or docs. Config through validated env (`apps/api/src/config/env.js`), committed `.env.example`.
 - Invite and reset tokens stored hashed, single use, 48 hours.
 - The first user is seeded as admin via `scripts/seed-admin.js` from `ADMIN_SEED_EMAIL` and `ADMIN_SEED_PASSWORD` (refuses if an admin exists).

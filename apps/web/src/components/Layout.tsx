@@ -24,7 +24,6 @@ import {
 import { apiFetch } from '../lib/api';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationToastContainer } from './NotificationToast';
-import { MyAccountModal } from './MyAccountModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -63,7 +62,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
-  const [showMyAccountModal, setShowMyAccountModal] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
@@ -600,7 +598,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="flex items-center gap-2 pl-2 border-l border-slate-300/60">
               <button
                 type="button"
-                onClick={() => setShowMyAccountModal(true)}
+                onClick={() => navigate('/account')}
                 title="My Account & Work Preferences"
                 className="flex items-center gap-2.5 p-1 rounded-full hover:bg-white/80 transition-all text-left group cursor-pointer"
               >
@@ -825,12 +823,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Real-time Toast Notifications */}
       <NotificationToastContainer />
-
-      {/* My Account Modal */}
-      <MyAccountModal
-        isOpen={showMyAccountModal}
-        onClose={() => setShowMyAccountModal(false)}
-      />
     </div>
   );
 };

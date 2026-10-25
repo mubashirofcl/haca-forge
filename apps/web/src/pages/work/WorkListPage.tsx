@@ -7,6 +7,7 @@ import {
   WORK_TYPES,
   WORK_ITEM_STATUSES,
   PRIORITIES,
+  WORK_TYPE_DEPARTMENT_MAP,
   type WorkType,
   type WorkItemStatus,
   type Priority,
@@ -122,17 +123,22 @@ export const WorkListPage: React.FC = () => {
     try {
       const [oRes, dRes] = await Promise.all([
         apiFetch<{ data: TeamMemberOption[] }>('/api/people').catch(() => ({ data: [] })),
-        apiFetch<{ data: DepartmentOption[] }>('/api/departments').catch(() => ({ data: [] })),
+        apiFetch<{ data?: DepartmentOption[]; departments?: DepartmentOption[] }>('/api/departments').catch(() => ({ data: [] })),
       ]);
 
-      setOwners(oRes.data || []);
-      setDepartments(dRes.data || []);
+      const loadedOwners = oRes.data || [];
+      const loadedDepts = dRes.data || (dRes as any).departments || [];
 
-      if (dRes.data?.length > 0 && !formDepartmentId) {
-        setFormDepartmentId(dRes.data[0]._id);
+      setOwners(loadedOwners);
+      setDepartments(loadedDepts);
+
+      if (loadedDepts.length > 0 && !formDepartmentId) {
+        const targetCode = WORK_TYPE_DEPARTMENT_MAP[formWorkType];
+        const matched = loadedDepts.find((d: DepartmentOption) => d.code === targetCode);
+        setFormDepartmentId(matched ? matched._id : loadedDepts[0]._id);
       }
-      if (oRes.data?.length > 0 && !formOwnerId) {
-        setFormOwnerId(user?._id || user?.id || oRes.data[0]._id);
+      if (loadedOwners.length > 0 && !formOwnerId) {
+        setFormOwnerId(user?._id || user?.id || loadedOwners[0]._id);
       }
     } catch (err) {
       console.warn('Could not load auxiliary data:', err);
@@ -158,8 +164,8 @@ export const WorkListPage: React.FC = () => {
         body: JSON.stringify({
           title: formTitle,
           workType: formWorkType,
-          departmentId: formDepartmentId,
-          ownerId: formOwnerId,
+          departmentId: formDepartmentId || undefined,
+          ownerId: formOwnerId || null,
           deadline: formDeadline,
           estimatedEffortHrs: Number(formEffort),
           priority: formPriority,
@@ -552,7 +558,15 @@ export const WorkListPage: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-700 mb-1">Work Type *</label>
                   <select
                     value={formWorkType}
-                    onChange={(e) => setFormWorkType(e.target.value as WorkType)}
+                    onChange={(e) => {
+                      const newType = e.target.value as WorkType;
+                      setFormWorkType(newType);
+                      const targetCode = WORK_TYPE_DEPARTMENT_MAP[newType];
+                      if (targetCode && departments.length > 0) {
+                        const matched = departments.find((d) => d.code === targetCode);
+                        if (matched) setFormDepartmentId(matched._id);
+                      }
+                    }}
                     className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
                   >
                     {WORK_TYPES.map((wt) => (

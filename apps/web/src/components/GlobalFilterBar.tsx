@@ -21,9 +21,15 @@ export const GlobalFilterBar: React.FC = () => {
   useEffect(() => {
 
     // Load dynamic departments
-    apiFetch<{ data: DepartmentOption[] }>('/api/departments')
-      .then((res) => {
-        const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+    apiFetch<{ data?: DepartmentOption[]; departments?: DepartmentOption[] }>('/api/departments')
+      .then((res: any) => {
+        const list = Array.isArray(res)
+          ? res
+          : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res?.departments)
+          ? res.departments
+          : [];
         setDepartments(list);
       })
       .catch(() => {

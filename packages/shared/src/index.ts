@@ -485,8 +485,8 @@ export type BriefInput = z.infer<typeof briefSchema>;
 export const workItemCreateSchema = z.object({
   title: z.string().trim().min(2, "Work item title is required"),
   workType: z.enum(WORK_TYPES),
-  departmentId: z.string().min(1, "Department is required"),
-  ownerId: z.string().min(1, "Assigned owner is required"),
+  departmentId: z.string().optional().nullable(),
+  ownerId: z.string().optional().nullable(),
   deadline: z.coerce.date(),
   estimatedEffortHrs: z.number().min(0.5).max(100).default(4),
   status: z.enum(WORK_ITEM_STATUSES).default("Not Started"),

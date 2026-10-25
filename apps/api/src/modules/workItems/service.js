@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
 import { WorkItem } from './model.js';
+import { Department } from '../departments/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logActivity, listRecentActivities } from '../activity/service.js';
 import { resolveProfileObjectId } from '../referenceData/service.js';
-import { normalizeWorkType } from '@mmp/shared';
+import { normalizeWorkType, WORK_TYPE_DEPARTMENT_MAP } from '@mmp/shared';
 
 export async function createWorkItem(data, user) {
   // 1. Resolve Profile ID (Default to HACA if not passed)
@@ -26,6 +27,42 @@ export async function createWorkItem(data, user) {
     throw error;
   }
 
+  // 3. Resolve Department ID (auto-infer from workType if omitted)
+  let resolvedDepartmentId =
+    data.departmentId && mongoose.Types.ObjectId.isValid(data.departmentId)
+      ? data.departmentId
+      : null;
+  const normalizedType = normalizeWorkType(data.workType) || data.workType;
+  if (!resolvedDepartmentId) {
+    const deptCode = WORK_TYPE_DEPARTMENT_MAP[normalizedType];
+    if (deptCode) {
+      const deptDoc =
+        (await Department.findOne({ code: deptCode, isActive: true })) ||
+        (await Department.findOne({ code: deptCode }));
+      if (deptDoc) {
+        resolvedDepartmentId = deptDoc._id;
+      }
+    }
+  }
+  if (!resolvedDepartmentId) {
+    const fallbackDept = await Department.findOne({ isActive: true });
+    if (fallbackDept) {
+      resolvedDepartmentId = fallbackDept._id;
+    }
+  }
+
+  // 4. Resolve Owner ID
+  let resolvedOwnerId =
+    data.ownerId && mongoose.Types.ObjectId.isValid(data.ownerId)
+      ? data.ownerId
+      : null;
+  if (!resolvedOwnerId && data.ownerId === undefined && (user?._id || user?.userId)) {
+    const candidateId = user._id || user.userId;
+    if (mongoose.Types.ObjectId.isValid(candidateId)) {
+      resolvedOwnerId = candidateId;
+    }
+  }
+
   const desc =
     data.description !== undefined
       ? data.description
@@ -38,9 +75,9 @@ export async function createWorkItem(data, user) {
   const workItem = await WorkItem.create({
     profileId: resolvedProfileId,
     title: data.title.trim(),
-    workType: normalizeWorkType(data.workType) || data.workType,
-    departmentId: data.departmentId,
-    ownerId: data.ownerId || user._id || user.userId,
+    workType: normalizedType,
+    departmentId: resolvedDepartmentId,
+    ownerId: resolvedOwnerId,
     deadline: data.deadline,
     estimatedEffortHrs: data.estimatedEffortHrs || 4,
     status: data.status || 'Not Started',

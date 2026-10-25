@@ -7,6 +7,7 @@ import {
   WORK_TYPES,
   WORK_ITEM_STATUSES,
   PRIORITIES,
+  WORK_TYPE_DEPARTMENT_MAP,
   type WorkType,
   type WorkItemStatus,
   type Priority,
@@ -54,6 +55,7 @@ interface UserOption {
 interface DepartmentOption {
   _id: string;
   name: string;
+  code?: string;
 }
 
 // Brand Profile Color Mapping for high visual polish
@@ -141,10 +143,10 @@ export const CalendarPage: React.FC = () => {
       try {
         const [uRes, dRes] = await Promise.all([
           apiFetch<{ data: UserOption[] }>('/api/users?limit=100'),
-          apiFetch<{ data: DepartmentOption[] }>('/api/departments?limit=50').catch(() => ({ data: [] })),
+          apiFetch<{ data?: DepartmentOption[]; departments?: DepartmentOption[] }>('/api/departments?limit=50').catch(() => ({ data: [] })),
         ]);
         setUsers(uRes.data || []);
-        setDepartments(dRes.data || []);
+        setDepartments(dRes.data || (dRes as any).departments || []);
       } catch (err) {
         console.error('Failed to load auxiliary calendar options', err);
       }
@@ -300,15 +302,20 @@ export const CalendarPage: React.FC = () => {
     setCreateError(null);
 
     try {
+      const deptCode = WORK_TYPE_DEPARTMENT_MAP[newWorkType];
+      const matchedDept = departments.find((d) => d.code === deptCode);
+      const departmentId = matchedDept ? matchedDept._id : undefined;
+
       await apiFetch('/api/work', {
         method: 'POST',
         body: JSON.stringify({
           title: newTitle.trim(),
           workType: newWorkType,
+          departmentId: departmentId,
           deadline: new Date(newDeadline).toISOString(),
           estimatedEffortHrs: Number(newEffort),
           priority: newPriority,
-          ownerId: newOwnerId || undefined,
+          ownerId: newOwnerId || null,
         }),
       });
 

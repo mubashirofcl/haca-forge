@@ -13,8 +13,6 @@
     "seed:admin": "node scripts/seed-admin.js",
     "seed": "node scripts/seed.js",
     "seed:reset": "node scripts/seed.js",
-    "seed:demo": "node scripts/seed-demo.js",
-    "db:clean": "node scripts/clean-database.js",
     "worker": "node src/worker.js"
   },
   "dependencies": {
@@ -28,7 +26,6 @@
     "dotenv": "^16.4.7",
     "exceljs": "^4.4.0",
     "express": "^5.0.1",
-    "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "hpp": "^0.2.3",
@@ -38,12 +35,10 @@
     "multer": "^2.4.0",
     "nodemailer": "^6.10.0",
     "pino": "^9.6.0",
-    "pino-http": "^10.4.0",
     "socket.io": "^4.8.1",
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@faker-js/faker": "^10.6.0",
     "pino-pretty": "^13.0.0",
     "supertest": "^7.0.0",
     "vitest": "^3.0.5"

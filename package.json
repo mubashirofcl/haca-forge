@@ -18,11 +18,9 @@
     "lint": "eslint .",
     "test": "npm run test --workspaces",
     "typecheck": "npm run typecheck --workspaces",
-    "migrate:roles-v2": "node scripts/migrate-roles-v2.js",
     "seed:admin": "npm run seed:admin -w apps/api",
     "seed": "npm run seed -w apps/api",
-    "seed:reset": "npm run seed:reset -w apps/api",
-    "seed:demo": "npm run seed:demo -w apps/api"
+    "seed:reset": "npm run seed:reset -w apps/api"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

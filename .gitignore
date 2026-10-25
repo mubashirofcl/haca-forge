@@ -48,3 +48,7 @@ backups/
 *USERS_AND_PASSWORDS.md
 docs/USERS_AND_PASSWORDS.md
 Docs/USERS_AND_PASSWORDS.md
+
+# Large media files
+*.mp4
+

@@ -3,7 +3,7 @@ import * as deptService from './service.js';
 export async function list(req, res, next) {
   try {
     const departments = await deptService.listDepartments();
-    return res.status(200).json({ departments });
+    return res.status(200).json({ success: true, data: departments, departments });
   } catch (error) {
     next(error);
   }
@@ -12,7 +12,7 @@ export async function list(req, res, next) {
 export async function create(req, res, next) {
   try {
     const department = await deptService.createDepartment(req.body, req.user);
-    return res.status(201).json({ department });
+    return res.status(201).json({ success: true, data: department, department });
   } catch (error) {
     next(error);
   }
@@ -24,7 +24,7 @@ export async function update(req, res, next) {
     if (!department) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Department not found' } });
     }
-    return res.status(200).json({ department });
+    return res.status(200).json({ success: true, data: department, department });
   } catch (error) {
     next(error);
   }

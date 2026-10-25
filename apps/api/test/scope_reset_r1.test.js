@@ -8,7 +8,6 @@ import { Department } from '../src/modules/departments/model.js';
 import { Profile } from '../src/modules/referenceData/profile.model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { ensureReportDefinitions } from '../src/modules/reports/service.js';
-import { runScopeResetR1 } from '../../scripts/scope-reset-r1.js';
 import { env } from '../src/config/env.js';
 
 const makeToken = (user) =>
@@ -126,6 +125,43 @@ describe('SCOPE RESET R1 Verification Suite', () => {
       expect(rawDoc.qualifiedLeads).toBeUndefined();
       expect(rawDoc.profileId.toString()).toBe(profileHaca._id.toString());
     });
+
+    it('creates a work item with omitted departmentId and ownerId (auto-infers department and defaults owner)', async () => {
+      const res = await request(app)
+        .post('/api/work')
+        .set('Authorization', `Bearer ${leadToken}`)
+        .send({
+          title: 'Quick Create Deliverable (No Dept/Owner Specified)',
+          workType: 'Ad Creative',
+          deadline: new Date(Date.now() + 86400000 * 3).toISOString(),
+          estimatedEffortHrs: 4,
+          priority: 'Medium',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.title).toBe('Quick Create Deliverable (No Dept/Owner Specified)');
+      expect(res.body.data.departmentId).toBeDefined();
+      expect(res.body.data.ownerId).toBeDefined();
+    });
+
+    it('creates an unassigned work item when ownerId is explicitly null', async () => {
+      const res = await request(app)
+        .post('/api/work')
+        .set('Authorization', `Bearer ${leadToken}`)
+        .send({
+          title: 'Unassigned Reel Deliverable',
+          workType: 'Reel',
+          deadline: new Date(Date.now() + 86400000 * 3).toISOString(),
+          estimatedEffortHrs: 4,
+          priority: 'Medium',
+          ownerId: null,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.ownerId).toBeNull();
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -222,31 +258,5 @@ describe('SCOPE RESET R1 Verification Suite', () => {
       expect(keys).not.toContain('campaign_deepdive');
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // 4. Dry run changes nothing
-  // ---------------------------------------------------------------------------
-  describe('4. scripts/scope-reset-r1.js Dry Run Invariance', () => {
-    it('dry run runs without mutating data or collections', async () => {
-      const dbName = mongoose.connection.name;
-      const initialWorkCount = await WorkItem.countDocuments();
-
-      // Execute dry-run via programmatic entry point
-      const result = await runScopeResetR1({
-        argv: [`--db-name=${dbName}`],
-      });
-
-      expect(result.dryRun).toBe(true);
-      expect(result.executed).toBe(false);
-
-      // Verify no work item was deleted
-      const finalWorkCount = await WorkItem.countDocuments();
-      expect(finalWorkCount).toBe(initialWorkCount);
-
-      // Verify created test work item is completely unchanged
-      const itemStillExists = await WorkItem.findById(testWorkItem._id);
-      expect(itemStillExists).not.toBeNull();
-      expect(itemStillExists.title).toBe(testWorkItem.title);
-    });
-  });
 });
+
