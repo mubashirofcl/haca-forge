@@ -5,7 +5,6 @@ import {
   ROLE_KEYS,
   ROLE_LABELS,
   JOB_ROLES,
-  PROFILES,
   DEPARTMENTS,
   WORK_PREFERENCES,
   type UserRole,
@@ -27,7 +26,12 @@ import {
   Building,
   Clock,
   Users,
+  Star,
+  Trash2,
 } from 'lucide-react';
+import { RatingsFeedbackSection } from '../../components/RatingsFeedbackSection';
+import { Avatar } from '../../components/Avatar';
+import { ProfileDrawer } from '../../components/ProfileDrawer';
 
 interface PersonRecord {
   _id: string;
@@ -35,17 +39,14 @@ interface PersonRecord {
   email: string;
   role: UserRole;
   status: 'active' | 'suspended' | 'invited';
+  avatarUrl?: string | null;
+  phone?: string;
   jobRole?: string;
   departmentId?: {
     _id: string;
     name: string;
     code: string;
   } | string;
-  profileAccess?: Array<{
-    _id: string;
-    name: string;
-    code: string;
-  } | string>;
   reportsToIds?: Array<{
     _id: string;
     name: string;
@@ -59,7 +60,6 @@ interface PersonRecord {
 }
 
 interface ReferenceData {
-  profiles: Array<{ _id: string; name: string; code: string }>;
   departments: Array<{ _id: string; name: string; code: string }>;
 }
 
@@ -73,7 +73,6 @@ export const UsersPage: React.FC = () => {
 
   const [people, setPeople] = useState<PersonRecord[]>([]);
   const [referenceData, setReferenceData] = useState<ReferenceData>({
-    profiles: PROFILES.map((p, i) => ({ _id: `prof-${i}`, name: p.name, code: p.code })),
     departments: DEPARTMENTS.map((d, i) => ({ _id: `dept-${i}`, name: d.name, code: d.code })),
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -96,7 +95,6 @@ export const UsersPage: React.FC = () => {
     jobRole: 'Designer' as JobRole,
     departmentId: '',
     weeklyCapacityHours: 40,
-    profileAccess: [] as string[],
     reportsToIds: [] as string[],
     password: '',
     workPreferences: [] as string[],
@@ -108,14 +106,21 @@ export const UsersPage: React.FC = () => {
   const [editJobRole, setEditJobRole] = useState<string>('Designer');
   const [editDeptId, setEditDeptId] = useState<string>('');
   const [editCapacity, setEditCapacity] = useState<number>(40);
-  const [editProfileAccess, setEditProfileAccess] = useState<string[]>([]);
   const [editReportsToIds, setEditReportsToIds] = useState<string[]>([]);
   const [editWorkPreferences, setEditWorkPreferences] = useState<string[]>([]);
+  const [editName, setEditName] = useState<string>('');
+  const [editPhone, setEditPhone] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Profile Drawer state
+  const [drawerPersonId, setDrawerPersonId] = useState<string | null>(null);
 
   // Password Reset modal
   const [resetModalData, setResetModalData] = useState<{ person: PersonRecord; resetLink?: string } | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Quality Ratings Modal
+  const [selectedRatingsPerson, setSelectedRatingsPerson] = useState<PersonRecord | null>(null);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -167,6 +172,8 @@ export const UsersPage: React.FC = () => {
   // Open Edit Modal
   const openEditModal = (p: PersonRecord) => {
     setEditingPerson(p);
+    setEditName(p.name);
+    setEditPhone(p.phone || '');
     setEditRole(p.role);
     setEditJobRole(p.jobRole || 'Designer');
     const currentDeptId = typeof p.departmentId === 'object' && p.departmentId !== null
@@ -175,16 +182,27 @@ export const UsersPage: React.FC = () => {
     setEditDeptId(currentDeptId);
     setEditCapacity(p.weeklyCapacityHours || 40);
 
-    const accessIds = (p.profileAccess || []).map((prof) =>
-      typeof prof === 'object' && prof !== null ? prof._id : prof
-    );
-    setEditProfileAccess(accessIds);
-
     const reportsIds = (p.reportsToIds || []).map((r) =>
       typeof r === 'object' && r !== null ? r._id : r
     );
     setEditReportsToIds(reportsIds);
     setEditWorkPreferences(p.workPreferences || []);
+  };
+
+  // Remove Photo (Admin only)
+  const handleAdminRemovePhoto = async () => {
+    if (!editingPerson) return;
+    if (!confirm(`Are you sure you want to remove ${editingPerson.name}'s profile photo?`)) return;
+    try {
+      await apiFetch(`/api/people/${editingPerson._id}/avatar`, {
+        method: 'DELETE',
+      });
+      setEditingPerson((prev) => (prev ? { ...prev, avatarUrl: null } : null));
+      await fetchData();
+      setFeedback({ type: 'success', message: `Removed photo for ${editingPerson.name}.` });
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to remove photo.' });
+    }
   };
 
   // Save Person Updates
@@ -198,7 +216,6 @@ export const UsersPage: React.FC = () => {
         departmentId: editDeptId || null,
         jobRole: editJobRole || null,
         weeklyCapacityHours: Number(editCapacity),
-        profileAccess: editProfileAccess,
         reportsToIds: editReportsToIds,
         workPreferences: editWorkPreferences,
       };
@@ -212,6 +229,18 @@ export const UsersPage: React.FC = () => {
         method: 'PATCH',
         body: JSON.stringify(body),
       });
+
+      // Admin fixing name or phone
+      if (isAdmin && (editName.trim() !== editingPerson.name || editPhone.trim() !== (editingPerson.phone || ''))) {
+        await apiFetch(`/api/people/${editingPerson._id}/basic-info`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: editName.trim(),
+            phone: editPhone.trim() || undefined,
+          }),
+        });
+      }
 
       setFeedback({ type: 'success', message: `Updated ${editingPerson.name} successfully.` });
       setEditingPerson(null);
@@ -235,9 +264,6 @@ export const UsersPage: React.FC = () => {
         body: JSON.stringify({
           ...createForm,
           departmentId: createForm.departmentId || null,
-          profileAccess: createForm.profileAccess.length > 0
-            ? createForm.profileAccess
-            : referenceData.profiles.map((p) => p._id),
           workPreferences: createForm.workPreferences,
         }),
       });
@@ -251,7 +277,6 @@ export const UsersPage: React.FC = () => {
         jobRole: 'Designer',
         departmentId: '',
         weeklyCapacityHours: 40,
-        profileAccess: [],
         reportsToIds: [],
         password: '',
         workPreferences: [],
@@ -327,7 +352,7 @@ export const UsersPage: React.FC = () => {
             People & Capacity Setup
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Manage team assignments, job roles, profile boundaries, and capacity limits.
+            Manage team assignments, job roles, and capacity limits.
           </p>
         </div>
 
@@ -446,10 +471,6 @@ export const UsersPage: React.FC = () => {
               ? person.departmentId.name
               : 'Unassigned';
 
-            const assignedProfiles = (person.profileAccess || []).map((prof) =>
-              typeof prof === 'object' && prof !== null ? prof.name : prof
-            );
-
             return (
               <div
                 key={person._id}
@@ -459,16 +480,25 @@ export const UsersPage: React.FC = () => {
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500/20 to-indigo-500/20 flex items-center justify-center text-sm font-bold text-purple-700 border border-purple-200">
-                        {person.name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .slice(0, 2)
-                          .join('')
-                          .toUpperCase()}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDrawerPersonId(person._id)}
+                        className="cursor-pointer hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-purple-400 rounded-full"
+                        title={`View ${person.name}'s profile`}
+                      >
+                        <Avatar
+                          url={person.avatarUrl}
+                          name={person.name}
+                          userId={person._id}
+                          size="md"
+                        />
+                      </button>
                       <div>
-                        <h3 className="text-sm font-bold text-slate-900 leading-tight flex items-center gap-1.5">
+                        <h3
+                          onClick={() => setDrawerPersonId(person._id)}
+                          className="text-sm font-bold text-slate-900 leading-tight flex items-center gap-1.5 cursor-pointer hover:text-purple-600 transition-colors"
+                          title="View profile drawer"
+                        >
                           {person.name}
                           {isSelf && (
                             <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-1.5 py-0.2 rounded-md">
@@ -521,31 +551,6 @@ export const UsersPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Profile Access Tags */}
-                  <div className="mb-3">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
-                      Profile Access ({assignedProfiles.length})
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {assignedProfiles.slice(0, 3).map((prof, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-0.5 bg-slate-100 rounded-md text-[10px] text-slate-700 font-medium"
-                        >
-                          {prof}
-                        </span>
-                      ))}
-                      {assignedProfiles.length > 3 && (
-                        <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded-md text-[10px] font-bold">
-                          +{assignedProfiles.length - 3} more
-                        </span>
-                      )}
-                      {assignedProfiles.length === 0 && (
-                        <span className="text-[10px] text-slate-400 italic">Org-wide (All 7 Profiles)</span>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Stage Work Preferences (Content Flow) */}
                   <div className="mb-3">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
@@ -581,6 +586,17 @@ export const UsersPage: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-1.5">
+                    {/* Quality Ratings trigger (Workers see only own; CH/SM/Admin/Exec see all) */}
+                    {(isSelf || isCreativeHead || isAdmin || isExecutive || currentUser?.role === 'sm_manager') && (
+                      <button
+                        onClick={() => setSelectedRatingsPerson(person)}
+                        className="p-1.5 rounded-full hover:bg-amber-50 text-slate-500 hover:text-amber-600 transition-colors cursor-pointer"
+                        title={isSelf ? 'My Quality Ratings & Feedback' : `View ${person.name}'s Quality Ratings`}
+                      >
+                        <Star className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
                     {!isExecutive && (
                       <>
                         {canEditThisPerson ? (
@@ -657,6 +673,64 @@ export const UsersPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSavePerson} className="space-y-4">
+              {/* Basic Info (Admin fix name, phone, photo) */}
+              {isAdmin && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Full Name
+                      </label>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                        placeholder="Full Name"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Phone
+                      </label>
+                      <input
+                        type="tel"
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                        placeholder="+1234567890"
+                      />
+                    </div>
+                  </div>
+
+                  {editingPerson.avatarUrl && (
+                    <div className="flex items-center justify-between p-3 bg-slate-50/70 border border-slate-200 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <Avatar
+                          url={editingPerson.avatarUrl}
+                          name={editingPerson.name}
+                          userId={editingPerson._id}
+                          size="sm"
+                        />
+                        <div>
+                          <div className="text-xs font-semibold text-slate-800">Profile Photo</div>
+                          <div className="text-[10px] text-slate-500">Custom avatar image is set</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAdminRemovePhoto}
+                        className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove Photo</span>
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
               {/* Role selector (Admin only) */}
               {isAdmin && (
                 <div>
@@ -728,37 +802,6 @@ export const UsersPage: React.FC = () => {
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
                 />
               </div>
-
-              {/* Profile Access Checkboxes (Admin only) */}
-              {isAdmin && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Profile (Brand) Scoping
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50/70 p-3 rounded-2xl border border-slate-100 max-h-36 overflow-y-auto">
-                    {referenceData.profiles.map((p) => {
-                      const checked = editProfileAccess.includes(p._id);
-                      return (
-                        <label key={p._id} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setEditProfileAccess([...editProfileAccess, p._id]);
-                              } else {
-                                setEditProfileAccess(editProfileAccess.filter((id) => id !== p._id));
-                              }
-                            }}
-                            className="rounded text-purple-600 focus:ring-purple-500/30"
-                          />
-                          <span className="truncate">{p.name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
               {/* Work Preferences (Content Flow) */}
               <div>
@@ -1029,6 +1072,43 @@ export const UsersPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Quality Ratings & Feedback Modal */}
+      {selectedRatingsPerson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-3xl bg-slate-900 border border-white/20 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div>
+                <h3 className="text-xl font-black text-white">{selectedRatingsPerson.name}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {selectedRatingsPerson.jobRole || 'Team Member'} &bull; {selectedRatingsPerson.role}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedRatingsPerson(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <RatingsFeedbackSection
+              personId={selectedRatingsPerson._id}
+              personName={selectedRatingsPerson.name}
+              isOwnProfile={selectedRatingsPerson._id === currentUser?._id}
+              canEditRating={isCreativeHead || isAdmin}
+              readOnly={isExecutive}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Teammate Profile Drawer */}
+      <ProfileDrawer
+        isOpen={Boolean(drawerPersonId)}
+        personId={drawerPersonId}
+        onClose={() => setDrawerPersonId(null)}
+      />
     </div>
   );
 };

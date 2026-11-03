@@ -136,7 +136,6 @@ describe('Phase 1b: Access Request Backend Service & Authorization', () => {
 
     expect(req).toBeDefined();
     expect(req.status).toBe('pending');
-    expect(req.requestedProfileIds.length).toBe(2);
     expect(req.departmentId?.toString()).toBe(testDept._id.toString());
 
     // Second submission with same email is rejected with 409 duplicate message
@@ -157,15 +156,12 @@ describe('Phase 1b: Access Request Backend Service & Authorization', () => {
     });
   });
 
-  it('filters access requests by status, department, and brand', async () => {
+  it('filters access requests by status and department', async () => {
     const allReqs = await accessService.listAccessRequests({ status: 'pending' });
     expect(allReqs.length).toBeGreaterThan(0);
 
     const deptReqs = await accessService.listAccessRequests({ department: 'SEO & Content' });
     expect(deptReqs.length).toBeGreaterThan(0);
-
-    const brandReqs = await accessService.listAccessRequests({ brand: 'brand_alpha' });
-    expect(brandReqs.length).toBeGreaterThan(0);
   });
 
   it('enforces that only admin can approve; creative_head receives 403', async () => {
@@ -229,7 +225,6 @@ describe('Phase 1b: Access Request Backend Service & Authorization', () => {
     expect(createdPerson.role).toBe('team_member');
     expect(createdPerson.jobRole).toBe('Writer');
     expect(createdPerson.departmentId?.toString()).toBe(testDept._id.toString());
-    expect(createdPerson.profileAccess.length).toBe(1);
     expect(createdPerson.reportsToIds[0]?.toString()).toBe(leadUser._id.toString());
     expect(createdPerson.weeklyCapacityHours).toBe(35);
     expect(createdPerson.mustSetPassword).toBe(true);

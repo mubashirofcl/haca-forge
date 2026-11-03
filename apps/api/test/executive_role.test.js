@@ -169,6 +169,8 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
         'people.view',
         'analytics.team',
         'report.view',
+        'chat.read',
+        'team.profile.view',
       ]);
     });
 
@@ -201,8 +203,8 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
       const scope = await resolveScope(execRestrictedUser);
       expect(scope.scopeType).toBe('all');
       expect(scope.canAccessProfile(profileAlpha._id)).toBe(true);
-      expect(scope.canAccessProfile(profileBeta._id)).toBe(false);
-      expect(scope.allowedProfileIds).toHaveLength(1);
+      // brand removal: single org HACA
+      expect(scope.allowedProfileIds).toEqual([]);
     });
   });
 

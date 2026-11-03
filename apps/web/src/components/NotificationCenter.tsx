@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Bell,
   CheckCircle2,
@@ -14,13 +14,12 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '../hooks/useSocket';
-import { NotificationPreferencesModal } from './NotificationPreferencesModal';
 
 export const NotificationCenter: React.FC = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'tasks' | 'requests' | 'mentions'>('all');
-  const [showPreferences, setShowPreferences] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { on } = useSocket();
 
@@ -181,8 +180,11 @@ export const NotificationCenter: React.FC = () => {
                   </button>
                 )}
                 <button
-                  onClick={() => setShowPreferences(true)}
-                  title="Preferences"
+                  onClick={() => {
+                    setIsOpen(false);
+                    navigate('/settings');
+                  }}
+                  title="Notification Settings"
                   className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                 >
                   <Settings className="w-3.5 h-3.5" />
@@ -308,7 +310,10 @@ export const NotificationCenter: React.FC = () => {
                 View all notifications &rarr;
               </Link>
               <button
-                onClick={() => setShowPreferences(true)}
+                onClick={() => {
+                  setIsOpen(false);
+                  navigate('/settings');
+                }}
                 className="text-slate-400 hover:text-slate-600 transition-colors"
               >
                 Preferences
@@ -317,11 +322,6 @@ export const NotificationCenter: React.FC = () => {
           </div>
         )}
       </div>
-
-      <NotificationPreferencesModal
-        isOpen={showPreferences}
-        onClose={() => setShowPreferences(false)}
-      />
     </>
   );
 };

@@ -3,7 +3,6 @@ import { apiFetch } from '../../lib/api';
 import {
   DEPARTMENTS,
   JOB_ROLES,
-  PROFILES,
   ROLE_KEYS,
   ROLE_LABELS,
   type UserRole,
@@ -21,6 +20,7 @@ import {
   Phone,
   Mail,
 } from 'lucide-react';
+import { Avatar } from '../../components/Avatar';
 
 interface AccessRequestItem {
   _id: string;
@@ -31,8 +31,6 @@ interface AccessRequestItem {
   departmentId?: { _id: string; name: string; code: string } | string;
   jobRole: string;
   requestedRole: UserRole;
-  requestedProfileCodes?: string[];
-  requestedProfileIds?: Array<{ _id: string; name: string; code: string }>;
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'info_needed';
   createdAt: string;
@@ -41,7 +39,6 @@ interface AccessRequestItem {
   assignedRole?: UserRole;
   assignedJobRole?: string;
   assignedDepartmentId?: { _id: string; name: string; code: string };
-  assignedProfileAccess?: Array<{ _id: string; name: string; code: string }>;
   assignedReportsToIds?: Array<{ _id: string; name: string; email: string; jobRole?: string }>;
   assignedCapacity?: number;
   rejectReason?: string;
@@ -55,7 +52,6 @@ export const AccessRequestsPage: React.FC = () => {
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [deptFilter, setDeptFilter] = useState<string>('all');
-  const [brandFilter, setBrandFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Dialog states
@@ -66,7 +62,6 @@ export const AccessRequestsPage: React.FC = () => {
   const [assignedRole, setAssignedRole] = useState<UserRole>('team_member');
   const [assignedJobRole, setAssignedJobRole] = useState<string>('');
   const [assignedDept, setAssignedDept] = useState<string>('');
-  const [assignedProfiles, setAssignedProfiles] = useState<string[]>([]);
   const [assignedReportsTo, setAssignedReportsTo] = useState<string[]>([]);
   const [assignedCapacity, setAssignedCapacity] = useState<number>(40);
 
@@ -120,7 +115,6 @@ export const AccessRequestsPage: React.FC = () => {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.append('status', statusFilter);
       if (deptFilter !== 'all') params.append('department', deptFilter);
-      if (brandFilter !== 'all') params.append('brand', brandFilter);
 
       const res = await apiFetch<{ data: AccessRequestItem[] }>(
         `/admin/access-requests?${params.toString()}`
@@ -135,7 +129,7 @@ export const AccessRequestsPage: React.FC = () => {
 
   useEffect(() => {
     fetchRequests();
-  }, [statusFilter, deptFilter, brandFilter]);
+  }, [statusFilter, deptFilter]);
 
   const openApproveModal = (req: AccessRequestItem) => {
     setSelectedRequest(req);
@@ -143,13 +137,6 @@ export const AccessRequestsPage: React.FC = () => {
     setAssignedRole(req.requestedRole || 'team_member');
     setAssignedJobRole(req.jobRole || JOB_ROLES[0]);
     setAssignedDept(req.department || DEPARTMENTS[0].name);
-
-    // Pre-fill profile access from request
-    const requestedCodes = req.requestedProfileCodes && req.requestedProfileCodes.length > 0
-      ? req.requestedProfileCodes
-      : (req.requestedProfileIds?.map((p) => p.code) || [PROFILES[0].code]);
-    setAssignedProfiles(requestedCodes);
-
     setAssignedReportsTo([]);
     setAssignedCapacity(40);
     setActionReason('');
@@ -171,7 +158,6 @@ export const AccessRequestsPage: React.FC = () => {
             jobRole: assignedJobRole,
             departmentId: assignedDept,
             department: assignedDept,
-            profileAccess: assignedProfiles,
             reportsToIds: assignedReportsTo,
             weeklyCapacityHours: Number(assignedCapacity),
           }),
@@ -241,7 +227,7 @@ export const AccessRequestsPage: React.FC = () => {
             )}
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Review public registrations, confirm role scope, brand permissions and issue activation invites.
+            Review public registrations, confirm role scope, and issue activation invites.
           </p>
         </div>
 
@@ -276,7 +262,7 @@ export const AccessRequestsPage: React.FC = () => {
           ))}
         </div>
 
-        {/* Department, Brand & Search dropdowns */}
+        {/* Department & Search dropdowns */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Department Filter */}
           <select
@@ -288,20 +274,6 @@ export const AccessRequestsPage: React.FC = () => {
             {DEPARTMENTS.map((d) => (
               <option key={d.code} value={d.name}>
                 {d.name}
-              </option>
-            ))}
-          </select>
-
-          {/* Brand Filter */}
-          <select
-            value={brandFilter}
-            onChange={(e) => setBrandFilter(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
-          >
-            <option value="all">All Brands</option>
-            {PROFILES.map((p) => (
-              <option key={p.code} value={p.code}>
-                {p.name}
               </option>
             ))}
           </select>
@@ -351,10 +323,6 @@ export const AccessRequestsPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredRequests.map((req) => {
-            const requestedBrands = req.requestedProfileCodes && req.requestedProfileCodes.length > 0
-              ? req.requestedProfileCodes
-              : (req.requestedProfileIds?.map((p) => p.name || p.code) || []);
-
             return (
               <div
                 key={req._id}
@@ -375,9 +343,11 @@ export const AccessRequestsPage: React.FC = () => {
                           title="Select for bulk approve"
                         />
                       )}
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#7a6af6] to-[#4f46e5] text-white font-bold text-xs flex items-center justify-center shadow-xs">
-                        {req.name.slice(0, 2).toUpperCase()}
-                      </div>
+                      <Avatar
+                        name={req.name}
+                        userId={req._id}
+                        size="md"
+                      />
                       <div>
                         <h3 className="font-bold text-sm text-slate-900 leading-snug">{req.name}</h3>
                         <div className="text-[11px] text-slate-500 flex items-center gap-1">
@@ -432,27 +402,6 @@ export const AccessRequestsPage: React.FC = () => {
                         <Phone className="w-3 h-3" /> Phone:
                       </span>
                       <span className="text-slate-700">{req.phone}</span>
-                    </div>
-                  </div>
-
-                  {/* Brands badges */}
-                  <div className="mb-3">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
-                      Brands Requested
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {requestedBrands.length > 0 ? (
-                        requestedBrands.map((b, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-semibold border border-slate-200"
-                          >
-                            {b}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[11px] text-slate-400">None specified</span>
-                      )}
                     </div>
                   </div>
 
@@ -649,42 +598,6 @@ export const AccessRequestsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Brands (Profile Access) multi-select checkboxes */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="block text-xs font-semibold text-slate-700">
-                          Brand Access Permissions *
-                        </label>
-                        <span className="text-[10px] text-[#7a6af6] font-medium">
-                          {assignedProfiles.length} active
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/70 border border-slate-200/80 rounded-2xl">
-                        {PROFILES.map((profile) => {
-                          const isSelected = assignedProfiles.includes(profile.code);
-                          return (
-                            <button
-                              type="button"
-                              key={profile.code}
-                              onClick={() => {
-                                setAssignedProfiles((prev) =>
-                                  isSelected
-                                    ? prev.filter((c) => c !== profile.code)
-                                    : [...prev, profile.code]
-                                );
-                              }}
-                              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${
-                                isSelected
-                                  ? 'bg-[#0d0e12] text-white border-black shadow-xs'
-                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                              }`}
-                            >
-                              {profile.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
                   </>
                 ) : (
                   <div>

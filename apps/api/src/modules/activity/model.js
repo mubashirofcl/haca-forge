@@ -12,11 +12,6 @@ const activityEventSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    profileId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Profile',
-      index: true,
-    },
     actorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Person',
@@ -55,7 +50,7 @@ const activityEventSchema = new mongoose.Schema(
   }
 );
 
-activityEventSchema.index({ profileId: 1, timestamp: -1 });
+activityEventSchema.index({ timestamp: -1 });
 activityEventSchema.index({ entityType: 1, entityId: 1, timestamp: -1 });
 activityEventSchema.index({ actorId: 1, timestamp: -1 });
 

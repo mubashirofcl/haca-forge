@@ -17,7 +17,11 @@ function getCookieOptions(maxAgeMs) {
 
 export async function login(req, res, next) {
   try {
-    const result = await authService.loginUser(req.body);
+    const result = await authService.loginUser({
+      ...req.body,
+      userAgent: req.headers['user-agent'] || '',
+      ip: req.ip || req.socket?.remoteAddress || '',
+    });
 
     res.cookie(
       "accessToken",
@@ -106,17 +110,50 @@ export async function me(req, res, next) {
         jobRole: req.user.jobRole,
         department: req.user.department,
         departmentId: req.user.departmentId,
-        profileAccess: req.user.profileAccess || [],
         reportsToIds: req.user.reportsToIds || [],
         weeklyCapacityHours:
           req.user.weeklyCapacityHours || req.user.capacity || 40,
-        lastProfileId: req.user.lastProfileId,
         status: req.user.status,
         workPreferences: req.user.workPreferences || [],
+        avatarUrl: req.user.avatarUrl || null,
+        avatarStorageId: req.user.avatarStorageId || null,
+        preferredName: req.user.preferredName || '',
+        phone: req.user.phone || '',
+        whatsappNumber: req.user.whatsappNumber || '',
+        languages: req.user.languages || [],
+        about: req.user.about || '',
+        skills: req.user.skills || [],
+        preferences: req.user.preferences || {
+          startPage: 'Home',
+          dateFormat: 'DD/MM/YYYY',
+          timeFormat: '12h',
+          weekStart: 'monday',
+        },
+        notificationPrefs: req.user.notificationPrefs || {
+          mySteps: { inApp: true, email: true },
+          approvalsRevisions: { inApp: true, email: true },
+          messagesComments: { inApp: true, email: true },
+          deadlinesOverdue: { inApp: true, email: true },
+          planUpdates: { inApp: true, email: true },
+          system: { inApp: true, email: true },
+        },
+        profileCompletedAt: req.user.profileCompletedAt || null,
+        lastLoginAt: req.user.lastLoginAt || req.user.lastLogin || null,
+        createdAt: req.user.createdAt,
       },
       role: normalizeRole(req.user.role),
       permissions: ROLE_PERMISSIONS[normalizeRole(req.user.role)] || [],
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function verifyToken(req, res, next) {
+  try {
+    const token = req.query.token || req.body?.token;
+    const result = await authService.verifyPasswordToken(token);
+    return res.status(200).json(result);
   } catch (error) {
     next(error);
   }

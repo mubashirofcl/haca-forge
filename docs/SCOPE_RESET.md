@@ -16,12 +16,11 @@ All commercial lead tracking, external CRM synchronization, revenue targeting, a
 ```mermaid
 graph TD
     subgraph Core System Boundary [HACA Marketing OS - Work & Team Only]
-        CP[Calendar Plan: Monthly / Project] -->|Submit for Approval| CH_Appr[Creative Head Verification & Row Approval]
-        CH_Appr -->|Auto-Generate| Stages[ContentPiece & Stage WorkItems]
-        Stages -->|Auto-Recommend by Work Preference| Assign[SM Manager Assignment Confirmation]
-        Assign -->|Work Execution| Worker[Team Member: My Work & Stage Deliverables]
+        CP[Calendar Plan: Monthly / Individual] -->|Submit for Approval| CH_Appr[Creative Head Verification & Row Approval]
+        CH_Appr -->|Auto-Generate on Approval| Stages[ContentPiece & Stage WorkItems]
+        Stages -->|Stage 1 Unlocked| Worker[Team Member: My Work & Stage Deliverables]
         Worker -->|Review Stages| Rev[Creative Head Review & Feedback Loop]
-        Worker -->|Non-Review Stages| Done[Done and Forward]
+        Worker -->|Non-Review Stages| Done[Done and Forward / Publish]
         Rev -->|Approved| Live[Publish & Turnaround Tracking]
         Live -->|Tracked by All| Tracker[Content Tracker Table & Dashboard]
     end
@@ -38,6 +37,9 @@ The following domains, models, routes, jobs, UI pages, and configuration are **p
 | **Leads & CRM** | LSQ adapter (`lsqAdapter.js`), inbound polling & sync jobs, `Lead` Mongoose model, `SyncRun` model, `DataIssue` model, Lead Funnel screen (`/leads`), Data Center screen (`/data-center`), and the WhatsApp inbound auto-task creation rule. |
 | **Campaigns & OKRs** | `Campaign` Mongoose model, campaign routes (`/api/campaigns/*`), campaign UI pages (`/campaigns`, `/campaigns/:id`), campaign budget, spend tracking actuals, and `relatedOKR`. |
 | **Monthly Targets** | `MonthlyTarget` Mongoose model, target routes (`/api/targets/*`), target UI forms, target KPIs, and revenue/lead target metrics. |
+| **Project Plans** | `kind: 'project'` is removed (there are no department leads). Replaced by `individual` plans (exactly 1 row) and the row field `Program or event`. |
+| **Hour-Based Escalations** | No 4-hour overdue escalation, no 4-hour blocker escalation, no 48-hour revision flag escalation. Replaced by daily overdue checks, 'blocked since <date>', and dashboard pinning. Messages never say 'blocked for 4h'. |
+| **Invented Codes** | Retired internal codes (`assets_missing`, `brief_gap`, `waiting_approval`, etc.) replaced by standard 9 blocker reasons and 7 revision root causes. |
 | **Reports** | **Lead Funnel & CPL Report** and **Campaign Deep-Dive Report** (4 core work reports remain). |
 | **Automation** | `lsq_live_sync` background runner (6 core automation rules remain). |
 | **Performance Dimensions** | **Business Impact** performance dimension (4 dimensions remain: Output, Efficiency, Quality, Collaboration). |
@@ -83,9 +85,9 @@ executive ─── Leadership Viewer (Company Management, Zero Mutation Privile
 #### 2. `creative_head` (Creative Leadership — formerly `marketing_head`)
 * **Identity:** Creative Director / Head of Creative Production.
 * **Capabilities:**
-  * **Calendar Plan Approvals:** Verifies and approves Social Media Calendar Plans submitted by the SM Manager. Can approve all rows at once, approve selected rows, or send back rows with line-item comments requesting changes.
+  * **Calendar Plan Approvals:** Verifies and approves Calendar Plans submitted by the SM Manager. Actions: approve all rows at once, approve selected rows, request changes with mandatory row comments, or reject the entire plan with an overall strategic concern.
   * **Stage Review Approvals:** Authoritative approver for all creative review stages (`Script`, `Content`, `Design`, `Edit`). Approves deliverable links or sends back with `Revision Required` and specific feedback.
-  * **Revision Root Cause Classification:** Classifies root causes on revision flags (Brief unclear, Creative direction unclear, Skill gap, Feedback inconsistency, Excessive scope change, TL approval delay, Client/business requirement changed).
+  * **Revision Root Cause Classification:** Classifies root causes on revision flags (7 canonical causes: Brief unclear, Creative direction unclear, Skill gap, Feedback inconsistency, Excessive scope change, Approval delay, Client/business requirement changed).
   * **Team Operations Management:** Manages operational assignments for `sm_manager` and `team_member` (`departmentId`, `jobRole`, `workPreferences[]`, `reportsToIds[]`, `weeklyCapacityHours`).
   * **System Oversight:** Sees all work, all team members, and overall team workload. Runs and controls report definitions and automation rules. Can reassign work owners.
 * **Strict Boundaries:** Cannot create or suspend user accounts; cannot change user roles; cannot grant elevated roles; cannot upload or type calendar plans; cannot modify `admin`, `executive`, or other `creative_head` accounts.
@@ -94,10 +96,11 @@ executive ─── Leadership Viewer (Company Management, Zero Mutation Privile
 #### 3. `sm_manager` (Social Media Manager / Operational Planner — formerly `team_lead`)
 * **Identity:** Main operational planning and orchestration lead.
 * **Capabilities:**
-  * **Plan Creation & Upload:** Builds and creates Social Media Calendar Plans (Monthly or Project). Uploads plans via structured Excel/CSV templates with client-side validation preview, or enters rows directly in an interactive grid.
-  * **Plan Submission:** Submits draft plans to the Creative Head for verification.
-  * **Stage Assignment & Scheduling:** Once plan rows are approved, sets stage deadlines, auto-assigns or manually assigns stage owners based on `workPreferences[]` and capacity, and confirms all assignments in one click.
-  * **Workflow Orchestration:** Tracks every stage across all content pieces in the Content Tracker, reassigns stage owners when bottlenecks arise, shifts deadlines, resolves blockers, and monitors live team workload.
+  * **Plan Creation & Upload:** Builds and creates Calendar Plans (`monthly` and `individual`). Uploads plans via structured 24-column Excel/CSV templates with auto-fill preview, or enters rows directly in an interactive grid. Title carries school name (e.g. 'Tech School November 2026').
+  * **Instant Stage Auto-Fill:** Selecting deliverable type and reel toggles immediately suggests stage list, owners (<85% workload), and calendar-day deadline offsets. Overrides are tagged 'set by SM Manager'.
+  * **Plan Submission:** Submits draft plans to the Creative Head for verification (errors block submit).
+  * **Post-Approval Adjustments:** Can reassign an owner, modify a deadline, reschedule $F$, or skip an unstarted stage with audit logging and notifications.
+  * **Workflow Orchestration:** Tracks every stage across all content pieces in the Content Tracker, resolves blockers, and monitors live team workload.
   * **Visibility:** Full visibility into all work items, all people, and all calendar entries.
 * **Strict Boundaries:** **Cannot approve calendar plans and cannot approve review stages.** Does not classify revision root causes. Cannot manage user accounts or elevate permissions.
 * **Landing Page:** `/dashboard`.
@@ -111,10 +114,10 @@ executive ─── Leadership Viewer (Company Management, Zero Mutation Privile
 #### 5. `team_member` (Creative Contributor / Worker)
 * **Identity:** Writers, Graphic Designers, Video Editors, Animators, Specialists.
 * **Capabilities:**
-  * **Personal Portal:** Access restricted to own personal dashboard (`/my-work`), personal Todo, personal Calendar entries, Work Detail (`/work/:id`), Notifications, and My Account.
+  * **Personal Portal:** Access restricted to own personal dashboard (`/my-work`), personal Todo, personal Calendar entries, Work Detail (`/work/:id`), Notifications, and My Account. Downstream locked stages appear greyed out with due dates.
   * **Stage Execution:** Starts own assigned stages, updates status (`In Progress`, `Pending`, `Blocked`), pastes output URLs (Zoho Writer, Google Docs, Figma, Drive, YouTube links).
-  * **Handoffs:** Submits review stages (`Script`, `Content`, `Design`, `Edit`) to the Creative Head for approval; marks non-review stages (`Shoot`, `Post`) as **Done and forward** to unlock the next stage.
-  * **Collaboration:** Replies to revision feedback threads, flags blockers with mandatory dependency owner attribution, and submits work requests to the SM Manager.
+  * **Handoffs:** Submits review stages (`Script`, `Content`, `Design`, `Edit`) to the Creative Head for approval; marks non-review stages (`Shoot`, `Post`) as **Done and forward** (or Publish) to complete the stage.
+  * **Collaboration:** Replies to revision feedback threads, flags blockers with mandatory dependency owner attribution (9 canonical reasons), and submits work requests to the SM Manager.
 * **Strict Boundaries:** Sees only own work items and own calendar items. Cannot see other members' work unless assigned. Cannot create calendar plans, cannot assign work, cannot approve deliverables, and cannot access team-wide reports or workload analytics.
 * **Landing Page:** `/my-work`.
 
@@ -124,7 +127,7 @@ executive ─── Leadership Viewer (Company Management, Zero Mutation Privile
 
 ---
 
-## 5. End-to-End Content & Work Lifecycle (The 8-Step Flow)
+## 5. End-to-End Content & Work Lifecycle (Workflow V2)
 
 ```mermaid
 sequenceDiagram
@@ -134,78 +137,74 @@ sequenceDiagram
     actor Worker as Team Member
     actor Publisher as Posting Owner
     
-    Note over SMM: Step 1: Create Plan
-    SMM->>SMM: Upload Excel/CSV or type rows in grid (Monthly/Project)
+    Note over SMM: Step 1: Create Plan & Auto-Fill
+    SMM->>SMM: Upload 24-col CSV/Excel or enter in grid (Monthly/Individual)
+    SMM->>SMM: Select Type -> Instant Auto-fill of Owners & Deadlines (F-5, F-2, etc.)
     Note over SMM: Step 2: Submit Plan
-    SMM->>CH: Submit Plan (Draft -> Submitted)
+    SMM->>CH: Submit Plan (Validation errors block submit)
     Note over CH: Step 3: Verify Plan
-    CH->>SMM: Approve All / Approve Rows / Request Changes with Comments
+    CH->>SMM: Approve All / Approve Rows / Request Changes / Reject Plan with Concern
     Note over SMM,CH: Step 4: ContentPiece & Stages Built
     SMM->>SMM: Approved rows generate ContentPieces & Stage WorkItems
-    Note over SMM: Step 5: Recommended Assignment
-    SMM->>SMM: Review recommendations (work preference, capacity <85%) & Confirm
-    Note over Worker: Step 6: Stage Execution
+    Note over Worker: Step 5: Stage 1 Unlocked (Others Locked)
     Worker->>Worker: Executes stage in My Work & pastes output link
     alt Review Stage (Script, Content, Design, Edit)
         Worker->>CH: Submit for approval
-        Note over CH: Step 7: Creative Head Review
-        CH->>Worker: Approve (unlocks next stage) OR Revision Required
+        Note over CH: Step 6: Creative Head Review
+        CH->>Worker: Approve (unlocks next stage) OR Revision Required (note attached)
     else Non-Review Stage (Shoot, Post)
-        Worker->>Worker: Click "Done and forward" (unlocks next stage)
+        Worker->>Worker: Done and forward (footage link unlocks Edit)
     end
-    Note over Publisher: Step 8: Publish & Measure
+    Note over Publisher: Step 7: Publish & Measure
     Publisher->>Publisher: Publishes content, enters live URL & date
-    Note over SMM,CH: Tracked live in Content Tracker & Dashboard
+    Note over SMM,CH: Tracked live in Content Tracker ('who holds it now', 'at risk' 2 days)
 ```
 
 ### Detailed Lifecycle Steps:
 
-1. **Plan Creation:**
-   * The SM Manager creates a **Calendar Plan** (kind: `Monthly` or `Project`, with title and time period).
-   * Plan data can be entered in two ways:
-     * **Excel / CSV Upload:** Downloadable standardized template, client-side validation preview highlighting row syntax errors, followed by single-click commit.
-     * **Interactive Grid:** Fast inline table entry.
-   * Required fields per row: `postingDate` (or final date), `topic`, `contentType`, `needsScript` (boolean), `needsShoot` (boolean, Reel only), `contentLink` (optional draft doc), `remarks`.
-2. **Plan Submission:**
-   * SM Manager reviews the drafted plan and clicks **Submit Plan**.
-   * Plan status transitions: `Draft` $\rightarrow$ `Submitted`. Individual row statuses mirror the plan state.
-3. **Creative Head Verification:**
-   * Creative Head inspects the plan in **Feedback & Revisions $\rightarrow$ Plan Approvals**.
-   * Actions available to Creative Head:
+1. **Plan Creation & Row Fields:**
+   * The SM Manager creates a **Calendar Plan** (`kind: 'monthly'` or `'individual'`, title carrying school e.g. 'Tech School November 2026').
+   * Enters rows via 24-column Excel/CSV upload or interactive grid.
+   * Required fields per row: `postingDate F`, `topic`, `type` (15 types), `forTeam` (Sales, Marketing, Academics, Other), `brief` (max 1,000 chars), `priority` (Normal/Urgent, default Normal).
+   * Optional fields: `postingTime`, `programOrEvent`, `referenceLink` (input URL only; never reuse output fields), `remarks`.
+   * Postable types require `postingOwner`. Reels require `needsScript`, `needsShoot`, and `sourceVideoLink` when needsShoot is no.
+2. **Auto-Fill Suggestion Engine (at Row Creation):**
+   * Selecting `type` and reel toggles immediately generates stages, suggested owners, and suggested deadlines:
+     * Owners: active `team_member`, matching `workPreferences[]`, capacity strictly $<85\%$ (including draft plan stage hours), ranked by lowest workload, fewest 90-day revisions, earliest availability. Admin, Creative Head, SM Manager, Executive excluded.
+     * Deadlines (calendar days from $F$, 2-day buffer after last creation stage):
+       * Postable design: Content $F-5$, Design $F-2$, Post $F$.
+       * Non-postable design: Content $F-5$, Design $F-2$, Handover $F$.
+       * Reel A (script & shoot): Script $F-8$, Shoot $F-5$, Edit $F-2$, Post $F$.
+       * Reel B (shoot only): Shoot $F-5$, Edit $F-2$, Post $F$.
+       * Reel C (edit only): Edit $F-2$, Post $F$.
+   * SM Manager can edit or clear any suggestion (marked 'set by SM Manager').
+3. **Plan Submission & Validation:**
+   * Errors block submit: missing required fields, unknown type, past dates, stage deadline after $F$, out-of-order deadlines, needsShoot=no without sourceVideoLink, postable type without posting owner, invalid owner, duplicate row, individual plan != 1 row.
+   * Warnings (allowed): creation stage > $F-1$, owner > 85%, date outside plan month.
+4. **Creative Head Verification:**
+   * Creative Head inspects the plan in **Feedback & Revisions $\rightarrow$ Plan Approvals**:
      * **Approve All:** Approves all rows in the plan.
-     * **Approve Selected:** Approves valid rows while flagging others.
-     * **Request Changes:** Attaches specific line-item comments to individual rows and sends the plan back (`Changes Requested`).
-   * SM Manager updates rejected rows based on comments and resubmits.
-4. **ContentPiece & Stage Generation:**
-   * Once rows are marked `Approved`, the system auto-generates a **ContentPiece** record for each approved row, linked to the plan.
-   * Sequential stage **WorkItems** are instantly constructed using the pipeline rules from `CONTENT_FLOW.md`.
-   * Stage due dates are calculated automatically by counting backward from the final posting date $F$:
-     * *Design Postable:* Content ($F-6$), Design ($F-3$), Post ($F$).
-     * *Design Non-Postable:* Content ($F-5$), Design ($F-2$, approved by $F$).
-     * *Reel Variant A (Script + Shoot):* Script ($F-10$), Shoot ($F-7$), Edit ($F-4$), Post ($F$).
-     * *Reel Variant B (No Script + Shoot):* Shoot ($F-7$), Edit ($F-4$), Post ($F$).
-     * *Reel Variant C (No Script + No Shoot):* Edit ($F-4$), Post ($F$).
-5. **Intelligent Stage Auto-Assignment:**
-   * For each generated stage, the system identifies candidate owners using:
-     1. `Person.workPreferences[]` matching the stage key (`Content`, `Script`, `Design`, `Shoot`, `Edit`, `Post`).
-     2. Current workload percentage strictly **under 85%**.
-     3. Availability and capacity fit before the stage deadline.
-   * **No Silent Assignment:** All recommendations are presented in the **Assign Stages** view with clear rationales. The SM Manager can confirm all recommendations with one click or manually override any stage. Stages left open display as `"Needs owner"`.
+     * **Approve Selected:** Approves valid rows while leaving others.
+     * **Request Changes:** Attaches specific row comment (`changes_requested`).
+     * **Reject Plan:** Rejects entire plan with overall concern; all submitted rows go to `changes_requested`.
+   * SM Manager edits and resubmits only draft and changes_requested rows.
+5. **ContentPiece & Stage Generation (Post-Approval):**
+   * Approved rows auto-generate a **ContentPiece** record and sequential stage **WorkItems** with row owners and deadlines.
+   * Stage 1 is unlocked immediately (`unlockedAt: new Date()`); downstream stages remain locked (`unlockedAt: null`, greyed out with due date).
+   * SM Manager and Admin can adjust owner, deadline, reschedule $F$, or skip unstarted stage (logged in ActivityEvent; worker & Creative Head notified). Topic and type cannot change after approval.
 6. **Work Execution & Submission:**
-   * Creative workers see assigned stages in `/my-work` (categorized into Today, This Week, Later).
-   * Worker clicks **Start Work** (`In Progress`), executes the work, and pastes the output deliverable URL.
-   * **Review Stages (`Script`, `Content`, `Design`, `Edit`):** Worker clicks **Submit for Approval**, transitioning the item to `Feedback` status for the Creative Head.
-   * **Non-Review Stages (`Shoot`, `Post`):** Worker clicks **Done and forward**, immediately marking the stage complete and unlocking the next stage in sequence.
+   * Workers see assigned stages in `/my-work`.
+   * Worker clicks **Start Work** (`In Progress`), executes work, and pastes output deliverable URL.
+   * **Review Stages (`Script`, `Content`, `Design`, `Edit`):** Worker clicks **Submit for approval**.
+   * **Non-Review Stages (`Shoot`, `Post`):** Worker clicks **Done and forward** (footage URL), unlocking edit.
 7. **Creative Head Review & Revision Guardrails:**
-   * Creative Head reviews the deliverable from the **Waiting for Approval** queue.
    * Decisions:
-     * **Approved:** Marks stage approved and automatically unlocks the next stage (`unlockedAt` timestamp set).
-     * **Revision Required:** Attaches clear feedback text. The stage returns to the worker (`In Progress`), incrementing the revision counter.
-   * **Revision Guardrails:** If revisions reach 4, or exceed the worker's rolling 90-day average by $>1$, an automatic `RevisionFlag` is raised. The Creative Head classifies the root cause. If unclassified for 48 hours, it escalates.
+     * **Approved:** Marks stage approved and unlocks the next stage.
+     * **Revision Required:** Attaches clear feedback text; returns to worker (`In Progress`), incrementing revisions.
+   * **Revision Flag:** When revisions reach 4 or exceed owner baseline by $>1$, a `RevisionFlag` is raised and pinned to the top of the Creative Head dashboard until classified (no 48-hour escalation).
 8. **Publishing & Turnaround Tracking:**
-   * The posting owner publishes the approved asset, transitions the Post stage to `Published`, and enters the live public URL and publication timestamp.
-   * The system computes **Turnaround Days** ($\text{Published Date} - \text{First Stage Start Date}$).
-   * All stages and pieces are audited live in the **Content Tracker** across all management roles (`admin`, `creative_head`, `sm_manager`, `executive`).
+   * The posting owner publishes live, sets status to `Published`, and enters live public URL and timestamp. Non-postable items are handed over on date $F$.
+   * System audits live in the **Content Tracker** (`who holds it now`, `at risk` if due in 2 days and not started/pending/blocked, late by days, lag days, wait days).
 
 ---
 
@@ -248,19 +247,19 @@ REMOVED SCREENS:
 
 The `/dashboard` screen is structured into 8 operational sections designed for real-time clarity:
 
-1. **Month Plan Status:** Live status of current calendar plans (Draft, Submitted, Approved), planned pieces versus completed pieces, and publishing velocity.
+1. **Month Plan Status:** Live status of current calendar plans (Draft, Submitted, Approved, Approved with pending rows), planned deliverables versus completed deliverables, and publishing velocity.
 2. **KPI Strip:** 7 core real-time metrics:
    * **Planned:** Total pieces planned for the active period.
    * **Completed:** Total pieces published / final approved.
    * **In Progress:** Stages actively being worked on.
-   * **At Risk:** Open items due within 72 hours that are not yet in review.
-   * **Blocked:** Items currently held up with an active blocker.
-   * **Pending Approval:** Items awaiting Creative Head review.
-   * **Overdue:** Items where deadline has passed without completion.
+   * **At Risk:** Active stages due within **2 calendar days** that are currently `Not Started`, `Pending`, or `Blocked`.
+   * **Blocked:** Items currently held up with an active blocker ('blocked since <date>').
+   * **Pending Approval:** Items awaiting Creative Head review ('waiting for X days').
+   * **Overdue:** Items where deadline has passed without completion (late by days).
 3. **Today's Priorities:** High-urgency deliverables due today or overdue.
 4. **Production Stats & Trend:** Output velocity by content type (Reels, Static Posts, Carousels, Stories, Design assets) and weekly completion trends.
 5. **Team Workload:** Live capacity breakdown showing healthy ($<65\%$), high ($65\%-85\%$), and overloaded ($>85\%$) team members.
-6. **Issues & Blockers:** Unresolved blocker items with dependency owners, plus active revision flags requiring classification.
+6. **Issues & Blockers:** Unresolved blocker items (9 canonical reasons) with dependency owners, plus active revision flags pinned at top for classification.
 7. **Waiting for Approval:** Urgent deliverables submitted by team members awaiting Creative Head action.
 8. **Recent Activity:** Audit feed of status transitions, approvals, handoffs, and assignments.
 
@@ -281,18 +280,18 @@ Four focused reports replace all previous marketing and lead reports:
 
 ---
 
-## 9. Automation Rules (6 Core Rules)
+## 9. Automation Rules (Day-Based, Hour Rules Removed)
 
 Six background automation jobs run via BullMQ:
 
 1. **`month_end_report`:** Automatically compiles and archives the Monthly Performance Scorecard on the last day of the month at 23:59.
-2. **`overdue_escalation`:** Pings the stage owner immediately when a deadline passes; escalates alert to the SM Manager if uncompleted after 4 hours.
-3. **`todo_escalation`:** Flags open items that have had no status change or activity for $>3$ consecutive days.
-4. **`blocker_dependency_alert`:** Instantly dispatches a notification to the named dependency owner when an item is marked Blocked.
-5. **`revision_pattern_flag`:** Automatically raises a `RevisionFlag` when an item reaches 4 revisions or exceeds owner average by $>1$.
+2. **`overdue_daily_notification`:** Checks at the end of each day in `REPORT_TIMEZONE`; notifies the deliverable owner and SM Manager once when a due date passes. Tracker displays 'late by days'. (No 4-hour alert).
+3. **`todo_inactivity_reminder`:** Flags open items that have had no status change for 3 consecutive days (owner notified on Day 3; SM Manager notified on Day 4).
+4. **`blocker_dependency_alert`:** Instantly dispatches a notification to the named dependency owner and SM Manager when an item is marked Blocked. Tracker displays 'blocked since <date>'. (No 4-hour alert).
+5. **`revision_pattern_flag`:** Automatically raises a `RevisionFlag` when an item reaches 4 revisions or exceeds owner average by $>1$. Stays pinned at top of Creative Head dashboard until classified. (No 48-hour alert).
 6. **`weekly_report`:** Compiles and dispatches the Weekly Work Report every Monday morning at 08:00.
 
-*(Removed: `lsq_live_sync`).*
+*(Removed: `lsq_live_sync`, 4-hour overdue escalation, 4-hour blocker escalation, 48-hour flag escalation).*
 
 ---
 

@@ -13,17 +13,19 @@ import {
   FileText,
   Film,
   Calendar,
-  Clock,
   CheckSquare,
   ChevronDown,
   Menu,
   X,
   AlertCircle,
   Bell,
+  MessageSquare,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationToastContainer } from './NotificationToast';
+import { UserMenuDropdown } from './UserMenuDropdown';
+import { Avatar } from './Avatar';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -64,6 +66,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!user) return;
+    apiFetch<{ channels: Array<{ unreadCount?: number }> }>('/api/chat/channels')
+      .then((res) => {
+        const total = (res.channels || []).reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+        setChatUnreadCount(total);
+      })
+      .catch(() => {});
+  }, [user, location.pathname]);
 
   const navRef = useRef<HTMLDivElement>(null);
 
@@ -141,17 +154,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           label: 'Planning',
           items: [
             {
-              id: 'todo',
-              label: 'Todo',
-              path: '/todo',
-              description: 'Overdue, Today & Upcoming tasks',
-              icon: Clock,
+              id: 'my-work',
+              label: 'My Work',
+              path: '/my-work',
+              description: 'Personal stage assignments, deliverables & submissions',
+              icon: CheckSquare,
               show: true,
-              activeMatcher: (p: string) => p.startsWith('/todo'),
+              activeMatcher: (p: string) => p.startsWith('/my-work') || p === '/' || p.startsWith('/todo'),
             },
             {
               id: 'calendar',
-              label: 'Calendar',
+              label: 'Creative Calendar',
               path: '/calendar',
               description: 'Own scheduled deliverables & deadlines',
               icon: Calendar,
@@ -179,10 +192,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           label: 'Schedule',
           items: [
             {
+              id: 'my-work',
+              label: 'My Work',
+              path: '/my-work',
+              description: 'Personal assignments, posting deliverables & publishing tasks',
+              icon: CheckSquare,
+              show: true,
+              activeMatcher: (p: string) => p.startsWith('/my-work') || p.startsWith('/todo'),
+            },
+            {
               id: 'calendar',
-              label: 'Calendar',
+              label: 'Creative Calendar',
               path: '/calendar',
-              description: 'Monthly production & deliverable schedule',
+              description: 'Creative production & deliverable schedule',
               icon: Calendar,
               show: true,
               activeMatcher: (p: string) => p.startsWith('/calendar'),
@@ -191,7 +213,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               id: 'work-items',
               label: 'Work',
               path: '/work',
-              description: 'Production deliverables across profiles',
+              description: 'Production deliverables',
               icon: Film,
               show: true,
               activeMatcher: (p: string) => p.startsWith('/work'),
@@ -231,6 +253,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             },
           ],
         },
+        {
+          id: 'organization',
+          label: 'Organization',
+          items: [
+            {
+              id: 'team',
+              label: 'Team Directory',
+              path: '/team',
+              description: 'Team directory, capacity & worker performance profiles',
+              icon: Users,
+              show: true,
+              activeMatcher: (p: string) => p.startsWith('/team'),
+            },
+          ],
+        },
       ];
     }
 
@@ -242,9 +279,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         items: [
           {
             id: 'calendar',
-            label: 'Calendar',
+            label: 'Creative Calendar',
             path: '/calendar',
-            description: 'Monthly production & deliverable schedule',
+            description: 'Creative production & deliverable schedule',
             icon: Calendar,
             show: true,
             activeMatcher: (p: string) => p.startsWith('/calendar'),
@@ -253,7 +290,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             id: 'work-items',
             label: 'Work',
             path: '/work',
-            description: 'Production deliverables across profiles',
+            description: 'Production deliverables',
             icon: Film,
             show: true,
             activeMatcher: (p: string) => p.startsWith('/work'),
@@ -307,15 +344,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         label: 'Organization',
         items: [
           {
-            id: 'people',
-            label: 'People',
-            path: '/people',
-            description: isCreativeHead
-              ? 'Operating assignments & capacity'
-              : 'User accounts & operational assignments',
+            id: 'team',
+            label: 'Team Directory',
+            path: '/team',
+            description: 'Team directory, capacity & worker performance profiles',
             icon: Users,
             show: true,
-            activeMatcher: (p: string) => p.startsWith('/people') || p.startsWith('/admin/users'),
+            activeMatcher: (p: string) => p.startsWith('/team') || p.startsWith('/people') || p.startsWith('/admin/users'),
           },
           ...(isAdmin
             ? [
@@ -358,21 +393,30 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   ];
 
   const filteredSearchItems = searchQuery.trim()
-    ? allSearchableItems.filter(
-        (it) =>
-          it.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          it.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          it.category.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? [
+        {
+          id: 'search-tasks-direct',
+          label: `Search tasks & content for "${searchQuery.trim()}"`,
+          path: `/work?search=${encodeURIComponent(searchQuery.trim())}`,
+          description: 'Jump to Work items and content matching this query',
+          icon: Search,
+          category: 'Tasks & Content',
+        },
+        ...allSearchableItems.filter(
+          (it) =>
+            it.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            it.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            it.category.toLowerCase().includes(searchQuery.toLowerCase())
+        ),
+      ]
     : allSearchableItems.slice(0, 6);
 
   // Left sidebar icons per role
   const sidebarItems: SidebarItem[] = useMemo(() => {
     if (isTeamMember) {
       return [
-        { id: 'my-work', icon: CheckSquare, label: 'My Work', path: '/my-work', active: location.pathname.startsWith('/my-work') },
-        { id: 'todo', icon: Clock, label: 'Todo', path: '/todo', active: location.pathname.startsWith('/todo') },
-        { id: 'calendar', icon: Calendar, label: 'Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
+        { id: 'my-work', icon: CheckSquare, label: 'My Work', path: '/my-work', active: location.pathname.startsWith('/my-work') || location.pathname.startsWith('/todo') },
+        { id: 'calendar', icon: Calendar, label: 'Creative Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
         { id: 'notifications', icon: Bell, label: 'Notifications', path: '/notifications', active: location.pathname.startsWith('/notifications') },
       ];
     }
@@ -380,7 +424,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (isSmManager) {
       return [
         { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', active: isLandingActive },
-        { id: 'calendar', icon: Calendar, label: 'Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
+        { id: 'my-work', icon: CheckSquare, label: 'My Work', path: '/my-work', active: location.pathname.startsWith('/my-work') || location.pathname.startsWith('/todo') },
+        { id: 'calendar', icon: Calendar, label: 'Creative Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
         { id: 'work', icon: Film, label: 'Work', path: '/work', active: location.pathname.startsWith('/work') },
         { id: 'workload', icon: Users, label: 'Team Workload', path: '/workload', active: location.pathname.startsWith('/workload') },
         { id: 'issues', icon: AlertCircle, label: 'Issues and Blockers', path: '/issues', active: location.pathname.startsWith('/issues') },
@@ -391,13 +436,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     // creative_head, executive, admin
     const items: SidebarItem[] = [
       { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', active: isLandingActive },
-      { id: 'calendar', icon: Calendar, label: 'Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
+      { id: 'calendar', icon: Calendar, label: 'Creative Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
       { id: 'work', icon: Film, label: 'Work', path: '/work', active: location.pathname.startsWith('/work') },
       { id: 'feedback', icon: FileText, label: 'Feedback and Revisions', path: '/feedback', active: location.pathname.startsWith('/feedback') },
       { id: 'workload', icon: Users, label: 'Team Workload', path: '/workload', active: location.pathname.startsWith('/workload') },
       { id: 'issues', icon: AlertCircle, label: 'Issues and Blockers', path: '/issues', active: location.pathname.startsWith('/issues') },
       { id: 'reports', icon: BarChart3, label: 'Reports and Automation', path: '/reports', active: location.pathname.startsWith('/reports') },
-      { id: 'people', icon: Users, label: 'People', path: '/people', active: location.pathname.startsWith('/people') || location.pathname.startsWith('/admin/users') },
+      { id: 'team', icon: Users, label: 'Team Directory', path: '/team', active: location.pathname.startsWith('/team') || location.pathname.startsWith('/people') || location.pathname.startsWith('/admin/users') },
     ];
 
     if (isAdmin) {
@@ -430,10 +475,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               {showMobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
-            <Link to="/" className="flex items-center group py-0.5" title="HACA FORGE">
+            <Link to="/" className="flex items-center group py-0.5" title="HACA Marketing OS">
               <img
                 src="/haca-forge-logo.png"
-                alt="HACA FORGE"
+                alt="HACA Marketing OS"
                 className="h-[18px] sm:h-[19px] w-auto max-w-[110px] object-contain transition-opacity duration-200 group-hover:opacity-80"
               />
             </Link>
@@ -574,11 +619,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Search Pill (Full on XL, Compact icon on < XL) */}
             <button
               onClick={() => setShowSearchModal(true)}
-              title="Search cases & requests (⌘K)"
+              title="Search tasks and content (⌘K)"
               className="hidden xl:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/70 hover:bg-white border border-white/90 text-xs text-slate-500 shadow-sm transition-all whitespace-nowrap"
             >
               <Search className="w-3.5 h-3.5 text-slate-400" />
-              <span>Search cases & requests...</span>
+              <span>Search tasks and content...</span>
               <kbd className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 rounded text-slate-500">
                 ⌘K
               </kbd>
@@ -591,41 +636,34 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <Search className="w-4 h-4" />
             </button>
 
+            {/* Team Chat Button */}
+            <Link
+              to="/chat"
+              title="Team Chat"
+              data-testid="top-bar-chat-btn"
+              className={`relative p-2 rounded-full border transition-all ${
+                location.pathname.startsWith('/chat')
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white/70 hover:bg-white border-white/90 text-slate-600 hover:text-slate-900 shadow-sm'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              {chatUnreadCount > 0 && (
+                <span
+                  data-testid="chat-unread-badge"
+                  className="absolute -top-1 -right-1 px-1.5 py-0.2 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold bg-rose-500 text-white flex items-center justify-center border-2 border-white shadow-sm"
+                >
+                  {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                </span>
+              )}
+            </Link>
+
             {/* Notification Center */}
             <NotificationCenter />
 
-            {/* User Avatar & Menu (Opens My Account) */}
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-300/60">
-              <button
-                type="button"
-                onClick={() => navigate('/account')}
-                title="My Account & Work Preferences"
-                className="flex items-center gap-2.5 p-1 rounded-full hover:bg-white/80 transition-all text-left group cursor-pointer"
-              >
-                <div className="relative">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-800 to-slate-900 text-white font-bold text-xs flex items-center justify-center ring-2 ring-white shadow-sm group-hover:ring-purple-400 transition-all">
-                    {user?.name?.slice(0, 2).toUpperCase() || 'AD'}
-                  </div>
-                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
-                </div>
-
-                <div className="hidden xl:block text-left">
-                  <div className="text-xs font-bold text-slate-900 leading-tight group-hover:text-purple-600 transition-colors">
-                    {user?.name || 'Administrator'}
-                  </div>
-                  <div className="text-[10px] text-slate-500 capitalize leading-tight mt-0.5">
-                    {user?.role?.replace('_', ' ') || 'admin'} • My Account
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={handleLogout}
-                title="Sign out"
-                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50/60 rounded-full transition-colors ml-0.5"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+            {/* User Avatar Menu Dropdown */}
+            <div className="flex items-center pl-2 border-l border-slate-300/60">
+              <UserMenuDropdown />
             </div>
           </div>
         </div>
@@ -633,6 +671,62 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Mobile Navigation Drawer Dropdown */}
         {showMobileMenu && (
           <div className="md:hidden glass-panel border-b border-white bg-white/95 px-4 py-4 space-y-4 animate-in slide-in-from-top duration-200 shadow-xl max-h-[calc(100vh-70px)] overflow-y-auto">
+            {/* Mobile User Identity Bar */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <Link
+                to="/profile"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex items-center gap-2.5 min-w-0"
+              >
+                <Avatar
+                  url={user?.avatarUrl}
+                  name={user?.name || 'User'}
+                  userId={user?._id || user?.id}
+                  size="sm"
+                />
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-900 truncate">
+                    {user?.preferredName || user?.name || 'User'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 capitalize">
+                    {user?.role?.replace('_', ' ') || 'member'} • Profile
+                  </div>
+                </div>
+              </Link>
+              <div className="flex items-center gap-1">
+                <Link
+                  to="/chat"
+                  onClick={() => setShowMobileMenu(false)}
+                  title="Team Chat"
+                  className="p-2 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-100 min-h-[44px] min-w-[44px] flex items-center justify-center relative"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  {chatUnreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500" />
+                  )}
+                </Link>
+                <Link
+                  to="/settings"
+                  onClick={() => setShowMobileMenu(false)}
+                  title="Settings"
+                  className="p-2 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <Settings className="w-4 h-4" />
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    handleLogout();
+                  }}
+                  title="Sign out"
+                  className="p-2 text-rose-500 hover:text-rose-600 rounded-lg hover:bg-rose-50 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-1">
               <Link
                 to={landingPath}
@@ -763,7 +857,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <input
                 type="text"
                 autoFocus
-                placeholder="Type to jump to any page or feature..."
+                placeholder="Search tasks and content..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 bg-white/80 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] transition-all"

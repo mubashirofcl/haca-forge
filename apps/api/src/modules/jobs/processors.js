@@ -22,7 +22,7 @@ export async function runBlockerAlertsJob(job) {
 }
 
 export async function runWeeklyReportJob(job) {
-  logger.info({ jobId: job?.id }, '[BullMQ] Running Weekly Marketing Report Automation Rule');
+  logger.info({ jobId: job?.id }, '[BullMQ] Running Weekly Creative Report Automation Rule');
   return executeAutomationRule('weekly_report', null);
 }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Bell,
   CheckCircle2,
@@ -14,13 +14,12 @@ import {
   Search,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { NotificationPreferencesModal } from '../components/NotificationPreferencesModal';
 
 export const NotificationsPage: React.FC = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'tasks' | 'requests' | 'mentions'>('all');
   const [page, setPage] = useState(1);
-  const [showPreferences, setShowPreferences] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const { data: notificationsData, isLoading } = useQuery({
@@ -123,7 +122,7 @@ export const NotificationsPage: React.FC = () => {
           )}
 
           <button
-            onClick={() => setShowPreferences(true)}
+            onClick={() => navigate('/settings')}
             className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-bold bg-[#0f172a] text-white hover:bg-slate-800 shadow-md transition-all"
           >
             <Settings className="w-3.5 h-3.5" />
@@ -285,10 +284,6 @@ export const NotificationsPage: React.FC = () => {
         </div>
       )}
 
-      <NotificationPreferencesModal
-        isOpen={showPreferences}
-        onClose={() => setShowPreferences(false)}
-      />
     </div>
   );
 };

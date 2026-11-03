@@ -21,6 +21,8 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import { Avatar } from '../../components/Avatar';
+import { PersonWorkHistoryDrawer } from '../../components/PersonWorkHistoryDrawer';
 
 interface ActiveWorkItem {
   _id: string;
@@ -116,6 +118,7 @@ export const TeamWorkloadPage: React.FC = () => {
   const [selectedBand, setSelectedBand] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedMembers, setExpandedMembers] = useState<Record<string, boolean>>({});
+  const [workHistoryPersonId, setWorkHistoryPersonId] = useState<string | null>(null);
 
   // Auto-Assignment Modal State
   const [isRecommendOpen, setIsRecommendOpen] = useState(false);
@@ -488,16 +491,19 @@ export const TeamWorkloadPage: React.FC = () => {
                       <div>
                         {/* Member Card Header */}
                         <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs flex items-center justify-center">
-                              {member.person.name
-                                .split(' ')
-                                .map((n) => n[0])
-                                .slice(0, 2)
-                                .join('')}
-                            </div>
+                          <div
+                            onClick={() => setWorkHistoryPersonId(member.person._id)}
+                            className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity"
+                            title="Click to view individual work history"
+                          >
+                            <Avatar
+                              url={(member.person as any).avatarUrl}
+                              name={member.person.name}
+                              userId={member.person._id}
+                              size="sm"
+                            />
                             <div>
-                              <h4 className="text-xs font-bold text-slate-900 tracking-tight">
+                              <h4 className="text-xs font-bold text-slate-900 tracking-tight hover:text-purple-600 transition-colors">
                                 {member.person.name}
                               </h4>
                               <p className="text-[11px] text-slate-400 font-medium">
@@ -730,7 +736,7 @@ export const TeamWorkloadPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Team Lead Override Section */}
+                {/* Manager Override Section */}
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/90 text-xs space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-800">
@@ -768,7 +774,7 @@ export const TeamWorkloadPage: React.FC = () => {
                       <input
                         type="text"
                         required
-                        placeholder="e.g. Specialized 3D motion skills required for luxury campaign"
+                        placeholder="e.g. Specialized 3D motion skills required for specialized deliverable launch"
                         value={overrideReason}
                         onChange={(e) => setOverrideReason(e.target.value)}
                         className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-white"
@@ -788,6 +794,13 @@ export const TeamWorkloadPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Per-Person Work View Drawer */}
+      <PersonWorkHistoryDrawer
+        isOpen={Boolean(workHistoryPersonId)}
+        onClose={() => setWorkHistoryPersonId(null)}
+        personId={workHistoryPersonId}
+      />
     </div>
   );
 };

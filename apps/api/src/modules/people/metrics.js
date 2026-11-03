@@ -17,7 +17,6 @@ export async function calculatePersonPerformance(personId, filters = {}, actor =
   // 1. Verify existence & actor scoping
   const person = await Person.findById(personId)
     .populate('departmentId', 'name code')
-    .populate('profileAccess', 'name code')
     .lean();
 
   if (!person) {
@@ -44,9 +43,6 @@ export async function calculatePersonPerformance(personId, filters = {}, actor =
     const end = new Date(start);
     end.setUTCMonth(end.getUTCMonth() + 1);
     itemQuery.createdAt = { $gte: start, $lt: end };
-  }
-  if (filters.profileId && filters.profileId !== 'all') {
-    itemQuery.profileId = filters.profileId;
   }
 
   const workItems = await WorkItem.find(itemQuery).lean();

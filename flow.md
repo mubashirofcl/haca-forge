@@ -1,6 +1,9 @@
 # Complete Marketing Operations Workflow Specification (HACA Marketing OS)
 
-*A definitive guide to Monthly Calendar Plans, Project-Based Workflows, Worker Execution, Inter-Worker Handoffs, and Creative Head Approvals.*
+> [!WARNING]
+> **SUPERSEDED / DEPRECATED:** This document has been replaced by [docs/WORKFLOW.md](file:///c:/Users/ADMIN/OneDrive/Desktop/HACA/TECH/haca-forge/docs/WORKFLOW.md), which is the authoritative single source of truth for Workflow V2.
+
+*A definitive guide to Monthly Calendar Plans, Individual Works, Worker Execution, Inter-Worker Handoffs, and Creative Head Approvals.*
 
 ---
 
@@ -67,15 +70,16 @@ flowchart LR
 
 ### Comparative Breakdown
 
-| Attribute | Monthly Calendar Plan (`kind: 'monthly'`) | Project-Based Plan (`kind: 'project'`) |
+| Attribute | Monthly Calendar Plan (`kind: 'monthly'`) | Individual Work Plan (`kind: 'individual'`) |
 | :--- | :--- | :--- |
-| **Primary Scope** | Recurring social content distribution for a full calendar month. | Event, admissions drive, workshop, brand refresh, or collateral batch. |
-| **Initiated By** | SM Manager (at least 7–10 days before the start of the month). | SM Manager or Department Lead (upon event or project brief). |
-| **Time Horizon** | Fixed calendar month (`periodStart`: 1st, `periodEnd`: 30th/31st). | Flexible milestone window (e.g., 2 weeks to 3 months). |
-| **Typical Deliverables** | Reels (A, B, C), Static Posts, Carousel Posts, Stories, Posters. | Placement Posters, Brochures, Certificates, Meta Ad Creatives, Custom Requests. |
-| **Final Date ($F$) Meaning** | **Live Publication Date** on social channels. | **Project Milestone / Delivery Date** to internal team or print vendor. |
-| **Pipeline Termination** | Includes a final `Post` stage for live link verification. | Usually concludes on `Design` approval (non-postable items). |
-| **Evaluation Metrics** | Monthly Performance Scorecard: Planned vs. Done, on-time rate, revision rate. | Creative Production Report: Turnaround days, departmental throughput. |
+| **Primary Scope** | Recurring social content distribution for a full calendar month. | Single standalone deliverable (exactly one row: event collateral, ad-hoc poster, brochure). |
+| **Initiated By** | SM Manager (around the 25th of the prior month). | SM Manager (upon specific internal request or ad-hoc requirement). |
+| **Time Horizon** | Fixed calendar month (`periodStart`: 1st, `periodEnd`: 30th/31st). | Delivery window for the single deliverable. |
+| **Typical Deliverables** | Reels (A, B, C), Static Posts, Carousel Posts, Stories, Posters. | Single Brochure, Standee Poster, Certificate, or Announcement. |
+| **Final Date ($F$) Meaning** | **Live Publication Date** on social channels. | **Target Handover / Print Date** or live date for the item. |
+| **Pipeline Termination** | Includes a final `Post` stage for postable items. | Non-postable concludes on `Design` approval; postable includes `Post`. |
+| **Evaluation Metrics** | Monthly Performance Scorecard: Planned vs. Done, on-time rate, revision rate. | Turnaround days, stage handoff latency, and approval wait times. |
+| **Programs & Events** | Grouped within the plan using the row field `Program or event`. | Tagged with the row field `Program or event`. |
 
 ---
 
@@ -141,31 +145,30 @@ Project-based workflows handle non-calendar campaigns, offline events, brochure 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Lead as Project / Dept Lead
+    actor Requester as Requesting Team / Stakeholder
     actor SMM as SM Manager
     actor CH as Creative Head
     actor Writer as Copywriter
     actor Designer as Graphic Designer
-    actor Stakeholder as Requesting Team
 
-    Lead->>SMM: Project Brief (e.g. Annual Admissions Drive)
-    SMM->>SMM: Create Project Plan (kind: 'project', window: 3 weeks)
-    SMM->>CH: Submit Collateral Rows (Brochure, Posters, Meta Ads)
-    CH->>SMM: Approve Plan Rows
-    SMM->>Writer: Assign Stage 1 (Copy / Content)
-    Note over Writer: Unlocked in /my-work
+    Requester->>SMM: Requirement Brief (e.g. Engineering Fair Standee)
+    SMM->>SMM: Create Individual Plan (kind: 'individual', exactly 1 row)
+    SMM->>CH: Submit Individual Plan Row
+    CH->>SMM: Approve Plan Row
+    Note over Writer: Stage 1 (Content) Unlocked in /my-work
     Writer->>CH: Submit Copy Doc Link
     CH->>Writer: Approved Copy
     Note over Designer: Stage 2 (Design) Unlocks Automatically
-    Designer->>CH: Submit Figma / High-Res Drive Link
+    Designer->>CH: Submit High-Res Graphic Link
     CH->>Designer: Approved Design
-    Designer->>Stakeholder: Final Deliverable Handover (Non-postable done)
+    Designer->>Requester: Final Deliverable Handover (Non-postable done)
 ```
 
-### Project Workflow Rules:
-1. **Collateral Grouping:** Multiple requirements for the same event share a single `CalendarPlan` with `kind: 'project'`.
-2. **Non-Postable Termination:** Items like `Brochure`, `Placement Poster`, `Certificate`, and `Meta Ad Creative` have **no Post stage**. Their final state is `Approved` upon Design Approval.
-3. **Cross-Department Resourcing:** The SM Manager can assign copy to `seo_content`, graphics to `design`, and ad sets to `performance_marketing` under one unified project plan.
+### Individual Work Workflow Rules:
+1. **Strict One-Row Boundary:** An `individual` plan must contain exactly one deliverable row.
+2. **Unified Approval & Form:** Uses the exact same plan builder, stage auto-fill, and approval flow as monthly plans.
+3. **Programs and Events Tagging:** Programs and events are identified using the row field `Program or event`.
+4. **Non-Postable Termination:** Items like `Poster`, `Brochure`, and `Certificate` conclude upon Creative Head `Design` approval.
 
 ---
 

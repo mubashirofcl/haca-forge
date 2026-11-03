@@ -13,6 +13,7 @@
     "seed:admin": "node scripts/seed-admin.js",
     "seed": "node scripts/seed.js",
     "seed:reset": "node scripts/seed.js",
+    "db:reset-and-seed": "node scripts/reset-and-seed.js",
     "worker": "node src/worker.js"
   },
   "dependencies": {

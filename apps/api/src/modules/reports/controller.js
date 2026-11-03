@@ -57,8 +57,6 @@ export async function generateReportHandler(req, res, next) {
     const filters = {};
     const month = input.month || req.query.month;
     if (month && month !== 'all') filters.month = month;
-    const profileId = input.profileId || req.query.profileId;
-    if (profileId && profileId !== 'all') filters.profileId = profileId;
     const departmentId = input.departmentId || req.query.departmentId;
     if (departmentId && departmentId !== 'all') filters.departmentId = departmentId;
 

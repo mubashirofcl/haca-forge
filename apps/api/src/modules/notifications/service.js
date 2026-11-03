@@ -10,6 +10,26 @@ export function registerSocketIO(io) {
   ioInstance = io;
 }
 
+export function getSocketIO() {
+  return ioInstance;
+}
+
+/**
+ * Resolve notification category from event type
+ */
+export function resolveNotificationCategory(type = '') {
+  const t = String(type).toLowerCase();
+  if (t === 'security_alert') return 'security';
+  if (t.includes('system') || t.includes('access')) return 'system';
+  if (t.includes('chat')) return 'chat';
+  if (t.includes('plan')) return 'planUpdates';
+  if (t.includes('deadline') || t.includes('overdue')) return 'deadlinesOverdue';
+  if (t.includes('comment') || t.includes('message') || t.includes('mention')) return 'messagesComments';
+  if (t.includes('review') || t.includes('revision') || t.includes('approval') || t.includes('feedback')) return 'approvalsRevisions';
+  if (t.includes('task') || t.includes('step') || t.includes('assign') || t.includes('handoff')) return 'mySteps';
+  return 'mySteps';
+}
+
 /**
  * Creates an in-app notification record and dispatches via Socket.io
  */
@@ -23,6 +43,17 @@ export async function createNotification({
   io = ioInstance,
 }) {
   try {
+    const category = resolveNotificationCategory(type);
+
+    // Security notices cannot be turned off
+    if (category !== 'security') {
+      const recipientUser = await User.findById(recipient).select('notificationPrefs').lean();
+      if (recipientUser?.notificationPrefs?.[category]?.inApp === false) {
+        // In-app notifications for this category are disabled by user preference
+        return null;
+      }
+    }
+
     const notification = await Notification.create({
       recipient,
       type,
@@ -168,11 +199,14 @@ export async function handleDomainEvent(eventName, payload, io = ioInstance) {
 
     for (const recipient of recipients) {
       const prefs = recipient.notificationPreferences || {};
+      const newPrefs = recipient.notificationPrefs || {};
       const inAppPrefs = prefs.inApp || {};
       const emailPrefs = prefs.email || {};
 
-      // Check In-App preference (default true)
-      const allowInApp = inAppPrefs[preferenceKey] !== false;
+      // Check In-App preference (default true, security always allowed)
+      const allowInApp =
+        preferenceKey === 'security' ||
+        (newPrefs[preferenceKey]?.inApp !== false && inAppPrefs[preferenceKey] !== false);
       if (allowInApp) {
         await createNotification({
           recipient: recipient._id,
@@ -185,8 +219,10 @@ export async function handleDomainEvent(eventName, payload, io = ioInstance) {
         });
       }
 
-      // Check Email preference (default true)
-      const allowEmail = emailPrefs[preferenceKey] !== false;
+      // Check Email preference (default true, security always allowed)
+      const allowEmail =
+        preferenceKey === 'security' ||
+        (newPrefs[preferenceKey]?.email !== false && emailPrefs[preferenceKey] !== false);
       if (allowEmail && templateName && recipient.email) {
         await enqueueEmail({
           to: recipient.email,

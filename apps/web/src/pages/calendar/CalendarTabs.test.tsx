@@ -10,6 +10,36 @@ vi.mock('../../context/AuthContext', () => ({
 
 vi.mock('../../lib/api', () => ({
   apiFetch: vi.fn().mockImplementation((url: string) => {
+    if (url.includes('/api/calendar-plans/plan-2')) {
+      return Promise.resolve({
+        data: {
+          _id: 'plan-2',
+          code: 'PLAN-2026-11-002',
+          title: 'November Draft Plan',
+          kind: 'monthly',
+          periodStart: '2026-11-01',
+          periodEnd: '2026-11-30',
+          status: 'Draft',
+          rows: [
+            {
+              _id: 'row-2',
+              topic: 'Draft Reel',
+              contentType: 'Reel',
+              postingDate: '2026-11-25',
+              rowStatus: 'draft',
+              needsScript: true,
+              needsShoot: true,
+              stagePlan: [
+                { stageKey: 'Script', ownerId: 'user-1', dueDate: '2026-11-17' },
+                { stageKey: 'Shoot', ownerId: 'user-2', dueDate: '2026-11-20' },
+                { stageKey: 'Edit', ownerId: 'user-3', dueDate: '2026-11-23' },
+                { stageKey: 'Post', ownerId: 'user-4', dueDate: '2026-11-25' },
+              ],
+            },
+          ],
+        },
+      });
+    }
     if (url.includes('/api/calendar-plans/plan-1')) {
       return Promise.resolve({
         data: {
@@ -50,6 +80,20 @@ vi.mock('../../lib/api', () => ({
             submittedRowCount: 3,
             changesRequestedRowCount: 0,
             draftRowCount: 0,
+          },
+          {
+            _id: 'plan-2',
+            code: 'PLAN-2026-11-002',
+            title: 'November Draft Plan',
+            kind: 'monthly',
+            periodStart: '2026-11-01',
+            periodEnd: '2026-11-30',
+            status: 'Draft',
+            rowCount: 1,
+            approvedRowCount: 0,
+            submittedRowCount: 0,
+            changesRequestedRowCount: 0,
+            draftRowCount: 1,
           },
         ],
       });
@@ -181,5 +225,38 @@ describe('CalendarPage 3 Tabs & Role-based Controls (Scope Reset R3)', () => {
     expect(screen.getByText(/Creative Team Members view their personal stage assignments/i)).toBeDefined();
     expect(screen.getByText(/Go to My Work/i)).toBeDefined();
   });
-});
 
+  it('displays Steps column and badges in the plan rows table for SM Manager', async () => {
+    (authContext.useAuth as any).mockReturnValue({
+      user: { role: 'sm_manager', name: 'Sam Manager' },
+      hasPermission: () => true,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/calendar?tab=plans']}>
+        <CalendarPage />
+      </MemoryRouter>
+    );
+
+    const planItem = await screen.findByText(/November Draft Plan/i);
+    fireEvent.click(planItem);
+
+    // Verify Steps column header exists
+    expect(await screen.findByText('Steps')).toBeDefined();
+
+    // Verify row topic exists
+    expect(await screen.findByText('Draft Reel')).toBeDefined();
+
+    // Click step chip button to open modal
+    const scriptStepBtn = await screen.findByRole('button', { name: /Script/i });
+    expect(scriptStepBtn).toBeDefined();
+    fireEvent.click(scriptStepBtn);
+
+    // Verify row form displays Edit Plan Row modal with Publish date and Steps section
+    expect(await screen.findByText('Edit Plan Row')).toBeDefined();
+    expect(screen.getAllByText(/Publish date/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Steps & Deadlines/i)).toBeDefined();
+    expect(screen.getByText(/Needs script/i)).toBeDefined();
+    expect(screen.getByText(/Needs shoot/i)).toBeDefined();
+  });
+});

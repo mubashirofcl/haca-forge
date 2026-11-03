@@ -40,16 +40,6 @@ const accessRequestSchema = new mongoose.Schema(
       required: true,
       default: 'team_member',
     },
-    requestedProfileCodes: {
-      type: [String],
-      default: [],
-    },
-    requestedProfileIds: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Profile',
-      },
-    ],
     reason: {
       type: String,
       required: true,
@@ -80,12 +70,6 @@ const accessRequestSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Department',
     },
-    assignedProfileAccess: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Profile',
-      },
-    ],
     assignedReportsToIds: [
       {
         type: mongoose.Schema.Types.ObjectId,

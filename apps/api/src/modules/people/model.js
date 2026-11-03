@@ -38,13 +38,6 @@ const personSchema = new mongoose.Schema(
       ref: 'Department',
       index: true,
     },
-    profileAccess: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Profile',
-        index: true,
-      },
-    ],
     reportsToIds: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -63,10 +56,6 @@ const personSchema = new mongoose.Schema(
       enum: WORK_PREFERENCES,
       default: [],
     },
-    lastProfileId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Profile',
-    },
     status: {
       type: String,
       enum: ['invited', 'active', 'suspended'],
@@ -79,6 +68,106 @@ const personSchema = new mongoose.Schema(
     },
     lastLogin: {
       type: Date,
+    },
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+    avatarUrl: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    avatarStorageId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    preferredName: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 60,
+    },
+    phone: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    phoneVerified: {
+      type: Boolean,
+      default: false,
+    },
+    phoneVerifiedAt: {
+      type: Date,
+      default: null,
+    },
+    whatsappNumber: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    languages: {
+      type: [String],
+      default: [],
+    },
+    about: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 200,
+    },
+    preferences: {
+      startPage: {
+        type: String,
+        enum: ['Home', 'My Work', 'Calendar'],
+        default: 'Home',
+      },
+      dateFormat: {
+        type: String,
+        enum: ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'],
+        default: 'DD/MM/YYYY',
+      },
+      timeFormat: {
+        type: String,
+        enum: ['12h', '24h'],
+        default: '12h',
+      },
+      weekStart: {
+        type: String,
+        enum: ['monday', 'sunday'],
+        default: 'monday',
+      },
+    },
+    notificationPrefs: {
+      mySteps: {
+        inApp: { type: Boolean, default: true },
+        email: { type: Boolean, default: true },
+      },
+      approvalsRevisions: {
+        inApp: { type: Boolean, default: true },
+        email: { type: Boolean, default: true },
+      },
+      messagesComments: {
+        inApp: { type: Boolean, default: true },
+        email: { type: Boolean, default: true },
+      },
+      deadlinesOverdue: {
+        inApp: { type: Boolean, default: true },
+        email: { type: Boolean, default: true },
+      },
+      planUpdates: {
+        inApp: { type: Boolean, default: true },
+        email: { type: Boolean, default: true },
+      },
+      system: {
+        inApp: { type: Boolean, default: true },
+        email: { type: Boolean, default: true },
+      },
+    },
+    profileCompletedAt: {
+      type: Date,
+      default: null,
     },
     refreshTokenHash: {
       type: String,

@@ -313,7 +313,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
       expect(reportKeys).toContain('team_performance');
     });
 
-    it('Generates Weekly Marketing Report on demand via POST /api/reports/definitions/:key/generate', async () => {
+    it('Generates Weekly Creative Report on demand via POST /api/reports/definitions/:key/generate', async () => {
       const res = await request(app)
         .post('/api/reports/definitions/weekly_marketing/generate')
         .set('Authorization', `Bearer ${headToken}`)
@@ -325,7 +325,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
       expect(res.body.report.reportKey).toBe('weekly_marketing');
       expect(res.body.report.summary.totalWorkItems).toBeGreaterThanOrEqual(2);
       expect(res.body.report.tables.length).toBeGreaterThanOrEqual(2);
-      expect(res.body.report.html).toContain('Weekly Marketing Report');
+      expect(res.body.report.html).toContain('Weekly Creative Report');
 
       // Verify ReportDefinition record updated with lastGeneratedAt
       const def = await ReportDefinition.findOne({ reportKey: 'weekly_marketing' });

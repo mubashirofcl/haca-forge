@@ -114,7 +114,6 @@ export const ReportsPage: React.FC = () => {
     try {
       const queryParams = new URLSearchParams();
       if (filters.month) queryParams.set('month', filters.month);
-      if (filters.profileId && filters.profileId !== 'all') queryParams.set('profileId', filters.profileId);
       if (filters.departmentId && filters.departmentId !== 'all') queryParams.set('departmentId', filters.departmentId);
 
       const url = `/api/reports/view/${key}?${queryParams.toString()}`;
@@ -131,7 +130,7 @@ export const ReportsPage: React.FC = () => {
     if (activeTab === 'viewer') {
       fetchLiveReport(selectedReportKey);
     }
-  }, [activeTab, selectedReportKey, filters.month, filters.profileId, filters.departmentId]);
+  }, [activeTab, selectedReportKey, filters.month, filters.departmentId]);
 
   // Generate Report on Demand ("Generate Now")
   const handleGenerateReport = async (key: string, sendEmail: boolean = false) => {
@@ -144,7 +143,6 @@ export const ReportsPage: React.FC = () => {
           body: JSON.stringify({
             sendEmail,
             month: filters.month,
-            profileId: filters.profileId !== 'all' ? filters.profileId : undefined,
           }),
         }
       );

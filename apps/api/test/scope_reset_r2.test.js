@@ -178,6 +178,7 @@ describe('SCOPE RESET R2: Role Model Change & Permissions Verification Suite', (
     await Department.deleteMany({ code: 'r2_creative' });
     await WorkItem.deleteMany({ title: /R2 Deliverable/i });
     await AccessRequest.deleteMany({ email: /@r2-test\.com$/ });
+    await CalendarPlan.deleteMany({ $or: [{ code: /R2-/ }, { title: /R2 Plan/i }] });
   });
 
   // =========================================================================
@@ -215,7 +216,7 @@ describe('SCOPE RESET R2: Role Model Change & Permissions Verification Suite', (
       expect(ROLE_PERMISSIONS.admin).toContain('user.approve');
     });
 
-    it('creative_head role has exact 13 authoritative creative & people ops keys', () => {
+    it('creative_head role has exact 16 authoritative creative & people ops keys', () => {
       const expectedKeys = [
         'portal.view',
         'people.view',
@@ -230,6 +231,10 @@ describe('SCOPE RESET R2: Role Model Change & Permissions Verification Suite', (
         'report.view',
         'report.configure',
         'automation.manage',
+        'chat.use',
+        'chat.group.create',
+        'chat.moderate',
+        'team.profile.view',
       ];
       expect(ROLE_PERMISSIONS.creative_head).toEqual(expectedKeys);
       expect(ROLE_PERMISSIONS.creative_head).not.toContain('calendar.plan');
@@ -238,7 +243,7 @@ describe('SCOPE RESET R2: Role Model Change & Permissions Verification Suite', (
       expect(ROLE_PERMISSIONS.creative_head).not.toContain('user.approve');
     });
 
-    it('sm_manager role has exact 8 operational planning and tracking keys', () => {
+    it('sm_manager role has exact 11 operational planning and tracking keys', () => {
       const expectedKeys = [
         'calendar.plan',
         'work.create',
@@ -248,6 +253,10 @@ describe('SCOPE RESET R2: Role Model Change & Permissions Verification Suite', (
         'analytics.team',
         'report.view',
         'people.view',
+        'chat.use',
+        'chat.group.create',
+        'chat.moderate',
+        'team.profile.view',
       ];
       expect(ROLE_PERMISSIONS.sm_manager).toEqual(expectedKeys);
       expect(ROLE_PERMISSIONS.sm_manager).not.toContain('calendar.approve');
@@ -259,8 +268,8 @@ describe('SCOPE RESET R2: Role Model Change & Permissions Verification Suite', (
       expect(ROLE_PERMISSIONS.sm_manager).not.toContain('user.manage');
     });
 
-    it('executive role has exact 4 read-only keys with zero write keys', () => {
-      const expectedKeys = ['portal.view', 'people.view', 'analytics.team', 'report.view'];
+    it('executive role has exact 5 read-only keys with zero write keys', () => {
+      const expectedKeys = ['portal.view', 'people.view', 'analytics.team', 'report.view', 'chat.read', 'team.profile.view'];
       expect(ROLE_PERMISSIONS.executive).toEqual(expectedKeys);
       expect(ROLE_PERMISSIONS.executive).not.toContain('work.create');
       expect(ROLE_PERMISSIONS.executive).not.toContain('work.update.own');
@@ -271,8 +280,8 @@ describe('SCOPE RESET R2: Role Model Change & Permissions Verification Suite', (
       expect(ROLE_PERMISSIONS.executive).not.toContain('feedback.respond');
     });
 
-    it('team_member role has exact 3 personal contributor keys', () => {
-      const expectedKeys = ['work.update.own', 'work.request', 'feedback.respond'];
+    it('team_member role has exact 4 personal contributor keys', () => {
+      const expectedKeys = ['work.update.own', 'work.request', 'feedback.respond', 'chat.use'];
       expect(ROLE_PERMISSIONS.team_member).toEqual(expectedKeys);
       expect(ROLE_PERMISSIONS.team_member).not.toContain('portal.view');
       expect(ROLE_PERMISSIONS.team_member).not.toContain('people.view');
@@ -459,12 +468,14 @@ describe('SCOPE RESET R2: Role Model Change & Permissions Verification Suite', (
           .send({
             title: 'November Social Calendar Plan',
             kind: 'monthly',
-            periodStart: new Date(),
-            periodEnd: new Date(Date.now() + 30 * 86400000),
+            periodStart: new Date(Date.now() + 40 * 86400000),
+            periodEnd: new Date(Date.now() + 70 * 86400000),
             profileId: profileHaca._id,
           });
         expect(res.status).toBe(201);
         expect(res.body.data).toBeDefined();
+
+        await CalendarPlan.findByIdAndDelete(res.body.data._id);
       });
 
       it('POST /api/calendar-plans/:id/review -> 403 (Cannot approve calendar plans)', async () => {

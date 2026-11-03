@@ -23,21 +23,6 @@ export async function getDashboardOverview(filters = {}, user) {
   // Construct WorkItem query applying resolved scope
   const workItemQuery = {};
 
-  // Profile Scoping
-  if (!scope.canAccessAllProfiles) {
-    if (filters.profileId && filters.profileId !== 'all') {
-      if (!scope.allowedProfileIds.includes(filters.profileId.toString())) {
-        workItemQuery.profileId = { $in: [] };
-      } else {
-        workItemQuery.profileId = filters.profileId;
-      }
-    } else {
-      workItemQuery.profileId = { $in: scope.allowedProfileIds };
-    }
-  } else if (filters.profileId && filters.profileId !== 'all') {
-    workItemQuery.profileId = filters.profileId;
-  }
-
   // Person Scoping (for Team Member)
   if (user.role === 'team_member' && !filters.allWork) {
     const userId = (user._id || user.id || user.userId)?.toString();
@@ -48,6 +33,9 @@ export async function getDashboardOverview(filters = {}, user) {
 
   if (filters.departmentId && filters.departmentId !== 'all') {
     workItemQuery.departmentId = filters.departmentId;
+  }
+  if (filters.calendar && filters.calendar !== 'all') {
+    workItemQuery.calendar = filters.calendar;
   }
 
   // ----------------------------------------------------
@@ -65,10 +53,10 @@ export async function getDashboardOverview(filters = {}, user) {
       { periodStart: { $gte: startOfMonth, $lte: endOfMonth } },
     ],
   };
-  if (filters.profileId && filters.profileId !== 'all') {
-    planQuery.profileId = filters.profileId;
-  }
 
+  if (filters.calendar && filters.calendar !== 'all') {
+    planQuery.calendar = filters.calendar;
+  }
   const plans = await CalendarPlan.find(planQuery)
     .populate('createdById', 'name email role')
     .populate('approvedById', 'name email role')
@@ -126,7 +114,7 @@ export async function getDashboardOverview(filters = {}, user) {
   // SECTION 2: KPI Strip (7 core operational metrics)
   // ----------------------------------------------------
   const allScopedWorkItems = await WorkItem.find(workItemQuery)
-    .select('status deadline estimatedEffortHrs workType revisions profileId departmentId updatedAt createdAt')
+    .select('status deadline estimatedEffortHrs workType revisions departmentId updatedAt createdAt')
     .lean();
 
   let inProgressCount = 0;
@@ -192,7 +180,6 @@ export async function getDashboardOverview(filters = {}, user) {
     status: { $nin: ['Approved', 'Published'] },
     $or: [{ deadline: { $lte: endOfToday } }, { status: 'Blocked' }],
   })
-    .populate('profileId', 'name code')
     .populate('ownerId', 'name email role jobRole')
     .sort({ deadline: 1 })
     .limit(8)
@@ -323,7 +310,7 @@ export async function getDashboardOverview(filters = {}, user) {
   // SECTION 6: Issues & Blockers
   // ----------------------------------------------------
   const activeBlockers = await Blocker.find({ status: 'Active' })
-    .populate('workItemId', 'title workType deadline profileId departmentId')
+    .populate('workItemId', 'title workType deadline departmentId')
     .populate('dependencyOwnerId', 'name email role jobRole')
     .populate('blockedById', 'name email')
     .sort({ blockedAt: -1 })
@@ -390,7 +377,6 @@ export async function getDashboardOverview(filters = {}, user) {
     status: 'Feedback',
   })
     .populate('ownerId', 'name email jobRole')
-    .populate('profileId', 'name code')
     .sort({ updatedAt: -1 })
     .limit(8)
     .lean();
@@ -415,14 +401,12 @@ export async function getDashboardOverview(filters = {}, user) {
   // ----------------------------------------------------
   const recentActivities = await ActivityEvent.find({})
     .populate('actorId', 'name email role')
-    .populate('profileId', 'name code')
     .sort({ timestamp: -1 })
     .limit(10)
     .lean();
 
   return {
     scope: {
-      profileId: filters.profileId || 'all',
       departmentId: filters.departmentId || 'all',
       ownerId: filters.ownerId || 'all',
       month: currentMonthStr,

@@ -1,5 +1,673 @@
 # HACA Marketing OS — Conversion Progress
 
+## Phase PE: Profile Edit, Mobile OTP Verification & Mandatory Welcome Step Removal (Status: COMPLETE)
+
+### Precondition & Final Verification Counts (Verified 03 November 2026)
+- **Database Baseline:** 13 canonical users verified in MongoDB.
+- **`npm install`:** Clean install, strictly 0 new npm dependencies.
+- **`npm run typecheck`:** PASSED cleanly (**0 TypeScript errors** across `@mmp/shared`, `@mmp/api`, and `@mmp/web`).
+- **`npm run build`:** PASSED cleanly across all workspaces:
+  - `@mmp/shared`: Built cleanly.
+  - `@mmp/web`: Vite production bundle generated cleanly in 12.93s.
+- **Test Suite Results:**
+  - `@mmp/api`: **583 tests passed across 35 test files (100% green)**, including all 9 tests in `apps/api/test/phone_otp_profile.test.js`, 34 tests in `apps/api/test/profile_and_settings.test.js`, and 16 tests in `apps/api/test/team_profile_api.test.js`.
+  - `@mmp/web`: **109 tests passed across 16 test files (100% green)**.
+  - Total: **692 tests passing, 0 failures**.
+
+### Key Deliverables & Changes Completed
+1. **Mandatory Welcome Setup Gate Removed:**
+   - Deleted the onboarding blocker in `RootRedirect` (`apps/web/src/App.tsx`) that formerly forced uncompleted profiles to `/welcome`. Authenticated users now transition directly into their home/workspace (`/my-work` or `/dashboard`).
+   - Route `/welcome` redirects to `/profile`.
+2. **Official Email Security (Admin-Only Modification):**
+   - Registered email address is strictly locked against modification by non-admin users.
+   - User profile update schema (`profileUpdateSchema` in `@mmp/shared`) excludes `email` to block unauthorized payload attempts.
+   - Profile UI displays a clear 🔒 lock badge and notice explaining that official email changes require Administrator intervention.
+   - Administrators retain the capability to adjust user emails via `PATCH /api/team/:id`.
+3. **SMS OTP Service for Mobile Phone Verification:**
+   - Dedicated `PhoneVerification` model (`apps/api/src/modules/profile/phoneVerification.model.js`) storing cryptographically secure 6-digit OTPs with 10-minute expiry and rate-limiting safeguards.
+   - Added `POST /api/me/phone-otp/send` and `POST /api/me/phone-otp/verify` endpoints.
+   - When a user modifies their mobile number, an OTP verification token (`phoneVerificationToken`) is required before `PATCH /api/me/profile` allows the update.
+   - Updated `Person` schema to record `phoneVerified` and `phoneVerifiedAt`.
+4. **Standard, High-Quality Profile UI:**
+   - Prominent "Edit Profile" action for self-view and administrators on `/profile` and `/team/:id`.
+   - Comprehensive Edit Profile modal featuring:
+     - Avatar crop trigger integration (`AvatarCropModal`).
+     - Full legal name and preferred name / nickname inputs.
+     - Official locked email field with security notice.
+     - Mobile phone input with integrated OTP request, 6-digit verification code field, feedback alerts, and countdown resend timer.
+     - WhatsApp number with "Same as mobile number" sync checkbox.
+     - Bio / About textarea with dynamic 500-character counter.
+     - Interactive chip managers for Languages (max 5) and Skills (max 10).
+     - Verified phone badge and official email indicators in profile header cards.
+
+---
+
+## Phase TP: Team Directory and Worker Profile (Status: COMPLETE)
+
+### Precondition & Final Verification Counts (Verified 03 November 2026)
+- **Database Seed:** Verified clean re-seed with 13 canonical users; all 13 canonical credentials authenticated via bcrypt.
+- **`npm install`:** Clean install, strictly zero new npm dependencies.
+- **`npm run typecheck`:** PASSED cleanly (**0 TypeScript errors** across `@mmp/shared`, `@mmp/api`, and `@mmp/web`).
+- **`npm run build`:** PASSED cleanly across all workspaces:
+  - `@mmp/shared`: tsup ESM/CJS/DTS build success.
+  - `@mmp/web`: Vite production bundle generated cleanly (built in 17.00s).
+- **Final Test Counts:** **683 tests passed across 50 test files (100% green, 0 failures)**:
+  - `@mmp/api`: **574 tests passed across 34 test files** (including 16 tests in `apps/api/test/team_profile_api.test.js`).
+  - `@mmp/web`: **109 tests passed across 16 test files** (including 4 tests in `apps/web/src/pages/team/__tests__/TeamProfileSuite.test.tsx`).
+  - Monorepo Total: **683 passed tests, 0 failures (100% green)**.
+
+### Architecture & Key Deliverables Completed (Phase TP)
+1. **Team Directory (`/team`):**
+   - Mounted at `/team` and added to main navigation for `admin`, `creative_head`, `sm_manager`, and `executive`.
+   - Comprehensive directory list displaying avatar, name (preferred name first), role, job role, department, status, load % & band, 'Now' deliverable indicator, and active counts (in progress, waiting for approval, late).
+   - Filter bar: search, role, department, status, load band, and has late work only toggle.
+   - **Strict Whitelist Sorting:** Limited strictly to `name`, `department`, `jobRole`, `load`. Strictly zero ranking/sort on performance, speed, or ratings.
+2. **Polymorphic Worker Profile (`/team/:id` and `/profile`):**
+   - Unified component displaying member profile to leadership at `/team/:id` and to the worker themselves at `/profile`.
+   - **Worker Transparency Notice:** Prominently alerts workers on self-view: *"Your work history, timings and ratings are visible to the Admin, Creative Head, SM Manager and Executive."*
+   - **Anti-Harvesting Isolation:** `team_member` attempting to access `/team/:otherId` receives **HTTP 404 Not Found**.
+   - **Executive Privacy Redaction:** Contact details (`email`, `phone`, `whatsappNumber`) are stripped/null for `executive` viewers.
+   - **KPI Strip & 3-Rating Threshold:** Displays load & band, in progress, waiting, late, on-time rate, and average rating. Average rating is **strictly hidden until $\ge 3$ ratings exist**, displaying a confidentiality notice otherwise.
+   - **Global Date Range Control:** Presets for 7d, 30d, 90d, this month, last month.
+3. **Six Profile Tabs:**
+   - **Overview:** Right Now active deliverables with live elapsed work time, Next Up queued deliverables with due dates, 8-Week load trend chart (`recharts`), work breakdown by step type & calendar, skills & preferences, plus operational summary for non-worker roles.
+   - **Work:** Filterable assigned deliverable steps with expandable timeline traces (`assignedAt`, `unlockedAt`, `startedAt`, `submittedAt`, `decisionAt`, `approvedAt`, `postedAt`), revision rounds, and paused interval logs.
+   - **Performance:** Individual craftsmanship metrics (on-time rate, average days late, first-pass approval rate, revision rate, average work time by step type, waiting to start, approval wait, blockers raised count & duration), monthly output trend chart, and previous period comparison deltas. Anti-ranking guarantee notice.
+   - **Ratings:** Feedback summary, star score distribution, and constructive review feedback comments ($\ge 3$ threshold enforced).
+   - **Activity:** Person's domain operational events feed (assignments, starts, submissions, decisions, step comments; strictly zero chat content or stats).
+   - **Changes:** Audit log of modifications to `jobRole`, `departmentId`, `workPreferences`, and `weeklyCapacityHours` (who, when, old, new). Visible **only to `admin` and `creative_head`**.
+4. **Role Action Modals:**
+   - Reassign Steps modal (`admin`, `creative_head`, `sm_manager`).
+   - Edit Operational Details modal (`admin`, `creative_head`).
+   - Administrative controls: Suspend/Reactivate, Reset password, Force logout (`admin` only). Executive has zero mutation buttons.
+5. **Specification Documentation:**
+   - [`docs/TEAM_PROFILE.md`](file:///c:/Users/ADMIN/OneDrive/Desktop/HACA/TECH/haca-forge/docs/TEAM_PROFILE.md) authored as single source of truth for Team Directory and Worker Profile.
+   - [`docs/METRICS.md`](file:///c:/Users/ADMIN/OneDrive/Desktop/HACA/TECH/haca-forge/docs/METRICS.md) updated with 8-week load trend formula.
+
+---
+
+## Phase IT1: Individual Tracking and Timing from Each Worker's Start (Status: COMPLETE)
+
+### Precondition & Final Verification Counts (Verified 02 November 2026)
+- **`npm install`:** Clean install, strictly zero new npm dependencies.
+- **`npm run typecheck`:** PASSED cleanly (**0 TypeScript errors** across `@mmp/shared`, `@mmp/api`, and `@mmp/web`).
+- **`npm run build`:** PASSED cleanly across all workspaces:
+  - `@mmp/shared`: tsup ESM/CJS/DTS build success.
+  - `@mmp/web`: Vite production bundle generated cleanly (built in 24.58s).
+- **Final Test Counts:** **663 passed tests, 0 failed across 48 test files**:
+  - `@mmp/api`: **558 passed tests across 33 test files** (including 8 tests in `apps/api/test/individual_tracking_and_timing.test.js`).
+  - `@mmp/web`: **105 passed tests across 15 test files** (including `apps/web/src/pages/work/WorkerIndividualTiming.test.tsx`).
+  - Monorepo Total: **663 passed tests, 0 failures (100% green)**.
+
+### Architecture & Key Deliverables Completed (Individual Tracking and Timing)
+1. **Timestamping per Stage and Round:**
+   - Work items track timestamps: `unlockedAt`, `assignedAt`, `startedAt`, `submittedAt`, `decisionAt`, `changesRequestedAt`, `resubmittedAt`, `approvedAt`, `postedAt`.
+   - `intervals` log array tracking paused intervals (`blocked`, `pending`) with `{ kind, startedAt, endedAt, reason, note }`.
+   - `rounds` array capturing each revision cycle `{ roundNumber, startedAt, submittedAt, decisionAt, outcome, intervals }`.
+2. **Start Precondition Guard (`MUST_START_BEFORE_SUBMIT`):**
+   - Workers cannot submit without starting. Submitting from `'Not Started'` without having started is rejected with HTTP 400 `MUST_START_BEFORE_SUBMIT`.
+   - Transition to `'In Progress'` stamps `startedAt` and closes paused intervals.
+   - Legacy records without timestamps display neutral dash (`'—'`).
+3. **Shared Metrics Engine (`packages/shared` & `docs/METRICS.md`):**
+   - `formatDuration(ms)` producing compact formatted strings: `'1d 4h'`, `'3h 20m'`, `'45m'`, `'0m'`, or `'—'`.
+   - `calculateIndividualWorkMeasures(item, nowDate)` computing:
+     - Waiting to start (`startedAt - unlockedAt`).
+     - Net work time (gross round work time minus blocked and pending periods, summed across rounds).
+     - Approval wait (`decisionAt - submittedAt`).
+     - Late by (calendar days between submission date and step due date).
+4. **Worker Screens (Removal of Shared Clocks & Countdowns):**
+   - Removed shared countdown clocks, time-of-day deadlines, and derivations from publish date on worker views.
+   - Workers see their step due DATE only.
+   - Once started, workers see elapsed individual work time (`"Working for 2h 15m"` excluding blocked/pending time).
+   - After submission, workers see their work time and approval wait.
+5. **Per-Person Work View (Drawer & Full Page):**
+   - Implemented `PersonWorkHistoryDrawer` and `PersonWorkHistoryView`, mounted at route `/team/members/:id/work` and drawer on Team Load and Content Flow Tracker.
+   - Scoped access: elevated roles can view any member; `team_member` can only view their own history (HTTP 403 otherwise).
+   - Sections: Now, Next (locked/not started with due dates), Done (last 30 with individual metrics).
+   - Interactive Step Timeline modal breaking down each round, pause intervals, and timestamps.
+   - Neutral summary: completion count, on-time rate, average work time by step type, average approval wait, revision count. Strictly zero performance rankings.
+6. **Content Flow Tracker Timing Columns:**
+   - Added Waiting, Work Time, Approval Wait, and Late by columns to Tracker.
+   - Row click opens step timeline modal.
+   - Worker view scoped to their own stage items.
+7. **Reports & Non-Ranked Alphabetical Digest:**
+   - Creative Production Report: added average waiting to start and average work time per step type.
+   - Team Performance Digest: members listed strictly alphabetically with individual work metrics (zero ranking or speed-based ordering).
+
+---
+
+## Phase SD1: Step Deadlines in the Plan Row Form (Status: COMPLETE)
+
+### Precondition & Final Verification Counts (Verified 02 November 2026)
+- **`npm install`:** Clean install, strictly zero new npm dependencies.
+- **`npm run typecheck`:** PASSED cleanly (**0 TypeScript errors** across `@mmp/shared`, `@mmp/api`, and `@mmp/web`).
+- **`npm run build`:** PASSED cleanly across all workspaces:
+  - `@mmp/shared`: tsup ESM/CJS/DTS build success.
+  - `@mmp/web`: Vite production bundle generated cleanly (built in 18.33s).
+- **Final Test Counts:** **654 passed tests, 0 failed across 46 test files**:
+  - `@mmp/api`: **550 passed tests across 32 test files** (including 9 tests in `apps/api/test/step_deadlines_plan_form.test.js`).
+  - `@mmp/web`: **104 passed tests across 14 test files** (including 6 tests in `apps/web/src/pages/calendar/CalendarTabs.test.tsx`).
+  - Monorepo Total: **654 passed tests, 0 failures (100% green)**.
+
+### Architecture & Key Deliverables Completed (Step Deadlines in the Plan Row Form)
+1. **Dynamic Main Date Label & Pipeline Selection:**
+   - Main date label dynamically displays **"Publish date"** for deliverables that go live (`Reel`, `Static Post`, `Carousel Post`, `Story`) and **"Needed-by date"** for internal design types (`Flyer`, `Poster`, `Brochure`, `Banner`, `Document`, `Merchandise`).
+   - Retained optional `postingTime` ("Publish time") input field.
+2. **Dynamic Steps Section & Pipeline Variants:**
+   - Reels include interactive toggles for `Needs script` (adds Script stage) and `Needs shoot` (adds Shoot stage; when toggled off, renders a required `Source video link` URL field). Always includes Edit and Post stages.
+   - Design types include Content and Design stages; Post stage included only for postable types.
+   - The Post stage line displays the assigned posting owner and is pinned to the publish date.
+3. **Autofill Deadlines & Suggested Offsets ($F - \text{offset}$):**
+   - Implemented standard backwards calendar day offsets from publish/needed-by date $F$:
+     - **Reel with Script & Shoot:** Script $F-8$, Shoot $F-5$, Edit $F-2$, Post $F$.
+     - **Reel with Shoot only:** Shoot $F-5$, Edit $F-2$, Post $F$.
+     - **Reel with Edit only:** Edit $F-2$, Post $F$.
+     - **Postable Design:** Content $F-5$, Design $F-2$, Post $F$.
+     - **Non-postable Design:** Content $F-5$, Design $F-2$.
+   - Interactive date pickers for each stage with dynamic offset hint chips (`5 days before publish`, `On publish date`).
+   - Manual override tracking: editing a date sets `dueDateSource: 'manual'` and displays a `'Set by you'` badge. When $F$ is updated, manual deadlines are preserved while auto-deadlines are cleanly recalculated.
+4. **Suggested Owners & Work Preferences:**
+   - Autofills owners based on lowest workload and stage qualification (`workPreferences`), tagging with reason badges (`Work preference: <Stage>`, `Load: <Pct>%`, or `'Set by you'`).
+   - Graceful fallback when no team member holds a preference: marks select with warning banner `'No available person with this role; assign manually'`.
+   - Permitted SM Managers and Admins to be assigned as posting owners without triggering worker work preference mismatch.
+5. **Real-Time Row Form Validation & Submit Guards:**
+   - Blocks invalid inputs with clear messages: past dates, deadlines $> F$, out-of-order stage sequence (Script $\ge$ Shoot $\ge$ Edit; Content $\ge$ Design), missing source video on Reels without shoot, and unqualified owner selections.
+   - Tight buffer warning highlighted when last creation stage is due $\ge F-1$.
+   - Form Save/Submit button is disabled while validation errors exist.
+6. **Plan Grid & Import Enhancements:**
+   - Plan rows table includes a **Steps** column displaying step avatar chips with deadline badges. Clicking any chip opens the Edit Plan Row modal.
+   - 23-column standard Excel import template downloaded via `GET /api/calendar-plans/template/excel`.
+   - Preview import calculates blank deadlines ($F - \text{offset}$) and suggests owners, tagging them in the preview table.
+7. **Calendar Visibility:**
+   - Calendar month view displays both stage deadlines (`${stageKey} due: <topic> (<owner>)`) and live publish events (`Publish: <topic>`).
+   - Scoped visibility: workers view only their assigned stage items, while managers/admins view all events.
+
+---
+
+## Phase CC1: Creative Calendar & Multiple Calendars (Status: COMPLETE)
+
+### Precondition & Final Verification Counts (Verified 02 November 2026)
+- **`npm install`:** Clean install, strictly zero new npm dependencies.
+- **`npm run typecheck`:** PASSED cleanly (**0 TypeScript errors** across `@mmp/shared`, `@mmp/api`, and `@mmp/web`).
+- **`npm run build`:** PASSED cleanly across all workspaces:
+  - `@mmp/shared`: tsup ESM/CJS/DTS build success.
+  - `@mmp/web`: Vite production bundle generated cleanly.
+- **Final Test Counts:** **644 passed tests, 0 failed across 45 test files**:
+  - `@mmp/api`: **541 passed tests across 31 test files** (including 11 tests in `apps/api/test/creative_calendar_multical.test.js`).
+  - `@mmp/web`: **103 passed tests across 14 test files**.
+  - Monorepo Total: **644 passed tests, 0 failures (100% green)**.
+
+### Architecture & Key Deliverables Completed (Creative Calendar & Multiple Calendars)
+1. **Renaming & Scope Consistency:**
+   - Renamed "Monthly Marketing Calendar", "Marketing Calendar", and "SM Calendar" to "Creative Calendar" across navigation, headers, breadcrumbs, notifications, emails, docs, rules, and OpenAPI descriptions.
+   - Renamed report from "Weekly Marketing Report" to "Weekly Creative Report" (and digest job to "Weekly Creative Executive Digest").
+   - Product name **HACA Marketing OS** kept strictly untouched.
+2. **Multiple Calendars Support (5 Fixed Calendars):**
+   - Added stable calendar keys and visual palette in `@mmp/shared`:
+     - `sm` (SM) - Violet
+     - `sales` (Sales Team) - Emerald
+     - `ads` (Ads Team) - Amber
+     - `academics_management` (Academics and Management) - Sky
+     - `other` (Other) - Slate
+   - `CalendarPlan` model updated with required `calendar` field and compound index `{ calendar: 1, periodStart: 1, periodEnd: 1 }`.
+   - Propagated `calendar` to `ContentPiece` and `WorkItem`.
+   - Removed legacy `forTeam` row field and its import column.
+3. **Plan Creation Wizard & Duplicate Period Blocking:**
+   - 3-step wizard in `PlansTab.tsx`:
+     - Step 1: "Which calendar is this for?" (5 calendar selection cards with descriptions & colors).
+     - Step 2: "Plan Type" (Monthly or Individual work).
+     - Step 3: Details form with dynamic default title `<Calendar Name> <Month Year>` (editable).
+   - Period overlap validation: scoped per `{ kind: 'monthly', calendar }`. Exact duplicate start/end period on the same calendar is strictly blocked with HTTP 400 `EXACT_DUPLICATE_PERIOD`. Partial overlap surfaces an advisory warning `OVERLAPPING_PERIOD`.
+4. **Individual Work Management:**
+   - 1-row plan of kind `individual`.
+   - Dedicated "Add individual work" button in Creative Calendar and Plans views.
+   - Moving calendar via `PATCH /api/calendar-plans/:id/calendar`: Allowed freely during Draft or Changes requested; once approved, restricted to SM Manager and Admin only. Emits `plan.calendar_moved` ActivityEvent and notifies leadership.
+5. **Creative Calendar UI & Filtering:**
+   - Top selector bar in `CalendarPage.tsx` supporting: All, SM, Sales Team, Ads Team, Academics and Management, Other.
+   - Persistent synchronization with URL query parameter `?calendar=`.
+   - Month, Plans, and Content Flow Tracker tabs filter seamlessly by selected calendar.
+   - Deliverables and timeline chips styled with calendar-specific colors.
+   - Worker scoping preserved: Workers only see their own assigned stage items on the calendar.
+6. **Data Migration Script (`scripts/migrate-calendars.js`):**
+   - Safe, idempotent migration script with dry-run default, local database enforcement, external JSON backup export to temporary directory, and rollback mechanism.
+   - Assigns `calendar: 'sm'` to existing plans and pieces and unsets deprecated `forTeam`.
+   - Dry-run tested and verified.
+
+---
+
+## Phase CH2: Share to Chat, Media Cards, Access Grants, and Chat Polish (Status: COMPLETE)
+
+### Precondition & Final Verification Counts (Verified 01 November 2026)
+- **`npm install`:** Clean install, strictly zero new npm dependencies.
+- **`npm run typecheck`:** PASSED cleanly (**0 TypeScript errors** across `@mmp/shared`, `@mmp/api`, and `@mmp/web`).
+- **`npm run build`:** PASSED cleanly across all workspaces:
+  - `@mmp/shared`: tsup ESM/CJS/DTS build success in 3.08s (`dist/index.d.ts` 123 KB).
+  - `@mmp/web`: Vite production bundle generated in 14.85s (2215 modules transformed, 0 bundle errors).
+- **Final Test Counts:** **637 passed tests, 0 failed across 44 test files** (+22 tests in this phase):
+  - `@mmp/api`: **534 passed tests across 30 test files** (+17 tests in `apps/api/test/chat_share_polish.test.js` covering approved-only gating, destination channel membership verification, ownership checks, grant creation, signed HMAC streaming/download, revocation cutoff, and submission approval atomic sharing).
+  - `@mmp/web`: **103 passed tests across 14 test files** (+5 tests in `apps/web/src/pages/__tests__/ChatSharePolish.test.tsx` verifying channel population, snapshot preview, custom note submission, inline video player modal, and real-time revoked state transition).
+  - Monorepo Total: **637 passed tests, 0 failures (100% green)**.
+
+### Architecture & Key Deliverables Completed (Share to Chat & Chat Polish)
+1. **Scoped ShareGrant Model (`apps/api/src/modules/chat/shareGrant.model.js`):**
+   - Implemented `ShareGrant` schema: `{ mediaItem, channel, message, grantedBy, revokedAt, isRevoked }`.
+   - Indexes on `{ channel: 1, isRevoked: 1 }` and `{ mediaItem: 1 }`.
+2. **Backend Endpoints & Access Control (`apps/api/src/modules/chat`):**
+   - `POST /api/chat/share`: Strict role checking (asset owner, creative_head, sm_manager, admin). Status must be approved. Sharer must be a member of destination channel. Executives blocked. Generates `ChatMessage` of kind `media_share` with snapshot metadata.
+   - `GET /api/chat/shared-asset/:grantId`: Verifies requester channel membership; ensures grant is not revoked (HTTP 403 `SHARE_REVOKED`). Signs short-lived 15-minute download/stream URL (`token` & `expires`). Leaks zero review comments, ratings, or pipeline internals. Supports `?download=1` direct streaming header.
+   - `POST /api/chat/share/:grantId/revoke`: Sharer, creative_head, or admin sets `revokedAt`. Emits revocation and transforms card to revoked state.
+   - Atomic approval sharing: `approveWithRating` supports `alsoShareToTeamChat: true`, creating chat share within the same transaction.
+3. **Frontend Workspaces & Polish (`apps/web/src`):**
+   - `ShareToChatModal`: Integrated in Shoot, Edit, and Design workspaces (`ClipCard`, `MediaThread`, `DesignWorkspace`, `EditWorkspace`) and Review Studio (`ReviewStudioPage`).
+   - `MediaCardPlayer`: Inline media preview with play modal, direct signed download link, approved badge, owner attribution, note display, and role-gated "Unshare" button with instantaneous revoked notice.
+   - "Shared media" right drawer tab in `ChatPage.tsx` listing all active shared deliverables with scroll-to-message navigation.
+   - Review Studio decision bar includes `[ ] Also share to Team chat` checkbox for Creative Head approving final cut.
+   - Consistent UI standards adhered to: responsive layout, smooth scrolling, reserved image heights to prevent layout jumps, and accessible contrast.
+
+---
+
+## Phase CH1: Team Chat, Groups, Direct Messages, and Real-Time Socket Architecture (Status: COMPLETE)
+
+### Precondition & Final Verification Counts (Verified 29 October 2026)
+- **`npm install`:** Clean install, 0 dependency changes, strictly zero new npm packages added.
+- **`npm run typecheck`:** PASSED cleanly (**0 TypeScript errors** across `@mmp/shared`, `@mmp/api`, and `@mmp/web`).
+- **`npm run build`:** PASSED cleanly:
+  - `@mmp/shared`: tsup ESM/CJS/DTS generated in 3.30s.
+  - `@mmp/web`: Vite production bundle generated in 12.22s (`dist/assets/ChatPage-Cc5Sbq-A.js`, 2214 modules transformed).
+- **Final Test Counts:** **615 passed tests, 0 failed across 42 test files** (+44 new tests):
+  - `@mmp/shared`: TypeScript contracts & Zod schemas built into package bundle.
+  - `@mmp/api`: **517 passed tests across 29 test files** (+33 tests in `apps/api/test/chat_system.test.js`, updated permission snapshots in `executive_role.test.js`, `permissions.test.js`, `scope_reset_r2.test.js`).
+  - `@mmp/web`: **98 passed tests across 13 test files** (+11 tests in `apps/web/src/pages/__tests__/ChatSuite.test.tsx`).
+  - Monorepo Total: **615 passed tests, 0 failures (100% green)**.
+
+### Architecture & Key Deliverables Completed
+1. **Source of Truth Specification (`docs/CHAT.md` & Rules):**
+   - Wrote comprehensive master specification in `docs/CHAT.md` and `haca-forge/docs/CHAT.md`.
+   - Updated `.agent/rules/` files (`00-project-context.md`, `00-scope-and-roles.md`, `01-engineering-rules.md`, `03-business-rules.md`) strictly keeping all files under 8,000 characters.
+   - Updated `docs/BUILD_PLAN.md` and `docs/OPEN_QUESTIONS.md`.
+2. **Channel Model & Management (`apps/api/src/modules/chat`):**
+   - **Team Chat:** Singleton system channel (`general-team`). Automatically joins all active users upon activation; suspended/deactivated users lose access immediately. Immutable (cannot be renamed, archived, or left). Executive users are read-only members.
+   - **Groups:** Created by `creative_head`, `sm_manager`, and `admin` (`chat.group.create`). Owner controls membership and group rename/archive; members can leave; owner must transfer ownership or archive before leaving; admin can manage any group. Archived groups become read-only and are listed under Archived.
+   - **Direct Messages (DMs):** 1:1 private channels between any two active users who are not executives. Strictly private from admin inspection; zero group DMs.
+3. **Messages, Rich Interactions & Media Security:**
+   - Text limit: 4,000 characters; Unicode emoji picker built-in (84 emojis across 4 categories with zero npm dependencies); @mentions with autocomplete (`@everyone` restricted to leaders/admin).
+   - Quoted replies, 24-hour edit window (`[edited]` flag), deletion placeholders (`"Message deleted"`), admin deletion logging in `ActivityEvent`.
+   - 6 fixed reactions (👍, ❤️, 😂, 🎉, 👀, ✅), up to 10 pinned messages per channel.
+   - Attachments: Images ($\le 20$ MB), Documents ($\le 25$ MB), Video ($\le 100$ MB) with max 5 files per message; stored in unguessable UUID directory paths with filename sanitization.
+   - Plain text links (no preview scraping); read receipts (`Seen by N` for groups, double-tick for DMs), unread dividers, real-time typing indicators, jump-to-latest button, infinite scroll history (50 per page), in-channel and cross-channel message search, deep links (`/chat/<channelId>?m=<messageId>`).
+4. **Real-Time Socket.io Architecture:**
+   - Authenticated handshake via JWT; database membership check on room join (`chat:join`) and every emit.
+   - Socket events: `chat:message:new`, `chat:message:edited`, `chat:message:deleted`, `chat:reaction:toggled`, `chat:pin:toggled`, `chat:typing`, `chat:read`.
+   - Optimistic message sending with retry UI.
+5. **Scoped "Share to Chat" (`ShareGrant` Model):**
+   - Only approved outputs (clips, final cuts, design images/PDFs, documents) can be shared from workspaces, Review Studio, and clip cards by output owner, `creative_head`, `sm_manager`, or `admin`.
+   - Scoped `ShareGrant`: grants channel members read-only access to view and download *that asset only*; upstream pipelines, review comments, ratings, and steps remain private.
+   - Unshare revokes grant immediately, showing `"This asset is no longer shared in this channel. Access was revoked."`
+   - Creative Head Review Studio decision bar includes optional `[ ] Also share to Team chat` checkbox during approval.
+6. **Zero Surveillance Rule Strictly Enforced:**
+   - No leaderboards, message volume metrics, or individual chat ranking reports anywhere in the application.
+
+---
+
+
+
+### Precondition Verification & Baseline Counts (Verified 29 October 2026)
+- **`npm install`:** PASSED cleanly (`up to date, audited 780 packages in 35s`, 0 install errors).
+- **`npm run typecheck`:** PASSED cleanly (0 TypeScript errors across `@mmp/shared`, `@mmp/api`, and `@mmp/web`).
+- **`npm run build`:** PASSED cleanly:
+  - `@mmp/shared`: tsup ESM/CJS/DTS compiled in 3.79s.
+  - `@mmp/web`: Vite production bundle compiled in 24.36s (2204 modules transformed).
+- **Initial Baseline `npm test`:** **521 passed tests, 0 failed across 38 test files**:
+  - `@mmp/shared`: No tests needed (typings and Zod schemas).
+  - `@mmp/api`: **450 passed tests across 27 test files** (0 failures).
+  - `@mmp/web`: **71 passed tests across 11 test files** (0 failures).
+  - Total: **521 passed tests, 0 failed**.
+- **`npm run lint`:** References `eslint .`; eslint is not present in devDependencies per the project's zero-new-dependencies constraint (documented in previous phases).
+
+### Final Implementation & Verification Counts
+- **`npm run typecheck`:** PASSED cleanly with **0 errors** across all workspaces (`@mmp/shared`, `@mmp/api`, `@mmp/web`).
+- **`npm run build`:** PASSED cleanly in 24.52s across all workspaces.
+- **Final `npm test`:** **571 passed tests, 0 failed across 40 test files** (+50 new tests):
+  - `@mmp/shared`: No test runner required (pure schemas & types).
+  - `@mmp/api`: **484 passed tests across 28 test files** (+34 in `test/profile_and_settings.test.js`).
+  - `@mmp/web`: **87 passed tests across 12 test files** (+16 in `ProfileSettingsSuite.test.tsx`).
+- **Zero New Dependencies:**
+  - Standard HTML5 2D Canvas was used to build the responsive client-side image cropper (`<AvatarCropModal />`), adhering strictly to the constraint of zero external cropping dependencies.
+- **Ratings & Feedback Integration:**
+  - `<RatingsFeedbackSection>` component integrated on `ProfileView.tsx` directly underneath the role panel slot, displaying summary rating stats, distribution bars, monthly trends, and teammate feedback.
+
+### Architecture & Key Deliverables Completed
+1. **Data Model Extensions (`Person` / `User` & `Session`):**
+   - Added profile attributes: `avatarUrl`, `avatarStorageId`, `preferredName`, `phone` (E.164 validated), `whatsappNumber`, `languages` (up to 5), `about` (up to 200 chars), `skills` (up to 10 tags <= 30 chars), `preferences` (`startPage`, `dateFormat`, `timeFormat`, `weekStart`), `notificationPrefs` (category switches: `mySteps`, `approvalsRevisions`, `messagesComments`, `deadlinesOverdue`, `planUpdates`, `system`), `profileCompletedAt`, `lastLoginAt`.
+   - New `Session` model tracking active sign-ins (`deviceLabel` from user agent, SHA-256 `ipHash`, `refreshTokenFamily`, `refreshTokenHash`, `lastUsedAt`, `revokedAt`).
+2. **Backend Services & Strict Endpoints (`apps/api`):**
+   - Strictly validates all payloads via Zod (`.strict()`), disallowing unauthorized modifications to `role`, `email`, `department`, `jobRole`, `capacity`, or unrecognized properties.
+   - Mounted endpoints: `GET /api/me/profile`, `PATCH /api/me/profile`, `POST /api/me/avatar` (png/jpg/webp <= 5MB, old file deleted), `DELETE /api/me/avatar`, `GET /api/me/settings`, `PATCH /api/me/settings`, `POST /api/me/password` (min 8 chars, 1 uppercase, 1 digit, different from current, rate limited with mandatory security alert email), `GET /api/me/sessions`, `DELETE /api/me/sessions/:id`, `POST /api/me/sessions/revoke-others`, `POST /api/me/change-request` (notifies all active admins & records `ActivityEvent`), `GET /api/people/:id/profile` (strict contact masking; workers restricted to teammates sharing content pieces), `PATCH /api/people/:id/basic-info` (admin only), `DELETE /api/people/:id/avatar` (admin only), `POST /api/me/welcome` (first login completion).
+   - `ActivityEvent` audit records created with field names only (values never recorded).
+   - In-app and email notification suppression respects user notification switches while security alerts are non-suppressible.
+3. **Frontend Components & Pages (`apps/web`):**
+   - `<Avatar />`: Universal component (sizes `xs`, `sm`, `md` [40px], `lg`, `xl`) with initials fallback, deterministic ID-derived accessible gradient, and lazy loading. Completely removed online presence dots.
+   - `<AvatarCropModal />`: Canvas circular crop modal with zoom slider, drag pan, and preview.
+   - `<UserMenuDropdown />`: Compact top-nav dropdown with "View profile", "Settings", and "Sign out".
+   - `<ProfileView />`: Header card, edit/discard about form with character counter and dirty-state warning, read-only work details with change request modal, and 5-variant role panels:
+     - `admin`: Pending access requests link & team distribution by role.
+     - `creative_head`: Stages waiting approval link & plans waiting review link.
+     - `sm_manager`: Content pipeline status, stages needing owner count, and late items.
+     - `executive`: Company operational throughput summary (read-only).
+     - `team_member`: Active deliverables in flight, capacity workload band, and on-time rate.
+   - `/profile`: Main profile route (`/account` and `/my-account` redirect to `/profile`).
+   - `/settings`: Unified layout for all roles with tabs for Security (password change & active sessions list), Notifications (role-scoped category toggles), and Preferences (landing page, date/time format, week start).
+   - `/welcome`: First-login profile completion wizard requiring name and phone.
+   - `<ProfileDrawer />`: Slide-out teammate profile drawer with strict contact masking.
+4. **Idempotent Migration Script:**
+   - `scripts/migrate-profile-completed.js` created with dry-run mode, JSON backup, and rollback capabilities. Verified in dry run mode without database mutations.
+
+---
+
+## Phase WS3.2: Editor Workspace Video Player & Live Discussion Sync (Status: COMPLETE)
+- **Problem Statement:**
+  - In Editor's workspace (`/work/:id/workspace`), when an edited video was submitted and Creative Head requested revisions (`status: 'Feedback'`), the edited cut video player and live chat feedback stream were not displaying, leaving the workspace empty or trapped on the upload tab.
+  - In read-only mode (when awaiting approval), editors and reviewers visiting the edit step fell through to a generic viewer rather than showing the rendered cut and live feedback thread.
+- **Root Cause & Fixes:**
+  1. **Read Mode Trap in `MediaWorkspacePage.tsx`:**
+     - Previously, when `modeInfo.mode === 'read'`, only Shoot stage was handled and other stages fell through to `EarlierOutputsViewer`.
+     - Fixed `MediaWorkspacePage.tsx` to render `EditWorkspace` with `readOnly={true}` when `stageKey === 'Edit'`, ensuring the cut player and live feedback are always accessible in read mode.
+  2. **Tab Stuck on Upload & Video Player Resolution in `EditWorkspace.tsx`:**
+     - `activeTab` was initialized based on `hasExistingCut` at initial mount. If props loaded asynchronously, `activeTab` stayed stuck on `'upload'`, which hid the video player and chat entirely.
+     - Resolved `effectiveCutUrl` across `activeVideoUrl`, `propActiveVideoUrl`, `currentSubmission?.fileUrl`, `currentSubmission?.linkUrl`, `versions[0]?.fileUrl`, and `workItem.deliverableUrl`.
+     - Added automatic tab sync to switch to `'cut'` whenever an existing cut is detected or when in `readOnly` mode.
+     - In `activeTab === 'cut'`, rendered `<VideoPlayer url={effectiveCutUrl} ... />` whenever `effectiveCutUrl` is truthy, with a quick upload revised cut drawer underneath.
+     - In `readOnly` mode, displayed a clean deliverable status banner and hid submission dropzones.
+  3. **Backend `fileUrl` Persistence on `Submission` Model:**
+     - Added `fileUrl: { type: String, default: '', trim: true }` to `submissionSchema` in `apps/api/src/modules/submissions/model.js` so local `/uploads/...` paths are directly stored and returned.
+  4. **Creative Head Revision Notes in Live Discussion:**
+     - Updated `requestRevision` in `apps/api/src/modules/submissions/service.js` to automatically create a `SubmissionComment` and broadcast `comment:new` over Socket.IO when a reviewer submits a revision note, ensuring feedback immediately appears in the editor's live chat stream.
+     - Enhanced `isReviewer` detection in `EditWorkspace.tsx` to handle all creative roles and team member checks.
+  5. **Performance & Infinite Loop Fix in React `useEffect`:**
+     - Removed default parameter `[]` array instantiation in `propRevisionComments` and `propRawFootage` destructuring, and memoized comment updates to eliminate memory leaks and ensure rapid ~0.4s test execution.
+- **Verification:**
+  - Automated tests: **8/8 passed** in `Workspaces.test.tsx` (including dedicated video player, live discussion, and read-only tests).
+  - API integration tests: **16/16 passed** in `workspaces_ws4_journeys.test.js` and **6/6 passed** in `review_studio_and_workspaces.test.js`.
+  - Typecheck: `npm run typecheck` passed with 0 errors across `@mmp/shared`, `@mmp/api`, and `@mmp/web`.
+  - Production build: `npm run build` completed successfully in 14.12s.
+- **Precondition Verification & Baseline Counts:**
+  - `typecheck`: Passed with 0 errors across `@mmp/shared`, `@mmp/api`, and `@mmp/web`.
+  - `build`: Passed (`@mmp/shared` tsup ESM/CJS/DTS in 4.5s, `@mmp/web` Vite production bundle in 35.00s).
+  - `test`: **477 passed tests, 0 failed** across entire monorepo:
+    - API (`@mmp/api`): 426 passed tests across 25 test files.
+    - Web (`@mmp/web`): 51 passed tests across 8 test files.
+    - Total: 477 passed tests, 0 failed.
+  - `lint`: npm run lint references eslint; dependencies strictly preserved per zero new dependencies constraint.
+- **Root Cause & Resolution:**
+  - Owner opening workspace during `Feedback` status was previously routed to read-only `view` mode instead of `edit` mode.
+  - Fixed `getWorkspaceMode` logic in `@mmp/shared/src/index.ts` so step owner in `Feedback` or `In Progress` status correctly receives `mode: 'edit'`.
+  - Added unit and integration test coverage across all role permutations.
+
+## Phase WS3: Shoot Workspace: Clips, Per-Clip Feedback and Tools (Status: COMPLETE)
+- **Precondition Verification & Final Results:**
+  - Precondition baseline: 426 API tests, 51 Web tests (477 total passed).
+  - Final tests: **514 passed tests, 0 failed** across entire monorepo:
+    - API (`@mmp/api`): 450 passed tests across 27 test files (+21 in `media_and_shoot_workspace.test.js`, +3 in `local_uploads.test.js`).
+    - Web (`@mmp/web`): 64 passed tests across 9 test files (+13 in `ShootWorkspaceSuite.test.tsx`).
+    - Total: 514 passed tests, 0 failed.
+  - `typecheck`: Passed with 0 errors across `@mmp/shared`, `@mmp/api`, and `@mmp/web`.
+  - `build`: Passed (`@mmp/shared` tsup ESM/CJS/DTS in 4.5s, `@mmp/web` Vite bundle in 19.58s).
+  - `dependencies`: **Zero new dependencies added.** Reused existing Multer package, Mongoose models, Zod, and Tailwind/Lucide ecosystem.
+  - `storage`: Replaced external Cloudinary client upload with a dedicated local project upload engine (`apps/api/uploads/`), served statically via Express on `/uploads` and proxied through Vite, resolving HTTP 401 external credentials errors while preserving MongoDB `MediaItem` models and document references.
+
+## Phase WS3.1: Creative Review Studio & Media Workspace Footage Display (Status: COMPLETE)
+- **Problem Statement:**
+  - After shooter uploaded footage clips and submitted the Shoot step for approval, Creative Head / Creative Manager opening Review Studio (`/feedback/review-studio`) saw a dark card displaying only the raw string text `"Clips submitted for review"` instead of the uploaded footage clips.
+- **Root Cause:**
+  1. `detectViewerType(sub)` in `ReviewStudioPage.tsx` checked only `sub.fileUrl` or `sub.contentUrl`. Because Shoot deliverables store media as a collection of clips (`sub.files` and `MediaItem` collection), `sub.fileUrl` was undefined, causing it to fall through to `setViewerType('document')`.
+  2. `DocumentViewer` rendered `sub.textContent || sub.notes`, displaying only the notes string `"Clips submitted for review"`.
+  3. `ShootReviewView` was only mounted under `/work/:id/workspace` and was not wired into `ReviewStudioPage.tsx`.
+  4. In `MediaWorkspacePage.tsx`, any user accessing Shoot workspace in `read` mode was redirected to an empty `EarlierOutputsViewer` rather than showing the uploaded Shoot deliverables in read-only mode.
+  5. In `VideoPlayer.tsx`, clips with image extensions (`.jpg`, `.jpeg`, `.png`, `.webp`) attempted to load into HTML5 `<video>`, which fails for still assets.
+- **Resolution:**
+  1. **`ReviewStudioPage.tsx`:**
+     - Embedded `ShootReviewView` directly into the Review Studio queue when the active submission is a `Shoot` deliverable (`isShootStage`), passing `stageItemId`, `hideHeader={true}`, and `onFinishReview` to advance the queue.
+     - Enhanced `detectViewerType(sub)` to inspect `sub.files[0]`, `sub.kind`, and `sub.deliverableType` when `sub.fileUrl` is not directly on the root.
+     - Guarded `DecisionBar` and viewer switcher tabs so Shoot's dedicated per-clip review suite and rating bar take precedence.
+  2. **`ShootReviewView.tsx`:**
+     - Added `hideHeader?: boolean` and `readOnly?: boolean` props.
+     - Displayed coverage badge in the Clips Gallery header so it remains visible without top header.
+     - Fixed `selectedClip` reset when navigating between queue items so the first clip of the new item is selected.
+  3. **`VideoPlayer.tsx`:**
+     - Added image detection (`.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`, `.svg`, `data:image/`) rendering `<img>` for photo assets and `<video>` for video footage with full thread referencing support.
+  4. **`MediaWorkspacePage.tsx`:**
+     - In `modeInfo.mode === 'read'` for Shoot steps, renders `ShootReviewView` with `readOnly={true}` so teammates, owners, and creative managers can always inspect uploaded clips.
+  5. **`apps/api/src/modules/media/service.js`:**
+     - Populated `fileUrl: clipFiles[0]?.url` on `Submission` creation and updated `WorkItem.deliverableUrl`.
+- **Verification:**
+  - `npm --workspace=@mmp/web test`: **65 passed tests** (including new `ReviewStudioPage with Shoot Submissions` test).
+  - `npm --workspace=@mmp/api test`: **450 passed tests**.
+  - `npm run typecheck`: **0 errors** across all workspaces.
+  - `npm run build`: Production build succeeded in 18.78s.
+
+## SM Manager My Work Section & Posting Workflow Enhancements (Status: COMPLETE)
+- **User Request:**
+  - "SM Manager will may have the work of social media work upload like the posting role will the the work of sm maneger so is a work that assing to sm maneger he need to upload the post and add social loink as the reference , so add the my work section also for sm manger"
+- **Implementations:**
+  1. **Navigation & Sidebar Integration (`apps/web/src/components/Layout.tsx`):**
+     - Added `My Work` (`/my-work`) to `navCategories` under the Schedule group for `sm_manager` with `CheckSquare` icon and description.
+     - Added `My Work` (`/my-work`) to left desktop icon `sidebarItems` immediately adjacent to Dashboard for `sm_manager`.
+     - Automatically included in mobile drawer navigation and search jump index.
+  2. **Posting Workspace Asset Uploading & Social Link Reference (`apps/web/src/pages/work/workspaces/PostWorkspace.tsx`):**
+     - Enhanced `PostWorkspace` with an interactive post media upload dropzone supporting images, videos, and PDFs via `ResumableUploadTask` (`/api/uploads/file`).
+     - Added support for pasting external asset links (Google Drive, Figma, Dropbox).
+     - Added live status badge displaying attached post asset details and replace button.
+     - Enhanced publication form to capture and validate live social post URL reference (Instagram, LinkedIn, YouTube, TikTok, Facebook).
+     - Passes both `deliverableUrl` (uploaded creative post) and `publishedUrl` (live social reference link) upon marking as posted.
+  3. **Workspace Orchestration (`apps/web/src/pages/work/workspaces/MediaWorkspacePage.tsx`):**
+     - Updated `handleMarkAsPosted` to forward `deliverableUrl` alongside `publishedUrl` to the backend transition endpoint.
+     - Forwarded `deliverableUrl` and `publishedUrl` into `PostWorkspace` props.
+  4. **My Work Quick Modal (`apps/web/src/pages/work/MyWorkPage.tsx`):**
+     - Enhanced the Quick Submit / Mark as Posted modal with file upload capability (`ResumableUploadTask`) and validated live social reference link input for the `Post` stage.
+     - Added direct "Workspace" quick launch button on deliverable cards for interactive stages (`Shoot`, `Edit`, `Design`, `Post`).
+  5. **Unit & Integration Test Coverage:**
+     - Created `apps/web/src/components/__tests__/LayoutNavigation.test.tsx` verifying that `My Work` is rendered in navigation for `sm_manager`.
+     - Added test in `apps/web/src/pages/work/workspaces/__tests__/Workspaces.test.tsx` verifying post asset attachment, live social reference URL validation, and transition execution.
+- **Verification:**
+  - `npm --workspace=@mmp/web test`: **68 passed tests** across 10 test files (0 failures).
+  - `npm --workspace=@mmp/api test`: **450 passed tests** across 27 test files (0 failures).
+  - Monorepo Total: **518 passed tests** (0 failures).
+  - `npm run typecheck`: **0 errors** across all packages.
+  - `npm run build`: Production bundle built successfully in 16.71s.
+
+## Demo Quick-Fill Accounts Update (Status: COMPLETE)
+- **User Request:**
+  - "add - shooter@demo.haca.local : Shoot1@Test115, editor1@demo.haca.local : Edit1@Test116 , also in Demo Quick-Fill Accounts in login page"
+- **Implementations:**
+  1. **MongoDB Verification:**
+     - Verified `shooter@demo.haca.local` (Test Shooter, role `team_member`, workPreferences `['Shoot']`) and `editor1@demo.haca.local` (Test Editor One, role `team_member`, workPreferences `['Edit']`) already exist with active status, `mustSetPassword: false`, and password hashes matching `Shoot1@Test115` and `Edit1@Test116`.
+     - Confirmed both authenticate with status 200 via `POST /api/auth/login`.
+  2. **Login Page Quick-Fill Accounts (`apps/web/src/pages/LoginPage.tsx`):**
+     - Added quick-fill buttons for **Shooter (Worker)** (`shooter@demo.haca.local` : `Shoot1@Test115`) and **Editor (Worker)** (`editor1@demo.haca.local` : `Edit1@Test116`) to the 2-column quick-fill grid.
+  3. **Unit Tests Added (`apps/web/src/pages/__tests__/LoginPage.test.tsx`):**
+     - Added unit test asserting Shooter and Editor buttons render in Demo Quick-Fill Accounts and correctly autofill email and password fields on click.
+- **Verification:**
+  - `npm --workspace=@mmp/web test`: **69 passed tests** across 11 test files (0 failures).
+  - `npm run typecheck`: **0 errors** across all packages.
+  - `npm run build`: Production bundle built successfully in 16.77s.
+
+### Backend Architecture & Endpoints
+1. **Data Models (`apps/api/src/modules/media/model.js`):**
+   - `MediaItem`: `stageItemId`, `submissionId`, `kind` ('video' | 'image'), `url`, `storageId`, `thumbnailUrl`, `title`, `shotRef`, `take`, `tags[]`, `notes`, `favourite`, `order`, `version`, `replacesId`, `durationSeconds`, `width`, `height`, `orientationOk`, `sizeBytes`, `status` ('uploading' | 'uploaded' | 'waiting_review' | 'approved' | 'reshoot_needed'), `decidedById`, `decidedAt`, timestamps.
+   - `MediaMessage`: `mediaItemId`, `authorId`, `text`, `timeSeconds`, `replyToId`, `seenBy[]` (`userId`, `seenAt`), `doneAt`, `doneById`, timestamps. Immutable (no update endpoint).
+2. **REST Endpoints (`apps/api/src/modules/media/routes.js` & `controller.js`):**
+   - `POST /api/clips`: Create clip record after signed upload. Calculates 9:16 vertical ratio ($1.6 \le \text{height}/\text{width} \le 1.9$).
+   - `GET /api/work/:stageItemId/clips`: List clips for stage item with unread counts per viewer.
+   - `PATCH /api/clips/:id`: Update metadata (`title`, `shotRef`, `take`, `tags`, `notes`, `favourite`, `order`). Approved clips locked.
+   - `POST /api/clips/:id/replace`: Replaces clip with a new version; original clip remains archived in history.
+   - `DELETE /api/clips/:id`: Delete clip (only permitted while clip is not approved and stage item is editable).
+   - `PUT /api/work/:stageItemId/clips/reorder`: Reorder clip display sequence.
+   - `POST /api/clips/:id/messages`: Post message with optional `timeSeconds` and `replyToId`. Step owner, `creative_head`, and `admin` have write access; `sm_manager` and `executive` are read-only; others receive 403 Forbidden.
+   - `GET /api/clips/:id/messages`: List chronological thread with resolved `replyToPreview`.
+   - `POST /api/clips/:id/messages/seen`: Mark thread messages as seen for current user.
+   - `PATCH /api/clips/messages/:messageId/toggle-done`: Mark feedback message as done / reopen.
+   - `POST /api/clips/:id/review`: Approve clip or mark `reshoot_needed` (feedback text mandatory).
+   - `POST /api/work/:stageItemId/finish-review`: If any clip is `reshoot_needed`, step moves to `Feedback` (Changes requested); if all clips are approved, approves step with 1–5 rating score and unlocks `Edit` stage. Blocks approval if clips are `waiting_review` or `reshoot_needed`.
+   - `POST /api/work/:stageItemId/submit-clips`: Validates submission ($\ge 1$ clip, none uploading, all flagged clips replaced) and transitions eligible clips to `waiting_review`.
+3. **Stage Handoff & Isolation:**
+   - In `apps/api/src/modules/workItems/service.js`, `getWorkItemById` attaches `approvedClips` (with `title`, `shotRef`, `tags`, `notes`) read-only when stage is `Edit`.
+4. **Notifications:**
+   - Automated notification triggers for clips submitted (to `creative_head`), new messages (to opposite side), and clip review decisions (to shooter).
+
+### Frontend Components (`apps/web/src/pages/work/workspaces/`)
+1. `UploadManager.tsx`:
+   - Concurrency queue (2 parallel uploads).
+   - Pause, resume, retry, cancel per upload.
+   - Camera recording capture (`capture="environment"`) and drag-and-drop file picker.
+   - Tab-close protection (`beforeunload` warning when uploads are in flight).
+   - Background upload persistence across in-app navigation via singleton module queue.
+2. `ClipCard.tsx`:
+   - Thumbnail preview, duration formatting, file size, 9:16 vertical badge.
+   - Inline title editing, shot link dropdown, take counter, tag selector (`A-roll`, `B-roll`, `Interview`, `Cutaway`), notes textarea, favourite star.
+   - Version replacement button, delete button (conditional), lock icon for approved clips.
+   - Unread message counter badge.
+   - Revision highlight banner with latest reviewer feedback on top when flagged.
+3. `VideoPlayer.tsx`:
+   - Speed playback controls (`0.5x`, `1x`, `1.25x`, `1.5x`, `2x`).
+   - Frame stepping forward/backward, loop toggle, fullscreen, mute/unmute.
+   - "Reference this moment" button injecting current playback time into message composer.
+4. `MediaThread.tsx`:
+   - WhatsApp-style chat bubbles (mine right, theirs left) with author name, role chip, and timestamp.
+   - Quoted replies (`replyToPreview`) with jump-to-source indicator.
+   - Interactive timestamp chips (`at 0:12`) that seek video player.
+   - Sent (`✓`) and seen (`✓✓`) status ticks.
+   - Feedback Done toggle (`doneAt`, `doneById`) with Reopen capability for reviewers.
+   - Auto-scroll with floating "Jump to latest" button.
+   - Plain-text sanitization with non-clickable links by default.
+   - Read-only permission state for `sm_manager` and `executive` roles.
+5. `ShootReviewView.tsx`:
+   - Creative Head / Admin review cockpit: clip gallery with status, unread counts, shot coverage bar.
+   - Side-by-side video player and WhatsApp feedback thread.
+   - Action buttons: "Approve clip" and "Reshoot needed" (message required).
+   - Sticky summary bar: "Send back (Changes requested)" and "Approve Step with Rating" (1–5 stars + quality tags).
+6. `ShootWorkspace.tsx`:
+   - Split-screen workspace: upload dropzone + clip cards on left; docked sidebar tabs (Brief, Script, Shot list) on right.
+   - Shot checklist with coverage metrics (`"X of Y shots covered"`) and one-click shot linking.
+   - Submit for approval bar with live validation reason display and shot coverage summary.
+   - Mobile-optimized: player modal opens as full bottom-sheet on 360 px viewport with $\ge 44\text{ px}$ touch targets.
+7. `MediaWorkspacePage.tsx`:
+   - Dispatches `ShootReviewView` for `mode === 'review'` and `ShootWorkspace` for `mode === 'edit'`.
+
+### Automated Test Suites
+1. **API Integration Tests (`apps/api/test/media_and_shoot_workspace.test.js` - 21 tests):**
+   - Clip creation with 9:16 aspect ratio validation and size limits.
+   - Metadata updates and approved-clip lock enforcement.
+   - Clip replacement versioning (replacesId tracking).
+   - Clip deletion restrictions on approved clips and submitted steps.
+   - Message posting permissions: Step owner, creative_head, admin can post; sm_manager and executive read-only; others 403.
+   - Thread seen receipts and toggle-done/reopen lifecycle.
+   - Per-clip review decisions (Approve, Reshoot needed with mandatory comment).
+   - Step finish review: All approved -> rating & approval; any reshoot -> feedback stage.
+   - Step approval blocked while clips are waiting_review or reshoot_needed.
+   - Submission validation: empty clip guard, uploading guard, and revision replacement guard.
+   - Shot coverage calculation against Script stage scenes.
+   - Edit step receives only approved clips read-only.
+2. **Web Component Tests (`apps/web/src/pages/work/workspaces/__tests__/ShootWorkspaceSuite.test.tsx` - 13 tests):**
+   - `ClipCard`: Renders metadata, 9:16 badge, tags, and locks approved clips.
+   - `VideoPlayer`: Speed toggle, frame stepping, loop, and "Reference this moment" click handler.
+   - `MediaThread`: Chat bubbles, quoted replies, timestamp chips seeking player, seen ticks, read-only role banner, toggle done/reopen.
+   - `ShootReviewView`: Clip gallery, unread counts, review buttons, step approval enabled/disabled based on clip statuses.
+   - `ShootWorkspace`: Submit validation disable reason, tab docking, 360 px layout with $\ge 44\text{ px}$ touch targets.
+   - `UploadManager`: Rejection of files exceeding 500 MB video limit.
+
+
+
+## Phase WS2: Writing Studio (Status: COMPLETE)
+- **Precondition Verification & Final Results:**
+  - `typecheck`: Passed with 0 errors across `@mmp/shared`, `@mmp/api`, and `@mmp/web`.
+  - `build`: Passed (`@mmp/shared` tsup ESM/CJS/DTS in 4.5s, `@mmp/web` Vite bundle).
+  - `test`: **410 passed tests, 0 failed** across entire monorepo (API: 381 passed across 22 test files; Web: 29 passed across 5 test files).
+  - Added new automated test suites:
+    - `apps/api/test/writing_studio_api.test.js` (14 comprehensive integration tests for session lock, anchored comments, draft autosave, empty submission guard, shotlist handoff to Shoot step, Malayalam Unicode preservation).
+    - `apps/web/src/lib/__tests__/scriptTools.test.ts` (14 unit tests for duration maths, hook checks, caption platform limits, scene table extraction, and 7 templates).
+    - `apps/web/src/lib/__tests__/docxUtils.test.ts` (4 unit tests for DOCX export, Malayalam support, and browser download).
+
+### Allowed New Dependencies (Strictly Constrained)
+| Package | Version | Justification |
+| :--- | :--- | :--- |
+| `@tiptap/react` | ^2.11.5 | React component wrapper for ProseMirror rich text editor. |
+| `@tiptap/pm` | ^2.11.5 | ProseMirror core engine packages (state, view, model, transform). |
+| `@tiptap/starter-kit` | ^2.11.5 | Standard formatting extensions (headings, bold, italic, strike, lists, code, blockquote). |
+| `@tiptap/extension-table` | ^2.11.5 | Multi-column scene table editing with add/remove rows/cols and cell navigation. |
+| `@tiptap/extension-table-row` | ^2.11.5 | Table row DOM specification for scene tables. |
+| `@tiptap/extension-table-cell` | ^2.11.5 | Table cell DOM specification. |
+| `@tiptap/extension-table-header` | ^2.11.5 | Table header cell DOM specification. |
+| `@tiptap/extension-underline` | ^2.11.5 | Underline text styling. |
+| `@tiptap/extension-highlight` | ^2.11.5 | Text background highlight. |
+| `@tiptap/extension-text-align` | ^2.11.5 | Paragraph and heading alignment (left, center, right, justify). |
+| `@tiptap/extension-subscript` | ^2.11.5 | Subscript styling for technical notations. |
+| `@tiptap/extension-superscript` | ^2.11.5 | Superscript styling for footnotes and indices. |
+| `@tiptap/extension-color` | ^2.11.5 | Inline text color selection. |
+| `@tiptap/extension-text-style` | ^2.11.5 | Inline CSS style attributes for text runs. |
+| `@tiptap/extension-image` | ^2.11.5 | Image insertion support for visual references. |
+| `@tiptap/extension-link` | ^2.11.5 | Hyperlink insertion and navigation. |
+| `@tiptap/extension-task-list` | ^2.11.5 | Interactive checklist container. |
+| `@tiptap/extension-task-item` | ^2.11.5 | Interactive checklist checkbox item with checked state toggling. |
+| `docx` | ^9.1.1 | Single DOCX export library generating Microsoft Word `.docx` documents. |
+| `mammoth` | ^1.9.0 | Single DOCX import library converting incoming `.docx` files to semantic HTML. |
+| *Native Print* | N/A | PDF export uses browser print (`window.print()`) with `@media print` A4 canvas rules; zero extra PDF libraries. |
+
+### Tasks Completed
+1. **Writing Studio Page**: Opened from Content / Script step page (`/work/:id/writing-studio` and `/work/:id/write`), with brief & earlier outputs docked in side panel.
+2. **Editor**: A4 page view, zoom controls (50%–150%), 6 ribbon tabs (Home, Insert, Script, Review, View, File), full formatting (B, I, U, S, sub/sup, font family, font size, colors, alignments, lists, interactive checklists, tables, images, links, page breaks, undo/redo, find & replace, counts, spellcheck with language setting, focus mode, autosave with 'Saved' indicator and local buffer resilience in `localStorage`, version history with preview & restore, single-editor session lock with heartbeat, import .docx/.txt/paste, export .docx/PDF via print/TXT, print, rename, Malayalam fonts (Manjari, Gayathri) and Unicode text preservation.
+3. **Comments**: Anchored comments in side panel (`/api/work/:id/comments`), writer replies, resolves, and jumps to anchor in document.
+4. **Script tools**: 7 pre-structured templates (Reel, Explainer, Student Voices, Event Promo, Poster Copy, Carousel, Story), two-column scene table with numbering & duration totals, duration estimator with target duration chips (15s, 30s, 60s, 90s) & warnings, hook check (12-word limit), caption & hashtag section with platform limits (Instagram 2,200, LinkedIn 3,000), automatic shot list generator stored with submission for Shoot step, teleprompter mode (fullscreen high-contrast auto-scrolling with speed/mirror controls), personal snippets (local collection only).
+5. **Submit for Approval**: Guarded when document is empty with tooltip/error; studio enters read-only mode while Waiting for approval; unlocks on revision with last version loaded and comments visible.
+6. **Fallback**: External link submission modal remains accessible via secondary option.
+7. **Responsive**: Desktop-first glass UI; collapses gracefully on 360px mobile view with toolbar menu and scrollable A4 view.
+
+---
+
+## Phase WS1: Submissions, Review and Ratings Backend (Status: COMPLETE)
+- **Precondition Verification & Final Results:**
+  - `typecheck`: Passed with 0 errors across `@mmp/shared`, `@mmp/api`, and `@mmp/web`.
+  - `build`: Passed (`@mmp/shared` tsup ESM/CJS/DTS in 6.4s, `@mmp/web` Vite production bundle in 40.26s).
+  - `test`: Passed all 378/378 baseline tests before expanding into WS2.
+  - Submissions, ratings, reviews, review queue, and editor session lock endpoints active.
+
+## Work Actions by Role and Wording (Status: COMPLETE)
+- **Precondition Verification & Final Results:**
+  - `typecheck`: Passed with 0 errors across `@mmp/shared`, `@mmp/api`, and `@mmp/web`.
+  - `build`: Passed (`@mmp/shared` tsup ESM/CJS/DTS, `@mmp/web` Vite production bundle in 11.92s).
+  - `test`: Passed 378/378 tests (API: 367 tests across 21 test files, Web: 11 tests across 3 test files). Added 32 new tests across `security_probe.test.js` and `work_actions_and_wording.test.js`.
+  - `database`: `marketing_portal` verified clean (13 users, 8 campaign pieces, 13 work items, 0 orphaned test items). `marketing_portal_test` dropped cleanly after automated tests.
+  - `security`: Closed security gap where non-owners (e.g. Creative Head) could trigger submit, block, and publish on worker tasks; now strictly forbidden with 403 `FORBIDDEN_ACTION`.
+
+### Summary of Implementations
+1. **Shared Action Rules (`packages/shared/src/index.ts`)**:
+   - Implemented canonical `getAvailableActions(user, stage, piece)`, `getActionDisabledReason`, `WORK_ACTION_KEYS`, and `ACTION_LABELS`.
+   - Worker actions strictly require stage ownership (`isOwner`); Creative Head and admin can only `approve` and `request_revision` when `Pending` and `!isOwner`.
+   - SM Manager and admin can `change_owner`, `change_date`, `skip_step`, `resolve_blocker`.
+   - Executive and all other roles have zero actions.
+2. **Backend API Guards (`apps/api/src/modules/workItems/transition.service.js` & `service.js`)**:
+   - `transitionWorkItem` checks `getAvailableActions`. Unauthorised worker transitions return 403 `FORBIDDEN_ACTION`.
+   - Self-approval blocked (403 `FORBIDDEN_SELF_APPROVAL`). SM Manager cannot approve (403 `FORBIDDEN_APPROVAL`).
+   - `deleteWorkItem`: Only allowed for `sm_manager` and `admin` when task is in `Not Started` state (403 `CANNOT_DELETE_STARTED_WORK` / `FORBIDDEN_DELETE`). Audited via `work_item.deleted`.
+3. **Frontend UI Alignment**:
+   - `WorkDetailPage.tsx`: Cleaned wording (`Owner`, `Links and files`, `Details`, `History`, `Steps`), removed Brand Profile strip/badge, replaced 6-step bar with glassmorphic `PipelineStepper`, added delete confirmation modal.
+   - `MyWorkPage.tsx` & `TodoPrioritiesPage.tsx`: Actions rendered strictly from `getAvailableActions`.
+   - `WorkListPage.tsx` & `CalendarPage.tsx`: Removed standalone item creation modal and button; individual works created as 1-row calendar plans.
+   - `TrackerTab.tsx`: Button wording updated to `Skip step`, `Restore step`, `Change date`.
+4. **Wording Sweep**:
+   - Cleaned `Lead`, `TL`, `Team Lead`, `Deliverable`, `Brand`, `Audit Stream`, `FORGE` across code, comments, errors, docs, and UI.
+
+---
+
+## Worker Portal & Personal Stage Assignments Fix (Status: COMPLETE)
+
+### Overview & Root Causes Resolved
+1. **Empty Queue After Database Wipe**: When running the local database wipe preserving users, the local database was devoid of active uncompleted deliverables for creative team members (`role: 'team_member'`). A background seed script crashed due to unsupplied required fields on `CalendarPlan.create`, leaving writers, designers, editors, shooters, and posters with 0 work items.
+2. **Missing Deliverable & Submission Details in UI**: Work cards previously omitted current worker deliverable URLs, live publication links, reviewer feedback notes from the Creative Head, and task instructions/briefs.
+3. **Consolidated Worker Navigation**: Cleaned redundant `/todo` routing in favor of `/my-work` ("Focus Cockpit"), added interactive category filters (`All Work`, `Stage Assignments`, `Deliverables`, `Submissions & Reviews`), live search, and full stage workflow badges with stage-specific icons.
+4. **Enhanced API**: `/api/my-work` now populates briefs, reference links, and attaches the latest Creative Head revision feedback to items in `Feedback` status.
+
+---
+
 ## Phase 0: Retire and Archive (Status: COMPLETE)
 
 ### 1. Executive Summary
@@ -1453,16 +2121,398 @@ Scope Reset R4 delivers the final operational polish, executive governance, sche
 - [x] **Security Audit:** Confirm no credentials or debug tokens exist in repository or documentation.
 - [x] **Test Verification:** Confirm all 302 tests pass across monorepo (`npm test`).
 
+---
 
+## Workflow V2 Build Precondition Baseline
 
+### Verification Results (2026-10-25)
+- **Authoritative Spec:** [docs/WORKFLOW.md](file:///c:/Users/ADMIN/OneDrive/Desktop/HACA/TECH/haca-forge/docs/WORKFLOW.md) verified present (422 lines).
+- **`npm install`:** PASSED (687 packages audited, up to date).
+- **`npm run typecheck`:** PASSED (0 errors across `@mmp/shared`, `@mmp/api`, `@mmp/web`).
+- **`npm run build`:** PASSED (`@mmp/shared` built in 2.8s, `@mmp/web` built in 24.04s).
+- **`npm test`:** PASSED (20 test files, 296 tests passed, 0 failures: 17 files / 285 tests in `apps/api`, 3 files / 11 tests in `apps/web`).
+- **`npm run lint`:** FAILED (`'eslint' is not recognized as an internal or external command`; `eslint` is not listed in root or workspace dependencies).
 
+---
 
+## Workflow V2: Verification, Role Journeys, and Sample Data (Status: COMPLETE)
 
+### 1. Executive Summary
+Workflow V2 implementation, UI build, verification test suites, role-journey verification, and sample data generation are **100% COMPLETE**.
 
+All architectural principles from [docs/WORKFLOW.md](file:///c:/Users/ADMIN/OneDrive/Desktop/HACA/TECH/haca-forge/docs/WORKFLOW.md), [docs/UX_SPEC.md](file:///c:/Users/ADMIN/OneDrive/Desktop/HACA/TECH/haca-forge/docs/UX_SPEC.md), and [docs/SCOPE_RESET.md](file:///c:/Users/ADMIN/OneDrive/Desktop/HACA/TECH/haca-forge/docs/SCOPE_RESET.md) have been systematically realized and validated across the monorepo:
+1. **Simplified Information Architecture:** Exactly two plan kinds (`monthly` and `individual` with a strict 1-row invariant). `project` plan kind and department-lead references have been completely retired.
+2. **Canonical 15 Deliverable Types & 4 Pipelines:** `reel_a` (Script $\rightarrow$ Shoot $\rightarrow$ Edit $\rightarrow$ Post), `reel_b` (Shoot $\rightarrow$ Edit $\rightarrow$ Post), `reel_c` (Edit $\rightarrow$ Post), `design_postable` (Content $\rightarrow$ Design $\rightarrow$ Post), and `design_non_postable` (Content $\rightarrow$ Design).
+3. **Calendar-Day Offsets:** Counted back from posting date $F$ (`Script: F-8`, `Shoot: F-5`, `Edit: F-2`, `Content: F-5`, `Design: F-2`, `Post: F-0`). Internal default stage hours are maintained in the engine but permanently removed from all user-facing forms.
+4. **Authoritative Validation Engine:** Full pre-submission validation on every row mutation, returning standardized `VALIDATION_ERROR_CODES` (`MISSING_REQUIRED_FIELDS`, `UNKNOWN_TYPE`, `PAST_DATE`, `DEADLINE_AFTER_POSTING`, `OUT_OF_ORDER_DEADLINES`, `MISSING_SOURCE_VIDEO`, `MISSING_POSTING_OWNER`, `INVALID_STAGE_OWNER`, `DUPLICATE_ROW`, `INDIVIDUAL_PLAN_ROW_LIMIT`) and warnings (`MONTH_MISMATCH`, `TIGHT_CREATION_BUFFER`, `WORKLOAD_SATURATION`).
+5. **State Machine Integrity:** Shoot stage is non-review ("Done and forward", auto-unlocking Edit upon footage delivery). Review stages require workers to transition from `Not Started` $\rightarrow$ `In Progress` before submitting to `Feedback`. Approvals auto-unlock downstream stages; revisions require selecting from the exact 7 canonical root causes.
+6. **Social Publishing & Dynamic Holder Derivation:** Post stages transition from `Not Started` $\rightarrow$ `In Progress` $\rightarrow$ `Published`. When all stages are finished, content piece holder derives cleanly as `'Done'` with on-time audit.
+7. **Canonical Taxonomies:** Exactly 9 blocker reasons and 7 revision root causes (with "Approval delay" replacing legacy "TL approval delay").
 
+---
 
+### 2. Monorepo Build & Test Verification
 
+| Component | Target Command | Result | Details |
+| :--- | :--- | :---: | :--- |
+| **Monorepo Typecheck** | `npm run typecheck` | **PASSED** | **0 errors** across `@mmp/shared`, `@mmp/api`, `@mmp/web`. |
+| **Production Build** | `npm run build` | **PASSED** | Clean build (`@mmp/shared` tsup in 7.08s, `@mmp/web` Vite bundle in 16.35s). |
+| **Unit & Integration Tests** | `npm test` | **PASSED** | **21 test files, 313 tests passed, 0 failures (100% green)**. |
+| `@mmp/api` | `vitest run` | **PASSED** | 18 test files, 302 tests passed. |
+| `@mmp/web` | `vitest run` | **PASSED** | 3 test files, 11 tests passed. |
 
+#### Baseline Comparison
+- **Pre-Workflow-V2 Baseline:** 20 test files, 296 tests passed (17 API / 285 tests; 3 Web / 11 tests).
+- **Post-Workflow-V2 Verification:** **21 test files, 313 tests passed (+17 new comprehensive role-journey integration tests in `apps/api/test/workflow_v2_journeys.test.js`)**.
 
+---
+
+### 3. Role Journeys Verification Matrix
+
+| Journey | Role Path | Test Specification | Status | Key Validations |
+| :--- | :--- | :--- | :---: | :--- |
+| **Journey A** | Admin $\rightarrow$ SM Manager | `apps/api/test/workflow_v2_journeys.test.js`<br>`test/e2e/workflow_v2_journeys.spec.js` | **PASSED** | Inbound access request approval; SM Manager calendar plan creation with Reel A, Reel C (source video), postable poster, and non-postable poster; auto-fill populates 4 stages for Reel A and 2 stages for non-postable poster; manual date override succeeds. |
+| **Journey B** | Creative Head $\rightarrow$ SM Manager $\rightarrow$ Creative Head | `apps/api/test/workflow_v2_journeys.test.js`<br>`test/e2e/workflow_v2_journeys.spec.js` | **PASSED** | Creative Head requests changes on row 1 with feedback; rows 2-4 approved; SM Manager amends row 1 brief and resubmits; Creative Head approves; all `ContentPiece` records and `WorkItem` stages materialize with exact computed dates and owners. |
+| **Journey C** | Writer $\rightarrow$ Videographer $\rightarrow$ Editor $\rightarrow$ Creative Head $\rightarrow$ SM Manager | `apps/api/test/workflow_v2_journeys.test.js`<br>`test/e2e/workflow_v2_journeys.spec.js` | **PASSED** | Script review & approval; Shoot stage "Done and forward" auto-unlocks Edit without Creative Head gate; Editor submits cut; Creative Head requests revision with canonical root cause (`Creative direction unclear`); Editor resubmits and gets approval; SM Manager publishes; Tracker holder transitions to `'Done'` on time. |
+| **Journey D** | SM Manager $\rightarrow$ Creative Head $\rightarrow$ SM Manager | `apps/api/test/workflow_v2_journeys.test.js`<br>`test/e2e/workflow_v2_journeys.spec.js` | **PASSED** | Creative Head rejects whole plan with mandatory concern text; SM Manager views rejection banner with concern and resubmits with resolved topics. |
+| **Journey E** | SM Manager | `apps/api/test/workflow_v2_journeys.test.js`<br>`test/e2e/workflow_v2_journeys.spec.js` | **PASSED** | Individual Work plan created with 1 row; attempting a 2nd row triggers validation error `INDIVIDUAL_PLAN_ROW_LIMIT`; single-row submission succeeds. |
+| **Journey F** | Team Member $\rightarrow$ Creative Head / SM Manager | `apps/api/test/workflow_v2_journeys.test.js`<br>`test/e2e/workflow_v2_journeys.spec.js` | **PASSED** | Worker flags blocker with canonical reason (`Asset / footage missing`); notification sent to manager with "blocked since" timestamp; unblocking clears issue; overdue alert escalation verified. |
+| **Journey G** | Executive | `apps/api/test/workflow_v2_journeys.test.js`<br>`test/e2e/workflow_v2_journeys.spec.js` | **PASSED** | Executive navigates read-only dashboard, plans, tracker, and reports; mutation attempts return 403 Forbidden; menu strictly $\le 8$ items. |
+
+---
+
+### 4. Codebase Audit & Leftover Purge
+- **Hour-based wording:** Stripped from all frontend forms, table columns, and modals. Stage effort hours remain strictly encapsulated in backend capacity calculations (`DEFAULT_STAGE_HOURS`).
+- **Plan Kinds:** `CALENDAR_PLAN_KINDS` restricted to `['monthly', 'individual']`. `project` kind completely excised from all models, validation rules, and UI dropdowns.
+- **Department Lead References:** Completely removed; all creative reviews route exclusively to `creative_head`.
+- **Pre-Approval Stage Generation:** Replaced obsolete "recommend after approval" logic. Stages and owners are populated during autofill and finalized upon plan approval.
+- **Canonical Enums:** Replaced all legacy internal slugs (`assets_missing`, `waiting_approval`, `scope_change`) with the exact 9 blocker reasons and 7 revision root causes.
+- **Documentation Overhaul:** Regenerated [docs/PROJECT_DOCUMENTATION.md](file:///c:/Users/ADMIN/OneDrive/Desktop/HACA/TECH/haca-forge/docs/PROJECT_DOCUMENTATION.md) and [docs/FLOW.md](file:///c:/Users/ADMIN/OneDrive/Desktop/HACA/TECH/haca-forge/docs/FLOW.md) to match current Workflow V2 implementation.
+
+---
+
+### 5. Sample & Test Data (`../haca-test-data/`)
+The required sample datasets have been created outside the git repository in `c:\Users\ADMIN\OneDrive\Desktop\HACA\TECH\haca-test-data\`:
+
+1. **`minimal-import-template.csv` (848 bytes, 5 columns):**  
+   `Posting Date`, `Topic`, `Type`, `For Team`, `Brief`. Designed for 1-click batch import where the auto-fill engine derives all stage owners, pipelines, and dates.
+2. **`full-import-template.csv` (2,029 bytes, 24 columns):**  
+   Comprehensive specification covering all deliverable properties, stage owners, stage deadlines, reel toggles (`Needs Script`, `Needs Shoot`), source video URL, and remarks.
+3. **`november-2026-plan.csv` (3,801 bytes, 10 rows):**  
+   Realistic November 2026 HACA marketing schedule containing:
+   - 3 Reel variants: Reel A (Script + Shoot + Edit + Post), Reel B (Shoot + Edit + Post), Reel C (Edit + Post with source footage).
+   - 3 Postable designs: Static Post, Carousel Post, Story.
+   - 4 Non-postable designs: Poster, Brochure, Standee, Certificate.
+4. **`validation-errors.csv` (3,819 bytes, 12 rows):**  
+   Specifically crafted test rows triggering every system validation error code (`MISSING_REQUIRED_FIELDS`, `UNKNOWN_TYPE`, `PAST_DATE`, `DEADLINE_AFTER_POSTING`, `OUT_OF_ORDER_DEADLINES`, `MISSING_SOURCE_VIDEO`, `MISSING_POSTING_OWNER`, `INVALID_STAGE_OWNER`, `DUPLICATE_ROW`, `INDIVIDUAL_PLAN_ROW_LIMIT`).
+5. **`manual-test-script.md` (17,623 bytes):**  
+   Step-by-step manual QA test manual with pipeline and offset reference formulas, credential directory, test procedures for Journeys A through G, and sign-off criteria.
+
+---
+
+### 6. Final Launch Checklist
+
+- [x] **Database & Migrations:** MongoDB running; collections aligned to Workflow V2 schemas without data loss.
+- [x] **Type Safety & Build:** `npm run typecheck` passes with 0 errors; `npm run build` succeeds cleanly.
+- [x] **Test Verification:** All 313 tests passing across monorepo (`npm test` exits with code 0).
+- [x] **E2E & Role Journeys:** Journeys A through G validated with dedicated test suites.
+- [x] **External Test Data:** 5 CSV and QA guide artifacts generated in `../haca-test-data/`.
+- [x] **Documentation Alignment:** `docs/WORKFLOW.md`, `docs/PROJECT_DOCUMENTATION.md`, `docs/FLOW.md`, and `docs/PROGRESS.md` synchronized.
+
+---
+
+## Database Wipe: Keep Users Only (Status: READY FOR CONFIRMED RUN)
+
+### 1. Executive Summary
+Implemented and validated the safe, idempotent database wipe script (`scripts/wipe-keep-users.js`) and test suite (`apps/api/test/wipe_keep_users.test.js`):
+- **User Accounts Preserved:** All 13 local user accounts (including Admin, Creative Head, SM Manager, Team Members, pending set-password invites, and Executive Director) remain completely intact with all roles, preferences, capacities, department assignments, and passwords preserved.
+- **Session Security:** Session tokens are invalidated (`refreshTokens: []`) across all accounts so users sign in afresh.
+- **Reference & Config Standardization:** Standardized `departments` to canonical 7, `priorities` to canonical 3 (pruning 'Urgent'), `profiles` to single-brand mode (HACA active, 6 inactive), `automationrules` to canonical 6 rules with runtime state cleared, and `reportdefinitions` to canonical 4 reports with runtime state and orphan recipients cleared.
+- **Transactional Clean Slate:** Empties all transactional collections (`activityevents`, `contentpieces`, `workitems`, `calendarplans`, `assignment_overrides`, `notifications`, `accessrequests`, `counters`, `blockers`, `feedbackentries`, `revisionflags`, `scheduledreports`) while preserving collections and indexes.
+- **Retired Collections Purge (`--drop-empty`):** Drops collections without an active Mongoose model (e.g. `teams`).
+- **External Pre-Wipe Backup:** Automatically exports every non-empty collection as formatted JSON to a backup directory outside the repository (`../haca-backups/<timestamp>`). Refuses paths inside the repository. Aborts if any file fails or is empty.
+- **Cloudinary File Audit:** Scans all deleted documents and exports deduplicated Cloudinary URLs to `cloudinary-urls.txt` in the backup directory.
+- **BullMQ Queue Clearing (`--clear-queues`):** Obliterates all BullMQ Redis keys (`bull:*`) and repeatable jobs. Verified that `worker.js` re-registers all 6 repeatable jobs automatically on startup.
+- **Legacy Cleanup:** Deleted old `scripts/wipe-keep-admin.js` and obsolete `wipe_keep_admin.test.js`.
+
+### 2. Verification & Test Results
+- **Isolated Test Suite:** `apps/api/test/wipe_keep_users.test.js` passed **22 / 22 tests** asserting all guards (production refusal, non-local host refusal, db-name mismatch, inside-repo backup refusal), dry-run immutability, complete user preservation, reference data resets, Cloudinary URL extraction, and strict idempotency on second runs.
+- **Dry-run on Local Database:** Verified via `node scripts/wipe-keep-users.js` against `marketing_portal`.
+
+---
+
+## Pipeline Visibility and Status UI (Status: COMPLETE)
+
+### 1. Preconditions Verification
+- **Install & Workspace Alignment:** Confirmed intact (`@mmp/shared`, `@mmp/api`, `@mmp/web`).
+- **Typecheck:** `npm run typecheck` passed cleanly with 0 errors across all workspaces.
+- **Build:** `npm run build` completed cleanly (shared CJS/ESM/DTS, web Vite production build in 7.77s).
+- **Tests:** `npm test` passed **328 / 328 tests across 21 test files** (18 API test files / 317 tests, 3 Web test files / 11 tests).
+- **Lint:** `npm run lint` invokes `eslint .` which is not present in root devDependencies (per zero-new-dependencies constraint, noted).
+
+---
+
+## Plan List Fixes (Status: COMPLETE)
+
+### 1. Executive Summary
+Resolved all reported issues on the **Calendar > Plans** page for the SM Manager role, eliminating legacy terminology, fixing row count metrics, forbidding invalid zero-row plan submissions, warning on overlapping plan date ranges, blocking exact duplicate monthly periods, supporting plan deletion and renaming, and repairing orphaned zero-row records in the local database.
+
+### 2. Step 1 Investigation Findings
+1. **Origin of `PLAN-2026-10-001`:**
+   - **Created In:** `apps/api/test/scope_reset_r4.test.js:191-200` at `2026-10-25T18:13:07.731Z` by SM Manager ID `6ade46b3442f9f39fb6810e0`.
+   - **Why it had 0 rows:** The test added 1 row and submitted it. In `afterAll` (lines 142-143), the test cleaned up plans matching `code: /R4-/` and rows matching `topic: /R4/`. Because plan codes are generated dynamically as `PLAN-YYYY-MM-NNN`, the regex `/R4-/` failed to match, leaving the plan orphaned in MongoDB while its rows were wiped.
+   - **Why it showed "Submitted for Review":** The legacy implementation of `derivePlanStatus` in `@mmp/shared` contained fallback logic: `if (!rows || rows.length === 0) return submittedAt ? 'Submitted' : 'Draft';`. Because `submittedAt` was still stamped on the document, it falsely reported "Submitted" despite having 0 rows.
+2. **Missing Row Numbers on Plan Cards:**
+   - In `plan.service.js:87-93`, the API returned `{ totalRows, approvedRows, pendingRows }`, while `PlansTab.tsx` accessed `p.rowCount`, `p.approvedRowCount`, `p.submittedRowCount`, `p.changesRequestedRowCount`, evaluating to `undefined` and rendering `"Total: rows · approved · submitted"`.
+3. **Non-Derived Status Inconsistencies:**
+   - `derivePlanStatus` trusted `submittedAt` on empty arrays.
+   - `submitPlan` allowed plans with 0 rows to transition into review.
+
+### 3. Step 2 Fixes Implemented
+
+#### A. Shared Package (`@mmp/shared`)
+- **`derivePlanStatus`:** Strictly returns `"Draft"` whenever `rows.length === 0` or `rows` is empty, completely removing reliance on `submittedAt`.
+- **`formatPlanRowCounts`:** Returns `"No rows yet"` when total rows is 0. For non-zero rows, produces concise breakdown omitting zero counts (e.g. `'10 rows: 6 approved, 2 submitted, 2 changes requested'`).
+- **`calendarPlanCreateSchema`:** Made `title` optional so backend can derive `<Month> <Year>` from `periodStart`.
+- **Rebuilt cleanly:** ESM, CJS, and DTS bundles built via `tsup`.
+
+#### B. Backend API (`apps/api/src/modules/calendar/`)
+- **Zero-Row Submission Guard:** `submitPlan` throws 400 with exact message `'Add at least one row'` and code `'PLAN_EMPTY_ROWS'` when attempting to submit a plan with 0 rows. `validation.js` also records error `PLAN_EMPTY_ROWS`.
+- **Row Metrics Computation (`computePlanRowStats`):** Unifies canonical row counts and breakdowns (`rowCount`, `totalRows`, `draftRowCount`, `submittedRowCount`, `changesRequestedRowCount`, `approvedRowCount`, `pendingRows`, and `rowCounts` dictionary).
+- **Default Plan Title (`getDefaultPlanTitle`):** Defaults title to `<Month> <Year>` (e.g. `'November 2026'`) when title is omitted.
+- **Period Constraints (`checkPlanPeriodConstraints`):**
+  - Blocks exact duplicate monthly periods with 400 (`EXACT_DUPLICATE_PERIOD`).
+  - Emits interactive warnings for overlapping periods (`OVERLAPPING_PERIOD`) containing the conflicting plan ID and code.
+  - Ignores cancelled plans.
+- **Plan Deletion (`deletePlan`):** Allows SM Manager or Admin to delete Draft plans with zero approved rows. Deletes all associated rows, removes the plan, and logs `ActivityEvent` with action `calendar_plan.deleted`.
+- **Plan Renaming (`updatePlan`):** Allows updating title via `PATCH /api/calendar-plans/:id`.
+- **Robust Code Generation (`generatePlanCode`):** Queries the maximum existing numeric sequence in the monthly prefix to prevent sequence collision upon document deletions.
+- **On-Read Self-Healing:** `listPlans` and `getPlanById` automatically clear legacy `submittedAt`, `approvedAt`, `approvedById`, and `rejectionConcern` if a plan has zero rows.
+- **Database Repair Utility (`repairInconsistentPlanStatuses`):** Idempotently repairs plans with zero rows and non-Draft stored fields in the local database.
+
+#### C. Frontend UI (`apps/web/src/pages/calendar/PlansTab.tsx`)
+- **Plan Card Rendering:** Displays human-readable row metrics via `formatPlanRowCounts` (or `"No rows yet"`). Displays amber pill badge when `submissionWarnings` includes an overlapping period.
+- **Header Actions:** Added Rename Plan button (`Edit2`) and Delete Plan button (`Trash2`).
+- **Overlapping Period Banner:** Renders amber warning banner in the plan detail header linking directly to conflicting plans.
+- **Submit Button Guard:** Disabled with tooltip and amber alert message `'Add at least one row'` when row count is 0.
+- **Create Plan Modal:**
+  - Label changed to **"Plan Name"** with placeholder `e.g. November 2026`.
+  - Date change auto-populates `<Month> <Year>` if title is blank or unmodified.
+  - Plan Kind options: `"Monthly Content Plan"` (`monthly`) and `"Individual Work Plan"` (`individual`) (removed `project`).
+  - Notes placeholder updated to `"Content goals, theme or remarks..."`.
+- **Rename Plan Modal:** Added dialog with autofocus input and validation to rename plans without page reload.
+- **Page Header Text:** Updated to: `"Build the monthly content calendar, check your spreadsheet before upload, and follow the Creative Head's approval row by row."`.
+
+#### D. Comprehensive Wording Sweep
+- Replaced all instances of `HACA FORGE` with `HACA Marketing OS` in `<title>`, `<meta>`, `LoginPage.tsx`, `SetPasswordPage.tsx`, `Layout.tsx`, `service.js`, `mailer.js`, and `README.md`.
+- Search placeholder updated from `'Search cases & requests'` to `'Search tasks and content'`.
+- Eradicated ticketing terminology (`case`, `ticket`, `campaign` outside proper contexts) across user-facing views.
+
+#### E. Local Database Repair
+- Executed `repairInconsistentPlanStatuses()` against local MongoDB `marketing_portal`:
+  - Repaired `PLAN-2026-10-001`: cleared `submittedAt`, `approvedAt`, `approvedById`.
+  - Repaired `PLAN-2026-10-003`: cleared `submittedAt`, `approvedAt`, `approvedById`.
+  - Confirmed subsequent execution is 100% idempotent (`repairedCount: 0`).
+  - Cleaned leftover orphaned test plans from previous test trajectories.
+
+#### F. Automated Testing (`apps/api/test/plan_fixes.test.js`)
+Created dedicated 18-test test suite asserting:
+1. `formatPlanRowCounts`: zero rows returns `'No rows yet'`, formats counts cleanly omitting 0s.
+2. `computePlanRowStats`: provides canonical and breakdown fields.
+3. `derivePlanStatus`: strictly returns `'Draft'` for empty rows regardless of timestamps; correct status derivation across approved, mixed, changes requested, submitted, and draft.
+4. Empty plan submission blocked with exact message `'Add at least one row'` (`PLAN_EMPTY_ROWS`).
+5. Exact duplicate monthly period blocked with 400 (`EXACT_DUPLICATE_PERIOD`).
+6. Overlapping monthly period returns warning linking to conflicting plan; cancelled plans ignored.
+7. Default plan title derived as `<Month> <Year>` when omitted; title editing via PATCH.
+8. Delete allowed only for Draft plans without approved rows; blocked for approved rows; logs `calendar_plan.deleted` in `ActivityEvent`.
+9. Database repair utility repairs inconsistent plans and logs changes.
+10. UI Text Scan verifies zero forbidden strings (`FORGE`, `Search cases & requests`, old subheader text) in web pages.
+
+### 4. Final Quality Gates
+- **`npm run typecheck`:** **PASSED** (0 errors across `@mmp/shared`, `@mmp/api`, `@mmp/web`).
+- **`npm run build`:** **PASSED** (shared ESM/CJS/DTS and web production bundle compiled cleanly in 12.26s).
+- **`npm test`:** **PASSED** (**346 / 346 tests passed across 22 test files** — 19 API test files with 335 tests, 3 Web test files with 11 tests).
+
+---
+
+## WORKSPACES WS3: Review Studio & Media Workspaces (Status: COMPLETE)
+
+### 1. Executive Summary
+Completed Phase WS3 according to `docs/WORKSPACES.md` (Sections 3 and 4), `docs/UI_STANDARDS.md`, and strict system constraints.
+Zero new dependencies were added: built exclusively using native HTML5 `<video>`, browser DOM APIs, and existing upload signing endpoints.
+The system delivers a unified, high-throughput Review Studio cockpit at `/feedback` for Creative Head and Admin, plus dedicated role workspaces for Videographer (`Shoot`), Video Editor (`Edit`), Graphic Designer (`Design`), and Publisher (`Post`), with an upstream outputs viewer (`EarlierOutputsViewer`) and role-based workspace router (`MediaWorkspacePage`).
+
+---
+
+### 2. Capabilities Delivered
+
+#### A. Review Studio Cockpit (`/feedback` - `ReviewStudioPage.tsx`)
+1. **Waiting for Approval Queue:**
+   - FIFO sorting (oldest submissions first), elapsed waiting days display (`Waiting for X days in queue`), step and owner information.
+   - Breadcrumb navigation: `< Prev [X of Y] Next >` with auto-advance to next pending item upon approval or revision request.
+2. **Four Specialized Media Viewers:**
+   - **Document Viewer (`DocumentViewer.tsx`):**
+     - Formatted script/copy reader with version badge.
+     - Inline text diff compare mode (`diffUtils.ts`) highlighting additions in green and deletions in line-through red.
+     - Text selection floating comment popover anchoring text to review threads.
+   - **Video Player Viewer (`VideoPlayerViewer.tsx`):**
+     - Native HTML5 video player with speed toggles ($0.5\times$, $1.0\times$, $1.25\times$, $1.5\times$, $2.0\times$), seekbar, and fullscreen.
+     - Timecode-pinned comments with interactive pins directly on the timeline seekbar jumping playback to that exact second.
+   - **Image & Carousel Viewer (`ImageViewer.tsx`):**
+     - Pan & Zoom controls ($50\%$ to $300\%$) with reset.
+     - Coordinate-pinned comments (`x%, y%`) with clickable numbered pins.
+     - Thumbnail carousel gallery with keyboard navigation and slide indicator (`Slide X of Y`).
+   - **Link Opener Viewer (`LinkOpenerViewer.tsx`):**
+     - Safe fallback card displaying destination URL, deliverable notes, and secure "Open in New Tab" target link.
+3. **Right Context Sidebar (`ReviewStudioSidebar.tsx`):**
+   - Accessible tab navigation (`Comments`, `Brief`, `Outputs`, `Versions`).
+   - Upstream deliverable outputs viewer with script / footage / graphic downloads.
+   - Version history switcher with diff comparison toggle.
+4. **Persistent Decision Bar (`DecisionBar.tsx`):**
+   - **Mandatory 1 to 5 Star Rating:** Approve button is strictly disabled until a 1–5 score is selected.
+   - Optional qualitative feedback note and quality tags (`Sharp Hook`, `Clean Audio`, `On Brand`, etc.).
+   - **Request Revision Guard:** Blocked unless at least one anchored comment exists or a revision note is provided. Dropdown for 7 canonical revision root causes.
+   - **Keyboard Shortcuts:** `1-5` (rating), `A` (approve), `R` (request revision), `[` (previous item), `]` (next item).
+
+---
+
+#### B. Media Role Workspaces (`apps/web/src/pages/work/workspaces/`)
+1. **Videographer Workspace (`ShootWorkspace.tsx`):**
+   - Creative brief and target shoot date docked alongside read-only approved script and auto-generated shot list tabs.
+   - Chunked resilient video upload engine supporting 1–10 clips up to 500 MB each with progress tracking, pause, and retry.
+   - Camera roll and mobile file support; shoot notes capture; submit for approval and link fallback.
+2. **Video Editor Workspace (`EditWorkspace.tsx`):**
+   - Docked tabs for approved script and raw shoot footage clips.
+   - Video cut upload with client-side pre-flight checks: warning if aspect ratio $\ne 9:16$ (vertical reel) or duration $> 90$s.
+   - Interactive revision feedback checklist with live counter (`X of Y resolved`) and `role="checkbox"`.
+3. **Graphic Designer Workspace (`DesignWorkspace.tsx`):**
+   - Docked approved copy panel with quick "Copy Headline" and "Copy Body" buttons.
+   - Platform size guide reference cards (Instagram 1080x1350 / 1080x1080, LinkedIn 1200x628, YouTube 1280x720) with dimension mismatch warnings.
+   - Image (up to 20 MB) and PDF (up to 50 MB) upload, multi-slide thumbnail gallery with reordering controls.
+4. **Publisher Workspace (`PostWorkspace.tsx`):**
+   - Download approved deliverable master button.
+   - Copy caption and copy hashtags buttons directly from approved script metadata.
+   - 4-item pre-publish platform checklist (Aspect ratio verified, Audio synced, Caption/tags pasted, Thumbnail set).
+   - Live published URL input and publication datetime picker; "Mark as Posted" action.
+5. **Upstream Outputs & Workspace Router:**
+   - `EarlierOutputsViewer.tsx`: Read-only viewer for cross-stage collaboration and deliverable file downloads.
+   - `MediaWorkspacePage.tsx`: Dynamic role and stage router mounted at `/work/:id/workspace` routing automatically to Shoot, Edit, Design, Post, or Writing Studio based on deliverable stage.
+
+---
+
+---
+
+### 3. Verification & Test Results
+- **API Tests:** `apps/api/test/review_studio_and_workspaces.test.js` (**6/6 tests pass**).
+- **Web Component Tests:**
+  - `apps/web/src/pages/work/workspaces/__tests__/Workspaces.test.tsx` (**5/5 tests pass**).
+  - `apps/web/src/pages/feedback/review-studio/__tests__/ReviewStudio.test.tsx` (**10/10 tests pass**).
+
+---
+
+## Workspaces Phase WS4: Ratings in Profiles, Polish, Guardrails and End-to-End Journeys (Status: COMPLETE & VERIFIED)
+
+### 1. Architectural Summary & Delivered Features
+
+#### A. Ratings & Feedback Component & Scoped Profile Views
+1. **`RatingsFeedbackSection.tsx` Component:**
+   - **Metrics Bar:** 4 cards displaying Rolling 30-Day Average, Rolling 90-Day Average, All-Time Average, and Total Ratings Count.
+   - **Monthly Trend Chart:** Mini 6-month historical sparkline chart showing monthly averages and rating counts with tooltips.
+   - **Score Distribution Bars:** 5-tier distribution bar breakdown displaying counts and percentages of 5★, 4★, 3★, 2★, and 1★ ratings.
+   - **Breakdown by Step Type:** Card displaying average score across each pipeline stage (`Script`, `Shoot`, `Edit`, `Design`, `Post`).
+   - **Recent Creative Feedback:** Chronological list of qualitative reviews with deliverable content title, date, rating score, tags, and rater name.
+   - **3-Rating Minimum Threshold:** Shows exact card with `"Not enough ratings yet"` and coaching baseline explanation until $\ge 3$ ratings exist.
+   - **Mark as Seen:** Optimistic action allowing creative workers to acknowledge new review feedback.
+   - **Edit Rating Modal:** Creative Head or Admin can correct a previously submitted rating with mandatory reason field; every correction updates `editedLog` and dispatches `ActivityEvent`.
+2. **Page Integrations:**
+   - **My Account (`MyAccountPage.tsx`):** Creative workers inspect their own ratings, feedback, and trends.
+   - **People Directory (`UsersPage.tsx`):** Leaders (`creative_head`, `sm_manager`, `admin`, `executive`) can click "Ratings" on user cards to inspect performance.
+   - **Step Detail (`WorkDetailPage.tsx`):** Completed work items display the quality score, qualitative feedback note, quality tags, and seen marker.
+
+#### B. Institutional Guardrails & Privacy Protections
+1. **Zero Leaderboards:** No leaderboards exist anywhere in the platform UI or API.
+2. **Zero Rankings or Percentiles:** No ranking endpoints, no cross-person comparisons, no "top performers" lists.
+3. **No Ratings Export by Person:** Exports exclude individual worker ratings.
+4. **Strict Role-Scoping:**
+   - Workers (`team_member`) can **only** access and view their own ratings. Attempting to query another worker's ratings returns `HTTP 403 FORBIDDEN_RATINGS_ACCESS`.
+   - Authorized Leaders (`creative_head`, `sm_manager`, `admin`) can view team member ratings for growth and coaching.
+   - Executive (`executive`) has read-only access to view ratings across all profiles; mutation attempts return `HTTP 403`.
+5. **Decoupled from Compensation:** Prominent notice on profile section: *"Ratings evaluate the craftsmanship and creative quality of approved work for coaching and growth. They are strictly decoupled from compensation, pay, or financial incentives."*
+
+#### C. Aggregated Report Baselines
+- **Creative Production Report (`/api/reports/view/creative_production`):** Added `teamAverageRating`, `averageRatingPerStepType`, and a strictly aggregated *"Quality Ratings by Step Type (Aggregated Baseline)"* table (never per-person).
+- **Team Performance Digest (`/api/reports/view/team_performance`):** Added `teamAverageQualityRating`, `averageRatingPerStepType`, and a strictly aggregated *"Stage Quality Ratings (Aggregated Baseline)"* section.
+
+#### D. Regression Sweep & Polish
+- **Link-Only Placeholders:** Purged old link-only submission placeholders in favor of typed payloads.
+- **Role & Label Modernization:** Cleaned obsolete `Lead` labels (renamed to `isReviewerOrAdmin`), verified 0 hits for `FORGE`.
+- **Responsive Layouts & Keyboard Order:** Verified mobile stacked viewports, touch targets ($\ge 44$px), and tab orders across Writing Studio, Review Studio, and Media Workspaces.
+
+---
+
+### 2. Verified Test Suites & Monorepo Statistics
+
+| Workspace | Test Suite File | Tests | Status |
+|---|---|---|---|
+| **`@mmp/api`** | `apps/api/test/workspaces_ws4_ratings.test.js` | 20 | **PASSED (100%)** |
+| **`@mmp/api`** | `apps/api/test/workspaces_ws4_journeys.test.js` | 16 | **PASSED (100%)** |
+| **`@mmp/api`** | `apps/api/test/workspaces_ws1_submissions.test.js` | 17 | **PASSED (100%)** |
+| **`@mmp/api`** | `apps/api/test/workspaces_ws2_review.test.js` | 16 | **PASSED (100%)** |
+| **`@mmp/api`** | `apps/api/test/workspaces_ws3_media.test.js` | 15 | **PASSED (100%)** |
+| **`@mmp/api`** | 20 additional backend suites | 339 | **PASSED (100%)** |
+| **`@mmp/web`** | `apps/web/src/components/__tests__/RatingsFeedbackSection.test.tsx` | 7 | **PASSED (100%)** |
+| **`@mmp/web`** | `apps/web/src/pages/feedback/review-studio/__tests__/ReviewStudio.test.tsx` | 10 | **PASSED (100%)** |
+| **`@mmp/web`** | `apps/web/src/pages/work/workspaces/__tests__/Workspaces.test.tsx` | 5 | **PASSED (100%)** |
+| **`@mmp/web`** | 5 additional frontend suites | 29 | **PASSED (100%)** |
+| **E2E** | `test/e2e/workspaces_ws4_journeys.spec.js` | Specs A–G | **VERIFIED** |
+| **Total** | **33 Test Files** | **474 Tests** | **100% PASSED** |
+
+### 3. Playwright & Vitest Journeys (A through G) Verified
+- **Journey A (Writer Studio & Revision):** Writer authors draft, submits v1, Creative Head requests revision with anchored text comment, Writer resolves comment and submits v2, Creative Head approves with 5★ rating and `Great hook` tag.
+- **Journey B (Shooter & Editor Loop):** Shooter uploads footage package and is approved with 5★ rating; Editor submits cut v1, Creative Head pins timecode comment at second 4 and requests revision; Editor resubmits cut v2 and is approved with 4★ rating.
+- **Journey C (Designer Workspace):** Designer submits multi-slide carousel and Creative Head approves with 5★ rating.
+- **Journey D (Posting Owner):** Posting owner validates checklist, enters live published URL, and marks deliverable as `Published`.
+- **Journey E (Profile Ratings Visibility):** Each worker inspects their own ratings in My Account; Creative Head can inspect all worker profiles.
+- **Journey F (Anti-Comparison & Privacy Guardrail):** Cross-worker rating inspection requests strictly return `HTTP 403 FORBIDDEN_RATINGS_ACCESS`.
+- **Journey G (Executive Read-Only Walk):** Executive inspects all ratings and deliverables in read-only mode; approval or edit mutations return `HTTP 403`.
+
+---
+
+### 4. Final Launch Checklist
+- [x] **Zero New Dependencies:** Implemented strictly using existing workspace dependencies.
+- [x] **Monorepo Build:** `npm run build` succeeds cleanly across all packages.
+- [x] **Type Safety:** `npm run typecheck` exits with code 0 (zero TypeScript errors).
+- [x] **Automated Tests:** 474/474 tests pass across 33 test suites.
+- [x] **Strict Privacy Enforced:** Zero leaderboards, zero worker rankings, zero per-person ratings export.
+- [x] **Documentation Synchronized:** `docs/WORKSPACES.md`, `docs/PROJECT_DOCUMENTATION.md`, and `docs/PROGRESS.md` fully up to date.
+
+---
+
+## Deliverable Type Normalization & Submission Healing Fix
+
+### 1. Root Cause
+1. In `apps/web/src/pages/calendar/PlansTab.tsx`, the Individual Plan creation modal's dropdown contained legacy deliverable type options (`<option value="Reel / Video">`, `<option value="Carousel">`, `<option value="Motion Graphic">`, `<option value="Article / Blog">`) rather than the 15 canonical deliverable types from `DELIVERABLE_TYPES_CONFIG`.
+2. When creating an individual deliverable with `"Reel / Video"`, the deliverable was stored with `type: "Reel / Video"`.
+3. In `packages/shared/src/index.ts`, `normalizeWorkType` did not map `"Reel / Video"` to canonical `"Reel"`.
+4. When calling `/api/calendar-plans/:id/submit`, `validation.js` rejected the row with `HTTP 400 PLAN_SUBMISSION_BLOCKED` (`UNKNOWN_TYPE: Type "Reel / Video" is not one of the 15 supported deliverable types.`).
+5. A spurious `MONTH_MISMATCH` warning was also triggered due to comparing timestamped dates without start/end of day boundaries.
+
+### 2. Solution Implemented
+1. **`@mmp/shared`**:
+   - Updated `WORK_TYPE_ALIASES` in `packages/shared/src/index.ts` to map `"Reel / Video"`, `"reel / video"`, `"Video"`, `"Motion Graphic"` to `"Reel"`, `"Carousel"` to `"Carousel Post"`, and `"Article / Blog"` to `"Other"`.
+   - Enhanced `normalizeWorkType` to check `CANONICAL_DELIVERABLE_TYPES` and apply case-insensitive pattern matching.
+   - Re-compiled `@mmp/shared` cleanly.
+2. **`@mmp/api`**:
+   - Added virtual `type` getter/setter in `apps/api/src/modules/calendar/contentPiece.model.js` mapped to `contentType`.
+   - Updated `submitPlan` in `apps/api/src/modules/calendar/plan.service.js` to heal incomplete or aliased draft rows (normalizing `type`/`contentType` to canonical types and ensuring Reel default shoot stage configuration).
+   - Updated `createPlan` to normalize types and assign default `needsScript`/`needsShoot` for Reels when unassigned.
+   - Refined `MONTH_MISMATCH` in `apps/api/src/modules/calendar/validation.js` using start-of-day boundaries (`pStartMidnight`, `pEndMidnight`).
+3. **`@mmp/web`**:
+   - Updated the Individual Plan modal dropdown in `apps/web/src/pages/calendar/PlansTab.tsx` to list all 15 canonical deliverable types from `DELIVERABLE_TYPES_CONFIG`.
+   - Ensured creation payload normalizes the deliverable type and assigns script/shoot flags.
+4. **Automated Verification**:
+   - Added automated regression test in `apps/api/test/plan_fixes.test.js` asserting that plans with `"Reel / Video"` rows heal and submit successfully with HTTP 200.
+   - Verified that all 34 API test files (575 tests) and all 16 web test files (109 tests) pass with 100% green status (684 total tests).
+   - Verified clean typecheck (`npm run typecheck`) and web production build (`npm run build`).
 
 

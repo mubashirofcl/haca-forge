@@ -68,6 +68,10 @@ router.post(
   validate(requestAccessSchema),
   accessController.submitRequest,
 );
+router.get(
+  "/verify-token",
+  authController.verifyToken,
+);
 router.post(
   "/set-password",
   validate(setPasswordSchema),

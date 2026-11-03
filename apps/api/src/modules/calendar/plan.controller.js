@@ -1,5 +1,9 @@
 import * as planService from './plan.service.js';
 import * as importService from './import.service.js';
+import { autofillRowPlan } from './autofill.service.js';
+import { validatePlanAndRows } from './validation.js';
+import { ContentPiece } from './contentPiece.model.js';
+import { CalendarPlan } from './plan.model.js';
 
 export async function listPlans(req, res, next) {
   try {
@@ -37,6 +41,15 @@ export async function updatePlan(req, res, next) {
   }
 }
 
+export async function deletePlan(req, res, next) {
+  try {
+    const result = await planService.deletePlan(req.params.id, req.user);
+    res.json({ success: true, message: 'Plan deleted successfully', data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function addRows(req, res, next) {
   try {
     const { rows } = req.body;
@@ -61,6 +74,32 @@ export async function updateRow(req, res, next) {
       req.user
     );
     res.json({ data: row });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteRow(req, res, next) {
+  try {
+    const plan = await planService.deleteRow(
+      req.params.id,
+      req.params.rowId,
+      req.user
+    );
+    res.json({ data: plan, message: 'Row deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function submitRow(req, res, next) {
+  try {
+    const plan = await planService.submitRow(
+      req.params.id,
+      req.params.rowId,
+      req.user
+    );
+    res.json({ data: plan, message: 'Row submitted for review' });
   } catch (err) {
     next(err);
   }
@@ -120,7 +159,7 @@ export async function previewImport(req, res, next) {
       });
     }
 
-    const validationResult = importService.validateImportRows(rawRows);
+    const validationResult = await importService.validateImportRows(rawRows);
     res.json({ data: validationResult });
   } catch (err) {
     next(err);
@@ -154,6 +193,53 @@ export async function commitImport(req, res, next) {
 
     const plan = await planService.addRowsToPlan(targetPlanId, rows, req.user);
     res.status(201).json({ data: plan });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function autofillRow(req, res, next) {
+  try {
+    const { type, postingDate, needsScript, needsShoot, currentPlanRows } = req.body;
+    const planId = req.params.id;
+    let existingRows = currentPlanRows || [];
+    if (planId && (!existingRows || existingRows.length === 0)) {
+      existingRows = await ContentPiece.find({ planId }).lean();
+    }
+    const autofillData = await autofillRowPlan({
+      type,
+      postingDate,
+      needsScript,
+      needsShoot,
+      currentPlanRows: existingRows,
+    });
+    res.json({ data: autofillData });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function validatePlan(req, res, next) {
+  try {
+    const planId = req.params.id;
+    const plan = planId ? await CalendarPlan.findById(planId).lean() : req.body.plan;
+    const rows = req.body.rows || (planId ? await ContentPiece.find({ planId }).lean() : []);
+    const validation = await validatePlanAndRows({
+      plan,
+      rows,
+      isSubmitting: Boolean(req.body.isSubmitting),
+    });
+    res.json({ data: validation });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function moveCalendar(req, res, next) {
+  try {
+    const { calendar } = req.body;
+    const plan = await planService.movePlanCalendar(req.params.id, calendar, req.user);
+    res.json({ success: true, data: plan });
   } catch (err) {
     next(err);
   }

@@ -12,7 +12,6 @@ import { REVISION_ROOT_CAUSES, normalizeRole } from '@mmp/shared';
  */
 export async function getFeedbackForWorkItem(workItemId, user) {
   const workItem = await WorkItem.findById(workItemId)
-    .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole');
 
@@ -167,15 +166,6 @@ export async function createFeedbackEntry(data, user) {
         error.code = 'FORBIDDEN_APPROVAL';
         throw error;
       }
-
-      const scope = await resolveScope(user);
-      const itemProfileIdStr = (workItem.profileId?._id || workItem.profileId)?.toString();
-      if (itemProfileIdStr && !scope.canAccessProfile(itemProfileIdStr)) {
-        const error = new Error('You do not have brand profile access to approve deliverables for this brand');
-        error.statusCode = 403;
-        error.code = 'FORBIDDEN_PROFILE_APPROVAL';
-        throw error;
-      }
     }
 
     // Auto-advance round if latest round has already been reviewed
@@ -206,14 +196,19 @@ export async function createFeedbackEntry(data, user) {
       workItem.revisions = (workItem.revisions || 0) + 1;
     } else if (roundStatus === 'Approved') {
       workItem.status = 'Approved';
+      workItem.approvedAt = new Date();
     }
     await workItem.save();
+
+    if (roundStatus === 'Approved') {
+      const { unlockNextStage } = await import('../workItems/transition.service.js');
+      await unlockNextStage(workItem);
+    }
 
     // Log ActivityEvent
     await logActivity({
       entityType: 'work_item',
       entityId: workItem._id,
-      profileId: workItem.profileId,
       actor: user,
       action: roundStatus === 'Approved' ? 'work_item.approved' : 'work_item.feedback_submitted',
       fromStatus,
@@ -251,7 +246,6 @@ export async function createFeedbackEntry(data, user) {
     await logActivity({
       entityType: 'work_item',
       entityId: workItem._id,
-      profileId: workItem.profileId,
       actor: user,
       action: 'work_item.feedback_response',
       metadata: {
@@ -311,7 +305,6 @@ export async function checkAndCreateRevisionFlag(workItem, actor = null) {
     await logActivity({
       entityType: 'work_item',
       entityId: workItem._id,
-      profileId: workItem.profileId,
       actor: actorObj,
       action: 'revision.flagged',
       metadata: {
@@ -350,11 +343,11 @@ export async function checkAndCreateRevisionFlag(workItem, actor = null) {
 }
 
 /**
- * Classify root cause for a revision flag (Team Lead or Admin/Head)
+ * Classify root cause for a revision flag (SM Manager, Creative Head or Admin)
  */
 export async function classifyRevisionFlag(flagId, { rootCause, rootCauseNotes }, user) {
   if (user.role === 'team_member') {
-    const error = new Error('Only a Team Lead, Marketing Head, or Admin can classify revision root causes');
+    const error = new Error('Only an SM Manager, Creative Head, or Admin can classify revision root causes');
     error.statusCode = 403;
     throw error;
   }
@@ -368,7 +361,7 @@ export async function classifyRevisionFlag(flagId, { rootCause, rootCauseNotes }
   }
 
   const flag = await RevisionFlag.findById(flagId)
-    .populate('workItemId', 'title profileId departmentId')
+    .populate('workItemId', 'title departmentId')
     .populate('ownerId', 'name email role');
 
   if (!flag) {
@@ -392,7 +385,6 @@ export async function classifyRevisionFlag(flagId, { rootCause, rootCauseNotes }
   await logActivity({
     entityType: 'work_item',
     entityId: flag.workItemId._id,
-    profileId: flag.workItemId.profileId,
     actor: user,
     action: 'revision.classified',
     metadata: {
@@ -428,9 +420,8 @@ export async function listRevisionFlags(filters = {}, user) {
   const flags = await RevisionFlag.find(query)
     .populate({
       path: 'workItemId',
-      select: 'title workType status deadline profileId departmentId revisions',
+      select: 'title workType status deadline departmentId revisions',
       populate: [
-        { path: 'profileId', select: 'name code' },
         { path: 'departmentId', select: 'name code' },
       ],
     })
@@ -465,18 +456,14 @@ export async function listFeedbackThreads(filters = {}, user) {
 
   const workItemsQuery = {
     ...scope,
-    $or: [{ status: 'Feedback' }, { revisions: { $gt: 0 } }],
+    $or: [{ status: 'Feedback' }, { status: 'Pending' }, { revisions: { $gt: 0 } }],
   };
 
-  if (filters.profileId) {
-    workItemsQuery.profileId = filters.profileId;
-  }
   if (filters.departmentId) {
     workItemsQuery.departmentId = filters.departmentId;
   }
 
   const workItems = await WorkItem.find(workItemsQuery)
-    .populate('profileId', 'name code')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole')
     .sort({ updatedAt: -1 })

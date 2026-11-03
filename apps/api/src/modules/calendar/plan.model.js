@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { CALENDAR_PLAN_KINDS } from '@mmp/shared';
+import { CALENDAR_PLAN_KINDS, CALENDAR_KEYS } from '@mmp/shared';
 
 const calendarPlanSchema = new mongoose.Schema(
   {
@@ -14,6 +14,13 @@ const calendarPlanSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+    },
+    calendar: {
+      type: String,
+      enum: CALENDAR_KEYS,
+      required: true,
+      default: 'sm',
+      index: true,
     },
     kind: {
       type: String,
@@ -53,11 +60,18 @@ const calendarPlanSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
-    profileId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Profile',
+    rejectionConcern: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    submissionWarnings: {
+      type: Array,
+      default: [],
+    },
+    status: {
+      type: String,
       default: null,
-      index: true,
     },
   },
   {
@@ -68,6 +82,7 @@ const calendarPlanSchema = new mongoose.Schema(
 );
 
 calendarPlanSchema.index({ periodStart: 1, periodEnd: 1 });
+calendarPlanSchema.index({ calendar: 1, periodStart: 1, periodEnd: 1 });
 
 export const CalendarPlan = mongoose.model('CalendarPlan', calendarPlanSchema);
 export default CalendarPlan;

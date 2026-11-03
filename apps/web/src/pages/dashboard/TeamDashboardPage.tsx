@@ -687,7 +687,7 @@ export const TeamDashboardPage: React.FC = () => {
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-                            {item.profileId?.name} &bull; {item.ownerId?.name || 'Unassigned'}
+                            {item.ownerId?.name || 'Unassigned'}
                           </p>
                         </div>
 

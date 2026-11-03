@@ -32,7 +32,7 @@ describe('SCOPE RESET R1 Verification Suite', () => {
 
     await WorkItem.deleteMany({ title: /R1 Test/i });
     await Person.deleteMany({ email: /@r1-verify\.com$/ });
-    await Profile.deleteMany({ code: 'haca' });
+    await Profile.deleteMany({ $or: [{ name: 'HACA' }, { code: 'haca' }] });
     await Department.deleteMany({ code: 'r1_creative' });
 
     profileHaca = await Profile.create({
@@ -123,7 +123,7 @@ describe('SCOPE RESET R1 Verification Suite', () => {
       expect(rawDoc.relatedTarget).toBeUndefined();
       expect(rawDoc.leadsGenerated).toBeUndefined();
       expect(rawDoc.qualifiedLeads).toBeUndefined();
-      expect(rawDoc.profileId.toString()).toBe(profileHaca._id.toString());
+      expect(rawDoc.profileId).toBeUndefined();
     });
 
     it('creates a work item with omitted departmentId and ownerId (auto-infers department and defaults owner)', async () => {

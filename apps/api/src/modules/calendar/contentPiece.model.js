@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { ROW_STATUSES, WORK_TYPES } from '@mmp/shared';
+import { ROW_STATUSES, WORK_TYPES, CALENDAR_KEYS } from '@mmp/shared';
 
 const contentPieceSchema = new mongoose.Schema(
   {
@@ -14,6 +14,11 @@ const contentPieceSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    postingTime: {
+      type: String,
+      trim: true,
+      default: '18:00',
+    },
     topic: {
       type: String,
       required: true,
@@ -24,6 +29,42 @@ const contentPieceSchema = new mongoose.Schema(
       required: true,
       trim: true,
       index: true,
+    },
+    calendar: {
+      type: String,
+      enum: CALENDAR_KEYS,
+      default: 'sm',
+      index: true,
+    },
+    programOrEvent: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    brief: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    referenceLink: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    priority: {
+      type: String,
+      enum: ['Normal', 'Urgent', 'High', 'Medium', 'Low'],
+      default: 'Normal',
+    },
+    postingOwnerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Person',
+      default: null,
+    },
+    sourceVideoLink: {
+      type: String,
+      trim: true,
+      default: '',
     },
     needsScript: {
       type: Boolean,
@@ -54,6 +95,38 @@ const contentPieceSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    stagePlan: [
+      {
+        stageKey: {
+          type: String,
+          enum: ['Content', 'Script', 'Design', 'Shoot', 'Edit', 'Post'],
+          required: true,
+        },
+        ownerId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Person',
+          default: null,
+        },
+        dueDate: {
+          type: Date,
+          required: true,
+        },
+        ownerSource: {
+          type: String,
+          enum: ['suggested', 'manual'],
+          default: 'suggested',
+        },
+        dueDateSource: {
+          type: String,
+          enum: ['auto', 'manual'],
+          default: 'auto',
+        },
+        overrideReason: {
+          type: String,
+          default: '',
+        },
+      },
+    ],
     pipeline: {
       type: String,
       enum: ['design', 'reel_a', 'reel_b', 'reel_c'],
@@ -82,12 +155,6 @@ const contentPieceSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
-    profileId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Profile',
-      default: null,
-      index: true,
-    },
     createdById: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Person',
@@ -100,6 +167,12 @@ const contentPieceSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
+
+contentPieceSchema.virtual('type').get(function () {
+  return this.contentType;
+}).set(function (val) {
+  this.contentType = val;
+});
 
 contentPieceSchema.index({ planId: 1, rowStatus: 1 });
 contentPieceSchema.index({ postingDate: 1, contentType: 1 });

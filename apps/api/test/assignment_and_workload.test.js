@@ -48,15 +48,21 @@ describe('Phase 4: Auto-Assignment Engine & Team Workload', () => {
     });
 
     // Seed Departments
-    deptDesign = await Department.create({
-      name: 'Design',
-      code: 'test_design',
-    });
+    deptDesign = await Department.findOne({ name: 'Design' });
+    if (!deptDesign) {
+      deptDesign = await Department.create({
+        name: 'Design',
+        code: 'test_design',
+      });
+    }
 
-    deptVideo = await Department.create({
-      name: 'Video Production',
-      code: 'test_video',
-    });
+    deptVideo = await Department.findOne({ name: 'Video Production' });
+    if (!deptVideo) {
+      deptVideo = await Department.create({
+        name: 'Video Production',
+        code: 'test_video',
+      });
+    }
 
     // Seed Admin
     adminUser = await Person.create({

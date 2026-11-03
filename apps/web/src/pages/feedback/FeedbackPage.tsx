@@ -135,7 +135,10 @@ export const FeedbackPage: React.FC = () => {
     try {
       const res = await apiFetch<{ data: FeedbackThreadItem[] }>('/api/feedback/threads');
       setThreads(res.data);
-      if (res.data.length > 0 && !selectedWorkItemId) {
+      const queryWorkId = searchParams.get('workItemId');
+      if (queryWorkId && res.data.some((t) => t.workItem._id === queryWorkId)) {
+        setSelectedWorkItemId(queryWorkId);
+      } else if (res.data.length > 0 && !selectedWorkItemId) {
         setSelectedWorkItemId(res.data[0].workItem._id);
       }
     } catch (err) {
@@ -259,7 +262,7 @@ export const FeedbackPage: React.FC = () => {
   // Filtered Threads (Sorted Oldest First)
   const filteredThreads = useMemo(() => {
     const list = threads.filter((t) => {
-      if (activeTab === 'feedback' && t.workItem.status !== 'Feedback') return false;
+      if (activeTab === 'feedback' && t.workItem.status !== 'Feedback' && t.workItem.status !== 'Pending') return false;
       if (activeTab === 'flagged' && !t.flag) return false;
       if (activeTab === 'approved' && t.workItem.status !== 'Approved') return false;
 
@@ -281,7 +284,7 @@ export const FeedbackPage: React.FC = () => {
 
   // Metrics
   const metrics = useMemo(() => {
-    const totalActive = threads.filter((t) => t.workItem.status === 'Feedback').length;
+    const totalActive = threads.filter((t) => t.workItem.status === 'Feedback' || t.workItem.status === 'Pending').length;
     const totalFlagged = threads.filter((t) => t.flag && t.flag.isFlagged).length;
     const totalEscalated = threads.filter(
       (t) => t.flag && (t.flag.isEscalated || t.flag.isOver48HoursUnclassified)
@@ -297,7 +300,7 @@ export const FeedbackPage: React.FC = () => {
   const canApprove =
     (user?.role === 'admin' || user?.role === 'creative_head') && !isAssignedOwner;
 
-  const isLeadOrAdmin = user?.role === 'admin' || user?.role === 'creative_head' || user?.role === 'sm_manager';
+  const isReviewerOrAdmin = user?.role === 'admin' || user?.role === 'creative_head' || user?.role === 'sm_manager';
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
@@ -326,6 +329,16 @@ export const FeedbackPage: React.FC = () => {
           <CheckCircle2 className="w-4 h-4" />
           Stages waiting for approval
         </button>
+
+        {isReviewerOrAdmin && (
+          <button
+            onClick={() => navigate('/feedback/review-studio')}
+            className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            Open Review Studio
+          </button>
+        )}
       </div>
 
       {mainTab === 'plans' && <PlansApprovalTab />}
@@ -487,11 +500,6 @@ export const FeedbackPage: React.FC = () => {
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                           {item.workItem.workType}
                         </span>
-                        {item.workItem.profileId && (
-                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">
-                            {item.workItem.profileId.name}
-                          </span>
-                        )}
                       </div>
 
                       {hasFlag && (
@@ -562,11 +570,6 @@ export const FeedbackPage: React.FC = () => {
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
                         {activeThread.workItem.workType}
                       </span>
-                      {activeThread.workItem.profileId && (
-                        <span className="text-[10px] font-semibold text-slate-500">
-                          Brand: <strong>{activeThread.workItem.profileId.name}</strong>
-                        </span>
-                      )}
                     </div>
                     <h2 className="text-base font-black text-slate-900">
                       {activeThread.workItem.title}
@@ -648,13 +651,13 @@ export const FeedbackPage: React.FC = () => {
                           </div>
                         ) : (
                           <p className="text-[11px] text-amber-800/80 mt-1">
-                            Awaiting root cause classification by Team Lead or Marketing Head.
+                            Awaiting root cause classification by SM Manager or Creative Head.
                           </p>
                         )}
                       </div>
                     </div>
 
-                    {!activeThread.flag.rootCause && isLeadOrAdmin && (
+                    {!activeThread.flag.rootCause && isReviewerOrAdmin && (
                       <button
                         onClick={() => setIsClassifyModalOpen(true)}
                         className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm shrink-0 flex items-center gap-1.5 transition-all"
@@ -747,8 +750,8 @@ export const FeedbackPage: React.FC = () => {
                   <span>Submit Thread Update</span>
                 </h3>
 
-                {/* Reviewer Action Form (Team Lead or Admin) */}
-                {isLeadOrAdmin && (
+                {/* Reviewer Action Form (Creative Head or Admin) */}
+                {isReviewerOrAdmin && (
                   <form onSubmit={handleSubmitReview} className="space-y-3 pt-2 border-t border-slate-100">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-800">
@@ -804,8 +807,8 @@ export const FeedbackPage: React.FC = () => {
                   </form>
                 )}
 
-                {/* Owner Response Form (Assigned Owner or Admin/Lead) */}
-                {(isAssignedOwner || isLeadOrAdmin) && (
+                {/* Owner Response Form (Assigned Owner or Creative Head/Admin) */}
+                {(isAssignedOwner || isReviewerOrAdmin) && (
                   <form onSubmit={handleSubmitResponse} className="space-y-3 pt-3 border-t border-slate-100">
                     <span className="text-xs font-bold text-slate-800 block">
                       Respond to Latest Reviewer Feedback
@@ -813,7 +816,7 @@ export const FeedbackPage: React.FC = () => {
                     <textarea
                       required
                       rows={2}
-                      placeholder="Describe changes made, paste updated deliverable links, or request clarification..."
+                      placeholder="Describe changes made, updated deliverable details, or request clarification..."
                       value={responseText}
                       onChange={(e) => setResponseText(e.target.value)}
                       className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20"

@@ -48,10 +48,13 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
       active: true,
     });
 
-    deptDesign = await Department.create({
-      name: 'Design',
-      code: 'test_feedback_dept',
-    });
+    deptDesign = await Department.findOne({ name: 'Design' });
+    if (!deptDesign) {
+      deptDesign = await Department.create({
+        name: 'Design',
+        code: 'test_feedback_dept',
+      });
+    }
 
     adminUser = await Person.create({
       name: 'Admin Reviewer',

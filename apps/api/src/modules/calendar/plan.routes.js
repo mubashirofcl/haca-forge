@@ -37,6 +37,12 @@ router.post(
   planController.commitImport
 );
 
+router.post(
+  '/autofill',
+  requirePermission('calendar.plan'),
+  planController.autofillRow
+);
+
 // Plans CRUD & review
 router.get(
   '/',
@@ -58,9 +64,21 @@ router.get(
 );
 
 router.patch(
+  '/:id/calendar',
+  requirePermission('calendar.plan'),
+  planController.moveCalendar
+);
+
+router.patch(
   '/:id',
   requirePermission('calendar.plan'),
   planController.updatePlan
+);
+
+router.delete(
+  '/:id',
+  requirePermission('calendar.plan'),
+  planController.deletePlan
 );
 
 router.post(
@@ -73,6 +91,30 @@ router.patch(
   '/:id/rows/:rowId',
   requirePermission('calendar.plan'),
   planController.updateRow
+);
+
+router.delete(
+  '/:id/rows/:rowId',
+  requirePermission('calendar.plan'),
+  planController.deleteRow
+);
+
+router.post(
+  '/:id/rows/:rowId/submit',
+  requirePermission('calendar.plan'),
+  planController.submitRow
+);
+
+router.post(
+  '/:id/rows/autofill',
+  requirePermission('calendar.plan'),
+  planController.autofillRow
+);
+
+router.post(
+  '/:id/validate',
+  requirePermission('calendar.plan'),
+  planController.validatePlan
 );
 
 router.post(

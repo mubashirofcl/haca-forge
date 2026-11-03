@@ -2,7 +2,6 @@ import React, { createContext, useContext, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 export interface GlobalFilterState {
-  profileId: string;
   departmentId: string;
   ownerId: string;
   month: string;
@@ -18,7 +17,6 @@ interface GlobalFilterContextType {
 }
 
 export const defaultFilters: GlobalFilterState = {
-  profileId: 'all',
   departmentId: 'all',
   ownerId: 'all',
   month: new Date().toISOString().slice(0, 7),
@@ -32,7 +30,6 @@ export const GlobalFilterProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Read current filters from URL search params with defaults
   const filters: GlobalFilterState = useMemo(() => ({
-    profileId: searchParams.get('profileId') || 'all',
     departmentId: searchParams.get('departmentId') || 'all',
     ownerId: searchParams.get('ownerId') || 'all',
     month: searchParams.get('month') || new Date().toISOString().slice(0, 7),
@@ -61,7 +58,6 @@ export const GlobalFilterProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        next.delete('profileId');
         next.delete('departmentId');
         next.delete('ownerId');
         next.delete('month');
@@ -74,7 +70,6 @@ export const GlobalFilterProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (filters.profileId !== 'all') count++;
     if (filters.departmentId !== 'all') count++;
     if (filters.ownerId !== 'all') count++;
     if (filters.status !== 'all') count++;
@@ -83,7 +78,6 @@ export const GlobalFilterProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const queryParams = useMemo(() => {
     const params: Record<string, string> = {};
-    if (filters.profileId !== 'all') params.profileId = filters.profileId;
     if (filters.departmentId !== 'all') params.departmentId = filters.departmentId;
     if (filters.ownerId !== 'all') params.ownerId = filters.ownerId;
     if (filters.month) params.month = filters.month;

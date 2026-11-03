@@ -7,7 +7,17 @@ import cookieParser from "cookie-parser";
 import { sanitizeMiddleware } from "./middleware/sanitize.js";
 import hpp from "hpp";
 import jwt from "jsonwebtoken";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 import { normalizeRole } from "@mmp/shared";
+
+const __serverFilename = fileURLToPath(import.meta.url);
+const __serverDirname = path.dirname(__serverFilename);
+const localUploadsDir = path.resolve(__serverDirname, "../uploads");
+if (!fs.existsSync(localUploadsDir)) {
+  fs.mkdirSync(localUploadsDir, { recursive: true });
+}
 
 import { env } from "./config/env.js";
 import { connectDB } from "./config/db.js";
@@ -19,6 +29,7 @@ import rateLimit from "express-rate-limit";
 
 import statusRoutes from "./modules/status/routes.js";
 import authRoutes from "./modules/auth/routes.js";
+import profileRoutes from "./modules/profile/routes.js";
 import accessRoutes from "./modules/access/routes.js";
 import peopleRoutes from "./modules/people/routes.js";
 import referenceRoutes from "./modules/referenceData/routes.js";
@@ -36,8 +47,14 @@ import * as assignmentController from "./modules/assignment/controller.js";
 import { feedbackRouter, revisionsRouter } from "./modules/feedback/routes.js";
 import blockerRoutes from "./modules/blockers/routes.js";
 import automationRoutes from "./modules/automation/routes.js";
+import teamRoutes from "./modules/team/routes.js";
+import submissionRoutes, { attachWorkItemSubmissionRoutes } from "./modules/submissions/routes.js";
+import clipsRouter, { attachWorkItemMediaRoutes } from "./modules/media/routes.js";
+import { chatRouter } from "./modules/chat/routes.js";
+import { setupChatSocket, registerChatSocketIO } from "./modules/chat/socket.js";
 import { ensureAutomationRules } from "./modules/automation/runner.js";
 import { ensureReportDefinitions } from "./modules/reports/service.js";
+import { ensureBaselineUsers } from "./modules/people/baselineUsers.js";
 import { authenticate } from "./middleware/auth.js";
 import { initQueues } from "./lib/queue.js";
 import { initDomainEventListeners } from "./modules/notifications/service.js";
@@ -156,14 +173,22 @@ io.on("connection", (socket) => {
       const normalizedRole = normalizeRole(socket.user.role);
       socket.join(`role:${normalizedRole}`);
     }
+
+    setupChatSocket(io, socket);
   }
 });
+registerChatSocketIO(io);
 
 // 6. API Routes
 app.use("/api", statusRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/me", profileRoutes);
+app.use("/me", profileRoutes);
 app.use("/api/admin/access-requests", accessRoutes);
+app.use("/api/team", teamRoutes);
 app.use("/api/people", peopleRoutes);
+app.use("/api/users", peopleRoutes);
+app.use("/users", peopleRoutes);
 app.use("/api/reference-data", referenceRoutes);
 app.use("/api/reference", referenceRoutes);
 app.use("/api/departments", departmentRoutes);
@@ -173,13 +198,21 @@ app.use("/api/calendar-plans", planRoutes);
 app.use("/calendar-plans", planRoutes);
 app.use("/api/content-pieces", contentPieceRoutes);
 app.use("/content-pieces", contentPieceRoutes);
+app.use("/uploads", express.static(localUploadsDir));
+app.use("/api/uploads/files", express.static(localUploadsDir));
 app.use("/api/uploads", uploadRoutes);
-app.use("/uploads", uploadRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/docs", docsRoutes);
+attachWorkItemSubmissionRoutes(workItemRoutes);
+attachWorkItemMediaRoutes(workItemRoutes);
+
+app.use("/api/clips", clipsRouter);
+app.use("/clips", clipsRouter);
 app.use("/api/work", workItemRoutes);
 app.use("/api/work-items", workItemRoutes);
+app.use("/api/submissions", submissionRoutes);
+app.use("/submissions", submissionRoutes);
 app.use("/api/my-work", (req, res, next) => {
   req.url = "/my-work" + (req.url === "/" ? "" : req.url);
   workItemRoutes(req, res, next);
@@ -195,6 +228,8 @@ app.use("/api/revisions", revisionsRouter);
 app.use("/api/blockers", blockerRoutes);
 app.use("/api/automation/rules", automationRoutes);
 app.use("/api/automation", automationRoutes);
+app.use("/api/chat", chatRouter);
+app.use("/chat", chatRouter);
 
 app.set("io", io);
 
@@ -215,12 +250,35 @@ app.use(errorHandler);
 // 9. Startup & Database
 export async function startServer() {
   await connectDB();
+  await ensureBaselineUsers();
   await initQueues();
   await ensureAutomationRules();
   await ensureReportDefinitions();
   initDomainEventListeners(io);
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    server.once("error", (err) => {
+      if (err.code === "EADDRINUSE") {
+        logger.warn(
+          `Port ${env.PORT} is temporarily busy (EADDRINUSE). Retrying in 1.2s...`,
+        );
+        setTimeout(() => {
+          server.close();
+          server.listen(env.PORT, "0.0.0.0", () => {
+            logger.info(
+              `🚀 API Server running on port ${env.PORT} [${env.NODE_ENV}]`,
+            );
+            logger.info(
+              `🔗 Health check available at http://localhost:${env.PORT}/api/status`,
+            );
+            resolve(server);
+          });
+        }, 1200);
+      } else {
+        reject(err);
+      }
+    });
+
     server.listen(env.PORT, "0.0.0.0", () => {
       logger.info(
         `🚀 API Server running on port ${env.PORT} [${env.NODE_ENV}]`,
@@ -233,12 +291,32 @@ export async function startServer() {
   });
 }
 
+const shutdown = (signal) => {
+  logger.info(`Received ${signal}. Closing HTTP server...`);
+  server.close(() => {
+    logger.info("HTTP server closed.");
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 1500).unref();
+};
+
+process.once("SIGTERM", () => shutdown("SIGTERM"));
+process.once("SIGINT", () => shutdown("SIGINT"));
+
 // Automatically start if called directly
 if (process.env.NODE_ENV !== "test") {
-  startServer().catch((err) => {
-    logger.error({ err }, "Failed to start server");
-    process.exit(1);
-  });
+  const tryStart = (attempt = 1) => {
+    startServer().catch((err) => {
+      logger.error({ err }, "Failed to start server");
+      if (env.NODE_ENV === "production") {
+        process.exit(1);
+      } else {
+        logger.info(`Will retry starting API server in 3 seconds (attempt ${attempt})...`);
+        setTimeout(() => tryStart(attempt + 1), 3000);
+      }
+    });
+  };
+  tryStart();
 }
 
 export { app, server };

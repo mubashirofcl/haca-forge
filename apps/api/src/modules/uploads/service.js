@@ -1,55 +1,132 @@
 import crypto from 'crypto';
+import path from 'path';
 import { v2 as cloudinary } from 'cloudinary';
 import { env } from '../../config/env.js';
-import { MAX_UPLOAD_SIZES } from '@mmp/shared';
+import {
+  UPLOAD_KINDS,
+  UPLOAD_LIMITS_BYTES,
+  UPLOAD_ALLOWED_MIME_TYPES,
+  UPLOAD_ALLOWED_EXTENSIONS,
+} from '@mmp/shared';
+
+/**
+ * Normalizes and validates the upload kind and file extension / MIME type
+ */
+function resolveUploadKind({ kind, fileType, fileName, deliverableType }) {
+  const mimeOrType = (fileType || deliverableType || '').toLowerCase();
+  const ext = fileName ? path.extname(fileName).toLowerCase() : '';
+
+  if (kind && UPLOAD_KINDS.includes(kind)) {
+    return kind;
+  }
+
+  // Derive kind from MIME or extension
+  if (
+    mimeOrType.includes('video') ||
+    UPLOAD_ALLOWED_EXTENSIONS.video.includes(ext) ||
+    UPLOAD_ALLOWED_MIME_TYPES.video.includes(mimeOrType)
+  ) {
+    return 'video';
+  }
+
+  if (
+    mimeOrType.includes('image') ||
+    UPLOAD_ALLOWED_EXTENSIONS.image.includes(ext) ||
+    UPLOAD_ALLOWED_MIME_TYPES.image.includes(mimeOrType)
+  ) {
+    return 'image';
+  }
+
+  if (
+    mimeOrType.includes('pdf') ||
+    ext === '.pdf' ||
+    mimeOrType === 'application/pdf'
+  ) {
+    return 'pdf';
+  }
+
+  return null;
+}
 
 /**
  * Generate signed upload parameters for direct browser-to-Cloudinary upload
- * Enforces file type and maximum size restrictions (video up to 500 MB)
+ * Enforces strict kinds (video, image, pdf), server-side limits, and unguessable paths.
  */
-export async function generateUploadSignature({ fileName, fileSize, fileType, deliverableType, folder }) {
-  // 1. Determine category
-  let category = 'other';
-  const mimeOrType = (deliverableType || fileType || '').toLowerCase();
+export async function generateUploadSignature({
+  fileName,
+  fileSize,
+  fileType,
+  deliverableType,
+  kind,
+  pieceId,
+  contentPieceId,
+  folder,
+}) {
+  // 1. Resolve and validate upload kind
+  const resolvedKind = resolveUploadKind({ kind, fileType, fileName, deliverableType });
 
-  if (mimeOrType.includes('video') || mimeOrType === 'video') {
-    category = 'video';
-  } else if (mimeOrType.includes('image') || mimeOrType === 'image') {
-    category = 'image';
-  } else if (mimeOrType.includes('audio') || mimeOrType === 'audio') {
-    category = 'audio';
-  } else if (
-    mimeOrType.includes('pdf') ||
-    mimeOrType.includes('document') ||
-    mimeOrType.includes('text') ||
-    mimeOrType === 'document'
-  ) {
-    category = 'document';
+  if (!resolvedKind || !UPLOAD_KINDS.includes(resolvedKind)) {
+    const err = new Error(
+      `Unsupported upload type. Allowed upload kinds are video (mp4, mov, webm), image (png, jpg, webp), or pdf.`
+    );
+    err.statusCode = 400;
+    err.code = 'FILE_TYPE_NOT_ALLOWED';
+    err.details = { receivedType: fileType, receivedKind: kind, allowedKinds: UPLOAD_KINDS };
+    throw err;
   }
 
-  // 2. Validate maximum size limit
-  const maxAllowedBytes = MAX_UPLOAD_SIZES[category] || MAX_UPLOAD_SIZES.other;
-  if (fileSize > maxAllowedBytes) {
+  // 2. Validate MIME type and file extension
+  const mime = (fileType || '').toLowerCase();
+  const ext = fileName ? path.extname(fileName).toLowerCase() : '';
+  const allowedMimes = UPLOAD_ALLOWED_MIME_TYPES[resolvedKind];
+  const allowedExts = UPLOAD_ALLOWED_EXTENSIONS[resolvedKind];
+
+  const mimeMatch = !mime || allowedMimes.includes(mime) || allowedMimes.some((m) => mime.includes(m));
+  const extMatch = !ext || allowedExts.includes(ext);
+
+  if (!mimeMatch && !extMatch) {
     const err = new Error(
-      `File size (${Math.round(fileSize / 1024 / 1024)} MB) exceeds maximum allowed limit of ${Math.round(
-        maxAllowedBytes / 1024 / 1024
-      )} MB for ${category} uploads.`
+      `Invalid format for ${resolvedKind}. Allowed formats: ${allowedExts.join(', ')} (${allowedMimes.join(', ')})`
+    );
+    err.statusCode = 400;
+    err.code = 'FILE_TYPE_NOT_ALLOWED';
+    err.details = { receivedMime: mime, receivedExt: ext, allowedExts, allowedMimes };
+    throw err;
+  }
+
+  // 3. Validate maximum size limit
+  const maxAllowedBytes = UPLOAD_LIMITS_BYTES[resolvedKind];
+  if (fileSize && fileSize > maxAllowedBytes) {
+    const err = new Error(
+      `File size (${Math.round(fileSize / (1024 * 1024))} MB) exceeds maximum allowed limit of ${Math.round(
+        maxAllowedBytes / (1024 * 1024)
+      )} MB for ${resolvedKind} uploads.`
     );
     err.statusCode = 400;
     err.code = 'FILE_TOO_LARGE';
     err.details = {
       receivedBytes: fileSize,
       maxAllowedBytes,
-      category,
+      kind: resolvedKind,
     };
     throw err;
   }
 
   const timestamp = Math.round(new Date().getTime() / 1000);
-  const targetFolder = folder || 'marketing_portal/deliverables';
-  const resourceType = category === 'video' ? 'video' : category === 'image' ? 'image' : 'raw';
 
-  // 3. Generate Cloudinary signature
+  // 4. Unguessable, per-piece path structure
+  const randomSuffix = crypto.randomUUID();
+  const targetPieceId = pieceId || contentPieceId;
+  const targetFolder = folder
+    ? folder
+    : targetPieceId
+    ? `marketing_portal/pieces/${targetPieceId}/${randomSuffix}`
+    : `marketing_portal/general/${randomSuffix}`;
+
+  const resourceType =
+    resolvedKind === 'video' ? 'video' : resolvedKind === 'image' ? 'image' : 'raw';
+
+  // 5. Generate Cloudinary signature with non-public listing (type: 'authenticated')
   const cloudName = env.CLOUDINARY_CLOUD_NAME || 'dev_marketing_portal';
   const apiKey = env.CLOUDINARY_API_KEY || 'dev_api_key_123456';
   const apiSecret = env.CLOUDINARY_API_SECRET || 'dev_api_secret_abcdef123456';
@@ -63,16 +140,15 @@ export async function generateUploadSignature({ fileName, fileSize, fileType, de
         api_secret: apiSecret,
       });
       signature = cloudinary.utils.api_sign_request(
-        { folder: targetFolder, timestamp },
+        { folder: targetFolder, timestamp, type: 'authenticated' },
         apiSecret
       );
     } else {
-      // Deterministic dev/test fallback
-      const serialized = `folder=${targetFolder}&timestamp=${timestamp}${apiSecret}`;
+      const serialized = `folder=${targetFolder}&timestamp=${timestamp}&type=authenticated${apiSecret}`;
       signature = crypto.createHash('sha1').update(serialized).digest('hex');
     }
   } catch (signErr) {
-    const serialized = `folder=${targetFolder}&timestamp=${timestamp}${apiSecret}`;
+    const serialized = `folder=${targetFolder}&timestamp=${timestamp}&type=authenticated${apiSecret}`;
     signature = crypto.createHash('sha1').update(serialized).digest('hex');
   }
 
@@ -86,6 +162,96 @@ export async function generateUploadSignature({ fileName, fileSize, fileType, de
     folder: targetFolder,
     resourceType,
     uploadUrl,
+    kind: resolvedKind,
     maxSizeBytes: maxAllowedBytes,
+    accessMode: 'authenticated',
   };
 }
+
+
+/**
+ * Record metadata after upload has completed in browser
+ */
+export async function recordUploadMetadata({
+  url,
+  size,
+  duration,
+  width,
+  height,
+  mime,
+  name,
+  workItemId,
+  submissionId,
+}) {
+  if (!url) {
+    const err = new Error('File URL is required');
+    err.statusCode = 400;
+    err.code = 'INVALID_METADATA';
+    throw err;
+  }
+
+  const metadata = {
+    url,
+    size: Number(size) || 0,
+    duration: Number(duration) || 0,
+    width: Number(width) || 0,
+    height: Number(height) || 0,
+    mime: mime || '',
+    name: name || '',
+    recordedAt: new Date(),
+  };
+
+  if (submissionId) {
+    const { Submission } = await import('../submissions/model.js');
+    await Submission.findByIdAndUpdate(submissionId, {
+      $push: { files: metadata },
+    });
+  }
+
+  return metadata;
+}
+
+/**
+ * Validates and processes a locally uploaded file saved via Multer
+ */
+export async function processLocalUploadedFile(file, requestedKind) {
+  if (!file) {
+    const err = new Error('No file provided');
+    err.statusCode = 400;
+    err.code = 'NO_FILE_PROVIDED';
+    throw err;
+  }
+
+  const resolvedKind = resolveUploadKind({
+    kind: requestedKind,
+    fileType: file.mimetype,
+    fileName: file.originalname,
+  }) || 'image';
+
+  // Validate size limit
+  const maxAllowedBytes = UPLOAD_LIMITS_BYTES[resolvedKind] || (20 * 1024 * 1024);
+  if (file.size > maxAllowedBytes) {
+    const fs = await import('fs');
+    if (file.path && fs.existsSync(file.path)) {
+      try { fs.unlinkSync(file.path); } catch {}
+    }
+    const err = new Error(
+      `File size (${Math.round(file.size / (1024 * 1024))} MB) exceeds maximum allowed limit of ${Math.round(
+        maxAllowedBytes / (1024 * 1024)
+      )} MB for ${resolvedKind} uploads.`
+    );
+    err.statusCode = 400;
+    err.code = 'FILE_TOO_LARGE';
+    throw err;
+  }
+
+  return {
+    url: `/uploads/${file.filename}`,
+    storageId: file.filename,
+    fileName: file.originalname,
+    sizeBytes: file.size,
+    mimeType: file.mimetype,
+    kind: resolvedKind,
+  };
+}
+

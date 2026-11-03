@@ -31,7 +31,7 @@ function isAuthEndpoint(url: string): boolean {
 async function executeTokenRefresh(): Promise<boolean> {
   try {
     const refreshToken =
-      typeof window !== "undefined"
+      typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function"
         ? localStorage.getItem("refreshToken")
         : null;
 
@@ -46,7 +46,7 @@ async function executeTokenRefresh(): Promise<boolean> {
 
     if (res.ok) {
       const data = await res.json().catch(() => null);
-      if (typeof window !== "undefined") {
+      if (typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.setItem === "function") {
         if (data?.accessToken) {
           localStorage.setItem("accessToken", data.accessToken);
         }
@@ -78,7 +78,7 @@ export async function apiFetch<T = any>(
   }
 
   // Inject Authorization Bearer header if token exists in localStorage and not explicitly passed
-  if (!headers.has("Authorization") && typeof window !== "undefined") {
+  if (!headers.has("Authorization") && typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function") {
     const token =
       localStorage.getItem("accessToken") || localStorage.getItem("token");
     if (token) {

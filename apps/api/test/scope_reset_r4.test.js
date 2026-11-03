@@ -42,7 +42,7 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
     await Person.deleteMany({ email: /@r4-test\.com$/ });
     await Profile.deleteMany({ code: 'r4_haca' });
     await Department.deleteMany({ code: /r4_/ });
-    await CalendarPlan.deleteMany({ code: /R4-/ });
+    await CalendarPlan.deleteMany({ $or: [{ code: /R4-/ }, { title: /R4/ }] });
     await ContentPiece.deleteMany({ topic: /R4/ });
     await WorkItem.deleteMany({ title: /R4/ });
     await AccessRequest.deleteMany({ email: /@r4-test\.com$/ });
@@ -139,7 +139,7 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
     await Person.deleteMany({ email: /@r4-test\.com$/ });
     await Profile.deleteMany({ code: 'r4_haca' });
     await Department.deleteMany({ code: /r4_/ });
-    await CalendarPlan.deleteMany({ code: /R4-/ });
+    await CalendarPlan.deleteMany({ $or: [{ code: /R4-/ }, { title: /R4/ }] });
     await ContentPiece.deleteMany({ topic: /R4/ });
     await WorkItem.deleteMany({ title: /R4/ });
     await AccessRequest.deleteMany({ email: /@r4-test\.com$/ });
@@ -211,8 +211,12 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
           rows: [
             {
               topic: 'R4 Product Feature Reel',
+              type: 'Reel',
               contentType: 'Reel',
               pipeline: 'reel_a',
+              brief: 'Detailed brief for R4 Product Feature Reel',
+              forTeam: 'Marketing',
+              postingOwnerId: memberUser._id,
               postingDate: new Date(Date.now() + 7 * 86400000),
               needsScript: true,
               needsShoot: true,
@@ -733,4 +737,15 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
       expect(postPlanDenied.status).toBe(403);
     });
   });
+
+  afterAll(async () => {
+    await Person.deleteMany({ email: /@r4-test\.com$/ });
+    await Profile.deleteMany({ code: 'r4_haca' });
+    await Department.deleteMany({ code: /r4_/ });
+    await CalendarPlan.deleteMany({ $or: [{ code: /R4-/ }, { title: /R4/ }] });
+    await ContentPiece.deleteMany({ topic: /R4/ });
+    await WorkItem.deleteMany({ title: /R4/ });
+    await AccessRequest.deleteMany({ email: /@r4-test\.com$/ });
+  });
 });
+

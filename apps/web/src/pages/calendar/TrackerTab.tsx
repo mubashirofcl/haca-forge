@@ -13,7 +13,9 @@ import {
   X,
   Check,
 } from 'lucide-react';
-import type { StageKey, WorkItemStatus } from '@mmp/shared';
+import { getCalendarDefinition, type CalendarKey, type StageKey, type WorkItemStatus } from '@mmp/shared';
+import { Avatar } from '../../components/Avatar';
+import { PersonWorkHistoryDrawer } from '../../components/PersonWorkHistoryDrawer';
 
 interface StageSummary {
   _id: string;
@@ -36,6 +38,7 @@ interface ContentPieceTrackerRow {
   planId?: { _id: string; code: string; title: string };
   postingDate: string;
   topic: string;
+  calendar?: CalendarKey;
   contentType: string;
   pipeline: string;
   needsScript: boolean;
@@ -82,10 +85,11 @@ const STAGE_STATUS_COLORS: Record<string, { bg: string; text: string; dot: strin
   'Blocked': { bg: 'bg-rose-50 text-rose-700', text: 'text-rose-700', dot: 'bg-rose-500' },
 };
 
-export const TrackerTab: React.FC = () => {
+export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCalendar }) => {
   const { user } = useAuth();
   const isExecutive = user?.role === 'executive';
   const canAssign = user?.role === 'admin' || user?.role === 'creative_head' || user?.role === 'sm_manager';
+  const canManageSteps = user?.role === 'admin' || user?.role === 'sm_manager';
 
   const [pieces, setPieces] = useState<ContentPieceTrackerRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,6 +105,8 @@ export const TrackerTab: React.FC = () => {
 
   // Assign Modal State
   const [selectedPieceForAssign, setSelectedPieceForAssign] = useState<ContentPieceTrackerRow | null>(null);
+  const [drawerPersonId, setDrawerPersonId] = useState<string | null>(null);
+  const [selectedTimelinePiece, setSelectedTimelinePiece] = useState<ContentPieceTrackerRow | null>(null);
   const [recommendations, setRecommendations] = useState<AssignRecommendation[]>([]);
   const [assignSelections, setAssignSelections] = useState<Record<string, string>>({});
   const [overrideReasons, setOverrideReasons] = useState<Record<string, string>>({});
@@ -127,6 +133,7 @@ export const TrackerTab: React.FC = () => {
       if (filterWaitingApproval) params.set('waitingApproval', 'true');
       if (filterOverdue) params.set('overdue', 'true');
       if (filterBlocked) params.set('blocked', 'true');
+      if (selectedCalendar && selectedCalendar !== 'all') params.set('calendar', selectedCalendar);
 
       const res = await apiFetch<{ data: ContentPieceTrackerRow[] }>(`/api/content-pieces?${params.toString()}`);
       setPieces(res.data || []);
@@ -147,15 +154,27 @@ export const TrackerTab: React.FC = () => {
     filterWaitingApproval,
     filterOverdue,
     filterBlocked,
+    selectedCalendar,
   ]);
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await apiFetch<{ data: any[] }>('/api/users?limit=100');
-        setAllUsers(res.data || []);
+        const res = await apiFetch<{ data: any[] }>('/api/people?status=active');
+        if (res.data && res.data.length > 0) {
+          setAllUsers(res.data);
+        } else {
+          const cand = await apiFetch<{ data: any[] }>('/api/people/assignment-candidates');
+          setAllUsers(cand.data || []);
+        }
       } catch (err) {
-        console.error('Failed to fetch users', err);
+        console.error('Failed to fetch people', err);
+        try {
+          const cand = await apiFetch<{ data: any[] }>('/api/people/assignment-candidates');
+          setAllUsers(cand.data || []);
+        } catch (e2) {
+          console.error('Failed to fetch assignment candidates', e2);
+        }
       }
     };
     fetchUsers();
@@ -168,6 +187,18 @@ export const TrackerTab: React.FC = () => {
     setRecommendations([]);
     setAssignSelections({});
     setOverrideReasons({});
+
+    // Ensure users pool is loaded
+    if (allUsers.length === 0) {
+      try {
+        const uRes = await apiFetch<{ data: any[] }>('/api/people?status=active');
+        if (uRes.data && uRes.data.length > 0) {
+          setAllUsers(uRes.data);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
 
     try {
       const res = await apiFetch<{ data: AssignRecommendation[] }>('/api/content-pieces/recommend-owners', {
@@ -373,11 +404,21 @@ export const TrackerTab: React.FC = () => {
               className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="all">All Content Types</option>
-              <option value="Reel A">Reel A</option>
-              <option value="Reel B">Reel B</option>
-              <option value="Reel C">Reel C</option>
+              <option value="Reel">Reel</option>
               <option value="Static Post">Static Post</option>
-              <option value="Carousel">Carousel</option>
+              <option value="Carousel Post">Carousel Post</option>
+              <option value="Story">Story</option>
+              <option value="Poster">Poster</option>
+              <option value="Brochure">Brochure</option>
+              <option value="Flyer">Flyer</option>
+              <option value="Banner">Banner</option>
+              <option value="Standee">Standee</option>
+              <option value="Certificate">Certificate</option>
+              <option value="ID Card">ID Card</option>
+              <option value="Presentation">Presentation</option>
+              <option value="Newsletter">Newsletter</option>
+              <option value="Merchandise">Merchandise</option>
+              <option value="Other">Other</option>
             </select>
           </div>
 
@@ -417,6 +458,10 @@ export const TrackerTab: React.FC = () => {
                 <th className="p-3 whitespace-nowrap">Content Piece</th>
                 <th className="p-3 whitespace-nowrap">Final Date (F)</th>
                 <th className="p-3 min-w-[340px]">Pipeline Stages & Owners</th>
+                <th className="p-3 whitespace-nowrap">Waiting</th>
+                <th className="p-3 whitespace-nowrap">Work Time</th>
+                <th className="p-3 whitespace-nowrap">Approval Wait</th>
+                <th className="p-3 whitespace-nowrap">Late by</th>
                 <th className="p-3 whitespace-nowrap">Approval</th>
                 <th className="p-3 whitespace-nowrap">Live URL & Date</th>
                 <th className="p-3 whitespace-nowrap">Posting Owner</th>
@@ -428,14 +473,19 @@ export const TrackerTab: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {pieces.length === 0 && !isLoading ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-400">
+                  <td colSpan={13} className="p-8 text-center text-slate-400">
                     No approved content pieces match the selected filters.
                   </td>
                 </tr>
               ) : (
                 pieces.map((piece) => {
+                  const cal = getCalendarDefinition(piece.calendar || (piece.planId as any)?.calendar);
                   return (
-                    <tr key={piece._id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr
+                      key={piece._id}
+                      onClick={() => setSelectedTimelinePiece(piece)}
+                      className="hover:bg-purple-50/40 transition-colors cursor-pointer"
+                    >
                       {/* Content Piece Details */}
                       <td className="p-3 max-w-[200px]">
                         <div className="font-bold text-slate-900 line-clamp-1" title={piece.topic}>
@@ -444,6 +494,12 @@ export const TrackerTab: React.FC = () => {
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1 py-0.2 rounded">
                             {piece.contentType}
+                          </span>
+                          <span
+                            className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
+                            style={{ backgroundColor: cal.bg, borderColor: cal.border, color: cal.text }}
+                          >
+                            {cal.name}
                           </span>
                           {piece.planId && (
                             <span className="text-[10px] text-slate-400">
@@ -494,7 +550,24 @@ export const TrackerTab: React.FC = () => {
 
                                   <div className="text-[10px] text-slate-500 truncate" title={st.ownerId?.name || 'Needs owner'}>
                                     {st.ownerId ? (
-                                      <span className="text-slate-700 font-medium">{st.ownerId.name}</span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDrawerPersonId(st.ownerId!._id);
+                                        }}
+                                        className="inline-flex items-center gap-1.5 hover:text-purple-600 transition-colors cursor-pointer text-left group"
+                                      >
+                                        <Avatar
+                                          url={(st.ownerId as any).avatarUrl}
+                                          name={st.ownerId.name}
+                                          userId={st.ownerId._id}
+                                          size="xs"
+                                        />
+                                        <span className="text-slate-700 font-medium group-hover:text-purple-600 truncate max-w-[120px]">
+                                          {st.ownerId.name}
+                                        </span>
+                                      </button>
                                     ) : (
                                       <span className="text-amber-700 font-bold">Needs owner</span>
                                     )}
@@ -504,12 +577,12 @@ export const TrackerTab: React.FC = () => {
                                     Due: {new Date(st.dueDate).toLocaleDateString()}
                                   </div>
 
-                                  {!isExecutive && !st.isLocked && st.status === 'Not Started' && (
+                                  {canManageSteps && !st.isLocked && st.status === 'Not Started' && (
                                     <button
                                       onClick={() => handleToggleSkipStage(piece._id, st._id, st.isSkipped)}
                                       className="text-[9px] text-slate-400 hover:text-purple-600 text-left pt-0.5"
                                     >
-                                      {st.isSkipped ? 'Restore' : 'Skip'}
+                                      {st.isSkipped ? 'Restore step' : 'Skip step'}
                                     </button>
                                   )}
                                 </div>
@@ -517,6 +590,20 @@ export const TrackerTab: React.FC = () => {
                             })
                           )}
                         </div>
+                      </td>
+
+                      {/* Individual Tracking & Timing Columns */}
+                      <td className="p-3 whitespace-nowrap font-medium text-slate-700">
+                        {(piece as any).waitingFormatted || '—'}
+                      </td>
+                      <td className="p-3 whitespace-nowrap font-medium text-slate-700">
+                        {(piece as any).workTimeFormatted || '—'}
+                      </td>
+                      <td className="p-3 whitespace-nowrap font-medium text-slate-700">
+                        {(piece as any).approvalWaitFormatted || '—'}
+                      </td>
+                      <td className="p-3 whitespace-nowrap font-medium text-slate-700">
+                        {(piece as any).lateByFormatted || '—'}
                       </td>
 
                       {/* Approval Status */}
@@ -555,7 +642,28 @@ export const TrackerTab: React.FC = () => {
 
                       {/* Posting Owner */}
                       <td className="p-3 whitespace-nowrap text-slate-700 font-medium">
-                        {piece.postingOwner?.name || <span className="text-slate-400">—</span>}
+                        {piece.postingOwner ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDrawerPersonId(piece.postingOwner!._id);
+                            }}
+                            className="inline-flex items-center gap-1.5 hover:text-purple-600 transition-colors cursor-pointer group"
+                          >
+                            <Avatar
+                              url={(piece.postingOwner as any).avatarUrl}
+                              name={piece.postingOwner.name}
+                              userId={piece.postingOwner._id}
+                              size="xs"
+                            />
+                            <span className="text-slate-700 font-medium group-hover:text-purple-600">
+                              {piece.postingOwner.name}
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
 
                       {/* Turnaround Days */}
@@ -589,17 +697,19 @@ export const TrackerTab: React.FC = () => {
                               </button>
                             )}
 
-                            <button
-                              onClick={() => {
-                                setSelectedPieceForReschedule(piece);
-                                setNewPostingDate(piece.postingDate.substring(0, 10));
-                                setShiftUnstarted(true);
-                              }}
-                              className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium"
-                              title="Reschedule final date and shift stage deadlines"
-                            >
-                              Reschedule
-                            </button>
+                            {canManageSteps && (
+                              <button
+                                onClick={() => {
+                                  setSelectedPieceForReschedule(piece);
+                                  setNewPostingDate(piece.postingDate.substring(0, 10));
+                                  setShiftUnstarted(true);
+                                }}
+                                className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium"
+                                title="Change final date and shift stage deadlines"
+                              >
+                                Change date
+                              </button>
+                            )}
                           </div>
                         </td>
                       )}
@@ -663,6 +773,24 @@ export const TrackerTab: React.FC = () => {
                         rec.recommendedPerson &&
                         selectedPersonId !== rec.recommendedPerson._id;
 
+                      const optionsMap = new Map<string, any>();
+                      for (const u of allUsers) {
+                        optionsMap.set(u._id, u);
+                      }
+                      if (rec.recommendedPerson?._id) {
+                        optionsMap.set(rec.recommendedPerson._id, rec.recommendedPerson);
+                      }
+                      if (rec.currentOwner?._id) {
+                        optionsMap.set(rec.currentOwner._id, rec.currentOwner);
+                      }
+                      if (Array.isArray(rec.candidatePool)) {
+                        for (const c of rec.candidatePool) {
+                          const m = (c as any)?.member || c;
+                          if (m?._id) optionsMap.set(m._id, m);
+                        }
+                      }
+                      const availableUsers = Array.from(optionsMap.values());
+
                       return (
                         <div
                           key={rec.workItemId}
@@ -705,9 +833,9 @@ export const TrackerTab: React.FC = () => {
                                 className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
                               >
                                 <option value="">— Needs Owner (Unassigned) —</option>
-                                {allUsers.map((u) => (
+                                {availableUsers.map((u: any) => (
                                   <option key={u._id} value={u._id}>
-                                    {u.name} ({u.role.replace('_', ' ')})
+                                    {u.name} {u.jobRole ? `— ${u.jobRole}` : u.role ? `(${u.role.replace('_', ' ')})` : ''}
                                   </option>
                                 ))}
                               </select>
@@ -825,6 +953,125 @@ export const TrackerTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Timeline Drawer for Content Piece */}
+      {selectedTimelinePiece && (
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block">
+                  Piece Timeline &amp; Step Lifecycle
+                </span>
+                <h3 className="text-base font-extrabold text-slate-900">{selectedTimelinePiece.topic}</h3>
+                <p className="text-xs text-slate-500">
+                  {selectedTimelinePiece.contentType} • Posting Date:{' '}
+                  {new Date(selectedTimelinePiece.postingDate).toLocaleDateString()}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTimelinePiece(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Stages Timeline List */}
+            <div className="space-y-4">
+              {selectedTimelinePiece.stages.map((st: any) => (
+                <div key={st._id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-sm text-slate-900">{st.stageKey}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white border text-slate-700">
+                        {st.status}
+                      </span>
+                    </div>
+                    <span className="text-xs text-slate-500 font-semibold">
+                      Holder: <strong className="text-slate-800">{st.holder || st.ownerId?.name || '—'}</strong>
+                    </span>
+                  </div>
+
+                  {/* Stage Timestamps */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] bg-white p-2.5 rounded-xl border border-slate-100">
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Due Date</span>
+                      <span className="font-semibold text-slate-800">
+                        {st.dueDate ? new Date(st.dueDate).toLocaleDateString() : '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Started</span>
+                      <span className="font-semibold text-slate-800">
+                        {st.startedAt ? new Date(st.startedAt).toLocaleString() : '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Submitted</span>
+                      <span className="font-semibold text-slate-800">
+                        {st.submittedAt ? new Date(st.submittedAt).toLocaleString() : '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Approved</span>
+                      <span className="font-semibold text-slate-800">
+                        {st.approvedAt ? new Date(st.approvedAt).toLocaleString() : '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Work Time</span>
+                      <span className="font-semibold text-slate-800">
+                        {st.measures?.workTimeFormatted || '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Approval Wait</span>
+                      <span className="font-semibold text-slate-800">
+                        {st.measures?.approvalWaitFormatted || '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Paused intervals if any */}
+                  {Array.isArray(st.intervals) && st.intervals.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Paused Intervals ({st.intervals.length})
+                      </span>
+                      {st.intervals.map((iv: any, idx: number) => (
+                        <div key={idx} className="text-[11px] text-slate-600 bg-white p-2 rounded-lg border border-slate-100 flex items-center justify-between">
+                          <span className="font-bold text-rose-700 uppercase">{iv.kind}</span>
+                          <span>{new Date(iv.startedAt).toLocaleTimeString()} → {iv.endedAt ? new Date(iv.endedAt).toLocaleTimeString() : 'ongoing'}</span>
+                          {iv.reason && <span className="text-slate-500">({iv.reason})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 text-right">
+              <button
+                type="button"
+                onClick={() => setSelectedTimelinePiece(null)}
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 cursor-pointer"
+              >
+                Close Timeline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Individual Work History Drawer */}
+      <PersonWorkHistoryDrawer
+        isOpen={Boolean(drawerPersonId)}
+        personId={drawerPersonId}
+        onClose={() => setDrawerPersonId(null)}
+      />
     </div>
   );
 };

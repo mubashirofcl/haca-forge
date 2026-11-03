@@ -128,7 +128,7 @@ export async function startWorker() {
         }
       );
 
-      // 5. Weekly marketing report: every Monday at 08:00
+      // 5. Weekly creative report: every Monday at 08:00
       await scheduledJobsQueue.add(
         'weekly_report',
         {},

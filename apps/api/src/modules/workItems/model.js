@@ -3,6 +3,7 @@ import '../people/model.js';
 import '../calendar/plan.model.js';
 import '../calendar/contentPiece.model.js';
 import {
+  CALENDAR_KEYS,
   WORK_TYPES,
   WORK_ITEM_STATUSES,
   PRIORITIES,
@@ -11,12 +12,6 @@ import {
 
 const workItemSchema = new mongoose.Schema(
   {
-    profileId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Profile',
-      required: [true, 'Brand profile is required'],
-      index: true,
-    },
     title: {
       type: String,
       required: [true, 'Work item title is required'],
@@ -66,7 +61,7 @@ const workItemSchema = new mongoose.Schema(
     priority: {
       type: String,
       enum: PRIORITIES,
-      default: 'Medium',
+      default: 'Normal',
       index: true,
     },
     blockerReason: {
@@ -120,10 +115,108 @@ const workItemSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    assignedAt: {
+      type: Date,
+      default: Date.now,
+    },
     unlockedAt: {
       type: Date,
       default: null,
     },
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+    submittedAt: {
+      type: Date,
+      default: null,
+    },
+    decisionAt: {
+      type: Date,
+      default: null,
+    },
+    changesRequestedAt: {
+      type: Date,
+      default: null,
+    },
+    resubmittedAt: {
+      type: Date,
+      default: null,
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+    postedAt: {
+      type: Date,
+      default: null,
+    },
+    // Interval logs for non-working states (Blocked, Pending)
+    intervals: [
+      {
+        kind: {
+          type: String,
+          enum: ['blocked', 'pending'],
+          required: true,
+        },
+        startedAt: {
+          type: Date,
+          required: true,
+          default: Date.now,
+        },
+        endedAt: {
+          type: Date,
+          default: null,
+        },
+        reason: {
+          type: String,
+          default: '',
+        },
+        note: {
+          type: String,
+          default: '',
+        },
+      },
+    ],
+    // Revision rounds history for individual work time tracking
+    rounds: [
+      {
+        roundNumber: {
+          type: Number,
+          required: true,
+        },
+        startedAt: {
+          type: Date,
+          required: true,
+          default: Date.now,
+        },
+        submittedAt: {
+          type: Date,
+          default: null,
+        },
+        decisionAt: {
+          type: Date,
+          default: null,
+        },
+        decision: {
+          type: String,
+          enum: ['approved', 'changes_requested', null],
+          default: null,
+        },
+        intervals: [
+          {
+            kind: {
+              type: String,
+              enum: ['blocked', 'pending'],
+            },
+            startedAt: Date,
+            endedAt: Date,
+            reason: String,
+            note: String,
+          },
+        ],
+      },
+    ],
     isSkipped: {
       type: Boolean,
       default: false,
@@ -131,6 +224,12 @@ const workItemSchema = new mongoose.Schema(
     isLocked: {
       type: Boolean,
       default: false,
+      index: true,
+    },
+    calendar: {
+      type: String,
+      enum: CALENDAR_KEYS,
+      default: 'sm',
       index: true,
     },
     calendarPlanId: {
@@ -218,14 +317,14 @@ workItemSchema.virtual('isOverdue').get(function () {
 });
 
 // Compound performance indexes
-workItemSchema.index({ profileId: 1, status: 1 });
+workItemSchema.index({ status: 1 });
 workItemSchema.index({ ownerId: 1, status: 1 });
 workItemSchema.index({ departmentId: 1, status: 1 });
 workItemSchema.index({ deadline: 1, status: 1 });
 workItemSchema.index({ isBlocked: 1 });
 workItemSchema.index({ 'blocker.dependencyOwnerId': 1 });
 workItemSchema.index({ workType: 1, status: 1 });
-workItemSchema.index({ profileId: 1, departmentId: 1, status: 1, deadline: 1 });
+workItemSchema.index({ departmentId: 1, status: 1, deadline: 1 });
 workItemSchema.index({ contentPieceId: 1, stageOrder: 1 });
 workItemSchema.index({ contentPieceId: 1, stageKey: 1 });
 

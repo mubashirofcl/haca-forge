@@ -26,9 +26,7 @@ export async function calculateMemberWorkloadMetrics(personId, personDoc = null)
   const openItems = await WorkItem.find({
     ownerId: person._id,
     status: { $nin: ['Approved', 'Published'] },
-  })
-    .populate('profileId', 'name code')
-    .sort({ deadline: 1 });
+  }).sort({ deadline: 1 });
 
   const allocatedHours = openItems.reduce((acc, it) => acc + (it.estimatedEffortHrs || 4), 0);
   const workloadPct = capacity > 0 ? Math.round((allocatedHours / capacity) * 100) : 0;
@@ -90,7 +88,6 @@ export async function calculateMemberWorkloadMetrics(personId, personDoc = null)
 export async function recommendAssignee(criteria = {}, user) {
   const {
     workType,
-    profileId,
     departmentId,
     deadline,
     estimatedEffortHrs = 4,
@@ -99,59 +96,27 @@ export async function recommendAssignee(criteria = {}, user) {
   } = criteria;
 
   let effectiveStageKey = stageKey || null;
-  let rawProfileId = profileId || null;
 
-  // Infer stageKey and brand profileId from existing work item if provided
+  // Infer stageKey from existing work item if provided
   if (workItemId && mongoose.Types.ObjectId.isValid(workItemId)) {
     const item = await WorkItem.findById(workItemId);
-    if (item) {
-      if (!effectiveStageKey && item.stageKey) {
-        effectiveStageKey = item.stageKey;
-      }
-      if (!rawProfileId && item.profileId) {
-        rawProfileId = item.profileId;
-      }
+    if (item && !effectiveStageKey && item.stageKey) {
+      effectiveStageKey = item.stageKey;
     }
-  }
-
-  // Resolve target brand profile
-  let targetProfileId = null;
-  if (rawProfileId) {
-    targetProfileId = await resolveProfileObjectId(rawProfileId);
   }
 
   let candidates = [];
   let targetDepartment = null;
 
   if (effectiveStageKey) {
-    // ------------------------------------------------------------------------
-    // CONTENT FLOW DELTA: Stage Work Items
-    // Candidates come from Person.workPreferences plus brand access
-    // instead of the department table.
-    // ------------------------------------------------------------------------
-    const stageQuery = {
+    // Stage Work Items: Candidates come from Person.workPreferences
+    candidates = await Person.find({
       status: 'active',
       role: { $nin: ['admin', 'executive'] },
       workPreferences: effectiveStageKey,
-    };
+    });
 
-    if (targetProfileId) {
-      stageQuery.profileAccess = targetProfileId;
-    }
-
-    candidates = await Person.find(stageQuery);
-
-    // If no candidate with this stage preference has explicit brand access,
-    // fallback to any active team member with this stage preference
-    if (candidates.length === 0 && targetProfileId) {
-      candidates = await Person.find({
-        status: 'active',
-        role: { $nin: ['admin', 'executive'] },
-        workPreferences: effectiveStageKey,
-      });
-    }
-
-    // Ultimate fallback if no member has configured this preference
+    // Fallback if no member has configured this preference
     if (candidates.length === 0) {
       candidates = await Person.find({
         status: 'active',
@@ -159,10 +124,7 @@ export async function recommendAssignee(criteria = {}, user) {
       });
     }
   } else {
-    // ------------------------------------------------------------------------
-    // STANDALONE WORK ITEMS: Keep the department rule
-    // Candidates come from the target department responsible for workType
-    // ------------------------------------------------------------------------
+    // Standalone Work Items: Candidates come from target department responsible for workType
     if (departmentId && mongoose.Types.ObjectId.isValid(departmentId)) {
       targetDepartment = await Department.findById(departmentId);
     } else if (workType && WORK_TYPE_DEPARTMENT_MAP[workType]) {
@@ -181,19 +143,7 @@ export async function recommendAssignee(criteria = {}, user) {
       deptQuery.departmentId = targetDepartment._id;
     }
 
-    if (targetProfileId) {
-      deptQuery.profileAccess = targetProfileId;
-    }
-
     candidates = await Person.find(deptQuery);
-
-    if (candidates.length === 0 && targetProfileId) {
-      candidates = await Person.find({
-        status: 'active',
-        role: { $nin: ['admin', 'executive'] },
-        profileAccess: targetProfileId,
-      });
-    }
 
     if (candidates.length === 0) {
       candidates = await Person.find({
@@ -347,7 +297,6 @@ export async function recordAssignmentOverride(data, user) {
   await logActivity({
     entityType: 'work_item',
     entityId: workItem._id,
-    profileId: workItem.profileId,
     actor: user,
     action: 'assignment.overridden',
     metadata: {
@@ -374,12 +323,6 @@ export async function getTeamWorkload(filters = {}, user) {
     role: { $nin: ['admin', 'executive'] }, // Admin and Executive excluded from operational workload
   };
 
-  if (!scope.canAccessAllProfiles) {
-    personQuery.profileAccess = { $in: scope.allowedProfileIds };
-  } else if (filters.profileId && filters.profileId !== 'all') {
-    personQuery.profileAccess = filters.profileId;
-  }
-
   if (filters.departmentId && filters.departmentId !== 'all') {
     personQuery.departmentId = filters.departmentId;
   }
@@ -390,7 +333,6 @@ export async function getTeamWorkload(filters = {}, user) {
 
   const people = await Person.find(personQuery)
     .populate('departmentId', 'name code')
-    .populate('profileAccess', 'name code')
     .sort({ name: 1 });
 
   // Calculate metrics for each person

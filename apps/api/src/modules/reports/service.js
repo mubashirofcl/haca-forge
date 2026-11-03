@@ -5,6 +5,7 @@ import { FeedbackEntry, RevisionFlag } from '../feedback/model.js';
 import { Person } from '../people/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { ActivityEvent } from '../activity/model.js';
+import { Rating } from '../submissions/model.js';
 import { enqueueEmail } from '../../lib/queue.js';
 import { logger } from '../../lib/logger.js';
 import { REPORT_KEYS } from '@mmp/shared';
@@ -13,8 +14,8 @@ import { REPORT_KEYS } from '@mmp/shared';
 export const DEFAULT_REPORT_DEFINITIONS = [
   {
     reportKey: 'weekly_marketing',
-    name: 'Weekly Work Report',
-    description: 'Weekly summary of completed deliverables, on-time delivery rate, active bottlenecks, and upcoming week priorities.',
+    name: 'Weekly Creative Report',
+    description: 'Weekly summary of completed deliverables, on-time delivery rate, active bottlenecks, and upcoming week priorities across calendars.',
     cadence: 'Weekly',
     scheduleCron: '0 8 * * 1',
     scheduleDisplay: 'Mondays at 08:00 AM',
@@ -210,7 +211,6 @@ async function generateWeeklyMarketingReport(filters, scope, user) {
   const workItems = await WorkItem.find(query)
     .populate('ownerId', 'name email role')
     .populate('departmentId', 'name code')
-    .populate('profileId', 'name code')
     .lean();
 
   const total = workItems.length;
@@ -276,7 +276,7 @@ async function generateWeeklyMarketingReport(filters, scope, user) {
 
   return {
     reportKey: 'weekly_marketing',
-    title: 'Weekly Marketing Report',
+    title: 'Weekly Creative Report',
     cadence: 'Weekly',
     generatedAt: new Date().toISOString(),
     summary: {
@@ -336,7 +336,6 @@ async function generateMonthlyScorecardReport(filters, scope, user) {
   // Deliverables in scope for the month
   const workItemQuery = scope.buildQuery({ ...filters });
   const workItems = await WorkItem.find(workItemQuery)
-    .populate('profileId', 'name code')
     .populate('departmentId', 'name code')
     .lean();
 
@@ -423,6 +422,7 @@ async function generateMonthlyScorecardReport(filters, scope, user) {
  * (by department and stage)
  */
 async function generateCreativeProductionReport(filters, scope, user) {
+  const { calculateIndividualWorkMeasures, formatDuration } = await import('@mmp/shared');
   const query = scope.buildQuery({ ...filters });
   const workItems = await WorkItem.find(query)
     .populate('ownerId', 'name')
@@ -454,20 +454,62 @@ async function generateCreativeProductionReport(filters, scope, user) {
     if (['Approved', 'Published'].includes(w.status)) departmentMap[depName].completed += 1;
   });
 
-  // Stage definitions breakdown (Script, Design, Video Edit, Audio, Review, Post)
-  const STAGE_KEYS = ['Script', 'Design', 'Video Edit', 'Audio', 'Review', 'Post'];
+  // Stage definitions breakdown & Timing (Work time & Waiting to start)
+  const STAGE_KEYS = ['Script', 'Shoot', 'Edit', 'Design', 'Content', 'Post'];
   const stageStatsMap = {};
   STAGE_KEYS.forEach((stage) => {
-    stageStatsMap[stage] = { total: 0, active: 0, completed: 0, avgHours: 4 };
+    stageStatsMap[stage] = { total: 0, active: 0, completed: 0, totalWorkMs: 0, workCount: 0, totalWaitMs: 0, waitCount: 0 };
   });
 
+  let overallTotalWaitMs = 0;
+  let overallWaitCount = 0;
+
   workItems.forEach((w) => {
-    const stage = w.currentStageKey || 'Design';
-    if (!stageStatsMap[stage]) stageStatsMap[stage] = { total: 0, active: 0, completed: 0, avgHours: 4 };
+    const stage = w.stageKey || w.currentStageKey || 'Design';
+    if (!stageStatsMap[stage]) {
+      stageStatsMap[stage] = { total: 0, active: 0, completed: 0, totalWorkMs: 0, workCount: 0, totalWaitMs: 0, waitCount: 0 };
+    }
     stageStatsMap[stage].total += 1;
-    if (['In Progress', 'Feedback'].includes(w.status)) stageStatsMap[stage].active += 1;
+    if (['In Progress', 'Feedback', 'Pending'].includes(w.status)) stageStatsMap[stage].active += 1;
     if (['Approved', 'Published'].includes(w.status)) stageStatsMap[stage].completed += 1;
+
+    const measures = calculateIndividualWorkMeasures(w);
+    if (measures.workTimeMs != null && ['Approved', 'Published'].includes(w.status)) {
+      stageStatsMap[stage].totalWorkMs += measures.workTimeMs;
+      stageStatsMap[stage].workCount += 1;
+    }
+    if (measures.waitingToStartMs != null) {
+      stageStatsMap[stage].totalWaitMs += measures.waitingToStartMs;
+      stageStatsMap[stage].waitCount += 1;
+      overallTotalWaitMs += measures.waitingToStartMs;
+      overallWaitCount += 1;
+    }
   });
+
+  const avgWaitingToStartOverall = overallWaitCount > 0
+    ? formatDuration(Math.round(overallTotalWaitMs / overallWaitCount))
+    : '—';
+
+  // Quality Ratings aggregation (Team average & step type average, strictly NO individual rankings)
+  const ratings = await Rating.find().lean();
+  const totalRatings = ratings.length;
+  const teamAverageScore = totalRatings > 0
+    ? Number((ratings.reduce((sum, r) => sum + r.score, 0) / totalRatings).toFixed(2))
+    : null;
+
+  const stageRatingsMap = {};
+  ratings.forEach((r) => {
+    const stage = r.stageKey || 'Other';
+    if (!stageRatingsMap[stage]) stageRatingsMap[stage] = { total: 0, count: 0 };
+    stageRatingsMap[stage].total += r.score;
+    stageRatingsMap[stage].count += 1;
+  });
+
+  const stepTypeRatingRows = Object.entries(stageRatingsMap).map(([stage, stats]) => [
+    stage,
+    stats.count,
+    stats.count > 0 ? `${(stats.total / stats.count).toFixed(2)} ★` : '—',
+  ]);
 
   return {
     reportKey: 'creative_production',
@@ -479,7 +521,18 @@ async function generateCreativeProductionReport(filters, scope, user) {
       totalDeliverablesTracked: total,
       activeDepartments: Object.keys(departmentMap).length,
       stagesAudited: Object.keys(stageStatsMap).length,
+      averageWaitingToStart: avgWaitingToStartOverall,
       averageStageApprovalTurnaround: '1.2 days',
+      teamAverageRating: teamAverageScore !== null ? `${teamAverageScore} ★` : 'No ratings yet',
+      averageRatingPerStepType: Object.fromEntries(
+        Object.entries(stageRatingsMap).map(([k, v]) => [k, v.count > 0 ? Number((v.total / v.count).toFixed(2)) : 0])
+      ),
+      averageWorkTimePerStepType: Object.fromEntries(
+        Object.entries(stageStatsMap).map(([k, v]) => [
+          k,
+          v.workCount > 0 ? formatDuration(Math.round(v.totalWorkMs / v.workCount)) : '—',
+        ])
+      ),
     },
     tables: [
       {
@@ -506,15 +559,21 @@ async function generateCreativeProductionReport(filters, scope, user) {
         ]),
       },
       {
-        title: 'Stage Production Volume & Turnaround',
-        columns: ['Pipeline Stage', 'Total Items', 'Active Execution', 'Approved/Done', 'Est. Turnaround'],
+        title: 'Stage Production Volume, Timing & Waiting',
+        columns: ['Pipeline Stage', 'Total Items', 'Active Execution', 'Approved/Done', 'Avg Work Time', 'Avg Waiting to Start'],
         rows: Object.entries(stageStatsMap).map(([stage, stats]) => [
           stage,
           stats.total,
           stats.active,
           stats.completed,
-          '1-2 days',
+          stats.workCount > 0 ? formatDuration(Math.round(stats.totalWorkMs / stats.workCount)) : '—',
+          stats.waitCount > 0 ? formatDuration(Math.round(stats.totalWaitMs / stats.waitCount)) : '—',
         ]),
+      },
+      {
+        title: 'Quality Ratings by Step Type (Aggregated Baseline)',
+        columns: ['Step Type / Pipeline Stage', 'Ratings Count', 'Team Average Rating'],
+        rows: stepTypeRatingRows.length > 0 ? stepTypeRatingRows : [['No stage ratings recorded yet', 0, '—']],
       },
     ],
   };
@@ -522,9 +581,11 @@ async function generateCreativeProductionReport(filters, scope, user) {
 
 /**
  * 4. Team Performance Digest
- * (four dimensions: Output, Efficiency, Quality, Collaboration)
+ * Per-person summary with individual metrics listed alphabetically (strictly no ranking),
+ * showing average work time, average approval wait, on-time rate and revision count.
  */
 async function generateTeamPerformanceReport(filters, scope, user) {
+  const { calculateIndividualWorkMeasures, formatDuration } = await import('@mmp/shared');
   const people = await Person.find({
     $or: [{ status: 'active' }, { active: true }],
     role: { $in: ['team_member', 'sm_manager'] },
@@ -532,31 +593,46 @@ async function generateTeamPerformanceReport(filters, scope, user) {
     .populate('departmentId', 'name code')
     .lean();
 
+  // Strictly alphabetical listing (NO ranking by speed or performance)
+  people.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
   const workItems = await WorkItem.find(scope.buildQuery({ ...filters })).lean();
 
   const memberStats = people.map((p) => {
     const assignedItems = workItems.filter((w) => String(w.ownerId) === String(p._id));
-    const completed = assignedItems.filter((w) => ['Approved', 'Published'].includes(w.status)).length;
+    const completedItems = assignedItems.filter((w) => ['Approved', 'Published'].includes(w.status));
     const effortHrs = assignedItems.reduce((sum, w) => sum + (w.estimatedEffortHrs || 4), 0);
 
-    // Dimension 1: Output
-    const outputText = `${completed} done (${effortHrs}h)`;
+    // Individual timing metrics
+    let totalWorkMs = 0;
+    let workCount = 0;
+    let totalApprovalWaitMs = 0;
+    let approvalWaitCount = 0;
+    let onTimeCount = 0;
+    let withDeadlineCount = 0;
 
-    // Dimension 2: Efficiency (on-time rate)
-    const withDeadline = assignedItems.filter((w) => ['Approved', 'Published'].includes(w.status) && w.deadline);
-    const onTimeCount = withDeadline.filter(
-      (w) => new Date(w.updatedAt || w.createdAt) <= new Date(w.deadline)
-    ).length;
-    const onTimePct = withDeadline.length > 0 ? Math.round((onTimeCount / withDeadline.length) * 100) : 100;
-    const efficiencyText = `${onTimePct}% on-time`;
+    for (const item of completedItems) {
+      const measures = calculateIndividualWorkMeasures(item);
+      if (measures.workTimeMs != null) {
+        totalWorkMs += measures.workTimeMs;
+        workCount++;
+      }
+      if (measures.approvalWaitMs != null) {
+        totalApprovalWaitMs += measures.approvalWaitMs;
+        approvalWaitCount++;
+      }
+      if (item.deadline) {
+        withDeadlineCount++;
+        if (!measures.isLate) {
+          onTimeCount++;
+        }
+      }
+    }
 
-    // Dimension 3: Quality (revisions)
+    const avgWorkTime = workCount > 0 ? formatDuration(Math.round(totalWorkMs / workCount)) : '—';
+    const avgApprovalWait = approvalWaitCount > 0 ? formatDuration(Math.round(totalApprovalWaitMs / approvalWaitCount)) : '—';
+    const onTimePct = withDeadlineCount > 0 ? Math.round((onTimeCount / withDeadlineCount) * 100) : 100;
     const revSum = assignedItems.reduce((sum, w) => sum + (w.revisions || 0), 0);
-    const avgRevs = assignedItems.length > 0 ? (revSum / assignedItems.length).toFixed(1) : '1.0';
-    const qualityText = `${avgRevs} revs/item`;
-
-    // Dimension 4: Collaboration (blocker resolution)
-    const collaborationText = 'Fast (<24h)';
 
     const capacityHrs = p.weeklyCapacityHours || 40;
     const utilization = Math.round((effortHrs / capacityHrs) * 100);
@@ -565,18 +641,39 @@ async function generateTeamPerformanceReport(filters, scope, user) {
     return {
       name: p.name,
       department: p.departmentId?.name || 'General',
-      output: outputText,
-      efficiency: efficiencyText,
-      quality: qualityText,
-      collaboration: collaborationText,
+      avgWorkTime,
+      avgApprovalWait,
+      onTimeRate: `${onTimePct}%`,
+      revisionCount: revSum,
       band,
       utilization,
     };
   });
 
+  // Quality Ratings aggregation (Team average & step type average, strictly NO individual rankings)
+  const ratings = await Rating.find().lean();
+  const totalRatings = ratings.length;
+  const teamAverageScore = totalRatings > 0
+    ? Number((ratings.reduce((sum, r) => sum + r.score, 0) / totalRatings).toFixed(2))
+    : null;
+
+  const stageRatingsMap = {};
+  ratings.forEach((r) => {
+    const stage = r.stageKey || 'Other';
+    if (!stageRatingsMap[stage]) stageRatingsMap[stage] = { total: 0, count: 0 };
+    stageRatingsMap[stage].total += r.score;
+    stageRatingsMap[stage].count += 1;
+  });
+
+  const stepTypeRatingRows = Object.entries(stageRatingsMap).map(([stage, stats]) => [
+    stage,
+    stats.count,
+    stats.count > 0 ? `${(stats.total / stats.count).toFixed(2)} ★` : '—',
+  ]);
+
   return {
     reportKey: 'team_performance',
-    title: 'Team Performance Digest (4 Dimensions)',
+    title: 'Team Performance Digest (Alphabetical Individual Metrics)',
     cadence: 'Monthly',
     generatedAt: new Date().toISOString(),
     summary: {
@@ -584,28 +681,37 @@ async function generateTeamPerformanceReport(filters, scope, user) {
       averageOnTimeRate: '92%',
       averageQualityRating: '1.2 revisions per piece',
       collaborationSlaAdherence: '96%',
+      teamAverageQualityRating: teamAverageScore !== null ? `${teamAverageScore} ★` : 'No ratings yet',
+      averageRatingPerStepType: Object.fromEntries(
+        Object.entries(stageRatingsMap).map(([k, v]) => [k, v.count > 0 ? Number((v.total / v.count).toFixed(2)) : 0])
+      ),
     },
     tables: [
       {
-        title: 'Contributor Performance Digest across 4 Dimensions',
+        title: 'Contributor Performance Digest (Listed Alphabetically)',
         columns: [
           'Team Member',
           'Department',
-          '1. Output (Volume/Hrs)',
-          '2. Efficiency (On-Time %)',
-          '3. Quality (Avg Revs)',
-          '4. Collaboration',
+          'Avg Work Time',
+          'Avg Approval Wait',
+          'On-Time Rate',
+          'Revisions',
           'Band',
         ],
         rows: memberStats.map((m) => [
           m.name,
           m.department,
-          m.output,
-          m.efficiency,
-          m.quality,
-          m.collaboration,
+          m.avgWorkTime,
+          m.avgApprovalWait,
+          m.onTimeRate,
+          m.revisionCount,
           m.band,
         ]),
+      },
+      {
+        title: 'Stage Quality Ratings (Aggregated Baseline)',
+        columns: ['Step Type / Pipeline Stage', 'Total Ratings Count', 'Team Average Rating'],
+        rows: stepTypeRatingRows.length > 0 ? stepTypeRatingRows : [['No stage ratings recorded yet', 0, '—']],
       },
     ],
   };

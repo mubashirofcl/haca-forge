@@ -51,4 +51,7 @@ Docs/USERS_AND_PASSWORDS.md
 
 # Large media files
 *.mp4
+uploads/
+apps/api/uploads/
+
 

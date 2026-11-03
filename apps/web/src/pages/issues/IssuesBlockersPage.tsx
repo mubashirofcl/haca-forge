@@ -664,12 +664,12 @@ export const IssuesBlockersPage: React.FC = () => {
                             <p className="text-[11px] text-slate-600 mt-0.5">{f.rootCauseNotes}</p>
                           )}
                           <span className="text-[10px] text-slate-400 block mt-1">
-                            Classified by {f.classifiedBy?.name || 'Lead'}
+                            Classified by {f.classifiedBy?.name || 'Manager'}
                           </span>
                         </div>
                       ) : (
                         <p className="text-[11px] text-slate-400 italic">
-                          Requires Team Lead or Marketing Head root-cause classification.
+                          Requires SM Manager or Creative Head root-cause classification.
                         </p>
                       )}
                     </div>

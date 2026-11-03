@@ -5,7 +5,6 @@ export async function listPeople(req, res, next) {
   try {
     const filters = {
       departmentId: req.query.departmentId,
-      profileId: req.query.profileId,
       role: req.query.role,
       status: req.query.status,
     };
@@ -84,7 +83,6 @@ export async function getAssignmentCandidates(req, res, next) {
   try {
     const candidates = await peopleService.getAssignmentCandidates({
       departmentId: req.query.departmentId,
-      profileId: req.query.profileId,
     });
     res.json({ data: candidates });
   } catch (err) {
@@ -97,7 +95,6 @@ export async function getPersonPerformance(req, res, next) {
     const { calculatePersonPerformance } = await import('./metrics.js');
     const filters = {
       month: req.query.month,
-      profileId: req.query.profileId,
     };
     const metrics = await calculatePersonPerformance(req.params.id, filters, req.user);
     res.json({ data: metrics });
@@ -112,10 +109,49 @@ export async function getTeamPerformance(req, res, next) {
     const filters = {
       month: req.query.month,
       departmentId: req.query.departmentId,
-      profileId: req.query.profileId,
     };
     const teamMetrics = await calculateTeamPerformance(filters, req.user);
     res.json({ data: teamMetrics });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getPersonProfileHandler(req, res, next) {
+  try {
+    const profile = await peopleService.getPersonProfile(req.params.id, req.user);
+    res.json({ data: profile });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function adminUpdateBasicInfoHandler(req, res, next) {
+  try {
+    const result = await peopleService.adminUpdatePersonBasic(req.params.id, req.body, req.user);
+    res.json({
+      success: true,
+      message: 'Person basic details updated successfully',
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function adminRemoveAvatarHandler(req, res, next) {
+  try {
+    const result = await peopleService.adminRemovePersonAvatar(req.params.id, req.user);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getPersonWorkHistoryHandler(req, res, next) {
+  try {
+    const history = await peopleService.getPersonWorkHistory(req.params.id, req.user);
+    res.json({ data: history });
   } catch (err) {
     next(err);
   }

@@ -25,7 +25,6 @@ export async function createBlocker(data, user) {
   }
 
   const workItem = await WorkItem.findById(workItemId)
-    .populate('profileId', 'name code')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role');
 
@@ -87,7 +86,6 @@ export async function createBlocker(data, user) {
   await logActivity({
     entityType: 'work_item',
     entityId: workItem._id,
-    profileId: workItem.profileId,
     actor: user,
     action: 'work_item.blocked',
     fromStatus,
@@ -123,6 +121,24 @@ export async function createBlocker(data, user) {
     } catch (mailErr) {
       // Non-blocking mail failure
     }
+  }
+
+  // Notify SM Manager of active blocker
+  try {
+    const smManagers = await Person.find({ role: 'sm_manager', status: 'active' });
+    for (const sm of smManagers) {
+      if (dependencyPerson && String(sm._id) === String(dependencyPerson._id)) continue;
+      await createNotification({
+        recipient: sm._id,
+        type: 'work_item.blocked',
+        title: `Deliverable Blocked: ${workItem.title}`,
+        message: `"${workItem.title}" was marked as Blocked: ${reason}. ${notes ? `Note: ${notes}` : ''}`,
+        link: `/issues`,
+        metadata: { workItemId: workItem._id, blockerId: blocker._id, reason },
+      });
+    }
+  } catch (smErr) {
+    // Non-blocking
   }
 
   return Blocker.findById(blocker._id)
@@ -172,7 +188,6 @@ export async function resolveBlocker(blockerId, data = {}, user) {
     await logActivity({
       entityType: 'work_item',
       entityId: workItem._id,
-      profileId: workItem.profileId,
       actor: user,
       action: 'work_item.unblocked',
       fromStatus,
@@ -290,9 +305,8 @@ export async function listBlockers(filters = {}, user) {
   const blockers = await Blocker.find(query)
     .populate({
       path: 'workItemId',
-      select: 'title workType deadline status profileId departmentId ownerId',
+      select: 'title workType deadline status departmentId ownerId',
       populate: [
-        { path: 'profileId', select: 'name code' },
         { path: 'departmentId', select: 'name code' },
         { path: 'ownerId', select: 'name email role jobRole' },
       ],

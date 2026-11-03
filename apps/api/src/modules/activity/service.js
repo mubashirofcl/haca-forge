@@ -4,7 +4,6 @@ import { logger } from '../../lib/logger.js';
 export async function logActivity({
   entityType,
   entityId,
-  profileId,
   actor,
   action,
   fromStatus,
@@ -18,7 +17,6 @@ export async function logActivity({
     const event = await ActivityEvent.create({
       entityType,
       entityId,
-      profileId,
       actorId,
       actingAs,
       action,
@@ -36,9 +34,8 @@ export async function logActivity({
   }
 }
 
-export async function listRecentActivities({ profileId, entityType, entityId, limit = 50 }) {
+export async function listRecentActivities({ entityType, entityId, limit = 50 }) {
   const query = {};
-  if (profileId) query.profileId = profileId;
   if (entityType) query.entityType = entityType;
   if (entityId) query.entityId = entityId;
 

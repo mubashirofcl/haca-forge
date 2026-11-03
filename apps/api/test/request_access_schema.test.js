@@ -5,7 +5,6 @@ import {
   REQUESTABLE_ROLES,
   DEPARTMENTS,
   JOB_ROLES,
-  PROFILES,
 } from '@mmp/shared';
 
 describe('Shared Zod Schemas: Request Access & Review', () => {
@@ -16,7 +15,6 @@ describe('Shared Zod Schemas: Request Access & Review', () => {
     department: DEPARTMENTS[0].name,
     jobRole: JOB_ROLES[0],
     requestedRole: 'team_member',
-    requestedProfileCodes: [PROFILES[0].code],
     reason: 'I will create high-converting video and graphic campaigns for HACA.',
   };
 
@@ -41,7 +39,6 @@ describe('Shared Zod Schemas: Request Access & Review', () => {
       expect(paths).toContain('department');
       expect(paths).toContain('jobRole');
       expect(paths).toContain('requestedRole');
-      expect(paths).toContain('requestedProfileCodes');
       expect(paths).toContain('reason');
     }
   });
@@ -76,20 +73,6 @@ describe('Shared Zod Schemas: Request Access & Review', () => {
     expect(retiredAttempt.success).toBe(false);
   });
 
-  it('requires at least one brand in requestedProfileCodes', () => {
-    const emptyBrandsResult = requestAccessSchema.safeParse({
-      ...validPayload,
-      requestedProfileCodes: [],
-    });
-    expect(emptyBrandsResult.success).toBe(false);
-    if (!emptyBrandsResult.success) {
-      const brandIssue = emptyBrandsResult.error.issues.find(
-        (i) => i.path[0] === 'requestedProfileCodes'
-      );
-      expect(brandIssue?.message).toContain('at least one brand');
-    }
-  });
-
   it('enforces minimum description length for reason', () => {
     const shortReasonResult = requestAccessSchema.safeParse({
       ...validPayload,
@@ -108,7 +91,6 @@ describe('Shared Zod Schemas: Request Access & Review', () => {
       assignedRole: 'sm_manager',
       jobRole: 'Social Media Manager',
       weeklyCapacityHours: 40,
-      profileAccess: ['prof1', 'prof2'],
       reportsToIds: [],
     };
     const result = accessRequestReviewSchema.safeParse(validReview);

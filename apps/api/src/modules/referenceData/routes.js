@@ -8,7 +8,6 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/', referenceController.getAll);
-router.get('/profiles', referenceController.getProfiles);
 router.get('/departments', referenceController.getDepartments);
 
 export default router;

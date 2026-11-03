@@ -7,7 +7,7 @@ import { logActivity } from '../activity/service.js';
 import { createNotification } from '../notifications/service.js';
 import { resolveScope } from '../../lib/scope.js';
 import { recommendAssignee } from '../assignment/service.js';
-import { normalizeRole } from '@mmp/shared';
+import { normalizeRole, calculateIndividualWorkMeasures, formatDuration } from '@mmp/shared';
 
 /**
  * List Content Pieces (Content Tracker) with stages and metrics
@@ -15,17 +15,18 @@ import { normalizeRole } from '@mmp/shared';
 export async function listContentPieces(filters = {}, user) {
   const scope = await resolveScope(user);
   const userRole = normalizeRole(user.role);
-
-  if (userRole === 'team_member') {
-    const error = new Error('Team members cannot access the Content Tracker.');
-    error.statusCode = 403;
-    error.code = 'FORBIDDEN_SCOPE';
-    throw error;
-  }
+  const userId = (user?._id || user?.id || user?.userId)?.toString();
 
   const query = {};
-  if (scope.brandProfileId) {
-    query.profileId = scope.brandProfileId;
+  if (userRole === 'team_member') {
+    // Workers see only content pieces where they own at least one stage
+    const myStages = await WorkItem.find({ ownerId: userId, contentPieceId: { $ne: null } }).select('contentPieceId');
+    const myPieceIds = myStages.map((s) => s.contentPieceId);
+    query._id = { $in: myPieceIds };
+  }
+
+  if (filters.calendar && filters.calendar !== 'all') {
+    query.calendar = filters.calendar;
   }
   if (filters.planId) {
     query.planId = filters.planId;
@@ -62,31 +63,151 @@ export async function listContentPieces(filters = {}, user) {
   const now = new Date();
 
   const results = pieces.map((piece) => {
-    const stages = stagesByPiece[piece._id.toString()] || [];
-
-    // Derive piece status
-    let pieceStatus = 'Planned';
-    if (piece.publishedAt || stages.some((s) => s.status === 'Published')) {
-      pieceStatus = 'Published';
-    } else if (stages.some((s) => s.status === 'Blocked')) {
-      pieceStatus = 'Blocked';
-    } else if (stages.some((s) => s.status === 'Feedback')) {
-      pieceStatus = 'In Review';
-    } else if (stages.some((s) => s.status === 'In Progress')) {
-      pieceStatus = 'In Progress';
-    } else if (stages.length > 0 && stages.every((s) => s.status === 'Approved')) {
-      pieceStatus = 'Approved';
+    let stages = stagesByPiece[piece._id.toString()] || [];
+    if (userRole === 'team_member') {
+      stages = stages.filter((s) => (s.ownerId?._id || s.ownerId)?.toString() === userId);
     }
 
-    const hasNeedsOwner = stages.some((s) => !s.ownerId || s.status === 'Not Started' && !s.assigneeConfirmed);
-    const hasWaitingApproval = stages.some((s) => s.status === 'Feedback');
-    const hasBlocked = stages.some((s) => s.status === 'Blocked');
-    const hasOverdue = stages.some((s) => s.dueDate && new Date(s.dueDate) < now && s.status !== 'Approved' && s.status !== 'Published');
+    // Reconcile and derive stage locks
+    let precedingComplete = true;
+    for (let i = 0; i < stages.length; i++) {
+      const s = stages[i];
+      if (i === 0) {
+        if (s.isLocked) {
+          s.isLocked = false;
+          WorkItem.updateOne({ _id: s._id }, { $set: { isLocked: false } }).exec();
+        }
+      } else {
+        if (precedingComplete && s.isLocked) {
+          s.isLocked = false;
+          s.unlockedAt = s.unlockedAt || now;
+          WorkItem.updateOne({ _id: s._id }, { $set: { isLocked: false, unlockedAt: s.unlockedAt } }).exec();
+        }
+      }
+      if (!s.isSkipped && s.status !== 'Approved' && s.status !== 'Published') {
+        precedingComplete = false;
+      }
+    }
+
+    // Derive active stage (first uncompleted stage)
+    const allStagesDone = stages.length > 0 && stages.every((s) => s.status === 'Approved' || s.status === 'Published');
+    const activeStage = allStagesDone ? null : (stages.find((s) => s.status !== 'Approved' && s.status !== 'Published') || stages[stages.length - 1]);
+
+    let holder = 'Done';
+    let maxLateByDays = 0;
+
+    const enrichedStages = stages.map((s) => {
+      const due = s.dueDate ? new Date(s.dueDate) : null;
+      let lateBy = 0;
+      if (due && due < now && s.status !== 'Approved' && s.status !== 'Published') {
+        lateBy = Math.max(0, Math.floor((now.getTime() - due.getTime()) / (1000 * 3600 * 24)));
+      }
+      if (lateBy > maxLateByDays) maxLateByDays = lateBy;
+
+      let ownerLag = 0;
+      if (due && s.submittedAt) {
+        const sub = new Date(s.submittedAt);
+        if (sub > due) {
+          ownerLag = Math.max(0, Math.floor((sub.getTime() - due.getTime()) / (1000 * 3600 * 24)));
+        }
+      }
+
+      let approvalWait = 0;
+      if (s.submittedAt) {
+        const sub = new Date(s.submittedAt);
+        const approved = s.approvedAt ? new Date(s.approvedAt) : (s.status === 'Feedback' ? now : null);
+        if (approved && approved > sub) {
+          approvalWait = Math.max(0, Math.floor((approved.getTime() - sub.getTime()) / (1000 * 3600 * 24)));
+        }
+      }
+
+      let stageHolder = 'Done';
+      if (s.status === 'Blocked') {
+        stageHolder = `Blocked since ${s.updatedAt ? new Date(s.updatedAt).toISOString().slice(0, 10) : 'recent'}`;
+      } else if (s.status === 'Feedback') {
+        stageHolder = 'Creative Head';
+      } else if (!s.ownerId) {
+        stageHolder = 'SM Manager';
+      } else if (s.isLocked) {
+        stageHolder = 'Locked';
+      } else {
+        stageHolder = s.ownerId?.name || 'Worker';
+      }
+
+      const measures = calculateIndividualWorkMeasures(s, now);
+
+      return {
+        ...s,
+        lateByDays: lateBy,
+        ownerLagDays: ownerLag,
+        approvalWaitDays: approvalWait,
+        holder: stageHolder,
+        measures,
+      };
+    });
+
+    if (activeStage) {
+      if (activeStage.status === 'Blocked') {
+        holder = `Blocked since ${activeStage.updatedAt ? new Date(activeStage.updatedAt).toISOString().slice(0, 10) : 'recent'}`;
+      } else if (activeStage.status === 'Feedback') {
+        holder = 'Creative Head';
+      } else if (!activeStage.ownerId) {
+        holder = 'SM Manager';
+      } else if (activeStage.isLocked) {
+        holder = 'Locked';
+      } else {
+        holder = activeStage.ownerId?.name || 'Worker';
+      }
+    }
+
+    // Piece status: 'Late', 'At Risk', 'On Track'
+    let pieceStatus = 'On Track';
+    const hasLateStage = enrichedStages.some((s) => s.lateByDays > 0);
+    const hasAtRiskStage = enrichedStages.some((s) => {
+      if (s.status === 'Approved' || s.status === 'Published' || s.isLocked) return false;
+      if (!s.dueDate) return false;
+      const due = new Date(s.dueDate);
+      const daysUntilDue = (due.getTime() - now.getTime()) / (1000 * 3600 * 24);
+      return daysUntilDue >= 0 && daysUntilDue <= 2 && ['Not Started', 'Pending', 'Blocked'].includes(s.status);
+    });
+
+    if (hasLateStage) {
+      pieceStatus = 'Late';
+    } else if (hasAtRiskStage) {
+      pieceStatus = 'At Risk';
+    } else if (piece.publishedAt || (stages.length > 0 && stages.every((s) => s.status === 'Published' || s.status === 'Approved'))) {
+      pieceStatus = 'Done';
+    }
+
+    const hasNeedsOwner = enrichedStages.some((s) => !s.ownerId || (s.status === 'Not Started' && !s.assigneeConfirmed));
+    const hasWaitingApproval = enrichedStages.some((s) => s.status === 'Feedback');
+    const hasBlocked = enrichedStages.some((s) => s.status === 'Blocked');
+    const hasOverdue = maxLateByDays > 0;
+
+    let pieceWorkTimeMs = 0;
+    let pieceApprovalWaitMs = 0;
+    let pieceWaitToStartMs = 0;
+    let maxStageLateDays = 0;
+
+    for (const s of enrichedStages) {
+      if (s.measures?.workTimeMs) pieceWorkTimeMs += s.measures.workTimeMs;
+      if (s.measures?.approvalWaitMs) pieceApprovalWaitMs += s.measures.approvalWaitMs;
+      if (s.measures?.waitingToStartMs) pieceWaitToStartMs += s.measures.waitingToStartMs;
+      if (s.measures?.lateByDays && s.measures.lateByDays > maxStageLateDays) {
+        maxStageLateDays = s.measures.lateByDays;
+      }
+    }
 
     return {
       ...piece,
       pieceStatus,
-      stages,
+      holder,
+      lateByDays: maxLateByDays,
+      waitingFormatted: pieceWaitToStartMs > 0 ? formatDuration(pieceWaitToStartMs) : '—',
+      workTimeFormatted: pieceWorkTimeMs > 0 ? formatDuration(pieceWorkTimeMs) : '—',
+      approvalWaitFormatted: pieceApprovalWaitMs > 0 ? formatDuration(pieceApprovalWaitMs) : '—',
+      lateByFormatted: maxStageLateDays > 0 ? `${maxStageLateDays}d` : '—',
+      stages: enrichedStages,
       hasNeedsOwner,
       hasWaitingApproval,
       hasBlocked,
@@ -211,7 +332,6 @@ export async function assignStages(assignmentList, user) {
     await logActivity({
       entityType: 'work_item',
       entityId: workItem._id,
-      profileId: workItem.profileId,
       actor: user,
       action: 'work_item.assigned',
       metadata: {
@@ -282,7 +402,6 @@ export async function rescheduleContentPiece(id, { postingDate, shiftUnstartedSt
   await logActivity({
     entityType: 'content_piece',
     entityId: piece._id,
-    profileId: piece.profileId,
     actor: user,
     action: 'content_piece.rescheduled',
     metadata: {
@@ -344,7 +463,6 @@ export async function skipOrRestoreStage(pieceId, stageKey, isSkipped, user) {
   await logActivity({
     entityType: 'work_item',
     entityId: stage._id,
-    profileId: stage.profileId,
     actor: user,
     action: stage.isSkipped ? 'stage.skipped' : 'stage.restored',
     metadata: {
@@ -352,6 +470,106 @@ export async function skipOrRestoreStage(pieceId, stageKey, isSkipped, user) {
       pieceId,
     },
   });
+
+  return stage;
+}
+
+/**
+ * Reassign an existing stage WorkItem
+ */
+export async function reassignStage(pieceId, { stageKey, newOwnerId, overrideReason }, user) {
+  const piece = await ContentPiece.findById(pieceId);
+  if (!piece) {
+    const error = new Error('Content piece not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  const stage = await WorkItem.findOne({ contentPieceId: piece._id, stageKey });
+  if (!stage) {
+    const error = new Error(`Stage "${stageKey}" not found for this piece`);
+    error.statusCode = 404;
+    throw error;
+  }
+  const oldOwnerId = stage.ownerId;
+  const newOwner = await Person.findById(newOwnerId);
+  if (!newOwner) {
+    const error = new Error('New owner not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  stage.ownerId = newOwner._id;
+  stage.ownerSource = 'manual';
+  stage.assignedAt = new Date();
+  await stage.save();
+
+  await logActivity({
+    entityType: 'work_item',
+    entityId: stage._id,
+    actor: user,
+    action: 'work_item.reassigned',
+    metadata: {
+      oldOwnerId,
+      newOwnerId: newOwner._id,
+      overrideReason: overrideReason || null,
+      stageKey,
+    },
+  });
+
+  await createNotification({
+    recipient: newOwner._id,
+    type: 'stage_assigned',
+    title: 'Stage Assigned',
+    message: `You were reassigned stage ${stageKey} for "${piece.topic}".`,
+    link: `/my-work?id=${stage._id}`,
+  });
+
+  return stage;
+}
+
+/**
+ * Update an existing stage deadline
+ */
+export async function changeStageDeadline(pieceId, { stageKey, newDeadline }, user) {
+  const piece = await ContentPiece.findById(pieceId);
+  if (!piece) {
+    const error = new Error('Content piece not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  const stage = await WorkItem.findOne({ contentPieceId: piece._id, stageKey });
+  if (!stage) {
+    const error = new Error(`Stage "${stageKey}" not found for this piece`);
+    error.statusCode = 404;
+    throw error;
+  }
+  const oldDeadline = stage.dueDate;
+  const d = new Date(newDeadline);
+  stage.dueDate = d;
+  stage.deadline = d;
+  stage.dueDateSource = 'manual';
+  await stage.save();
+
+  await logActivity({
+    entityType: 'work_item',
+    entityId: stage._id,
+    actor: user,
+    action: 'work_item.deadline_changed',
+    metadata: {
+      oldDeadline,
+      newDeadline: d,
+      stageKey,
+    },
+  });
+
+  if (stage.ownerId) {
+    await createNotification({
+      recipient: stage.ownerId,
+      type: 'stage_deadline_changed',
+      title: 'Stage Deadline Changed',
+      message: `Deadline for stage ${stageKey} ("${piece.topic}") changed to ${d.toISOString().slice(0, 10)}.`,
+      link: `/my-work?id=${stage._id}`,
+    });
+  }
 
   return stage;
 }

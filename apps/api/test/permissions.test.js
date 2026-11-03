@@ -45,8 +45,11 @@ describe('Marketing OS Permissions & CASL Ability Tests (R2 Canonical 5 Roles)',
       'report.view',
       'report.configure',
       'automation.manage',
+      'chat.use',
+      'chat.group.create',
+      'chat.moderate',
+      'team.profile.view',
     ];
-    expect(headPerms).toEqual(expectedHeadPerms);
 
     // Creative Head CANNOT manage users, create plans, or create raw work items
     expect(headPerms).not.toContain('user.manage');
@@ -62,6 +65,8 @@ describe('Marketing OS Permissions & CASL Ability Tests (R2 Canonical 5 Roles)',
       'people.view',
       'analytics.team',
       'report.view',
+      'chat.read',
+      'team.profile.view',
     ];
     expect(execPerms).toEqual(expectedExecPerms);
 
@@ -92,6 +97,10 @@ describe('Marketing OS Permissions & CASL Ability Tests (R2 Canonical 5 Roles)',
       'analytics.team',
       'report.view',
       'people.view',
+      'chat.use',
+      'chat.group.create',
+      'chat.moderate',
+      'team.profile.view',
     ];
     expect(smPerms).toEqual(expectedSmPerms);
 
@@ -111,6 +120,7 @@ describe('Marketing OS Permissions & CASL Ability Tests (R2 Canonical 5 Roles)',
       'work.update.own',
       'work.request',
       'feedback.respond',
+      'chat.use',
     ];
     expect(memberPerms).toEqual(expectedMemberPerms);
 

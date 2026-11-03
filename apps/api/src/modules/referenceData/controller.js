@@ -9,15 +9,6 @@ export async function getAll(req, res, next) {
   }
 }
 
-export async function getProfiles(req, res, next) {
-  try {
-    const profiles = await referenceService.getProfiles();
-    res.json({ data: profiles });
-  } catch (err) {
-    next(err);
-  }
-}
-
 export async function getDepartments(req, res, next) {
   try {
     const departments = await referenceService.getDepartments();

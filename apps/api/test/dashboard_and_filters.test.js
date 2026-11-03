@@ -227,27 +227,6 @@ describe('Phase 6: Global Filter Bar & Team Dashboard (Screen 2)', () => {
     expect(d.recentActivity.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('updates widgets when changing Profile filter to Brand Alpha', async () => {
-    const res = await request(app)
-      .get(`/api/dashboard/overview?profileId=${profileAlpha._id}`)
-      .set('Authorization', `Bearer ${adminToken}`);
-
-    expect(res.status).toBe(200);
-    const d = res.body.data;
-
-    // KPIs should only reflect the 2 Brand Alpha items
-    expect(d.kpis.totalWorkItems).toBe(2);
-    expect(d.kpis.inProgress).toBe(1);
-    expect(d.kpis.approved).toBe(1);
-
-    // Priorities list items must all belong to Brand Alpha
-    for (const item of d.priorities) {
-      expect(item.profileId?._id?.toString() || item.profileId?.toString()).toBe(
-        profileAlpha._id.toString()
-      );
-    }
-  });
-
   it('denies team member access to team dashboard with 403 Forbidden', async () => {
     const res = await request(app)
       .get('/api/dashboard/overview')

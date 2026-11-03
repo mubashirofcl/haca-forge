@@ -29,9 +29,6 @@ const TeamDashboardPage = React.lazy(() =>
 const AccessRequestsPage = React.lazy(() =>
   import('./pages/admin/AccessRequestsPage').then((m) => ({ default: m.AccessRequestsPage }))
 );
-const UsersPage = React.lazy(() =>
-  import('./pages/admin/UsersPage').then((m) => ({ default: m.UsersPage }))
-);
 const NotificationsPage = React.lazy(() =>
   import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage }))
 );
@@ -47,11 +44,23 @@ const WorkListPage = React.lazy(() =>
 const WorkDetailPage = React.lazy(() =>
   import('./pages/work/WorkDetailPage').then((m) => ({ default: m.WorkDetailPage }))
 );
-const TodoPrioritiesPage = React.lazy(() =>
-  import('./pages/todo/TodoPrioritiesPage').then((m) => ({ default: m.TodoPrioritiesPage }))
+const WritingStudioPage = React.lazy(() =>
+  import('./pages/work/writing-studio/WritingStudioPage').then((m) => ({ default: m.WritingStudioPage }))
+);
+const ReviewStudioPage = React.lazy(() =>
+  import('./pages/feedback/review-studio/ReviewStudioPage').then((m) => ({ default: m.ReviewStudioPage }))
+);
+const MediaWorkspacePage = React.lazy(() =>
+  import('./pages/work/workspaces/MediaWorkspacePage').then((m) => ({ default: m.MediaWorkspacePage }))
 );
 const TeamWorkloadPage = React.lazy(() =>
   import('./pages/workload/TeamWorkloadPage').then((m) => ({ default: m.TeamWorkloadPage }))
+);
+const TeamDirectoryPage = React.lazy(() =>
+  import('./pages/team/TeamDirectoryPage').then((m) => ({ default: m.TeamDirectoryPage }))
+);
+const WorkerProfilePage = React.lazy(() =>
+  import('./pages/team/WorkerProfilePage').then((m) => ({ default: m.WorkerProfilePage }))
 );
 const FeedbackPage = React.lazy(() =>
   import('./pages/feedback/FeedbackPage').then((m) => ({ default: m.FeedbackPage }))
@@ -62,13 +71,16 @@ const IssuesBlockersPage = React.lazy(() =>
 const ReportsPage = React.lazy(() =>
   import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
-const MyAccountPage = React.lazy(() =>
-  import('./pages/MyAccountPage').then((m) => ({ default: m.MyAccountPage }))
+const SettingsPage = React.lazy(() =>
+  import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
+const ChatPage = React.lazy(() => import('./pages/chat/ChatPage'));
 
 /**
- * RootRedirect: Directs all authenticated users to /dashboard for Phase 0.
- * (Role-specific redirection: admin/head/TL to /dashboard, member to /my-work, active in Phase 1)
+ * RootRedirect: Directs authenticated users according to completion and preferences:
+ * 1. If profileCompletedAt is missing/empty -> /welcome
+ * 2. If preferences.startPage is set -> 'Home' | 'My Work' | 'Calendar'
+ * 3. Default fallback: team_member -> /my-work, all other roles -> /dashboard
  */
 const RootRedirect: React.FC = () => {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -85,7 +97,19 @@ const RootRedirect: React.FC = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Phase 1 Role-specific Redirection
+  // Preference-based start page
+  const startPage = user.preferences?.startPage;
+  if (startPage === 'My Work') {
+    return <Navigate to="/my-work" replace />;
+  }
+  if (startPage === 'Calendar') {
+    return <Navigate to="/calendar" replace />;
+  }
+  if (startPage === 'Home') {
+    return <Navigate to={user.role === 'team_member' ? '/my-work' : '/dashboard'} replace />;
+  }
+
+  // Role default fallback
   if (user.role === 'team_member') {
     return <Navigate to="/my-work" replace />;
   }
@@ -134,7 +158,7 @@ export const App: React.FC = () => {
                   }
                 />
 
-                {/* Screen 4: Monthly Marketing Calendar (Phase 3) */}
+                {/* Screen 4: Creative Calendar (Phase 3) */}
                 <Route
                   path="/calendar"
                   element={
@@ -170,6 +194,92 @@ export const App: React.FC = () => {
                   }
                 />
 
+                {/* Writing Studio Workspace (WS2) */}
+                <Route
+                  path="/work/:id/writing-studio"
+                  element={
+                    <ProtectedRoute>
+                      <WritingStudioPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/work/:id/write"
+                  element={
+                    <ProtectedRoute>
+                      <WritingStudioPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Media Workspaces (WS3: Shoot, Edit, Design, Post) */}
+                <Route
+                  path="/work/:id/workspace"
+                  element={
+                    <ProtectedRoute>
+                      <MediaWorkspacePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/work/:id/shoot"
+                  element={
+                    <ProtectedRoute>
+                      <MediaWorkspacePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/work/:id/edit"
+                  element={
+                    <ProtectedRoute>
+                      <MediaWorkspacePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/work/:id/design"
+                  element={
+                    <ProtectedRoute>
+                      <MediaWorkspacePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/work/:id/post"
+                  element={
+                    <ProtectedRoute>
+                      <MediaWorkspacePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/work/:id/review"
+                  element={
+                    <ProtectedRoute>
+                      <ReviewStudioPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Review Studio Workspace (WS3: Review Cockpit) */}
+                <Route
+                  path="/feedback/review-studio"
+                  element={
+                    <ProtectedRoute>
+                      <ReviewStudioPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/feedback/review"
+                  element={
+                    <ProtectedRoute>
+                      <ReviewStudioPage />
+                    </ProtectedRoute>
+                  }
+                />
+
                 {/* Screen 8: Feedback & Revision History (Phase 5) */}
                 <Route
                   path="/feedback"
@@ -194,14 +304,44 @@ export const App: React.FC = () => {
                   }
                 />
 
-                {/* Screen 10: Todo and Priorities (Phase 3) */}
+                {/* Team Directory & Worker Profiles */}
+                <Route
+                  path="/team"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <TeamDirectoryPage />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/team/:id"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <WorkerProfilePage />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Legacy route redirects to /team */}
+                <Route
+                  path="/team/members/:id/work"
+                  element={
+                    <ProtectedRoute>
+                      <Navigate to="/team" replace />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Screen 10: Todo and Priorities - Merged into /my-work (UX Spec §3) */}
                 <Route
                   path="/todo"
                   element={
                     <ProtectedRoute>
-                      <Layout>
-                        <TodoPrioritiesPage />
-                      </Layout>
+                      <Navigate to="/my-work" replace />
                     </ProtectedRoute>
                   }
                 />
@@ -230,26 +370,22 @@ export const App: React.FC = () => {
                   }
                 />
 
-                {/* Enabler: People Setup (Phase 1, adapted UsersPage) */}
+                {/* People Setup -> Redirect to /team */}
                 <Route
                   path="/people"
                   element={
                     <ProtectedRoute>
-                      <Layout>
-                        <UsersPage />
-                      </Layout>
+                      <Navigate to="/team" replace />
                     </ProtectedRoute>
                   }
                 />
 
-                {/* Legacy Admin Users route alias */}
+                {/* Legacy Admin Users route alias -> Redirect to /team */}
                 <Route
                   path="/admin/users"
                   element={
                     <ProtectedRoute>
-                      <Layout>
-                        <UsersPage />
-                      </Layout>
+                      <Navigate to="/team" replace />
                     </ProtectedRoute>
                   }
                 />
@@ -266,14 +402,68 @@ export const App: React.FC = () => {
                   }
                 />
 
-                {/* My Account & Work Preferences Enabler */}
+                {/* Legacy First-Login Welcome Screen (Redirected to Profile) */}
+                <Route
+                  path="/welcome"
+                  element={
+                    <ProtectedRoute>
+                      <Navigate to="/profile" replace />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Profile Page (Polymorphic Worker Profile for Self) */}
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <WorkerProfilePage />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Settings Page */}
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <SettingsPage />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Team Chat Platform */}
+                <Route
+                  path="/chat"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <ChatPage />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:channelId"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <ChatPage />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Legacy /account and /my-account Redirects to /profile */}
                 <Route
                   path="/account"
                   element={
                     <ProtectedRoute>
-                      <Layout>
-                        <MyAccountPage />
-                      </Layout>
+                      <Navigate to="/profile" replace />
                     </ProtectedRoute>
                   }
                 />
@@ -281,9 +471,7 @@ export const App: React.FC = () => {
                   path="/my-account"
                   element={
                     <ProtectedRoute>
-                      <Layout>
-                        <MyAccountPage />
-                      </Layout>
+                      <Navigate to="/profile" replace />
                     </ProtectedRoute>
                   }
                 />

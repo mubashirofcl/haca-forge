@@ -76,3 +76,31 @@ export async function skipStage(req, res, next) {
     next(err);
   }
 }
+
+export async function reassignStage(req, res, next) {
+  try {
+    const { stageKey, newOwnerId, overrideReason } = req.body;
+    const stage = await contentPieceService.reassignStage(
+      req.params.id,
+      { stageKey, newOwnerId, overrideReason },
+      req.user
+    );
+    res.json({ success: true, data: stage });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function changeDeadline(req, res, next) {
+  try {
+    const { stageKey, newDeadline } = req.body;
+    const stage = await contentPieceService.changeStageDeadline(
+      req.params.id,
+      { stageKey, newDeadline },
+      req.user
+    );
+    res.json({ success: true, data: stage });
+  } catch (err) {
+    next(err);
+  }
+}

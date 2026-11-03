@@ -4,10 +4,34 @@ import jwt from "jsonwebtoken";
 import { env } from "../../config/env.js";
 import { User } from "../people/model.js";
 import { AccessRequest } from "../access/model.js";
+import { Session } from "./session.model.js";
 import { ROLE_PERMISSIONS, normalizeRole } from "@mmp/shared";
 import { sendMail, templates } from "../../lib/mailer.js";
 
-function generateTokens(user) {
+export function parseDeviceLabel(userAgent = '') {
+  if (!userAgent || typeof userAgent !== 'string') return 'Unknown Device';
+  let browser = 'Browser';
+  if (/edg/i.test(userAgent)) browser = 'Edge';
+  else if (/chrome|crios/i.test(userAgent)) browser = 'Chrome';
+  else if (/firefox|fxios/i.test(userAgent)) browser = 'Firefox';
+  else if (/safari/i.test(userAgent)) browser = 'Safari';
+  else if (/opera|opr/i.test(userAgent)) browser = 'Opera';
+
+  let os = 'Unknown OS';
+  if (/windows/i.test(userAgent)) os = 'Windows';
+  else if (/macintosh|mac os x/i.test(userAgent)) os = 'macOS';
+  else if (/android/i.test(userAgent)) os = 'Android';
+  else if (/iphone|ipad|ipod/i.test(userAgent)) os = 'iOS';
+  else if (/linux/i.test(userAgent)) os = 'Linux';
+
+  return `${browser} on ${os}`;
+}
+
+export function hashIp(ip = '') {
+  return crypto.createHash('sha256').update(String(ip || '127.0.0.1')).digest('hex');
+}
+
+function generateTokens(user, { sessionId = null, refreshTokenFamily = null } = {}) {
   const role = normalizeRole(user.role);
   const payload = {
     userId: user._id.toString(),
@@ -19,14 +43,20 @@ function generateTokens(user) {
     expiresIn: env.JWT_EXPIRES_IN,
   });
 
-  const refreshToken = jwt.sign(payload, env.JWT_REFRESH_SECRET, {
+  const refreshPayload = {
+    ...payload,
+    ...(sessionId ? { sessionId } : {}),
+    ...(refreshTokenFamily ? { family: refreshTokenFamily } : {}),
+  };
+
+  const refreshToken = jwt.sign(refreshPayload, env.JWT_REFRESH_SECRET, {
     expiresIn: env.JWT_REFRESH_EXPIRES_IN,
   });
 
   return { accessToken, refreshToken };
 }
 
-export async function loginUser({ email, password }) {
+export async function loginUser({ email, password, userAgent = '', ip = '' }) {
   const normalizedEmail = email.toLowerCase().trim();
   const user = await User.findOne({ email: normalizedEmail }).select(
     "+passwordHash",
@@ -96,15 +126,37 @@ export async function loginUser({ email, password }) {
     throw error;
   }
 
-  const { accessToken, refreshToken } = generateTokens(user);
+  const deviceLabel = parseDeviceLabel(userAgent);
+  const ipHash = hashIp(ip);
+  const refreshTokenFamily = crypto.randomUUID();
 
-  // Store hashed refresh token
+  // Create active session
+  const session = await Session.create({
+    userId: user._id,
+    deviceLabel,
+    ipHash,
+    refreshTokenHash: 'pending',
+    refreshTokenFamily,
+    lastUsedAt: new Date(),
+  });
+
+  const { accessToken, refreshToken } = generateTokens(user, {
+    sessionId: session._id.toString(),
+    refreshTokenFamily,
+  });
+
+  // Store hashed refresh token on session and user
   const refreshTokenHash = crypto
     .createHash("sha256")
     .update(refreshToken)
     .digest("hex");
+
+  session.refreshTokenHash = refreshTokenHash;
+  await session.save();
+
   user.refreshTokenHash = refreshTokenHash;
   user.lastLogin = new Date();
+  user.lastLoginAt = new Date();
   await user.save();
 
   return {
@@ -116,16 +168,20 @@ export async function loginUser({ email, password }) {
       jobRole: user.jobRole,
       department: user.department,
       departmentId: user.departmentId,
-      profileAccess: user.profileAccess || [],
       reportsToIds: user.reportsToIds || [],
       weeklyCapacityHours: user.weeklyCapacityHours || user.capacity || 40,
-      lastProfileId: user.lastProfileId,
       status: user.status,
       workPreferences: user.workPreferences || [],
+      avatarUrl: user.avatarUrl || null,
+      preferredName: user.preferredName || '',
+      phone: user.phone || '',
+      profileCompletedAt: user.profileCompletedAt || null,
+      lastLoginAt: user.lastLoginAt,
     },
     permissions: ROLE_PERMISSIONS[normalizeRole(user.role)] || [],
     accessToken,
     refreshToken,
+    sessionId: session._id.toString(),
   };
 }
 
@@ -159,18 +215,61 @@ export async function refreshTokens(refreshToken) {
     .createHash("sha256")
     .update(refreshToken)
     .digest("hex");
-  if (user.refreshTokenHash !== tokenHash) {
-    const error = new Error("Refresh token has been revoked or rotated");
-    error.code = "REVOKED_REFRESH_TOKEN";
-    error.statusCode = 401;
-    throw error;
+
+  let session = null;
+  if (decoded.sessionId) {
+    session = await Session.findOne({
+      _id: decoded.sessionId,
+      revokedAt: null,
+    }).select('+refreshTokenHash');
+
+    if (!session) {
+      const error = new Error("Refresh token has been revoked or rotated");
+      error.code = "REVOKED_REFRESH_TOKEN";
+      error.statusCode = 401;
+      throw error;
+    }
+
+    if (session.refreshTokenHash !== tokenHash) {
+      // Possible token reuse attempt: revoke entire family for security
+      if (session.refreshTokenFamily) {
+        await Session.updateMany(
+          { refreshTokenFamily: session.refreshTokenFamily },
+          { revokedAt: new Date() }
+        );
+      }
+      const error = new Error("Refresh token has been revoked or rotated");
+      error.code = "REVOKED_REFRESH_TOKEN";
+      error.statusCode = 401;
+      throw error;
+    }
+  } else {
+    if (user.refreshTokenHash !== tokenHash) {
+      const error = new Error("Refresh token has been revoked or rotated");
+      error.code = "REVOKED_REFRESH_TOKEN";
+      error.statusCode = 401;
+      throw error;
+    }
   }
 
-  const newTokens = generateTokens(user);
-  user.refreshTokenHash = crypto
+  const newTokens = generateTokens(user, {
+    sessionId: session ? session._id.toString() : decoded.sessionId,
+    refreshTokenFamily: session?.refreshTokenFamily || decoded.family,
+  });
+
+  const newRefreshTokenHash = crypto
     .createHash("sha256")
     .update(newTokens.refreshToken)
     .digest("hex");
+
+  if (session) {
+    session.refreshTokenHash = newRefreshTokenHash;
+    session.lastUsedAt = new Date();
+    await session.save();
+  }
+
+  user.refreshTokenHash = newRefreshTokenHash;
+  user.lastLoginAt = new Date();
   await user.save();
 
   return {
@@ -184,15 +283,59 @@ export async function refreshTokens(refreshToken) {
       jobRole: user.jobRole,
       department: user.department,
       departmentId: user.departmentId,
-      profileAccess: user.profileAccess || [],
       reportsToIds: user.reportsToIds || [],
       weeklyCapacityHours: user.weeklyCapacityHours || user.capacity || 40,
-      lastProfileId: user.lastProfileId,
       status: user.status,
       workPreferences: user.workPreferences || [],
     },
     permissions: ROLE_PERMISSIONS[normalizeRole(user.role)] || [],
   };
+}
+
+export async function verifyPasswordToken(token) {
+  if (!token) {
+    const error = new Error("Token is required");
+    error.code = "TOKEN_REQUIRED";
+    error.statusCode = 400;
+    throw error;
+  }
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+  // 1. Check direct user reset token
+  const user = await User.findOne({
+    resetPasswordTokenHash: tokenHash,
+    resetPasswordExpiresAt: { $gt: new Date() },
+  });
+  if (user) {
+    return {
+      valid: true,
+      email: user.email,
+      name: user.name,
+      role: normalizeRole(user.role),
+    };
+  }
+
+  // 2. Check access request invite token
+  const accessRequest = await AccessRequest.findOne({
+    inviteTokenHash: tokenHash,
+    inviteExpiresAt: { $gt: new Date() },
+    status: "approved",
+  });
+  if (accessRequest) {
+    return {
+      valid: true,
+      email: accessRequest.email,
+      name: accessRequest.name,
+      role: accessRequest.assignedRole || accessRequest.requestedRole || "team_member",
+    };
+  }
+
+  const error = new Error(
+    "Invite or reset token is invalid or has expired (valid for 48 hours). Please request a new link.",
+  );
+  error.code = "INVALID_OR_EXPIRED_TOKEN";
+  error.statusCode = 400;
+  throw error;
 }
 
 export async function setPasswordWithToken({ token, password }) {
@@ -208,6 +351,7 @@ export async function setPasswordWithToken({ token, password }) {
     const salt = await bcrypt.genSalt(10);
     user.passwordHash = await bcrypt.hash(password, salt);
     user.mustSetPassword = false;
+    user.refreshTokenHash = undefined;
     user.resetPasswordTokenHash = undefined;
     user.resetPasswordExpiresAt = undefined;
     await user.save();
@@ -241,6 +385,7 @@ export async function setPasswordWithToken({ token, password }) {
   const salt = await bcrypt.genSalt(10);
   user.passwordHash = await bcrypt.hash(password, salt);
   user.mustSetPassword = false;
+  user.refreshTokenHash = undefined;
   await user.save();
 
   // Invalidate token
@@ -281,7 +426,7 @@ export async function requestPasswordReset(email) {
 
   await sendMail({
     to: user.email,
-    subject: "HACA FORGE - Password Reset Request",
+    subject: "HACA Marketing OS - Password Reset Request",
     text: `Hello ${user.name},\n\nA password reset was requested for your account. Please click the following link to set your password (valid for 48 hours):\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,
     html: template.html,
   }).catch(() => {});

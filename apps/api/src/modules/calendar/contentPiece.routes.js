@@ -43,4 +43,16 @@ router.patch(
   contentPieceController.skipStage
 );
 
+router.patch(
+  '/:id/reassign',
+  requirePermission('assignment.override'),
+  contentPieceController.reassignStage
+);
+
+router.patch(
+  '/:id/deadline',
+  requirePermission('calendar.plan'),
+  contentPieceController.changeDeadline
+);
+
 export default router;

@@ -17,9 +17,24 @@ export interface User {
   capacity: number;
   attendance: string;
   jobRole?: string;
-  profileAccess?: string[];
-  lastProfileId?: string;
   workPreferences?: string[];
+  avatarUrl?: string | null;
+  avatarStorageId?: string | null;
+  preferredName?: string;
+  phone?: string;
+  whatsappNumber?: string;
+  languages?: string[];
+  about?: string;
+  preferences?: {
+    startPage?: 'Home' | 'My Work' | 'Calendar';
+    dateFormat?: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
+    timeFormat?: '12h' | '24h';
+    weekStart?: 'Monday' | 'Sunday';
+  };
+  notificationPrefs?: Record<string, { inApp: boolean; email: boolean }>;
+  profileCompletedAt?: string | null;
+  lastLoginAt?: string | null;
+  createdAt?: string;
 }
 
 interface AuthContextType {
@@ -33,7 +48,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);

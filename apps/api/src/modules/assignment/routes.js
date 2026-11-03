@@ -17,7 +17,7 @@ router.post(
   assignmentController.getRecommendation
 );
 
-// Assignment Override (Requires explicit assignment.override permission: Admin, Marketing Head, Team Lead)
+// Assignment Override (Requires explicit assignment.override permission: Admin, Marketing Head, SM Manager)
 router.post(
   '/override',
   requirePermission('assignment.override'),

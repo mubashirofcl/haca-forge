@@ -1,8 +1,6 @@
 import mongoose from 'mongoose';
-import { Profile } from './profile.model.js';
 import { Department } from '../departments/model.js';
 import {
-  PROFILES,
   DEPARTMENTS,
   JOB_ROLES,
   PROGRAMS,
@@ -18,33 +16,8 @@ import {
 } from '@mmp/shared';
 import { logger } from '../../lib/logger.js';
 
-export async function resolveProfileObjectId(rawProfile) {
-  if (!rawProfile) return null;
-  if (rawProfile instanceof mongoose.Types.ObjectId) return rawProfile;
-
-  const str = String(rawProfile).trim();
-  if (!str || str === 'all' || str === 'null' || str === 'undefined' || str === 'org-wide') return null;
-
-  if (mongoose.Types.ObjectId.isValid(str) && /^[0-9a-fA-F]{24}$/.test(str)) {
-    const found = await Profile.findById(str).select('_id');
-    if (found) return found._id;
-  }
-
-  const escaped = str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const profDoc = await Profile.findOne({
-    $or: [
-      { code: str.toLowerCase() },
-      { name: str },
-      { code: new RegExp(`^${escaped}$`, 'i') },
-      { name: new RegExp(`^${escaped}$`, 'i') },
-    ],
-  }).select('_id');
-
-  return profDoc ? profDoc._id : null;
-}
-
-export async function getProfiles() {
-  return Profile.find({ active: true }).sort({ name: 1 }).lean();
+export async function resolveProfileObjectId() {
+  return null;
 }
 
 export async function getDepartments() {
@@ -52,13 +25,9 @@ export async function getDepartments() {
 }
 
 export async function getAllReferenceData() {
-  const [profiles, departments] = await Promise.all([
-    Profile.find().sort({ name: 1 }).lean(),
-    Department.find().sort({ name: 1 }).lean(),
-  ]);
+  const departments = await Department.find().sort({ name: 1 }).lean();
 
   return {
-    profiles: profiles.length > 0 ? profiles : PROFILES,
     departments: departments.length > 0 ? departments : DEPARTMENTS,
     jobRoles: JOB_ROLES,
     programs: PROGRAMS,
@@ -75,25 +44,9 @@ export async function getAllReferenceData() {
 }
 
 /**
- * Idempotently seeds the 7 Profiles and 7 Departments
+ * Idempotently seeds the 7 Departments
  */
 export async function seedReferenceData() {
-  const seededProfiles = [];
-  for (const prof of PROFILES) {
-    const existing = await Profile.findOne({ code: prof.code });
-    if (!existing) {
-      const created = await Profile.create({
-        name: prof.name,
-        code: prof.code,
-        active: true,
-      });
-      seededProfiles.push(created);
-      logger.info({ profile: prof.name }, 'Seeded Profile');
-    } else {
-      seededProfiles.push(existing);
-    }
-  }
-
   const seededDepts = [];
   for (const dept of DEPARTMENTS) {
     const existing = await Department.findOne({
@@ -117,5 +70,5 @@ export async function seedReferenceData() {
     }
   }
 
-  return { profiles: seededProfiles, departments: seededDepts };
+  return { departments: seededDepts };
 }

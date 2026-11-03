@@ -1,13 +1,39 @@
 import ExcelJS from 'exceljs';
-import { WORK_TYPES, normalizeWorkType } from '@mmp/shared';
+import {
+  WORK_TYPES,
+  normalizeWorkType,
+  getPipelineForContent,
+  calculateStageDueDate,
+  DEFAULT_STAGE_HOURS,
+  isPostableWorkType,
+  STAGE_DUE_OFFSETS,
+} from '@mmp/shared';
+import { Person } from '../people/model.js';
+import { WorkItem } from '../workItems/model.js';
 
 export const TEMPLATE_COLUMNS = [
   { header: 'Posting Date', key: 'postingDate', width: 16 },
+  { header: 'Posting Time', key: 'postingTime', width: 14 },
   { header: 'Topic', key: 'topic', width: 35 },
   { header: 'Type', key: 'contentType', width: 22 },
-  { header: 'Needs Script (Reel only)', key: 'needsScript', width: 26 },
-  { header: 'Needs Shoot (Reel only)', key: 'needsShoot', width: 26 },
-  { header: 'Content Link', key: 'contentLink', width: 30 },
+  { header: 'Program or Event', key: 'programOrEvent', width: 25 },
+  { header: 'Brief', key: 'brief', width: 35 },
+  { header: 'Reference Link', key: 'referenceLink', width: 30 },
+  { header: 'Priority', key: 'priority', width: 14 },
+  { header: 'Posting Owner', key: 'postingOwner', width: 28 },
+  { header: 'Content Owner', key: 'contentOwner', width: 28 },
+  { header: 'Content Deadline', key: 'contentDeadline', width: 18 },
+  { header: 'Script Owner', key: 'scriptOwner', width: 28 },
+  { header: 'Script Deadline', key: 'scriptDeadline', width: 18 },
+  { header: 'Needs Script', key: 'needsScript', width: 16 },
+  { header: 'Needs Shoot', key: 'needsShoot', width: 16 },
+  { header: 'Shoot Owner', key: 'shootOwner', width: 28 },
+  { header: 'Shoot Deadline', key: 'shootDeadline', width: 18 },
+  { header: 'Edit Owner', key: 'editOwner', width: 28 },
+  { header: 'Edit Deadline', key: 'editDeadline', width: 18 },
+  { header: 'Design Owner', key: 'designOwner', width: 28 },
+  { header: 'Design Deadline', key: 'designDeadline', width: 18 },
+  { header: 'Source Video Link', key: 'sourceVideoLink', width: 30 },
   { header: 'Remarks', key: 'remarks', width: 30 },
 ];
 
@@ -40,22 +66,54 @@ export async function generateExcelTemplate() {
 
   worksheet.addRow({
     postingDate: nextWeek.toISOString().slice(0, 10),
+    postingTime: '18:00',
     topic: 'Alumni Success Story Reel - Sarah M.',
     contentType: 'Reel',
+    programOrEvent: 'HACA Admissions',
+    brief: 'Focus on transformation & placement',
+    referenceLink: 'https://docs.google.com/document/d/sample-script',
+    priority: 'Normal',
+    postingOwner: 'smmanager@demo.haca.local',
+    contentOwner: '',
+    contentDeadline: '',
+    scriptOwner: 'writer1@demo.haca.local',
+    scriptDeadline: new Date(nextWeek.getTime() - 8 * 86400000).toISOString().slice(0, 10),
     needsScript: 'Yes',
     needsShoot: 'Yes',
-    contentLink: 'https://docs.google.com/document/d/sample-script',
-    remarks: 'Focus on transformation & placement',
+    shootOwner: 'shooter@demo.haca.local',
+    shootDeadline: new Date(nextWeek.getTime() - 5 * 86400000).toISOString().slice(0, 10),
+    editOwner: 'editor1@demo.haca.local',
+    editDeadline: new Date(nextWeek.getTime() - 2 * 86400000).toISOString().slice(0, 10),
+    designOwner: '',
+    designDeadline: '',
+    sourceVideoLink: '',
+    remarks: 'Approved concept',
   });
 
   worksheet.addRow({
     postingDate: twoWeeks.toISOString().slice(0, 10),
+    postingTime: '18:00',
     topic: 'Admissions Open - Batch 14 Poster',
     contentType: 'Static Post',
+    programOrEvent: 'Admissions Campaign',
+    brief: 'Include scholarship deadline and eligibility',
+    referenceLink: '',
+    priority: 'Normal',
+    postingOwner: 'smmanager@demo.haca.local',
+    contentOwner: 'writer1@demo.haca.local',
+    contentDeadline: new Date(twoWeeks.getTime() - 5 * 86400000).toISOString().slice(0, 10),
+    scriptOwner: '',
+    scriptDeadline: '',
     needsScript: 'No',
     needsShoot: 'No',
-    contentLink: '',
-    remarks: 'Include scholarship deadline',
+    shootOwner: '',
+    shootDeadline: '',
+    editOwner: '',
+    editDeadline: '',
+    designOwner: 'designer1@demo.haca.local',
+    designDeadline: new Date(twoWeeks.getTime() - 2 * 86400000).toISOString().slice(0, 10),
+    sourceVideoLink: '',
+    remarks: 'Focus on visual branding',
   });
 
   return workbook.xlsx.writeBuffer();
@@ -102,12 +160,29 @@ export async function parseBufferToRows(buffer, mimetype = '') {
       // Map column headers
       row.eachCell((cell, colNumber) => {
         const val = String(cell.value || '').trim().toLowerCase();
-        if (val.includes('posting') || val.includes('date')) headerMap[colNumber] = 'postingDate';
+        if (val.includes('posting date') || val === 'date' || val.includes('publish date') || val.includes('needed-by')) headerMap[colNumber] = 'postingDate';
+        else if (val.includes('posting time') || val === 'time' || val.includes('publish time')) headerMap[colNumber] = 'postingTime';
         else if (val.includes('topic') || val.includes('title')) headerMap[colNumber] = 'topic';
         else if (val === 'type' || val.includes('content type') || val.includes('format')) headerMap[colNumber] = 'contentType';
-        else if (val.includes('script')) headerMap[colNumber] = 'needsScript';
-        else if (val.includes('shoot')) headerMap[colNumber] = 'needsShoot';
-        else if (val.includes('link') || val.includes('url')) headerMap[colNumber] = 'contentLink';
+        else if (val.includes('program') || val.includes('event')) headerMap[colNumber] = 'programOrEvent';
+        else if (val.includes('brief')) headerMap[colNumber] = 'brief';
+        else if (val.includes('reference link') || val.includes('ref link')) headerMap[colNumber] = 'referenceLink';
+        else if (val.includes('priority')) headerMap[colNumber] = 'priority';
+        else if (val.includes('posting owner') || val.includes('post owner')) headerMap[colNumber] = 'postingOwner';
+        else if (val.includes('content owner')) headerMap[colNumber] = 'contentOwner';
+        else if (val.includes('content deadline')) headerMap[colNumber] = 'contentDeadline';
+        else if (val.includes('script owner')) headerMap[colNumber] = 'scriptOwner';
+        else if (val.includes('script deadline')) headerMap[colNumber] = 'scriptDeadline';
+        else if (val.includes('needs script') || val === 'script') headerMap[colNumber] = 'needsScript';
+        else if (val.includes('needs shoot') || val === 'shoot') headerMap[colNumber] = 'needsShoot';
+        else if (val.includes('shoot owner')) headerMap[colNumber] = 'shootOwner';
+        else if (val.includes('shoot deadline')) headerMap[colNumber] = 'shootDeadline';
+        else if (val.includes('edit owner')) headerMap[colNumber] = 'editOwner';
+        else if (val.includes('edit deadline')) headerMap[colNumber] = 'editDeadline';
+        else if (val.includes('design owner')) headerMap[colNumber] = 'designOwner';
+        else if (val.includes('design deadline')) headerMap[colNumber] = 'designDeadline';
+        else if (val.includes('source video') || val.includes('video link')) headerMap[colNumber] = 'sourceVideoLink';
+        else if (val.includes('content link') || val.includes('drive')) headerMap[colNumber] = 'contentLink';
         else if (val.includes('remark') || val.includes('note')) headerMap[colNumber] = 'remarks';
       });
       return;
@@ -136,18 +211,60 @@ export async function parseBufferToRows(buffer, mimetype = '') {
 }
 
 /**
- * Validates extracted rows according to R3 business rules:
+ * Validates extracted rows according to Workflow V2 business rules:
  * - Bad/missing date
  * - Past dates
  * - Unknown content types
  * - Duplicates
  * - Flags on non-reels
+ * - Step owners and deadlines (suggests blanks)
  */
-export function validateImportRows(rawRows) {
+export async function validateImportRows(rawRows) {
   const validatedRows = [];
   const seenCombinations = new Set();
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
+
+  // Fetch active team members for owner lookup and autofill
+  const activeMembers = await Person.find({
+    role: { $in: ['team_member', 'sm_manager', 'admin'] },
+    status: 'active',
+  }).lean();
+  const membersByEmail = new Map();
+  const membersById = new Map();
+  for (const m of activeMembers) {
+    if (m.email) membersByEmail.set(m.email.toLowerCase().trim(), m);
+    membersById.set(m._id.toString(), m);
+  }
+
+  // Pre-calculate workload per member
+  const memberWorkload = new Map();
+  for (const m of activeMembers) {
+    const openItems = await WorkItem.find({
+      ownerId: m._id,
+      status: { $in: ['Not Started', 'In Progress', 'Feedback'] },
+    }).select('estimatedEffortHrs').lean();
+    const totalHours = openItems.reduce((acc, it) => acc + (it.estimatedEffortHrs || 4), 0);
+    const capacity = m.weeklyCapacityHours || 40;
+    const pct = capacity > 0 ? Math.round((totalHours / capacity) * 100) : 0;
+    memberWorkload.set(m._id.toString(), pct);
+  }
+
+  function pickBestMemberForStage(stageKey) {
+    const eligible = activeMembers.filter((m) => {
+      const prefs = m.workPreferences || [];
+      const load = memberWorkload.get(m._id.toString()) || 0;
+      return prefs.includes(stageKey) && load < 85;
+    });
+
+    if (eligible.length === 0) return null;
+    eligible.sort((a, b) => {
+      const loadA = memberWorkload.get(a._id.toString()) || 0;
+      const loadB = memberWorkload.get(b._id.toString()) || 0;
+      return loadA - loadB;
+    });
+    return eligible[0];
+  }
 
   for (const raw of rawRows) {
     const errors = [];
@@ -187,12 +304,29 @@ export function validateImportRows(rawRows) {
     }
 
     // 4. Flags on non-reels
-    const needsScript = parseBoolean(raw.needsScript);
-    const needsShoot = parseBoolean(raw.needsShoot);
+    let needsScript = parseBoolean(raw.needsScript);
+    let needsShoot = parseBoolean(raw.needsShoot);
     const isReel = normalizedType.toLowerCase() === 'reel';
+
+    if (rawType.toLowerCase() === 'reel a') {
+      needsScript = true;
+      needsShoot = true;
+    } else if (rawType.toLowerCase() === 'reel b') {
+      needsScript = false;
+      needsShoot = true;
+    } else if (rawType.toLowerCase() === 'reel c') {
+      needsScript = false;
+      needsShoot = false;
+    }
 
     if (!isReel && (needsScript || needsShoot)) {
       errors.push('Needs Script and Needs Shoot flags apply only to Reels');
+    }
+
+    // Source video link check
+    const sourceVideoLink = typeof raw.sourceVideoLink === 'string' ? raw.sourceVideoLink.trim() : '';
+    if (isReel && !needsShoot && !sourceVideoLink) {
+      errors.push('Source video link is required when Reel does not need a shoot.');
     }
 
     // 5. Duplicates detection (same date + topic + type)
@@ -206,13 +340,172 @@ export function validateImportRows(rawRows) {
       }
     }
 
+    // 6. Build and validate Stage Plan
+    const stagePlan = [];
+    let postingOwnerId = null;
+    let postingOwnerName = '';
+    let isPostingOwnerSuggested = false;
+
+    if (isValidType && postingDate) {
+      const pipelineInfo = getPipelineForContent({
+        contentType: normalizedType,
+        needsScript: isReel ? needsScript : false,
+        needsShoot: isReel ? needsShoot : false,
+      });
+
+      const stageInputMap = {
+        Script: { owner: raw.scriptOwner, deadline: raw.scriptDeadline },
+        Shoot: { owner: raw.shootOwner, deadline: raw.shootDeadline },
+        Edit: { owner: raw.editOwner, deadline: raw.editDeadline },
+        Content: { owner: raw.contentOwner, deadline: raw.contentDeadline },
+        Design: { owner: raw.designOwner, deadline: raw.designDeadline },
+        Post: { owner: raw.postingOwner, deadline: raw.postingDate },
+      };
+
+      let prevDate = null;
+      let lastCreationDate = null;
+
+      for (const stageKey of pipelineInfo.stages) {
+        const input = stageInputMap[stageKey] || {};
+        let ownerId = null;
+        let ownerName = '';
+        let ownerSource = 'suggested';
+        let ownerReason = '';
+        let dueDate = null;
+        let dueDateSource = 'auto';
+
+        // Check owner
+        if (input.owner && String(input.owner).trim()) {
+          const email = String(input.owner).toLowerCase().trim();
+          const member = membersByEmail.get(email);
+          if (member) {
+            if (stageKey !== 'Post') {
+              const prefs = member.workPreferences || [];
+              if (!prefs.includes(stageKey)) {
+                errors.push(`${member.name} (${email}) does not have "${stageKey}" in work preferences`);
+              }
+            }
+            ownerId = member._id.toString();
+            ownerName = member.name;
+            ownerSource = 'manual';
+          } else {
+            errors.push(`Owner "${input.owner}" for ${stageKey} is not an active team member`);
+          }
+        } else {
+          // Autofill owner
+          const best = pickBestMemberForStage(stageKey);
+          if (best) {
+            ownerId = best._id.toString();
+            ownerName = best.name;
+            ownerSource = 'suggested';
+            ownerReason = `Lowest workload (${memberWorkload.get(best._id.toString()) || 0}%)`;
+          } else {
+            ownerReason = 'No available person with this role';
+          }
+        }
+
+        // Check deadline
+        if (input.deadline && String(input.deadline).trim()) {
+          const parsedDue = new Date(input.deadline);
+          if (isNaN(parsedDue.getTime())) {
+            errors.push(`Invalid deadline date for ${stageKey}: "${input.deadline}"`);
+          } else {
+            dueDate = parsedDue;
+            dueDateSource = 'manual';
+          }
+        } else {
+          // Calculate suggested deadline from F
+          dueDate = calculateStageDueDate(
+            postingDate,
+            pipelineInfo.pipeline,
+            stageKey,
+            pipelineInfo.hasPostStage
+          );
+          dueDateSource = 'auto';
+        }
+
+        // Validate deadline order & bounds
+        if (dueDate) {
+          const dueMidnight = new Date(dueDate);
+          dueMidnight.setHours(0, 0, 0, 0);
+
+          if (dueMidnight < startOfToday) {
+            errors.push(`${stageKey} deadline cannot be in the past`);
+          }
+          if (dueMidnight > postingDate) {
+            errors.push(`${stageKey} deadline cannot be after publish date`);
+          }
+          if (prevDate && dueMidnight < prevDate) {
+            errors.push(`${stageKey} deadline must be on or after preceding stage deadline`);
+          }
+          prevDate = dueMidnight;
+          if (stageKey !== 'Post') {
+            lastCreationDate = dueMidnight;
+          }
+        }
+
+        stagePlan.push({
+          stageKey,
+          ownerId,
+          ownerName,
+          dueDate: dueDate ? dueDate.toISOString() : null,
+          ownerSource,
+          dueDateSource,
+          ownerReason,
+          isSuggestedOwner: ownerSource === 'suggested',
+          isSuggestedDueDate: dueDateSource === 'auto',
+        });
+      }
+
+      // Check posting owner for postable types
+      if (isPostableWorkType(normalizedType)) {
+        if (raw.postingOwner && String(raw.postingOwner).trim()) {
+          const email = String(raw.postingOwner).toLowerCase().trim();
+          const member = membersByEmail.get(email);
+          if (member) {
+            postingOwnerId = member._id.toString();
+            postingOwnerName = member.name;
+          } else {
+            errors.push(`Posting owner "${raw.postingOwner}" not found or not active`);
+          }
+        } else {
+          const bestPost = pickBestMemberForStage('Post');
+          if (bestPost) {
+            postingOwnerId = bestPost._id.toString();
+            postingOwnerName = bestPost.name;
+            isPostingOwnerSuggested = true;
+          }
+        }
+      }
+
+      // Check tight buffer warning
+      if (lastCreationDate && postingDate) {
+        const postMidnight = new Date(postingDate);
+        postMidnight.setHours(0, 0, 0, 0);
+        const bufferDays = Math.round((postMidnight.getTime() - lastCreationDate.getTime()) / 86400000);
+        if (bufferDays < 1) {
+          warnings.push(`Tight creation buffer: last creation step is due less than 24h before publish date`);
+        }
+      }
+    }
+
     const rowObj = {
       rowIndex: raw.rowIndex,
       postingDate: postingDate ? postingDate.toISOString() : null,
+      postingTime: typeof raw.postingTime === 'string' && raw.postingTime.trim() ? raw.postingTime.trim() : '18:00',
       topic: topic || '',
       contentType: isValidType ? normalizedType : rawType || '',
+      programOrEvent: typeof raw.programOrEvent === 'string' ? raw.programOrEvent.trim() : '',
+      brief: typeof raw.brief === 'string' ? raw.brief.trim() : '',
+      referenceLink: typeof raw.referenceLink === 'string' ? raw.referenceLink.trim() : '',
+      priority: typeof raw.priority === 'string' && raw.priority.trim() ? raw.priority.trim() : 'Normal',
+      postingOwnerId,
+      postingOwnerName,
+      isPostingOwnerSuggested,
       needsScript: isReel ? needsScript : false,
       needsShoot: isReel ? needsShoot : false,
+      sourceVideoLink,
+      stagePlan,
       contentLink: typeof raw.contentLink === 'string' ? raw.contentLink.trim() : '',
       remarks: typeof raw.remarks === 'string' ? raw.remarks.trim() : '',
       isValid: errors.length === 0,

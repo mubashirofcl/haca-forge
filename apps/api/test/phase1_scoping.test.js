@@ -115,10 +115,6 @@ describe('Phase 1: Profiles, People & Access Scoping Tests', () => {
       expect(scope.allowedPersonIds).toBeNull();
       expect(scope.canAccessPerson(member1User._id)).toBe(true);
       expect(scope.canAccessPerson(member2User._id)).toBe(true);
-
-      // Profile access: only profile 1
-      expect(scope.canAccessProfile(profile1Id)).toBe(true);
-      expect(scope.canAccessProfile(profile2Id)).toBe(false);
     });
 
     it('team_member: returns assigned profiles and self only', async () => {
@@ -128,16 +124,6 @@ describe('Phase 1: Profiles, People & Access Scoping Tests', () => {
       expect(scope.allowedPersonIds).toEqual([member1User._id.toString()]);
       expect(scope.canAccessPerson(leadUser._id)).toBe(false);
       expect(scope.canAccessPerson(member2User._id)).toBe(false);
-    });
-
-    it('denies access when user requests a profileId outside their profileAccess', async () => {
-      // leadUser only has access to profile1Id, requests profile2Id
-      const scope = await resolveScope(leadUser, { profileId: profile2Id });
-      expect(scope.isAllowed).toBe(false);
-      expect(scope.allowedProfileIds).toEqual([]);
-
-      const query = scope.buildQuery();
-      expect(query).toEqual({ _id: { $exists: false } });
     });
 
     it('denies access when team_member requests an ownerId other than self', async () => {

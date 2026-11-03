@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch, ApiError } from '../lib/api';
 import {
   DEPARTMENTS,
   JOB_ROLES,
-  PROFILES,
   requestAccessSchema,
   type RequestableRole,
 } from '@mmp/shared';
@@ -17,17 +16,34 @@ import {
   ArrowRight,
   ShieldAlert,
   X,
+  Eye,
+  EyeOff,
+  Sparkles,
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Login form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<{ code?: string; message: string } | null>(null);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
+
+  // Pre-fill email and notice if navigated from SetPasswordPage
+  useEffect(() => {
+    const state = location.state as { email?: string; passwordSet?: boolean } | null;
+    if (state?.email) {
+      setEmail(state.email);
+    }
+    if (state?.passwordSet) {
+      setSuccessNotice('Password updated successfully! Please sign in with your new password.');
+    }
+  }, [location.state]);
 
   // Request Access modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -37,7 +53,6 @@ export const LoginPage: React.FC = () => {
   const [reqDept, setReqDept] = useState<string>(DEPARTMENTS[0].name);
   const [reqJobRole, setReqJobRole] = useState<string>(JOB_ROLES[0]);
   const [reqRole, setReqRole] = useState<RequestableRole>('team_member');
-  const [reqBrands, setReqBrands] = useState<string[]>([PROFILES[0].code]);
   const [reqReason, setReqReason] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmittingReq, setIsSubmittingReq] = useState(false);
@@ -49,6 +64,7 @@ export const LoginPage: React.FC = () => {
   const [forgotEmail, setForgotEmail] = useState('');
   const [isSubmittingForgot, setIsSubmittingForgot] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+  const [forgotResetLink, setForgotResetLink] = useState<string | null>(null);
   const [forgotError, setForgotError] = useState<string | null>(null);
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -56,13 +72,18 @@ export const LoginPage: React.FC = () => {
     setIsSubmittingForgot(true);
     setForgotError(null);
     setForgotSuccess(null);
+    setForgotResetLink(null);
 
     try {
-      const res = await apiFetch<{ message?: string }>('/auth/forgot-password', {
+      const cleanForgotEmail = forgotEmail.trim().toLowerCase();
+      const res = await apiFetch<{ message?: string; resetLink?: string }>('/auth/forgot-password', {
         method: 'POST',
-        body: JSON.stringify({ email: forgotEmail }),
+        body: JSON.stringify({ email: cleanForgotEmail }),
       });
-      setForgotSuccess(res.message || 'If an account exists with this email address, a password reset link has been dispatched.');
+      setForgotSuccess(res.message || 'If an active account exists with this email address, a password reset link has been dispatched.');
+      if (res.resetLink) {
+        setForgotResetLink(res.resetLink);
+      }
     } catch (err: any) {
       setForgotError(err.message || 'Failed to submit reset request. Please check email address.');
     } finally {
@@ -74,9 +95,12 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setIsLoggingIn(true);
     setLoginError(null);
+    setSuccessNotice(null);
+
+    const cleanEmail = email.trim().toLowerCase();
 
     try {
-      const loggedUser = await login({ email, password });
+      const loggedUser = await login({ email: cleanEmail, password });
       if (loggedUser.role === 'team_member') {
         navigate('/my-work');
       } else {
@@ -107,7 +131,6 @@ export const LoginPage: React.FC = () => {
       department: reqDept,
       jobRole: reqJobRole,
       requestedRole: reqRole,
-      requestedProfileCodes: reqBrands,
       reason: reqReason,
     });
 
@@ -136,7 +159,6 @@ export const LoginPage: React.FC = () => {
       setReqEmail('');
       setReqPhone('');
       setReqReason('');
-      setReqBrands([PROFILES[0].code]);
       setFieldErrors({});
     } catch (err: any) {
       if (
@@ -164,11 +186,11 @@ export const LoginPage: React.FC = () => {
         <div className="text-center mb-6 flex flex-col items-center">
           <img
             src="/haca-forge-logo.png"
-            alt="HACA FORGE"
+            alt="HACA Marketing OS"
             className="h-8 sm:h-9 w-auto object-contain drop-shadow-xs transition-transform duration-200 hover:scale-[1.02]"
           />
           <p className="mt-2 text-xs text-slate-500 font-medium tracking-wide">
-            Marketing Operations & Request Triage Engine
+            Marketing Operations & Content Workflow Engine
           </p>
         </div>
 
@@ -182,6 +204,13 @@ export const LoginPage: React.FC = () => {
               Enter your corporate credentials to access your dashboard
             </p>
           </div>
+
+          {successNotice && (
+            <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/90 text-emerald-800 text-xs flex items-center gap-3 mb-6">
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600" />
+              <span className="font-medium leading-relaxed">{successNotice}</span>
+            </div>
+          )}
 
           {loginError && (
             <div
@@ -217,6 +246,7 @@ export const LoginPage: React.FC = () => {
                 <input
                   type="email"
                   required
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
@@ -246,13 +276,22 @@ export const LoginPage: React.FC = () => {
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] transition-all shadow-xs"
+                  className="w-full pl-11 pr-11 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] transition-all shadow-xs"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -274,6 +313,115 @@ export const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
+
+          {/* Quick Demo Accounts Helper */}
+          <div className="mt-6 pt-5 border-t border-slate-200/80">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-[#7a6af6]" />
+                Demo Quick-Fill Accounts
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium">Click to fill</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 text-left">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('creativehead@demo.haca.local');
+                  setPassword('Head@Test101');
+                  setLoginError(null);
+                }}
+                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
+              >
+                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Creative Head</span>
+                <span className="text-[10px] text-slate-400 block truncate">creativehead@demo.haca.local</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('smmanager@demo.haca.local');
+                  setPassword('SMmgr@Test102');
+                  setLoginError(null);
+                }}
+                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
+              >
+                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">SM Manager</span>
+                <span className="text-[10px] text-slate-400 block truncate">smmanager@demo.haca.local</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('writer1@demo.haca.local');
+                  setPassword('Writer1@Test111');
+                  setLoginError(null);
+                }}
+                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
+              >
+                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Writer (Worker)</span>
+                <span className="text-[10px] text-slate-400 block truncate">writer1@demo.haca.local</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('designer1@demo.haca.local');
+                  setPassword('Design1@Test113');
+                  setLoginError(null);
+                }}
+                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
+              >
+                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Designer (Worker)</span>
+                <span className="text-[10px] text-slate-400 block truncate">designer1@demo.haca.local</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('shooter@demo.haca.local');
+                  setPassword('Shoot1@Test115');
+                  setLoginError(null);
+                }}
+                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
+              >
+                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Shooter (Worker)</span>
+                <span className="text-[10px] text-slate-400 block truncate">shooter@demo.haca.local</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('editor1@demo.haca.local');
+                  setPassword('Edit1@Test116');
+                  setLoginError(null);
+                }}
+                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
+              >
+                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Editor (Worker)</span>
+                <span className="text-[10px] text-slate-400 block truncate">editor1@demo.haca.local</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('admin@hacaforge.com');
+                  setPassword('Admin1212');
+                  setLoginError(null);
+                }}
+                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
+              >
+                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Admin</span>
+                <span className="text-[10px] text-slate-400 block truncate">admin@hacaforge.com</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('executive@demo.haca.local');
+                  setPassword('Exec@Test103');
+                  setLoginError(null);
+                }}
+                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
+              >
+                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Executive</span>
+                <span className="text-[10px] text-slate-400 block truncate">executive@demo.haca.local</span>
+              </button>
+            </div>
+          </div>
 
           {/* Request Access Link */}
           <div className="mt-8 pt-6 border-t border-slate-200/80 text-center">
@@ -467,46 +615,6 @@ export const LoginPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Brands Multi-Select */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Brands you work on * <span className="text-slate-400 font-normal">(select at least one)</span>
-                    </label>
-                    <span className="text-[10px] text-[#7a6af6] font-medium">
-                      {reqBrands.length} selected
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/70 border border-slate-200/80 rounded-2xl">
-                    {PROFILES.map((profile) => {
-                      const isSelected = reqBrands.includes(profile.code);
-                      return (
-                        <button
-                          type="button"
-                          key={profile.code}
-                          onClick={() => {
-                            setReqBrands((prev) =>
-                              isSelected
-                                ? prev.filter((c) => c !== profile.code)
-                                : [...prev, profile.code]
-                            );
-                          }}
-                          className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${
-                            isSelected
-                              ? 'bg-[#0d0e12] text-white border-black shadow-xs'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          {profile.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {fieldErrors.requestedProfileCodes && (
-                    <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.requestedProfileCodes}</p>
-                  )}
-                </div>
-
                 {/* Reason for Access */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -577,6 +685,27 @@ export const LoginPage: React.FC = () => {
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                   <p className="leading-relaxed">{forgotSuccess}</p>
                 </div>
+
+                {forgotResetLink && (
+                  <div className="p-4 rounded-2xl bg-purple-50/80 border border-purple-200 text-purple-900 text-xs space-y-2">
+                    <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                      <Sparkles className="w-4 h-4 text-[#7a6af6]" />
+                      <span>Development / Demo Direct Link:</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      In local development, email delivery is in console mode. You can open the set password link directly below:
+                    </p>
+                    <Link
+                      to={forgotResetLink.replace(/^https?:\/\/[^/]+/, '')}
+                      onClick={() => setShowForgotModal(false)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#7a6af6] hover:bg-[#6857ea] text-white text-xs font-bold rounded-full shadow-sm transition-transform hover:scale-[1.02]"
+                    >
+                      <span>Set New Password Now</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                )}
+
                 <div className="pt-2 flex justify-end">
                   <button
                     type="button"

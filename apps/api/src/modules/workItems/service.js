@@ -3,31 +3,10 @@ import { WorkItem } from './model.js';
 import { Department } from '../departments/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logActivity, listRecentActivities } from '../activity/service.js';
-import { resolveProfileObjectId } from '../referenceData/service.js';
-import { normalizeWorkType, WORK_TYPE_DEPARTMENT_MAP } from '@mmp/shared';
+import { normalizeWorkType, WORK_TYPE_DEPARTMENT_MAP, getAvailableActions } from '@mmp/shared';
 
 export async function createWorkItem(data, user) {
-  // 1. Resolve Profile ID (Default to HACA if not passed)
-  let resolvedProfileId = null;
-  if (data.profileId) {
-    resolvedProfileId = await resolveProfileObjectId(data.profileId);
-  }
-  if (!resolvedProfileId) {
-    resolvedProfileId = await resolveProfileObjectId('haca');
-  }
-
-  // 2. Profile Scoping Check
-  const scope = await resolveScope(user);
-  const profileIdStr = (resolvedProfileId?._id || resolvedProfileId)?.toString();
-
-  if (!scope.canAccessAllProfiles && !scope.allowedProfileIds.includes(profileIdStr)) {
-    const error = new Error('You do not have permission to create work items for this brand profile');
-    error.statusCode = 403;
-    error.code = 'FORBIDDEN_PROFILE';
-    throw error;
-  }
-
-  // 3. Resolve Department ID (auto-infer from workType if omitted)
+  // 1. Resolve Department ID (auto-infer from workType if omitted)
   let resolvedDepartmentId =
     data.departmentId && mongoose.Types.ObjectId.isValid(data.departmentId)
       ? data.departmentId
@@ -73,11 +52,11 @@ export async function createWorkItem(data, user) {
   const assetsLink = data.assetsLink || data.brief?.assetsLink || '';
 
   const workItem = await WorkItem.create({
-    profileId: resolvedProfileId,
     title: data.title.trim(),
     workType: normalizedType,
     departmentId: resolvedDepartmentId,
     ownerId: resolvedOwnerId,
+    assignedAt: resolvedOwnerId ? new Date() : null,
     deadline: data.deadline,
     estimatedEffortHrs: data.estimatedEffortHrs || 4,
     status: data.status || 'Not Started',
@@ -106,7 +85,6 @@ export async function createWorkItem(data, user) {
   await logActivity({
     entityType: 'work_item',
     entityId: workItem._id,
-    profileId: workItem.profileId,
     actor: user,
     action: 'work_item.created',
     toStatus: workItem.status,
@@ -119,7 +97,6 @@ export async function createWorkItem(data, user) {
   });
 
   return WorkItem.findById(workItem._id)
-    .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole');
 }
@@ -127,25 +104,6 @@ export async function createWorkItem(data, user) {
 export async function listWorkItems(filters = {}, user) {
   const scope = await resolveScope(user, filters);
   const query = {};
-
-  let filterProfileId = null;
-  if (filters.profileId && filters.profileId !== 'all') {
-    filterProfileId = await resolveProfileObjectId(filters.profileId);
-  }
-
-  // Profile Scoping
-  if (!scope.canAccessAllProfiles) {
-    if (filterProfileId) {
-      if (!scope.allowedProfileIds.includes(filterProfileId.toString())) {
-        return [];
-      }
-      query.profileId = filterProfileId;
-    } else {
-      query.profileId = { $in: scope.allowedProfileIds };
-    }
-  } else if (filterProfileId) {
-    query.profileId = filterProfileId;
-  }
 
   // Person Scoping (for Team Member)
   if (user.role === 'team_member' && filters.scopedToSelf !== false && !filters.allWork) {
@@ -161,6 +119,14 @@ export async function listWorkItems(filters = {}, user) {
 
   if (filters.status && filters.status !== 'all') {
     query.status = filters.status;
+  }
+
+  if (filters.calendar && filters.calendar !== 'all') {
+    query.calendar = filters.calendar;
+  }
+
+  if (user && user.role === 'team_member') {
+    query.ownerId = (user._id || user.id || user.userId)?.toString();
   }
 
   if (filters.workType && filters.workType !== 'all') {
@@ -191,7 +157,6 @@ export async function listWorkItems(filters = {}, user) {
   }
 
   const items = await WorkItem.find(query)
-    .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole')
     .sort({ deadline: 1, createdAt: -1 });
@@ -201,7 +166,6 @@ export async function listWorkItems(filters = {}, user) {
 
 export async function getWorkItemById(id, user) {
   const workItem = await WorkItem.findById(id)
-    .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole');
 
@@ -211,35 +175,113 @@ export async function getWorkItemById(id, user) {
     throw error;
   }
 
-  const scope = await resolveScope(user);
-  const profileIdStr = (workItem.profileId?._id || workItem.profileId)?.toString();
-
-  if (!scope.canAccessAllProfiles && !scope.allowedProfileIds.includes(profileIdStr)) {
-    const error = new Error('You do not have permission to view work items for this brand profile');
-    error.statusCode = 403;
-    throw error;
-  }
-
   const result = workItem.toObject();
-  if (result.contentPieceId && result.stageOrder > 1) {
-    const prevStage = await WorkItem.findOne({
-      contentPieceId: result.contentPieceId,
-      stageOrder: result.stageOrder - 1,
-    })
-      .select('stageKey deliverableUrl publishedUrl status title ownerId')
-      .populate('ownerId', 'name email role jobRole');
+  if (result.contentPieceId) {
+    const { reconcileContentPieceStageLocks } = await import('./transition.service.js');
+    await reconcileContentPieceStageLocks(result.contentPieceId);
 
-    result.previousStage = prevStage ? {
-      stageKey: prevStage.stageKey,
-      deliverableUrl: prevStage.deliverableUrl,
-      publishedUrl: prevStage.publishedUrl,
-      status: prevStage.status,
-      owner: prevStage.ownerId,
-    } : null;
-    if (prevStage?.ownerId) {
-      result.suggestedDependencyOwner = prevStage.ownerId;
+    const refreshed = await WorkItem.findById(id).select('isLocked unlockedAt');
+    if (refreshed) {
+      result.isLocked = refreshed.isLocked;
+      result.unlockedAt = refreshed.unlockedAt;
+    }
+
+    const siblingStages = await WorkItem.find({ contentPieceId: result.contentPieceId })
+      .select('stageKey stageOrder status isLocked isSkipped ownerId title deadline deliverableUrl publishedUrl revisions')
+      .populate('ownerId', 'name email role jobRole')
+      .sort({ stageOrder: 1 });
+    result.pieceStages = siblingStages;
+
+    if (result.stageOrder > 1) {
+      const prevStage = siblingStages.find((s) => s.stageOrder === result.stageOrder - 1);
+      result.previousStage = prevStage ? {
+        stageKey: prevStage.stageKey,
+        deliverableUrl: prevStage.deliverableUrl,
+        publishedUrl: prevStage.publishedUrl,
+        status: prevStage.status,
+        owner: prevStage.ownerId,
+      } : null;
+      if (prevStage?.ownerId) {
+        result.suggestedDependencyOwner = prevStage.ownerId;
+      }
+    }
+
+    // Attach shot list from Script stage for Shoot and Edit stages (WS2 Acceptance Criteria)
+    if (result.stageKey === 'Shoot' || result.stageKey === 'Edit') {
+      const scriptStage = siblingStages.find((s) => s.stageKey === 'Script');
+      if (scriptStage) {
+        try {
+          const { Submission } = await import('../submissions/model.js');
+          const scriptSub = await Submission.findOne({
+            workItemId: scriptStage._id,
+            version: { $gt: 0 },
+          }).sort({ version: -1 });
+
+          if (scriptSub?.document?.metadata?.shotList) {
+            result.scriptShotList = scriptSub.document.metadata.shotList;
+          }
+          if (scriptSub?.document?.htmlSnapshot || scriptSub?.document?.plainText) {
+            result.scriptContent = scriptSub.document.htmlSnapshot || scriptSub.document.plainText;
+          }
+        } catch {}
+      }
+    }
+
+    // Attach approved clips from Shoot stage for Edit stage (WS3 requirement)
+    if (result.stageKey === 'Edit') {
+      const shootStage = siblingStages.find((s) => s.stageKey === 'Shoot');
+      if (shootStage) {
+        try {
+          const { MediaItem } = await import('../media/model.js');
+          const approvedClips = await MediaItem.find({
+            stageItemId: shootStage._id,
+            status: 'approved',
+          })
+            .select('title shotRef take tags notes url thumbnailUrl durationSeconds width height orientationOk sizeBytes')
+            .sort({ order: 1, createdAt: 1 })
+            .lean();
+          result.approvedClips = approvedClips;
+        } catch {}
+      }
     }
   }
+
+  // Attach Latest Submission & Draft Submission for clean UI state & review cockpit
+  try {
+    const { Submission } = await import('../submissions/model.js');
+    const latestSub = await Submission.findOne({
+      workItemId: id,
+      version: { $gt: 0 },
+    })
+      .sort({ version: -1 })
+      .populate('submittedById', 'name email role jobRole')
+      .populate('reviewedById', 'name email role jobRole')
+      .lean();
+    if (latestSub) {
+      result.latestSubmission = latestSub;
+    }
+
+    const draftSub = await Submission.findOne({
+      workItemId: id,
+      version: 0,
+    }).lean();
+    if (draftSub) {
+      result.draftSubmission = draftSub;
+    }
+  } catch {}
+
+  // Attach Rating if approved with rating
+  try {
+    const { Rating } = await import('../submissions/model.js');
+    const rating = await Rating.findOne({ workItemId: id })
+      .sort({ createdAt: -1 })
+      .populate('raterId', 'name email role')
+      .populate('editedLog.editedBy', 'name role')
+      .lean();
+    if (rating) {
+      result.rating = rating;
+    }
+  } catch {}
 
   return result;
 }
@@ -252,19 +294,15 @@ export async function updateWorkItem(id, data, user) {
     throw error;
   }
 
-  const scope = await resolveScope(user);
-  const profileIdStr = (workItem.profileId?._id || workItem.profileId)?.toString();
-
-  if (!scope.canAccessAllProfiles && !scope.allowedProfileIds.includes(profileIdStr)) {
-    const error = new Error('You do not have permission to update work items for this brand profile');
-    error.statusCode = 403;
-    throw error;
-  }
-
   if (data.title) workItem.title = data.title.trim();
   if (data.workType) workItem.workType = normalizeWorkType(data.workType) || data.workType;
   if (data.departmentId) workItem.departmentId = data.departmentId;
-  if (data.ownerId) workItem.ownerId = data.ownerId;
+  if (data.ownerId !== undefined) {
+    if (data.ownerId?.toString() !== workItem.ownerId?.toString()) {
+      workItem.ownerId = data.ownerId;
+      workItem.assignedAt = data.ownerId ? new Date() : null;
+    }
+  }
   if (data.deadline) workItem.deadline = data.deadline;
   if (data.estimatedEffortHrs !== undefined) workItem.estimatedEffortHrs = data.estimatedEffortHrs;
   if (data.priority) workItem.priority = data.priority;
@@ -317,10 +355,14 @@ export async function updateWorkItem(id, data, user) {
 
   await workItem.save();
 
+  if (workItem.contentPieceId && (data.isSkipped !== undefined || data.isLocked !== undefined)) {
+    const { reconcileContentPieceStageLocks } = await import('./transition.service.js');
+    await reconcileContentPieceStageLocks(workItem.contentPieceId);
+  }
+
   await logActivity({
     entityType: 'work_item',
     entityId: workItem._id,
-    profileId: workItem.profileId,
     actor: user,
     action: 'work_item.updated',
     metadata: {
@@ -331,7 +373,6 @@ export async function updateWorkItem(id, data, user) {
   });
 
   return WorkItem.findById(workItem._id)
-    .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole');
 }
@@ -344,12 +385,16 @@ export async function deleteWorkItem(id, user) {
     throw error;
   }
 
-  const scope = await resolveScope(user);
-  const profileIdStr = (workItem.profileId?._id || workItem.profileId)?.toString();
-
-  if (!scope.canAccessAllProfiles && !scope.allowedProfileIds.includes(profileIdStr)) {
-    const error = new Error('You do not have permission to delete this work item');
+  const { actions } = getAvailableActions(user, workItem);
+  if (!actions.includes('delete')) {
+    const isStarted = workItem.status !== 'Not Started';
+    const error = new Error(
+      isStarted
+        ? 'Cannot delete a task that has already started'
+        : 'Deleting a task is only permitted for SM Manager and Admin'
+    );
     error.statusCode = 403;
+    error.code = isStarted ? 'CANNOT_DELETE_STARTED_WORK' : 'FORBIDDEN_DELETE';
     throw error;
   }
 
@@ -358,10 +403,9 @@ export async function deleteWorkItem(id, user) {
   await logActivity({
     entityType: 'work_item',
     entityId: id,
-    profileId: workItem.profileId,
     actor: user,
     action: 'work_item.deleted',
-    metadata: { title: workItem.title },
+    metadata: { title: workItem.title, stageKey: workItem.stageKey },
   });
 
   return { success: true, message: 'Work item deleted successfully' };
@@ -378,10 +422,9 @@ export async function getMyWork(user) {
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   const endOfThisWeek = new Date(startOfToday.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  const rawItems = await WorkItem.find({ ownerId: userId })
-    .populate('profileId', 'name code active')
+  const rawItems = await WorkItem.find({ ownerId: userId, isSkipped: { $ne: true } })
     .populate('departmentId', 'name code')
-    .populate('contentPieceId', 'topic contentType postingDate liveUrl')
+    .populate('contentPieceId', 'topic contentType postingDate liveUrl brief referenceLink programOrEvent priority')
     .sort({ deadline: 1 });
 
   const overdue = [];
@@ -392,6 +435,25 @@ export async function getMyWork(user) {
 
   for (const rawItem of rawItems) {
     const item = rawItem.toObject();
+    if (item.contentPieceId && item.isLocked) {
+      const pieceId = item.contentPieceId._id || item.contentPieceId;
+      if (item.stageOrder <= 1) {
+        item.isLocked = false;
+        WorkItem.updateOne({ _id: item._id }, { $set: { isLocked: false } }).exec();
+      } else {
+        const precedingUnfinished = await WorkItem.countDocuments({
+          contentPieceId: pieceId,
+          stageOrder: { $lt: item.stageOrder },
+          isSkipped: false,
+          status: { $nin: ['Approved', 'Published'] },
+        });
+        if (precedingUnfinished === 0) {
+          item.isLocked = false;
+          item.unlockedAt = item.unlockedAt || new Date();
+          WorkItem.updateOne({ _id: item._id }, { $set: { isLocked: false, unlockedAt: item.unlockedAt } }).exec();
+        }
+      }
+    }
     if (item.contentPieceId && item.stageOrder > 1) {
       const prevStage = await WorkItem.findOne({
         contentPieceId: item.contentPieceId._id || item.contentPieceId,
@@ -412,7 +474,26 @@ export async function getMyWork(user) {
       }
     }
 
-    const isCompleted = item.status === 'Approved' || item.status === 'Published';
+    // Attach latest reviewer feedback if item is in Feedback status
+    if (item.status === 'Feedback') {
+      try {
+        const { FeedbackEntry } = await import('../feedback/model.js');
+        const latestEntry = await FeedbackEntry.findOne({ workItemId: item._id, isResponse: false })
+          .populate('fromPersonId', 'name role jobRole')
+          .sort({ createdAt: -1 });
+        if (latestEntry) {
+          item.latestFeedback = {
+            text: latestEntry.text,
+            reviewer: latestEntry.fromPersonId?.name || 'Creative Head',
+            createdAt: latestEntry.createdAt,
+          };
+        }
+      } catch {
+        // gracefully handle missing feedback entry
+      }
+    }
+
+    const isCompleted = item.status === 'Approved' || item.status === 'Published' || item.status === 'Done';
     if (isCompleted) {
       completed.push(item);
       continue;
@@ -425,7 +506,9 @@ export async function getMyWork(user) {
     }
 
     const deadline = new Date(item.deadline || item.dueDate);
-    if (deadline < startOfToday) {
+    if (isNaN(deadline.getTime())) {
+      upcoming.push(item);
+    } else if (deadline < startOfToday) {
       overdue.push(item);
     } else if (deadline <= endOfToday) {
       today.push(item);
@@ -437,6 +520,11 @@ export async function getMyWork(user) {
   }
 
   const activeCount = overdue.length + today.length + thisWeek.length + upcoming.length;
+  const activeItems = [...overdue, ...today, ...thisWeek, ...upcoming];
+  const stageAssignmentsCount = activeItems.filter((i) => !!i.stageKey).length;
+  const submissionsCount = activeItems.filter((i) => i.status === 'Pending' || i.status === 'Feedback').length;
+  const deliverablesCount = activeItems.filter((i) => !!i.deliverableUrl || i.status === 'In Progress').length;
+
   const totalRevisions = rawItems.reduce((acc, it) => acc + (it.revisions || 0), 0);
   const avgRevisions = rawItems.length > 0 ? Number((totalRevisions / rawItems.length).toFixed(1)) : 0;
 
@@ -451,54 +539,99 @@ export async function getMyWork(user) {
       overdueCount: overdue.length,
       todayCount: today.length,
       completedCount: completed.length,
+      stageAssignmentsCount,
+      submissionsCount,
+      deliverablesCount,
       avgRevisions,
     },
   };
 }
 
+import { ContentPiece } from '../calendar/contentPiece.model.js';
+import { isPostableWorkType } from '@mmp/shared';
+
 export async function getCalendarWorkItems(filters = {}, user) {
-  const scope = await resolveScope(user, filters);
   const query = {};
 
-  if (!scope.canAccessAllProfiles) {
-    query.profileId = { $in: scope.allowedProfileIds };
-  } else if (filters.profileId && filters.profileId !== 'all') {
-    query.profileId = filters.profileId;
+  if (user && user.role === 'team_member') {
+    const userId = (user._id || user.id || user.userId)?.toString();
+    query.ownerId = userId;
+  } else if (filters.ownerId && filters.ownerId !== 'all') {
+    query.ownerId = filters.ownerId;
+  }
+
+  if (filters.calendar && filters.calendar !== 'all') {
+    query.calendar = filters.calendar;
   }
 
   if (filters.departmentId && filters.departmentId !== 'all') {
     query.departmentId = filters.departmentId;
   }
 
-  if (filters.ownerId && filters.ownerId !== 'all') {
-    query.ownerId = filters.ownerId;
-  }
-
   if (filters.status && filters.status !== 'all') {
     query.status = filters.status;
   }
 
-  if (filters.start && filters.end) {
+  const startParam = filters.start || filters.startDate;
+  const endParam = filters.end || filters.endDate;
+
+  if (startParam && endParam) {
     query.deadline = {
-      $gte: new Date(filters.start),
-      $lte: new Date(filters.end),
+      $gte: new Date(startParam),
+      $lte: new Date(endParam),
     };
   }
 
-  return WorkItem.find(query)
-    .populate('profileId', 'name code active')
+  const workItems = await WorkItem.find(query)
     .populate('departmentId', 'name code')
-    .populate('ownerId', 'name email role jobRole')
-    .sort({ deadline: 1 });
+    .populate('ownerId', 'name email role jobRole avatarUrl')
+    .sort({ deadline: 1 })
+    .lean();
+
+  // If not scoped to worker personal view, also include publish date events from ContentPiece
+  if (user?.role !== 'team_member' && startParam && endParam) {
+    const pieceQuery = {
+      postingDate: {
+        $gte: new Date(startParam),
+        $lte: new Date(endParam),
+      },
+    };
+    if (filters.calendar && filters.calendar !== 'all') {
+      pieceQuery.calendar = filters.calendar;
+    }
+
+    const pieces = await ContentPiece.find(pieceQuery)
+      .populate('postingOwnerId', 'name email role')
+      .lean();
+
+    const publishItems = pieces.map((p) => {
+      const isPostable = isPostableWorkType(p.contentType);
+      const prefix = isPostable ? 'Publish' : 'Needed by';
+      const ownerName = p.postingOwnerId?.name ? ` (${p.postingOwnerId.name})` : '';
+      return {
+        _id: `pub_${p._id.toString()}`,
+        title: `${prefix}: ${p.topic}${ownerName}`,
+        displayTitle: `${prefix}: ${p.topic}${ownerName}`,
+        topic: p.topic,
+        workType: p.contentType,
+        status: p.rowStatus === 'approved' ? 'Approved' : 'Planned',
+        deadline: p.postingDate,
+        calendar: p.calendar || 'sm',
+        isPublishDate: true,
+        isPublishEvent: true,
+        ownerId: p.postingOwnerId || null,
+      };
+    });
+
+    return [...workItems, ...publishItems].sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+  }
+
+  return workItems;
 }
 
 export async function getTodoItems(user) {
   const scope = await resolveScope(user);
   const query = {};
-
-  if (!scope.canAccessAllProfiles) {
-    query.profileId = { $in: scope.allowedProfileIds };
-  }
 
   if (user.role === 'team_member') {
     const userId = (user._id || user.id || user.userId)?.toString();
@@ -514,7 +647,6 @@ export async function getTodoItems(user) {
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
   const items = await WorkItem.find(query)
-    .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole')
     .sort({ deadline: 1 });

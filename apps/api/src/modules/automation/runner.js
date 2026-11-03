@@ -24,23 +24,23 @@ export const DEFAULT_AUTOMATION_RULES = [
   },
   {
     ruleKey: 'overdue_escalation',
-    name: 'Overdue Deliverable Escalation',
-    description: 'Continuously audits deliverables past their deadline. Pings deliverable owner immediately; escalates to Department Team Lead after 4 hours overdue.',
+    name: 'Overdue Task Escalation',
+    description: 'Continuously audits tasks past their deadline. Pings owner immediately; escalates to SM Manager after 4 hours overdue.',
     trigger: 'scheduled',
     schedule: 'Hourly check',
     cronExpression: '0 * * * *',
-    action: 'Dispatch owner reminder and Team Lead escalation for overdue work items',
+    action: 'Dispatch owner reminder and SM Manager escalation for overdue work items',
     active: true,
     config: { leadEscalationHours: 4 },
   },
   {
     ruleKey: 'todo_escalation',
     name: 'Stale Task & Todo Escalation',
-    description: 'Flags open deliverables in progress that have experienced no status change for 3 or more consecutive days, prompting status updates.',
+    description: 'Flags open tasks in progress that have experienced no status change for 3 or more consecutive days, prompting status updates.',
     trigger: 'scheduled',
     schedule: 'Daily at 09:00 AM',
     cronExpression: '0 9 * * *',
-    action: 'Notify deliverable owner of stagnant deliverable in progress',
+    action: 'Notify owner of stagnant task in progress',
     active: true,
     config: { daysInactive: 3 },
   },
@@ -68,12 +68,12 @@ export const DEFAULT_AUTOMATION_RULES = [
   },
   {
     ruleKey: 'weekly_report',
-    name: 'Weekly Marketing Executive Digest',
-    description: 'Generates the comprehensive Weekly Marketing Report every Monday at 08:00 AM, detailing planned vs completed output, department throughput, and open blockers.',
+    name: 'Weekly Creative Executive Digest',
+    description: 'Generates the comprehensive Weekly Creative Report every Monday at 08:00 AM, detailing planned vs completed output, department throughput, and open blockers.',
     trigger: 'cron',
     schedule: 'Mondays at 08:00 AM',
     cronExpression: '0 8 * * 1',
-    action: 'Generate and email Weekly Marketing Report to leadership',
+    action: 'Generate and email Weekly Creative Report to leadership',
     active: true,
     config: { reportKey: 'weekly_marketing', sendEmail: true },
   },
@@ -209,7 +209,7 @@ async function runMonthEndReportRule(rule, user) {
 
 /**
  * 2. Overdue Escalation Rule
- * Escalates to deliverable owner immediately; escalates to Team Lead if overdue > leadEscalationHours.
+ * Escalates to task owner immediately; escalates to SM Manager if overdue > leadEscalationHours.
  */
 async function runOverdueEscalationRule(rule, user) {
   const leadEscalationHours = rule.config?.leadEscalationHours || 4;
@@ -245,8 +245,8 @@ async function runOverdueEscalationRule(rule, user) {
         // Dispatch in-app notification
         await Notification.create({
           recipient: owner._id,
-          title: `Deliverable Overdue: ${item.title}`,
-          message: `Your deliverable "${item.title}" was due ${new Date(item.deadline).toLocaleDateString()} and is overdue by ${hoursOverdue} hours.`,
+          title: `Task Overdue: ${item.title}`,
+          message: `Your task "${item.title}" was due ${new Date(item.deadline).toLocaleDateString()} and is overdue by ${hoursOverdue} hours.`,
           type: 'warning',
           link: `/work/${item._id}`,
           metadata: {
@@ -260,28 +260,35 @@ async function runOverdueEscalationRule(rule, user) {
         if (owner.email) {
           await enqueueEmail({
             to: owner.email,
-            subject: `[Action Required] Deliverable Overdue: ${item.title}`,
-            text: `Hello ${owner.name},\n\nYour deliverable "${item.title}" is currently overdue by ${hoursOverdue} hours (deadline was ${new Date(item.deadline).toLocaleDateString()}). Please update its status in HACA Marketing OS.\n\nLink: http://localhost:5173/work/${item._id}`,
+            subject: `[Action Required] Task Overdue: ${item.title}`,
+            text: `Hello ${owner.name},\n\nYour task "${item.title}" is currently overdue by ${hoursOverdue} hours (deadline was ${new Date(item.deadline).toLocaleDateString()}). Please update its status in HACA Marketing OS.\n\nLink: http://localhost:5173/work/${item._id}`,
           });
         }
         ownerNotified++;
       }
     }
 
-    // Team Lead Escalation if overdue > leadEscalationHours
+    // SM Manager Escalation if overdue > leadEscalationHours
     if (hoursOverdue >= leadEscalationHours && item.departmentId?._id) {
-      // Find Team Lead for this department or Marketing Head
-      const teamLead = await Person.findOne({
+      // Find SM Manager or Creative Head (check department first, then organization-wide SM Manager)
+      let smManager = await Person.findOne({
         departmentId: item.departmentId._id,
         role: { $in: ['sm_manager', 'creative_head'] },
         status: { $ne: 'suspended' },
       }).lean();
 
-      if (teamLead?._id && String(teamLead._id) !== String(owner?._id)) {
-        // Idempotency check: don't escalate same item to same lead within 24 hours
+      if (!smManager) {
+        smManager = await Person.findOne({
+          role: 'sm_manager',
+          status: { $ne: 'suspended' },
+        }).lean();
+      }
+
+      if (smManager?._id && String(smManager._id) !== String(owner?._id)) {
+        // Idempotency check: don't escalate same item to same manager within 24 hours
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const existingLeadEscalation = await Notification.findOne({
-          recipient: teamLead._id,
+          recipient: smManager._id,
           'metadata.workItemId': item._id,
           'metadata.type': 'overdue_lead_escalation',
           createdAt: { $gte: twentyFourHoursAgo },
@@ -289,9 +296,9 @@ async function runOverdueEscalationRule(rule, user) {
 
         if (!existingLeadEscalation) {
           await Notification.create({
-            recipient: teamLead._id,
-            title: `[Escalation] Deliverable Overdue > ${leadEscalationHours}h: ${item.title}`,
-            message: `Deliverable "${item.title}" assigned to ${owner?.name || 'team member'} is overdue by ${hoursOverdue} hours. Immediate supervisory review required.`,
+            recipient: smManager._id,
+            title: `[Escalation] Task Overdue > ${leadEscalationHours}h: ${item.title}`,
+            message: `Task "${item.title}" assigned to ${owner?.name || 'team member'} is overdue by ${hoursOverdue} hours. Immediate supervisory review required.`,
             type: 'alert',
             link: `/work/${item._id}`,
             metadata: {
@@ -301,11 +308,11 @@ async function runOverdueEscalationRule(rule, user) {
             },
           });
 
-          if (teamLead.email) {
+          if (smManager.email) {
             await enqueueEmail({
-              to: teamLead.email,
-              subject: `[Escalation Alert] Deliverable Overdue > ${leadEscalationHours}h: ${item.title}`,
-              text: `Hello ${teamLead.name},\n\nDeliverable "${item.title}" assigned to ${owner?.name || 'team member'} is past due by ${hoursOverdue} hours without resolution. Please check in on this deliverable.\n\nLink: http://localhost:5173/work/${item._id}`,
+              to: smManager.email,
+              subject: `[Escalation Alert] Task Overdue > ${leadEscalationHours}h: ${item.title}`,
+              text: `Hello ${smManager.name},\n\nTask "${item.title}" assigned to ${owner?.name || 'team member'} is past due by ${hoursOverdue} hours without resolution. Please check in on this task.\n\nLink: http://localhost:5173/work/${item._id}`,
             });
           }
           leadEscalated++;
@@ -315,7 +322,7 @@ async function runOverdueEscalationRule(rule, user) {
   }
 
   return {
-    summary: `Audited ${overdueItems.length} overdue deliverables: notified ${ownerNotified} owners, escalated ${leadEscalated} to Team Leads.`,
+    summary: `Audited ${overdueItems.length} overdue tasks: notified ${ownerNotified} owners, escalated ${leadEscalated} to SM Managers.`,
     affectedCount: overdueItems.length,
     ownerNotified,
     leadEscalated,
@@ -520,7 +527,7 @@ async function runWeeklyReportRule(rule, user) {
   });
 
   return {
-    summary: `Generated Weekly Marketing Report successfully.`,
+    summary: `Generated Weekly Creative Report successfully.`,
     affectedCount: 1,
     reportKey: report.reportKey,
   };

@@ -91,7 +91,7 @@ export function templates() {
     inviteUser: ({ name, email, inviteUrl, setPasswordUrl }) => {
       const targetUrl = inviteUrl || setPasswordUrl;
       return {
-        subject: 'HACA FORGE - Set Your Password & Access Your Workspace',
+        subject: 'HACA Marketing OS - Set Your Password & Access Your Workspace',
         text: `Hello ${name},\n\nAn account has been provisioned or a password reset has been generated for your account (${email || ''}).\n\nPlease set your password using the link below (valid for 48 hours):\n${targetUrl}\n\nBest regards,\nHACA Marketing Operations Team`,
         html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 32px; background-color: #f8fafc; color: #1e293b;">
@@ -331,6 +331,33 @@ export function templates() {
           <p>Team <strong>${teamName}</strong> has scheduled workload exceeding available capacity for the upcoming week:</p>
           <p>Scheduled: <strong>${scheduledHours} hrs</strong> | Capacity: <strong>${capacityHours} hrs</strong> (${Math.round((scheduledHours / (capacityHours || 1)) * 100)}% utilization)</p>
           ${actionUrl ? `<p><a href="${actionUrl}" style="color: #4f46e5; font-weight: bold;">Review Team Workload</a></p>` : ''}
+        </div>
+      `,
+    }),
+    passwordChanged: ({ name, time }) => ({
+      subject: `[Security Alert] Password Changed for Your HACA Account`,
+      text: `Hello ${name},\n\nYour HACA Marketing OS account password was changed on ${time || new Date().toLocaleString()}.\nIf you did not perform this action, please contact your administrator immediately.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
+          <h2 style="color: #dc2626;">Security Notice: Password Changed</h2>
+          <p>Hello <strong>${name}</strong>,</p>
+          <p>The password for your HACA Marketing OS account was successfully changed on <strong>${time || new Date().toLocaleString()}</strong>.</p>
+          <p style="color: #64748b; font-size: 13px;">If you did not make this change, please contact your system administrator immediately to secure your account.</p>
+        </div>
+      `,
+    }),
+    changeRequestSubmitted: ({ requesterName, requesterEmail, requesterRole, requestedChanges }) => ({
+      subject: `[Change Request] Work Details Update Requested by ${requesterName}`,
+      text: `Hello Administrator,\n\nA work details change request was submitted by ${requesterName} (${requesterEmail}, role: ${requesterRole}):\n\n"${requestedChanges}"\n\nPlease review and update in People Setup.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
+          <h2 style="color: #4f46e5;">Profile / Work Details Change Request</h2>
+          <p><strong>Requester:</strong> ${requesterName} (${requesterEmail})</p>
+          <p><strong>Current Role:</strong> ${requesterRole}</p>
+          <div style="background-color: #f1f5f9; padding: 14px 18px; border-radius: 8px; margin: 16px 0;">
+            <p style="margin: 0; font-size: 14px; color: #1e293b;">${requestedChanges}</p>
+          </div>
+          <p style="font-size: 13px; color: #64748b;">Please review this request in the People console to adjust role, department, or capacity if appropriate.</p>
         </div>
       `,
     }),

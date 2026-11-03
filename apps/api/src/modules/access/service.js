@@ -4,11 +4,11 @@ import { REQUESTABLE_ROLES, ROLE_KEYS } from '@mmp/shared';
 import { AccessRequest } from './model.js';
 import { Person } from '../people/model.js';
 import { Department } from '../departments/model.js';
-import { Profile } from '../referenceData/profile.model.js';
 import { sendMail, templates } from '../../lib/mailer.js';
 import { env } from '../../config/env.js';
 import { eventBus, EVENTS } from '../../lib/events.js';
 import { logActivity } from '../activity/service.js';
+import { syncUserTeamChatMembership } from '../chat/service.js';
 
 export async function resolveDepartmentObjectId(rawDept) {
   if (!rawDept) return null;
@@ -70,15 +70,6 @@ export async function submitAccessRequest(data) {
   // Resolve departmentId if not explicitly provided or if passed as a string/code
   const departmentId = await resolveDepartmentObjectId(data.departmentId || data.department);
 
-  // Resolve requestedProfileIds from requestedProfileCodes
-  let requestedProfileIds = [];
-  if (Array.isArray(data.requestedProfileCodes) && data.requestedProfileCodes.length > 0) {
-    const matchedProfiles = await Profile.find({
-      code: { $in: data.requestedProfileCodes },
-    }).select('_id');
-    requestedProfileIds = matchedProfiles.map((p) => p._id);
-  }
-
   const accessRequest = await AccessRequest.create({
     name: data.name,
     email: normalizedEmail,
@@ -87,8 +78,6 @@ export async function submitAccessRequest(data) {
     departmentId,
     jobRole: data.jobRole,
     requestedRole: data.requestedRole,
-    requestedProfileCodes: data.requestedProfileCodes || [],
-    requestedProfileIds,
     reason: data.reason,
     status: 'pending',
   });
@@ -106,7 +95,6 @@ export async function submitAccessRequest(data) {
       department: data.department,
       jobRole: data.jobRole,
       requestedRole: data.requestedRole,
-      brands: data.requestedProfileCodes,
     },
   });
 
@@ -135,7 +123,6 @@ export async function submitAccessRequest(data) {
       department: data.department,
       jobRole: data.jobRole,
       requestedRole: data.requestedRole,
-      brands: data.requestedProfileCodes || [],
     });
 
     for (const adminEmail of adminEmails) {
@@ -165,23 +152,10 @@ export async function listAccessRequests(query = {}) {
     }
   }
 
-  if (query.brand && query.brand !== 'all') {
-    if (mongoose.Types.ObjectId.isValid(query.brand)) {
-      filter.$or = [
-        { requestedProfileIds: query.brand },
-        { assignedProfileAccess: query.brand },
-      ];
-    } else {
-      filter.requestedProfileCodes = query.brand;
-    }
-  }
-
   return AccessRequest.find(filter)
     .populate('reviewedBy', 'name email role')
     .populate('departmentId', 'name code')
-    .populate('requestedProfileIds', 'name code')
     .populate('assignedDepartmentId', 'name code')
-    .populate('assignedProfileAccess', 'name code')
     .populate('assignedReportsToIds', 'name email role jobRole')
     .sort({ createdAt: -1 });
 }
@@ -228,24 +202,6 @@ export async function approveAccessRequest(id, reviewData = {}, adminUser) {
     accessReq.department;
   const assignedDepartmentId = await resolveDepartmentObjectId(rawDept);
 
-  // Resolve assigned Profile Access
-  let assignedProfileAccess = [];
-  if (Array.isArray(reviewData.profileAccess) && reviewData.profileAccess.length > 0) {
-    const validIds = reviewData.profileAccess.filter((x) => mongoose.Types.ObjectId.isValid(x));
-    const codes = reviewData.profileAccess.filter((x) => !mongoose.Types.ObjectId.isValid(x));
-    const docs = await Profile.find({
-      $or: [{ _id: { $in: validIds } }, { code: { $in: codes } }],
-    }).select('_id');
-    assignedProfileAccess = docs.map((d) => d._id);
-  } else if (accessReq.requestedProfileIds && accessReq.requestedProfileIds.length > 0) {
-    assignedProfileAccess = accessReq.requestedProfileIds;
-  } else if (accessReq.requestedProfileCodes && accessReq.requestedProfileCodes.length > 0) {
-    const docs = await Profile.find({
-      code: { $in: accessReq.requestedProfileCodes },
-    }).select('_id');
-    assignedProfileAccess = docs.map((d) => d._id);
-  }
-
   const assignedJobRole = reviewData.jobRole || accessReq.jobRole || '';
   const assignedReportsToIds = Array.isArray(reviewData.reportsToIds)
     ? reviewData.reportsToIds.filter(
@@ -268,7 +224,6 @@ export async function approveAccessRequest(id, reviewData = {}, adminUser) {
       role: assignedRole,
       jobRole: assignedJobRole,
       departmentId: assignedDepartmentId,
-      profileAccess: assignedProfileAccess,
       reportsToIds: assignedReportsToIds,
       weeklyCapacityHours: assignedCapacity,
       status: 'active',
@@ -280,7 +235,6 @@ export async function approveAccessRequest(id, reviewData = {}, adminUser) {
     user.role = assignedRole;
     user.jobRole = assignedJobRole;
     user.departmentId = assignedDepartmentId;
-    user.profileAccess = assignedProfileAccess;
     user.reportsToIds = assignedReportsToIds;
     user.weeklyCapacityHours = assignedCapacity;
     user.status = 'active';
@@ -290,6 +244,9 @@ export async function approveAccessRequest(id, reviewData = {}, adminUser) {
   }
   await user.save();
 
+  // Sync team-chat membership (active user joins the team channel)
+  await syncUserTeamChatMembership(user._id).catch(() => {});
+
   // Update AccessRequest
   accessReq.status = 'approved';
   accessReq.reviewedBy = adminUser._id;
@@ -297,7 +254,6 @@ export async function approveAccessRequest(id, reviewData = {}, adminUser) {
   accessReq.assignedRole = assignedRole;
   accessReq.assignedJobRole = assignedJobRole;
   accessReq.assignedDepartmentId = assignedDepartmentId;
-  accessReq.assignedProfileAccess = assignedProfileAccess;
   accessReq.assignedReportsToIds = assignedReportsToIds;
   accessReq.assignedCapacity = assignedCapacity;
   accessReq.inviteTokenHash = tokenHash;
@@ -329,7 +285,6 @@ export async function approveAccessRequest(id, reviewData = {}, adminUser) {
       assignedRole,
       jobRole: assignedJobRole,
       departmentId: assignedDepartmentId,
-      profileAccessCount: assignedProfileAccess.length,
     },
   });
 

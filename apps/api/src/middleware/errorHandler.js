@@ -40,10 +40,12 @@ export function errorHandler(err, req, res, _next) {
   const code = err.code && typeof err.code === 'string' ? err.code : 'INTERNAL_ERROR';
 
   return res.status(statusCode).json({
+    code,
     error: {
       code,
       message: err.message || 'An unexpected internal error occurred',
-      details: err.details || undefined,
+      details: err.details || err.errors || undefined,
     },
+    message: err.message || 'An unexpected internal error occurred',
   });
 }

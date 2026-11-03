@@ -12,8 +12,8 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n \"api,web\" -c \"blue,green\" \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
-    "db:start": "powershell -Command \"Start-Process 'C:\\Program Files\\MongoDB\\Server\\8.3\\bin\\mongod.exe' -ArgumentList '--dbpath .mongodb_data --bind_ip 127.0.0.1 --port 27017' -NoNewWindow\"",
+    "dev": "concurrently --restart-tries 5 --restart-after 2000 -n \"api,web\" -c \"blue,green\" \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
+    "db:start": "powershell -Command \"Start-Process 'C:\\Program Files\\MongoDB\\Server\\9.0\\bin\\mongod.exe' -ArgumentList '--dbpath .mongodb_data --bind_ip 127.0.0.1 --port 27017' -NoNewWindow\"",
     "build": "npm run build --workspaces --if-present",
     "lint": "eslint .",
     "test": "npm run test --workspaces",

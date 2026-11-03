@@ -1,6 +1,6 @@
 import { WorkItem } from './model.js';
 import { logActivity } from '../activity/service.js';
-import { BLOCKER_REASONS, normalizeRole } from '@mmp/shared';
+import { BLOCKER_REASONS, normalizeRole, getAvailableActions, getWorkspaceMode } from '@mmp/shared';
 import { resolveScope } from '../../lib/scope.js';
 import { Person } from '../people/model.js';
 
@@ -43,11 +43,18 @@ export async function transitionWorkItem(id, transitionData, user) {
     throw error;
   }
 
-  // 3. Ownership / Role Authorization
+  // 3. Central Role & Ownership Authorization Guard
   const userId = (user._id || user.id || user.userId)?.toString();
   const ownerIdStr = (workItem.ownerId?._id || workItem.ownerId)?.toString();
   const userRole = normalizeRole(user.role);
-  const isAdminOrHead = userRole === 'admin' || userRole === 'creative_head';
+  const { actions, isOwner } = getAvailableActions(user, workItem);
+
+  if (userRole === 'executive') {
+    const error = new Error('Executives cannot perform status transitions');
+    error.statusCode = 403;
+    error.code = 'FORBIDDEN_ACTION';
+    throw error;
+  }
 
   if (userRole === 'team_member' && ownerIdStr !== userId) {
     const error = new Error('You can only update status for work items assigned to you');
@@ -56,18 +63,36 @@ export async function transitionWorkItem(id, transitionData, user) {
     throw error;
   }
 
-  // 4. Approval Guard: Review stages can be approved only by creative_head and admin. sm_manager and owner cannot approve.
-  const isNonReviewStage = workItem.stageKey === 'Shoot';
-  const isReviewStage = !isNonReviewStage;
-  if (toStatus === 'Approved' && isReviewStage) {
+  let requiredAction = null;
+  if (fromStatus === 'Not Started' && toStatus === 'In Progress') {
+    requiredAction = 'start';
+  } else if (toStatus === 'Pending') {
+    requiredAction = 'submit_for_approval';
+  } else if (fromStatus === 'In Progress' && toStatus === 'Approved' && workItem.stageKey === 'Shoot') {
+    requiredAction = 'done_and_forward';
+  } else if (toStatus === 'Published') {
+    requiredAction = 'mark_as_posted';
+  } else if (toStatus === 'Blocked') {
+    requiredAction = 'mark_blocked';
+  } else if (fromStatus === 'Pending' && toStatus === 'Approved') {
+    requiredAction = 'approve';
+  } else if (fromStatus === 'Pending' && toStatus === 'Feedback') {
+    requiredAction = 'request_revision';
+  } else if (fromStatus === 'Blocked' && toStatus === 'In Progress') {
+    requiredAction = 'resolve_blocker';
+  } else if (fromStatus === 'Feedback' && toStatus === 'In Progress') {
+    requiredAction = 'start';
+  }
+
+  // Self-approval guard
+  if (toStatus === 'Approved' && workItem.stageKey !== 'Shoot') {
     if (ownerIdStr === userId) {
       const error = new Error('The owner can never approve their own stage');
       error.statusCode = 403;
       error.code = 'FORBIDDEN_SELF_APPROVAL';
       throw error;
     }
-
-    if (!isAdminOrHead) {
+    if (userRole !== 'creative_head' && userRole !== 'admin') {
       const error = new Error(
         'Review stages can be approved only by Creative Head and Admin. SM Manager and the owner cannot approve.'
       );
@@ -75,30 +100,66 @@ export async function transitionWorkItem(id, transitionData, user) {
       error.code = 'FORBIDDEN_APPROVAL';
       throw error;
     }
+  }
 
-    const scope = await resolveScope(user);
-    const itemProfileIdStr = (workItem.profileId?._id || workItem.profileId)?.toString();
-    if (itemProfileIdStr && !scope.canAccessProfile(itemProfileIdStr)) {
-      const error = new Error('You do not have brand profile access to approve deliverables for this brand');
+  // Worker actions guard: A user never gets worker actions on a task they do not own
+  // Note: On legacy standalone work items (no stageKey), sm_manager can publish and head can request rework.
+  let isWorkerAction = ['start', 'submit_for_approval', 'done_and_forward', 'mark_as_posted', 'mark_blocked'].includes(requiredAction);
+  if (fromStatus === 'Feedback' && toStatus === 'In Progress' && (userRole === 'creative_head' || userRole === 'admin')) {
+    isWorkerAction = false;
+  }
+  if (toStatus === 'Published' && !workItem.stageKey && (userRole === 'sm_manager' || userRole === 'admin')) {
+    isWorkerAction = false;
+  }
+
+  if (isWorkerAction && !isOwner) {
+    const error = new Error(
+      `Action not permitted for your role: ${requiredAction || toStatus}. You must hold the appropriate role or stage ownership.`
+    );
+    error.statusCode = 403;
+    error.code = 'FORBIDDEN_ACTION';
+    throw error;
+  }
+
+  // Workspace mode guard: submit_for_approval and done_and_forward require edit mode
+  if ((requiredAction === 'submit_for_approval' || requiredAction === 'done_and_forward') && isOwner) {
+    const mode = getWorkspaceMode(user, workItem);
+    if (mode !== 'edit') {
+      const error = new Error('Action not permitted: Workspace is not in edit mode.');
       error.statusCode = 403;
-      error.code = 'FORBIDDEN_PROFILE_APPROVAL';
+      error.code = 'FORBIDDEN_ACTION';
       throw error;
     }
   }
 
-  // 4b. Revision Request Guard: Only Creative Head and Admin can request revisions on review stages
-  if (fromStatus === 'Feedback' && toStatus === 'In Progress' && isReviewStage) {
-    if (!isAdminOrHead) {
+  // Precondition: Worker cannot submit without having started
+  if (toStatus === 'Pending' || toStatus === 'Feedback') {
+    if (fromStatus === 'Not Started') {
+      const error = new Error('You must start this work item before submitting deliverables');
+      error.statusCode = 400;
+      error.code = 'MUST_START_BEFORE_SUBMIT';
+      throw error;
+    }
+    if (!workItem.startedAt) {
+      workItem.startedAt = workItem.createdAt || new Date();
+    }
+  }
+
+  // Blocker resolution guard: Owner, SM Manager, or Admin only
+  if (fromStatus === 'Blocked' && toStatus === 'In Progress') {
+    if (!isOwner && userRole !== 'sm_manager' && userRole !== 'admin') {
       const error = new Error(
-        'Only Creative Head and Admin can request revisions on review stages. The owner and SM Manager cannot.'
+        'Action not permitted for your role: resolve_blocker. You must hold the appropriate role or stage ownership.'
       );
       error.statusCode = 403;
-      error.code = 'FORBIDDEN_REVISION_REQUEST';
+      error.code = 'FORBIDDEN_ACTION';
       throw error;
     }
   }
 
-  // 5. Blocker Reason Guard: mandatory when toStatus is Blocked
+  const now = new Date();
+
+  // 5. Blocker Reason Guard & Interval Tracking: mandatory when toStatus is Blocked
   if (toStatus === 'Blocked') {
     if (!blockerReason || !BLOCKER_REASONS.includes(blockerReason)) {
       const error = new Error(
@@ -110,15 +171,89 @@ export async function transitionWorkItem(id, transitionData, user) {
     }
     workItem.blockerReason = blockerReason;
     workItem.blockerNote = blockerNote || '';
+
+    if (!workItem.intervals) workItem.intervals = [];
+    const blockedInterval = {
+      kind: 'blocked',
+      startedAt: now,
+      endedAt: null,
+      reason: blockerReason || null,
+      note: blockerNote || '',
+    };
+    workItem.intervals.push(blockedInterval);
+
+    if (workItem.rounds && workItem.rounds.length > 0) {
+      const curRound = workItem.rounds[workItem.rounds.length - 1];
+      if (!curRound.intervals) curRound.intervals = [];
+      curRound.intervals.push(blockedInterval);
+    }
   } else if (fromStatus === 'Blocked') {
-    // Clear blocker reason once unblocked
+    // Clear blocker reason once unblocked and close open intervals
     workItem.blockerReason = null;
     workItem.blockerNote = '';
+    if (Array.isArray(workItem.intervals)) {
+      for (const iv of workItem.intervals) {
+        if (!iv.endedAt) iv.endedAt = now;
+      }
+    }
+    if (workItem.rounds && workItem.rounds.length > 0) {
+      const curRound = workItem.rounds[workItem.rounds.length - 1];
+      if (Array.isArray(curRound?.intervals)) {
+        for (const iv of curRound.intervals) {
+          if (!iv.endedAt) iv.endedAt = now;
+        }
+      }
+    }
   }
 
-  // 6. Revision Counter: increment when restarting work after feedback & notify owner
-  if (fromStatus === 'Feedback' && toStatus === 'In Progress') {
+  // 6. Starting work and round tracking
+  if (toStatus === 'In Progress') {
+    if (!workItem.startedAt) {
+      workItem.startedAt = now;
+    }
+    // Close any lingering open interval
+    if (Array.isArray(workItem.intervals)) {
+      for (const iv of workItem.intervals) {
+        if (!iv.endedAt) iv.endedAt = now;
+      }
+    }
+    if (!workItem.rounds || workItem.rounds.length === 0) {
+      workItem.rounds = [
+        {
+          roundNumber: 1,
+          startedAt: workItem.startedAt || now,
+          intervals: [],
+        },
+      ];
+    } else {
+      const curRound = workItem.rounds[workItem.rounds.length - 1];
+      if (curRound && (curRound.decision || curRound.submittedAt)) {
+        workItem.rounds.push({
+          roundNumber: workItem.rounds.length + 1,
+          startedAt: now,
+          intervals: [],
+        });
+      } else if (curRound && Array.isArray(curRound.intervals)) {
+        for (const iv of curRound.intervals) {
+          if (!iv.endedAt) iv.endedAt = now;
+        }
+      }
+    }
+  }
+
+  // 7. Revision Counter: increment on revision request or when restarting work after feedback & notify owner
+  if (
+    ((fromStatus === 'Feedback' || fromStatus === 'Pending') && toStatus === 'In Progress') ||
+    (fromStatus === 'Pending' && toStatus === 'Feedback')
+  ) {
     workItem.revisions = (workItem.revisions || 0) + 1;
+    workItem.changesRequestedAt = now;
+    workItem.decisionAt = now;
+    if (workItem.rounds && workItem.rounds.length > 0) {
+      const curRound = workItem.rounds[workItem.rounds.length - 1];
+      if (!curRound.decisionAt) curRound.decisionAt = now;
+      if (!curRound.decision) curRound.decision = 'changes_requested';
+    }
     if (workItem.ownerId) {
       const { createNotification } = await import('../notifications/service.js');
       await createNotification({
@@ -132,12 +267,69 @@ export async function transitionWorkItem(id, transitionData, user) {
     }
   }
 
-  // 7. Deliverable / Published URLs update if provided
+  // 8. Deliverable / Published URLs update if provided
   if (deliverableUrl) {
     workItem.deliverableUrl = deliverableUrl.trim();
   }
   if (publishedUrl) {
     workItem.publishedUrl = publishedUrl.trim();
+  }
+
+  // 9. Submissions, Approvals and Publishing
+  if (toStatus === 'Pending' || toStatus === 'Feedback') {
+    if (!workItem.submittedAt) {
+      workItem.submittedAt = now;
+    } else {
+      workItem.resubmittedAt = now;
+    }
+    if (!workItem.rounds || workItem.rounds.length === 0) {
+      workItem.rounds = [
+        {
+          roundNumber: 1,
+          startedAt: workItem.startedAt || now,
+          submittedAt: now,
+          intervals: [],
+        },
+      ];
+    } else {
+      const curRound = workItem.rounds[workItem.rounds.length - 1];
+      curRound.submittedAt = now;
+    }
+  }
+
+  if (toStatus === 'Approved') {
+    workItem.approvedAt = now;
+    workItem.decisionAt = now;
+    if (Array.isArray(workItem.intervals)) {
+      for (const iv of workItem.intervals) {
+        if (!iv.endedAt) iv.endedAt = now;
+      }
+    }
+    if (workItem.rounds && workItem.rounds.length > 0) {
+      const curRound = workItem.rounds[workItem.rounds.length - 1];
+      curRound.decisionAt = now;
+      curRound.decision = 'approved';
+      if (Array.isArray(curRound?.intervals)) {
+        for (const iv of curRound.intervals) {
+          if (!iv.endedAt) iv.endedAt = now;
+        }
+      }
+    }
+  }
+
+  if (toStatus === 'Published') {
+    workItem.postedAt = now;
+    if (!workItem.approvedAt) workItem.approvedAt = now;
+    if (Array.isArray(workItem.intervals)) {
+      for (const iv of workItem.intervals) {
+        if (!iv.endedAt) iv.endedAt = now;
+      }
+    }
+    if (workItem.rounds && workItem.rounds.length > 0) {
+      const curRound = workItem.rounds[workItem.rounds.length - 1];
+      if (!curRound.decisionAt) curRound.decisionAt = now;
+      if (!curRound.decision) curRound.decision = 'approved';
+    }
   }
 
   workItem.status = toStatus;
@@ -149,40 +341,8 @@ export async function transitionWorkItem(id, transitionData, user) {
     const { createNotification } = await import('../notifications/service.js');
 
     // If stage approved / completed, unlock next unskipped stage
-    if (toStatus === 'Approved') {
-      const nextStage = await WorkItem.findOne({
-        contentPieceId: workItem.contentPieceId,
-        stageOrder: { $gt: workItem.stageOrder },
-        isSkipped: false,
-      }).sort({ stageOrder: 1 });
-
-      if (nextStage) {
-        nextStage.isLocked = false;
-        nextStage.unlockedAt = new Date();
-        await nextStage.save();
-
-        if (nextStage.ownerId) {
-          await createNotification({
-            recipient: nextStage.ownerId,
-            type: 'stage_unlocked',
-            title: 'Stage Unlocked',
-            message: `Stage ${nextStage.stageKey} for "${workItem.title}" is now unlocked.`,
-            link: `/my-work?id=${nextStage._id}`,
-          });
-        } else {
-          // Notify SM Managers that stage needs an owner
-          const smManagers = await Person.find({ role: 'sm_manager', status: 'active' });
-          for (const sm of smManagers) {
-            await createNotification({
-              recipient: sm._id,
-              type: 'needs_owner',
-              title: 'Stage Unlocked - Needs Owner',
-              message: `Stage ${nextStage.stageKey} for "${workItem.title}" is unlocked and needs an owner.`,
-              link: `/calendar?tab=tracker`,
-            });
-          }
-        }
-      }
+    if (toStatus === 'Approved' || toStatus === 'Published') {
+      await unlockNextStage(workItem);
     }
 
     // If stage published, update parent ContentPiece & turnaround days
@@ -206,8 +366,42 @@ export async function transitionWorkItem(id, transitionData, user) {
       }
     }
 
-    // If review requested (moved to Feedback), notify Creative Heads
-    if (toStatus === 'Feedback') {
+    // If review requested (moved to Feedback or Pending), notify Creative Heads & ensure Submission record exists
+    if (toStatus === 'Feedback' || toStatus === 'Pending') {
+      try {
+        const { Submission } = await import('../submissions/model.js');
+        const existingSubmitted = await Submission.findOne({
+          workItemId: workItem._id,
+          status: 'submitted',
+        });
+        if (!existingSubmitted) {
+          const latestSub = await Submission.findOne({
+            workItemId: workItem._id,
+            version: { $gt: 0 },
+          }).sort({ version: -1 });
+          const nextVersion = (latestSub?.version || 0) + 1;
+          const kind =
+            workItem.stageKey === 'Shoot' || workItem.stageKey === 'Edit' ? 'media' : 'document';
+          const url = deliverableUrl || workItem.deliverableUrl || '';
+          await Submission.create({
+            workItemId: workItem._id,
+            contentPieceId: workItem.contentPieceId || null,
+            stageKey: workItem.stageKey,
+            version: nextVersion,
+            kind,
+            linkUrl: url,
+            notes: comment || '',
+            files: url ? [{ name: 'deliverable', url }] : [],
+            submittedById: userId,
+            submittedAt: new Date(),
+            status: 'submitted',
+            versionToken: (await import('crypto')).randomUUID(),
+          });
+        }
+      } catch (subErr) {
+        // Non-blocking
+      }
+
       const creativeHeads = await Person.find({ role: 'creative_head', status: 'active' });
       for (const ch of creativeHeads) {
         await createNotification({
@@ -216,6 +410,7 @@ export async function transitionWorkItem(id, transitionData, user) {
           title: 'Deliverable Review Requested',
           message: `${workItem.title} (${workItem.stageKey || 'Stage'}) submitted by ${user.name || 'Worker'} for approval.`,
           link: `/feedback?tab=stages&workItemId=${workItem._id}`,
+          metadata: { workItemId: workItem._id, contentPieceId: workItem.contentPieceId },
         });
       }
     }
@@ -225,7 +420,6 @@ export async function transitionWorkItem(id, transitionData, user) {
   await logActivity({
     entityType: 'work_item',
     entityId: workItem._id,
-    profileId: workItem.profileId,
     actor: user,
     action: 'work_item.status_changed',
     fromStatus,
@@ -242,8 +436,80 @@ export async function transitionWorkItem(id, transitionData, user) {
   });
 
   return WorkItem.findById(workItem._id)
-    .populate('profileId', 'name code active')
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole');
 }
+
+export async function unlockNextStage(workItem) {
+  if (!workItem || !workItem.contentPieceId) return null;
+
+  const nextStage = await WorkItem.findOne({
+    contentPieceId: workItem.contentPieceId,
+    stageOrder: { $gt: workItem.stageOrder },
+    isSkipped: false,
+  }).sort({ stageOrder: 1 });
+
+  if (nextStage && nextStage.isLocked) {
+    nextStage.isLocked = false;
+    nextStage.unlockedAt = new Date();
+    await nextStage.save();
+
+    const { createNotification } = await import('../notifications/service.js');
+    const { Person } = await import('../people/model.js');
+
+    if (nextStage.ownerId) {
+      await createNotification({
+        recipient: nextStage.ownerId,
+        type: 'stage_unlocked',
+        title: 'Stage Unlocked',
+        message: `Stage ${nextStage.stageKey} for "${workItem.title}" is now unlocked.`,
+        link: `/my-work?id=${nextStage._id}`,
+      });
+    } else {
+      const smManagers = await Person.find({ role: 'sm_manager', status: 'active' });
+      for (const sm of smManagers) {
+        await createNotification({
+          recipient: sm._id,
+          type: 'needs_owner',
+          title: 'Stage Unlocked - Needs Owner',
+          message: `Stage ${nextStage.stageKey} for "${workItem.title}" is unlocked and needs an owner.`,
+          link: `/calendar?tab=tracker`,
+        });
+      }
+    }
+    return nextStage;
+  }
+  return null;
+}
+
+export async function reconcileContentPieceStageLocks(contentPieceId) {
+  if (!contentPieceId) return;
+  const stages = await WorkItem.find({ contentPieceId }).sort({ stageOrder: 1 });
+  let precedingComplete = true;
+
+  for (let i = 0; i < stages.length; i++) {
+    const stage = stages[i];
+    if (i === 0) {
+      if (stage.isLocked) {
+        stage.isLocked = false;
+        await stage.save();
+      }
+    } else {
+      if (precedingComplete) {
+        if (stage.isLocked) {
+          stage.isLocked = false;
+          stage.unlockedAt = stage.unlockedAt || new Date();
+          await stage.save();
+        }
+      }
+    }
+
+    if (!stage.isSkipped) {
+      if (stage.status !== 'Approved' && stage.status !== 'Published') {
+        precedingComplete = false;
+      }
+    }
+  }
+}
+
 
