@@ -444,7 +444,7 @@ export const IssuesBlockersPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {activeTab === 'blockers' && (
             <select
               value={selectedReason}
@@ -460,7 +460,7 @@ export const IssuesBlockersPage: React.FC = () => {
             </select>
           )}
 
-          <div className="relative min-w-[200px]">
+          <div className="relative flex-1 min-w-0 sm:min-w-[200px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"

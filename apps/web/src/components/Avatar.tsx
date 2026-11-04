@@ -79,7 +79,7 @@ export const Avatar: React.FC<AvatarProps> = ({
 
   return (
     <div
-      className={`relative inline-flex items-center justify-center rounded-full shrink-0 select-none overflow-hidden ring-1 ring-white/80 shadow-sm ${sizeConfig.container} ${className}`}
+      className={`relative inline-flex items-center justify-center rounded-full shrink-0 select-none overflow-hidden ui-avatar ${sizeConfig.container} ${className}`}
       title={name}
       aria-label={alt || name}
     >

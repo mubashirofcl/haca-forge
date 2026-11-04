@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
   BarChart3,
   Settings,
-  HelpCircle,
   Search,
   LogOut,
   ShieldCheck,
@@ -14,12 +13,12 @@ import {
   Film,
   Calendar,
   CheckSquare,
-  ChevronDown,
   Menu,
   X,
   AlertCircle,
   Bell,
   MessageSquare,
+  ChevronDown,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { NotificationCenter } from './NotificationCenter';
@@ -64,9 +63,23 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
+  const [headerHidden, setHeaderHidden] = useState(false);
+
+  // Hide the header while scrolling down, reveal it when scrolling up / near the top
+  useEffect(() => {
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (y < 80) setHeaderHidden(false);
+      else if (y > lastY + 4) setHeaderHidden(true);
+      else if (y < lastY - 4) setHeaderHidden(false);
+      lastY = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -78,24 +91,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       .catch(() => {});
   }, [user, location.pathname]);
 
-  const navRef = useRef<HTMLDivElement>(null);
-
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-  // Close dropdowns on outside click or escape key
+  // Keyboard shortcuts: Esc closes overlays, Cmd/Ctrl+K toggles search
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (navRef.current && !navRef.current.contains(event.target as Node)) {
-        setOpenDropdown(null);
-      }
-    };
-
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setOpenDropdown(null);
         setShowSearchModal(false);
         setShowMobileMenu(false);
       }
@@ -105,17 +109,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Close menus on page route change
+  // Close the mobile menu on page route change
   useEffect(() => {
-    setOpenDropdown(null);
     setShowMobileMenu(false);
   }, [location.pathname]);
 
@@ -216,7 +215,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               description: 'Production deliverables',
               icon: Film,
               show: true,
-              activeMatcher: (p: string) => p.startsWith('/work'),
+              activeMatcher: (p: string) => p === '/work' || p.startsWith('/work/'),
             },
           ],
         },
@@ -293,7 +292,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             description: 'Production deliverables',
             icon: Film,
             show: true,
-            activeMatcher: (p: string) => p.startsWith('/work'),
+            activeMatcher: (p: string) => p === '/work' || p.startsWith('/work/'),
           },
           {
             id: 'feedback',
@@ -426,10 +425,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', active: isLandingActive },
         { id: 'my-work', icon: CheckSquare, label: 'My Work', path: '/my-work', active: location.pathname.startsWith('/my-work') || location.pathname.startsWith('/todo') },
         { id: 'calendar', icon: Calendar, label: 'Creative Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
-        { id: 'work', icon: Film, label: 'Work', path: '/work', active: location.pathname.startsWith('/work') },
+        { id: 'work', icon: Film, label: 'Work', path: '/work', active: location.pathname === '/work' || location.pathname.startsWith('/work/') },
         { id: 'workload', icon: Users, label: 'Team Workload', path: '/workload', active: location.pathname.startsWith('/workload') },
         { id: 'issues', icon: AlertCircle, label: 'Issues and Blockers', path: '/issues', active: location.pathname.startsWith('/issues') },
         { id: 'reports', icon: BarChart3, label: 'Reports', path: '/reports', active: location.pathname.startsWith('/reports') },
+        { id: 'team', icon: Users, label: 'Team Directory', path: '/team', active: location.pathname.startsWith('/team') },
       ];
     }
 
@@ -437,7 +437,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     const items: SidebarItem[] = [
       { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', active: isLandingActive },
       { id: 'calendar', icon: Calendar, label: 'Creative Calendar', path: '/calendar', active: location.pathname.startsWith('/calendar') },
-      { id: 'work', icon: Film, label: 'Work', path: '/work', active: location.pathname.startsWith('/work') },
+      { id: 'work', icon: Film, label: 'Work', path: '/work', active: location.pathname === '/work' || location.pathname.startsWith('/work/') },
       { id: 'feedback', icon: FileText, label: 'Feedback and Revisions', path: '/feedback', active: location.pathname.startsWith('/feedback') },
       { id: 'workload', icon: Users, label: 'Team Workload', path: '/workload', active: location.pathname.startsWith('/workload') },
       { id: 'issues', icon: AlertCircle, label: 'Issues and Blockers', path: '/issues', active: location.pathname.startsWith('/issues') },
@@ -459,202 +459,149 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return items;
   }, [user?.role, location.pathname, isLandingActive, isTeamMember, isSmManager, isAdmin, pendingAccessCount]);
 
+  // Current page name for the header (sidebar is the single source of navigation)
+  const PAGE_TITLE_FALLBACKS: Array<[string, string]> = [
+    ['/profile', 'Profile'],
+    ['/settings', 'Settings'],
+    ['/chat', 'Team Chat'],
+    ['/notifications', 'Notifications'],
+  ];
+  const currentPageTitle =
+    sidebarItems.find((item) => item.active)?.label ??
+    PAGE_TITLE_FALLBACKS.find(([prefix]) => location.pathname.startsWith(prefix))?.[1] ??
+    '';
+
   return (
     <div className="min-h-screen flex flex-col text-slate-800">
       {/* 1. Top Navigation Bar (64px) */}
-      <header className="sticky top-0 z-40 h-16 glass-panel border-b border-white/80 transition-all">
-        <div className="max-w-[1520px] mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-3 md:gap-4">
-          {/* Left: Mobile Menu Toggle & Brand Logo */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Mobile hamburger button */}
+      <header
+        className={`shell-scope sticky top-0 z-40 transition-transform duration-300 ease-out ${
+          headerHidden && !showMobileMenu ? '-translate-y-full' : 'translate-y-0'
+        }`}
+      >
+        <div className="max-w-[1520px] mx-auto px-3 sm:px-6 pb-2">
+        <div className="flex items-start justify-between gap-3">
+          {/* Left pill: menu toggle (below lg), brand logo, current page */}
+          <div className="mt-2 flex items-center gap-3 min-w-0 h-12 pl-3 pr-6 rounded-full shell-header shadow-glass">
             <button
               onClick={() => setShowMobileMenu((prev) => !prev)}
               aria-label="Toggle navigation menu"
-              className="p-1 rounded-lg md:hidden text-slate-600 hover:text-slate-900 hover:bg-white/80 transition-colors"
+              aria-expanded={showMobileMenu}
+              className="lg:hidden w-8 h-8 rounded-full flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
             >
-              {showMobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {showMobileMenu ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
 
-            <Link to="/" className="flex items-center group py-0.5" title="HACA Marketing OS">
+            <Link to="/" className="flex items-center group py-0.5 shrink-0" title="HACA Marketing OS">
               <img
                 src="/haca-forge-logo.png"
                 alt="HACA Marketing OS"
                 className="h-[18px] sm:h-[19px] w-auto max-w-[110px] object-contain transition-opacity duration-200 group-hover:opacity-80"
               />
             </Link>
+
+            {currentPageTitle && (
+              <div className="hidden sm:flex items-center gap-3 min-w-0">
+                <span className="h-5 w-px bg-slate-300/70" aria-hidden="true" />
+                <span className="text-sm font-semibold text-slate-800 truncate">{currentPageTitle}</span>
+              </div>
+            )}
           </div>
 
-          {/* Center: Capsule Tab Switcher with Dropdowns */}
-          <nav
-            ref={navRef}
-            className="hidden md:flex items-center p-1 glass-pill-container border border-white/90 relative shrink-0"
-          >
-            {/* Landing Direct Tab */}
-            <Link
-              to={landingPath}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 ${
-                isLandingActive
-                  ? 'pill-active'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              {landingLabel}
-            </Link>
+          {/* Center: labelled segments (Search | Team Chat) */}
+          <div className="hidden md:flex flex-1 justify-center min-w-0">
+            {/* Tab hanging from the top edge, with inverted (concave) top corners */}
+            <div className="relative flex items-center w-full max-w-[760px] h-16 px-4 shell-header border-t-0 rounded-b-[32px]">
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute top-0 -left-8 w-8 h-8"
+                style={{ background: 'radial-gradient(circle at 0 100%, transparent 31.5px, var(--shell-surface) 32px)' }}
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute top-0 -right-8 w-8 h-8"
+                style={{ background: 'radial-gradient(circle at 100% 100%, transparent 31.5px, var(--shell-surface) 32px)' }}
+              />
+              <button
+                onClick={() => setShowSearchModal(true)}
+                title="Search tasks and content (⌘K)"
+                className="flex-1 min-w-0 flex flex-col justify-center h-12 px-6 rounded-full hover:bg-white/60 transition-all text-left leading-tight"
+              >
+                <span className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
+                  <Search className="w-3 h-3" />
+                  Search
+                </span>
+                <span className="mt-0.5 flex items-center justify-between gap-8 text-xs font-semibold text-slate-800 whitespace-nowrap">
+                  Tasks and content
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                </span>
+              </button>
 
-            {/* Categorized Dropdowns / Direct Tabs */}
-            {navCategories.map((category) => {
-              const visibleItems = category.items.filter((item) => item.show);
-              if (visibleItems.length === 0) return null;
+              <span className="h-7 w-px bg-slate-300/70 shrink-0" aria-hidden="true" />
 
-              // If only 1 item in category (e.g. for worker/requester), render direct tab
-              if (visibleItems.length === 1) {
-                const singleItem = visibleItems[0];
-                const isActive = singleItem.activeMatcher(location.pathname);
-                return (
-                  <Link
-                    key={singleItem.id}
-                    to={singleItem.path}
-                    className={`px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 ${
-                      isActive
-                        ? 'pill-active'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                    }`}
-                  >
-                    <span>{singleItem.label}</span>
-                    {singleItem.badge !== undefined && singleItem.badge > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500 text-white shadow-xs">
-                        {singleItem.badge}
+              <Link
+                to="/chat"
+                title="Team Chat"
+                data-testid="top-bar-chat-btn"
+                className={`relative flex-1 min-w-0 flex flex-col justify-center h-12 px-6 rounded-full transition-all text-left leading-tight ${
+                  location.pathname.startsWith('/chat')
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'hover:bg-white/60 text-slate-800'
+                }`}
+              >
+                <span
+                  className={`flex items-center gap-1.5 text-[10px] font-medium ${
+                    location.pathname.startsWith('/chat') ? 'text-white/70' : 'text-slate-400'
+                  }`}
+                >
+                  <MessageSquare className="w-3 h-3" />
+                  Team Chat
+                </span>
+                <span className="mt-0.5 flex items-center justify-between gap-8 text-xs font-semibold whitespace-nowrap">
+                  <span className="flex items-center gap-1.5">
+                    Messages
+                    {chatUnreadCount > 0 && (
+                      <span
+                        data-testid="chat-unread-badge"
+                        className="px-1.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold bg-rose-500 text-white flex items-center justify-center shadow-sm"
+                      >
+                        {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
                       </span>
                     )}
-                  </Link>
-                );
-              }
-
-              // Otherwise render category dropdown
-              const isCategoryActive = visibleItems.some((item) => item.activeMatcher(location.pathname));
-              const isOpen = openDropdown === category.id;
-
-              return (
-                <div key={category.id} className="relative">
-                  <button
-                    onClick={() => setOpenDropdown((prev) => (prev === category.id ? null : category.id))}
-                    className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-all duration-200 ${
-                      isCategoryActive || isOpen
-                        ? 'pill-active'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 ${
+                      location.pathname.startsWith('/chat') ? 'text-white/70' : 'text-slate-500'
                     }`}
-                  >
-                    <span>{category.label}</span>
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                        isOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
+                  />
+                </span>
+              </Link>
+            </div>
+          </div>
 
-                  {/* Dropdown Menu Popover */}
-                  {isOpen && (
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2.5 w-72 sm:w-80 glass-panel border border-white shadow-2xl rounded-2xl p-2 bg-white/95 backdrop-blur-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                      <div className="px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase text-slate-400 border-b border-slate-100 mb-1 flex items-center justify-between">
-                        <span>{category.label}</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-500 font-mono">
-                          {visibleItems.length}
-                        </span>
-                      </div>
-                      <div className="space-y-0.5">
-                        {visibleItems.map((item) => {
-                          const Icon = item.icon;
-                          const isItemActive = item.activeMatcher(location.pathname);
-                          return (
-                            <Link
-                              key={item.id}
-                              to={item.path}
-                              onClick={() => setOpenDropdown(null)}
-                              className={`flex items-start gap-3 p-2.5 rounded-xl transition-all ${
-                                isItemActive
-                                  ? 'bg-[#7a6af6]/10 text-[#7a6af6]'
-                                  : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'
-                              }`}
-                            >
-                              <div
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
-                                  isItemActive
-                                    ? 'bg-[#7a6af6] text-white shadow-sm'
-                                    : 'bg-slate-100 text-slate-600'
-                                }`}
-                              >
-                                <Icon className="w-4 h-4" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold leading-tight truncate flex items-center gap-1.5">
-                                    {item.label}
-                                    {item.badge !== undefined && item.badge > 0 && (
-                                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500 text-white shadow-xs">
-                                        {item.badge}
-                                      </span>
-                                    )}
-                                  </span>
-                                  {isItemActive && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#7a6af6]"></span>
-                                  )}
-                                </div>
-                                <p className="text-[11px] text-slate-500 leading-tight mt-0.5 truncate">
-                                  {item.description}
-                                </p>
-                              </div>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
-
-          {/* Right: Actions, Search, Notifications, Avatar */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Search Pill (Full on XL, Compact icon on < XL) */}
-            <button
-              onClick={() => setShowSearchModal(true)}
-              title="Search tasks and content (⌘K)"
-              className="hidden xl:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/70 hover:bg-white border border-white/90 text-xs text-slate-500 shadow-sm transition-all whitespace-nowrap"
-            >
-              <Search className="w-3.5 h-3.5 text-slate-400" />
-              <span>Search tasks and content...</span>
-              <kbd className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 rounded text-slate-500">
-                ⌘K
-              </kbd>
-            </button>
+          {/* Right pill: Search/Chat (mobile), Notifications, Account */}
+          <div className="mt-2 flex items-center gap-1.5 shrink-0 h-12 pl-2 pr-1 rounded-full shell-header shadow-glass">
             <button
               onClick={() => setShowSearchModal(true)}
               title="Search (⌘K)"
-              className="flex xl:hidden p-2 rounded-full bg-white/70 hover:bg-white border border-white/90 text-slate-600 shadow-sm transition-all"
+              aria-label="Search"
+              className="flex md:hidden p-2 rounded-full hover:bg-white text-slate-600 transition-all"
             >
               <Search className="w-4 h-4" />
             </button>
-
-            {/* Team Chat Button */}
             <Link
               to="/chat"
               title="Team Chat"
-              data-testid="top-bar-chat-btn"
-              className={`relative p-2 rounded-full border transition-all ${
+              aria-label="Team Chat"
+              className={`relative flex md:hidden p-2 rounded-full transition-all ${
                 location.pathname.startsWith('/chat')
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                  : 'bg-white/70 hover:bg-white border-white/90 text-slate-600 hover:text-slate-900 shadow-sm'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'hover:bg-white text-slate-600'
               }`}
             >
               <MessageSquare className="w-4 h-4" />
               {chatUnreadCount > 0 && (
-                <span
-                  data-testid="chat-unread-badge"
-                  className="absolute -top-1 -right-1 px-1.5 py-0.2 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold bg-rose-500 text-white flex items-center justify-center border-2 border-white shadow-sm"
-                >
-                  {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-                </span>
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500" />
               )}
             </Link>
 
@@ -667,10 +614,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
           </div>
         </div>
+        </div>
 
         {/* Mobile Navigation Drawer Dropdown */}
         {showMobileMenu && (
-          <div className="md:hidden glass-panel border-b border-white bg-white/95 px-4 py-4 space-y-4 animate-in slide-in-from-top duration-200 shadow-xl max-h-[calc(100vh-70px)] overflow-y-auto">
+          <div className="lg:hidden bg-white border-b border-slate-200 px-4 py-4 space-y-4 animate-in slide-in-from-top duration-200 shadow-xl max-h-[calc(100vh-70px)] overflow-y-auto">
             {/* Mobile User Identity Bar */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <Link
@@ -783,58 +731,62 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* 2. Main Body with Fixed Left Icon Sidebar (72px) & Content Area */}
       <div className="flex-1 max-w-[1520px] w-full mx-auto px-4 sm:px-6 flex gap-6 pt-6 pb-12">
-        {/* Fixed Left Sidebar (72px) */}
-        <aside className="hidden lg:flex flex-col justify-between items-center w-[72px] py-6 px-2 glass-panel rounded-[24px] border border-white/80 self-start sticky top-24 max-h-[calc(100vh-120px)] shadow-glass">
-          {/* Top module items */}
-          <div className="flex flex-col items-center gap-3.5 w-full overflow-y-auto no-scrollbar py-1">
-            {sidebarItems
-              .filter((item) => item.show !== false)
-              .map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.id}
-                    to={item.path}
-                    title={item.label}
-                    className={`w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center transition-all relative ${
-                      item.active
-                        ? 'bg-[#0d0e12] text-white shadow-md shadow-[#0d0e12]/20 scale-105'
-                        : 'text-slate-500 hover:text-slate-900 hover:bg-white/70 hover:scale-105'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    {'badge' in item && item.badge !== undefined && item.badge > 0 && (
-                      <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500 text-white shadow-xs">
-                        {item.badge}
+        {/* Left sidebar: 72px icon rail that widens on hover/keyboard focus to show labels.
+            It is part of the flex row, so the main content resizes along with it. */}
+        <aside
+          className="group/sidebar hidden lg:flex flex-col shrink-0 self-start sticky top-24 h-[calc(100vh-120px)] w-[72px] hover:w-60 focus-within:w-60 py-4 px-3.5 shell-scope glass-panel rounded-[24px] border border-white/80 shadow-glass overflow-hidden transition-[width] duration-200 ease-out hover:delay-75"
+        >
+            <nav aria-label="Sidebar navigation" className="flex-1 min-h-0 flex flex-col gap-2 overflow-y-auto overflow-x-hidden no-scrollbar">
+              {sidebarItems
+                .filter((item) => item.show !== false)
+                .map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.id}
+                      to={item.path}
+                      aria-current={item.active ? 'page' : undefined}
+                      className={`relative flex items-center h-11 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink focus-visible:ring-offset-2 ${
+                        item.active
+                          ? 'bg-ui-ink text-white'
+                          : 'text-ui-muted hover:text-ui-ink hover:bg-white/70'
+                      }`}
+                    >
+                      <span className="w-11 h-11 shrink-0 flex items-center justify-center">
+                        <Icon className="w-5 h-5" />
                       </span>
-                    )}
-                  </Link>
-                );
-              })}
-          </div>
+                      <span className="flex-1 min-w-0 truncate whitespace-nowrap pr-3 text-[13px] font-semibold opacity-0 -translate-x-1 transition-all duration-150 group-hover/sidebar:opacity-100 group-hover/sidebar:translate-x-0 group-focus-within/sidebar:opacity-100 group-focus-within/sidebar:translate-x-0">
+                        {item.label}
+                      </span>
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span className="absolute top-0.5 left-7 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold bg-ui-coral text-ui-ink flex items-center justify-center ring-2 ring-white">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+            </nav>
 
-          {/* Bottom helper icons */}
-          <div className="flex flex-col items-center gap-2.5 w-full border-t border-slate-200/80 pt-3 shrink-0">
-            {isAdmin && (
+            {/* Bottom: settings */}
+            <div className="shrink-0 mt-3 pt-3 border-t border-ui-line">
               <Link
-                to="/admin/settings"
-                title="System Settings"
-                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                  location.pathname.startsWith('/admin/settings')
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-400 hover:text-slate-700 hover:bg-white/60'
+                to="/settings"
+                aria-current={location.pathname.startsWith('/settings') ? 'page' : undefined}
+                className={`flex items-center h-11 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink focus-visible:ring-offset-2 ${
+                  location.pathname.startsWith('/settings')
+                    ? 'bg-ui-ink text-white'
+                    : 'text-ui-muted hover:text-ui-ink hover:bg-white/70'
                 }`}
               >
-                <Settings className="w-4 h-4" />
+                <span className="w-11 h-11 shrink-0 flex items-center justify-center">
+                  <Settings className="w-5 h-5" />
+                </span>
+                <span className="flex-1 min-w-0 truncate whitespace-nowrap pr-3 text-[13px] font-semibold opacity-0 -translate-x-1 transition-all duration-150 group-hover/sidebar:opacity-100 group-hover/sidebar:translate-x-0 group-focus-within/sidebar:opacity-100 group-focus-within/sidebar:translate-x-0">
+                  Settings
+                </span>
               </Link>
-            )}
-            <button
-              title="Help & Guides"
-              className="w-10 h-10 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-white/60 flex items-center justify-center transition-colors"
-            >
-              <HelpCircle className="w-4 h-4" />
-            </button>
-          </div>
+            </div>
         </aside>
 
         {/* 3. Main Dynamic Content Container */}
@@ -846,21 +798,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Global Quick Search Modal */}
       {showSearchModal && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-slate-900/30 backdrop-blur-md animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 ui-scrim backdrop-blur-md animate-in fade-in"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowSearchModal(false);
           }}
         >
           <div className="glass-modal max-w-lg w-full p-4 shadow-modal-glass border border-white">
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-ui-muted absolute left-4 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 autoFocus
                 placeholder="Search tasks and content..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white/80 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] transition-all"
+                className="ui-input w-full pl-11"
               />
             </div>
 
@@ -876,9 +828,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                       setShowSearchModal(false);
                       setSearchQuery('');
                     }}
-                    className="w-full text-left flex items-center gap-3 p-2 rounded-xl hover:bg-indigo-50/50 transition-colors group"
+                    className="w-full text-left flex items-center gap-3 p-2 rounded-2xl hover:bg-white/70 transition-colors group"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-[#7a6af6] group-hover:text-white flex items-center justify-center text-slate-500 transition-colors shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-ui-ink/5 group-hover:bg-ui-ink group-hover:text-white flex items-center justify-center text-ui-muted transition-colors shrink-0">
                       <Icon className="w-3.5 h-3.5" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -899,7 +851,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               })}
             </div>
 
-            <div className="p-3 text-[11px] text-slate-400 flex justify-between items-center mt-2 border-t border-slate-100">
+            <div className="p-3 text-[11px] text-ui-muted flex justify-between items-center mt-2 border-t border-ui-line">
               <span>Press ESC to close</span>
               <button
                 onClick={() => {

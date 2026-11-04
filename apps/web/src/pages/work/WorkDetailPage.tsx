@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
+import { statusClass, statusTone } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import {
   WORK_TYPES,
@@ -615,26 +616,14 @@ export const WorkDetailPage: React.FC = () => {
             </span>
 
             <span
-              className={`text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 ${
-                isUnderReview
-                  ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                  : isReworkRequested
-                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                  : item.status === 'In Progress'
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                  : item.status === 'Blocked'
-                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                  : item.status === 'Approved'
-                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                  : item.status === 'Published'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-700'
-              }`}
+              className={`status-chip ${statusClass(
+                isUnderReview ? 'waiting' : isReworkRequested ? 'changes' : statusTone(item.status)
+              )} text-xs font-bold px-3 py-1`}
             >
-              {isUnderReview && <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />}
-              {isReworkRequested && <RotateCcw className="w-3.5 h-3.5 text-amber-700" />}
-              {!isUnderReview && !isReworkRequested && item.status === 'In Progress' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
-              {!isUnderReview && !isReworkRequested && item.status === 'Blocked' && <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />}
+              {isUnderReview && <span className="w-2 h-2 rounded-full status-dot animate-pulse" />}
+              {isReworkRequested && <RotateCcw className="w-3.5 h-3.5" />}
+              {!isUnderReview && !isReworkRequested && item.status === 'In Progress' && <CheckCircle2 className="w-3.5 h-3.5" />}
+              {!isUnderReview && !isReworkRequested && item.status === 'Blocked' && <AlertTriangle className="w-3.5 h-3.5" />}
               {isUnderReview ? 'Waiting for approval' : isReworkRequested ? 'Changes requested' : getStepStatusLabel(item.status)}
             </span>
 

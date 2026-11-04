@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
+import { statusClass, statusTone } from '../../lib/statusTone';
 import {
   WORK_TYPES,
   WORK_ITEM_STATUSES,
@@ -203,7 +204,7 @@ export const WorkListPage: React.FC = () => {
       ) : viewMode === 'table' ? (
         <div className="glass-card rounded-3xl border border-white/80 shadow-glass overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="ui-table w-full text-left text-xs">
               <thead className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase text-[10px]">
                 <tr>
                   <th className="py-3 px-4">Title</th>
@@ -272,21 +273,7 @@ export const WorkListPage: React.FC = () => {
 
                       <td className="py-3.5 px-4">
                         <span
-                          className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                            it.status === 'In Progress'
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                              : it.status === 'Blocked'
-                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                              : it.status === 'Feedback'
-                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                              : it.status === 'Pending'
-                              ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                              : it.status === 'Approved'
-                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                              : it.status === 'Published'
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}
+                          className={`status-chip ${statusClass(statusTone(it.status))} text-[10px] font-extrabold px-2.5 py-1 uppercase tracking-wider`}
                         >
                           {it.status}
                         </span>
@@ -331,13 +318,7 @@ export const WorkListPage: React.FC = () => {
                       {it.workType}
                     </span>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                        it.status === 'In Progress'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : it.status === 'Blocked'
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-slate-100 text-slate-700'
-                      }`}
+                      className={`status-chip ${statusClass(statusTone(it.status))} text-[10px] font-bold px-2 py-0.5 uppercase tracking-wider`}
                     >
                       {it.status}
                     </span>

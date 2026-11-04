@@ -7,6 +7,7 @@ import {
   History,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import { statusClass, statusTone } from '../lib/statusTone';
 import { Avatar } from './Avatar';
 import type { WorkItemIndividualMeasures } from '@mmp/shared';
 
@@ -111,21 +112,7 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
                 {item.stageKey || item.workType || 'Stage'}
               </span>
               <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  item.status === 'In Progress'
-                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                    : item.status === 'Feedback'
-                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                    : item.status === 'Pending'
-                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                    : item.status === 'Blocked'
-                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                    : item.status === 'Approved'
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : item.status === 'Published'
-                    ? 'bg-teal-50 text-teal-700 border border-teal-200'
-                    : 'bg-slate-100 text-slate-600'
-                }`}
+                className={`status-chip ${statusClass(statusTone(item.status))} text-[10px] font-bold px-2 py-0.5`}
               >
                 {item.status}
               </span>

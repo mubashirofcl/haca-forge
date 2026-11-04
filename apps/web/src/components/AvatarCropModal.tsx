@@ -224,12 +224,13 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
-            <h3 className="text-base font-bold text-slate-900">Profile Photo</h3>
-            <p className="text-xs text-slate-500">Upload and position your circular avatar</p>
+            <h3 className="text-base font-bold text-ui-text">Profile Photo</h3>
+            <p className="text-xs text-ui-muted">Upload and position your circular avatar</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            aria-label="Close"
+            className="ui-icon-btn"
           >
             <X className="w-5 h-5" />
           </button>
@@ -346,7 +347,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={uploading}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors min-h-[44px]"
+              className="ui-btn ui-btn-secondary"
             >
               Cancel
             </button>
@@ -355,7 +356,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
                 type="button"
                 onClick={handleSaveCrop}
                 disabled={uploading}
-                className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-black transition-all shadow-md flex items-center gap-1.5 min-h-[44px]"
+                className="ui-btn ui-btn-primary"
               >
                 {uploading ? (
                   <span>Saving...</span>

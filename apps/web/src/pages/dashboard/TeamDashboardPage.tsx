@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
+import { statusClass, statusTone } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import { useGlobalFilter } from '../../context/GlobalFilterContext';
 import { GlobalFilterBar } from '../../components/GlobalFilterBar';
@@ -694,11 +695,7 @@ export const TeamDashboardPage: React.FC = () => {
                         <div className="shrink-0 text-right">
                           <span
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-full block mb-1 ${
-                              item.isOverdue
-                                ? 'bg-rose-600 text-white'
-                                : item.status === 'Blocked'
-                                ? 'bg-rose-100 text-rose-800'
-                                : 'bg-slate-200 text-slate-800'
+                              item.isOverdue ? 'bg-rose-600 text-white' : `status-tint ${statusClass(statusTone(item.status))}`
                             }`}
                           >
                             {item.isOverdue ? 'Overdue' : item.status}

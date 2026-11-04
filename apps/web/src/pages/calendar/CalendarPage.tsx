@@ -11,6 +11,7 @@ import {
   type Priority,
   type WorkItemStatus,
 } from '@mmp/shared';
+import { statusClass, statusTone } from '../../lib/statusTone';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -53,15 +54,6 @@ interface DepartmentOption {
   code?: string;
 }
 
-const STATUS_COLORS: Record<WorkItemStatus, { bg: string; text: string; border: string }> = {
-  'Not Started': { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
-  'In Progress': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-  'Feedback': { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-  'Pending': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-  'Blocked': { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
-  'Approved': { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-  'Published': { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' },
-};
 
 function formatCalendarItemTitle(item: any): string {
   if (item.displayTitle) return item.displayTitle;
@@ -387,7 +379,8 @@ export const CalendarPage: React.FC = () => {
       </div>
 
       {/* Main Tab Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar">
+        {/* overflow-x-auto: the three tabs exceed 360px once page text uses Plus Jakarta Sans */}
         <button
           onClick={() => handleTabChange('month')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
@@ -689,7 +682,7 @@ export const CalendarPage: React.FC = () => {
                           </p>
                         ) : (
                           dayItems.map((item) => {
-                            const statusStyle = STATUS_COLORS[item.status] || STATUS_COLORS['Not Started'];
+                            const statusStyle = statusClass(statusTone(item.status));
                             const cal = getCalendarDefinition(item.calendar);
 
                             return (
@@ -709,7 +702,7 @@ export const CalendarPage: React.FC = () => {
                                   >
                                     {cal.name}
                                   </span>
-                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                                  <span className={`status-chip ${statusStyle} text-[10px] font-semibold px-1.5 py-0.5`}>
                                     {item.status}
                                   </span>
                                 </div>
@@ -777,7 +770,7 @@ export const CalendarPage: React.FC = () => {
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             {dayItems.map((item) => {
-                              const statusStyle = STATUS_COLORS[item.status] || STATUS_COLORS['Not Started'];
+                              const statusStyle = statusClass(statusTone(item.status));
                               const cal = getCalendarDefinition(item.calendar);
 
                               return (
@@ -798,7 +791,7 @@ export const CalendarPage: React.FC = () => {
                                       >
                                         {cal.name}
                                       </span>
-                                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                                      <span className={`status-chip ${statusStyle} text-[10px] font-semibold px-2 py-0.5`}>
                                         {item.status}
                                       </span>
                                     </div>
@@ -851,7 +844,7 @@ export const CalendarPage: React.FC = () => {
                   <span className={`text-xs font-bold px-2.5 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200`}>
                     {selectedItem.workType}
                   </span>
-                  <span className={`text-xs font-semibold px-2.5 py-0.5 rounded border ${STATUS_COLORS[selectedItem.status].bg} ${STATUS_COLORS[selectedItem.status].text}`}>
+                  <span className={`status-chip ${statusClass(statusTone(selectedItem.status))} text-xs font-semibold px-2.5 py-0.5`}>
                     {selectedItem.status}
                   </span>
                   {selectedItem.isOverdue && (

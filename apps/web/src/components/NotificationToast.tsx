@@ -50,7 +50,7 @@ export const NotificationToastContainer: React.FC = () => {
         return (
           <div
             key={toast.id}
-            className="pointer-events-auto flex items-start gap-3 p-3.5 rounded-2xl glass-panel border border-white/90 bg-white/95 backdrop-blur-xl shadow-2xl transition-all animate-in fade-in slide-in-from-bottom-3 duration-200"
+            className="pointer-events-auto flex items-start gap-3 p-3.5 rounded-2xl glass-modal border border-white/90 bg-white/95 backdrop-blur-xl shadow-2xl transition-all animate-in fade-in slide-in-from-bottom-3 duration-200"
           >
             <div
               className={`p-2 rounded-xl shrink-0 ${

@@ -282,7 +282,7 @@ export const PlansApprovalTab: React.FC = () => {
 
                   {/* Rows Table */}
                   <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                    <table className="w-full text-left text-xs">
+                    <table className="ui-table w-full text-left text-xs">
                       <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
                         <tr>
                           <th className="p-3 w-8">

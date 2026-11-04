@@ -29,6 +29,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { apiFetch } from '../../lib/api';
+import { statusClass, statusTone, roleClass } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../../components/Avatar';
 import { AvatarCropModal } from '../../components/AvatarCropModal';
@@ -608,7 +609,7 @@ export const WorkerProfilePage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap text-xs">
-                <span className="font-extrabold px-2 py-0.5 rounded-md bg-slate-900 text-white">
+                <span className={`role-badge ${roleClass(profile.role)} font-extrabold px-2 py-0.5`}>
                   {roleLabel}
                 </span>
                 {profile.jobRole && (
@@ -963,7 +964,7 @@ export const WorkerProfilePage: React.FC = () => {
                         <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
                           {item.stageKey}
                         </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+                        <span className={`status-chip ${statusClass(statusTone(item.status))} text-[10px] font-bold px-2 py-0.5`}>
                           {item.status}
                         </span>
                       </div>
@@ -1306,7 +1307,7 @@ export const WorkerProfilePage: React.FC = () => {
             Operational Changes Audit Log
           </h3>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="ui-table w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-400 font-bold uppercase text-[10px]">
                 <tr>
                   <th className="p-2.5">Date & Time</th>

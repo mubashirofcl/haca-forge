@@ -78,7 +78,7 @@ export const UserMenuDropdown: React.FC = () => {
 
       {/* Glassmorphic Dropdown Popover */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 rounded-2xl glass-modal bg-white/95 border border-white/90 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="absolute right-0 mt-2 w-56 rounded-2xl shell-menu bg-white/95 border border-white/90 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
           {/* Identity Header */}
           <div className="px-3 py-2.5 border-b border-slate-100">
             <p className="text-xs font-bold text-slate-900 truncate">{user.name}</p>

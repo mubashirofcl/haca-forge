@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Editor } from '@tiptap/react';
 import { apiFetch } from '../../../lib/api';
+import { statusClass, statusTone } from '../../../lib/statusTone';
 import { useAuth } from '../../../context/AuthContext';
 import { getWorkspaceModeInfo } from '@mmp/shared';
 import { WritingStudioRibbon, type RibbonTab } from './WritingStudioRibbon';
@@ -589,24 +590,18 @@ export const WritingStudioPage: React.FC = () => {
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Status Badge */}
             <span
-              className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1 ${
-                isUnderReview
-                  ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
-                  : workItem?.status === 'Approved'
-                  ? 'bg-blue-100 text-blue-900 border border-blue-200'
-                  : workItem?.status === 'Feedback'
-                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                  : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
-              }`}
+              className={`status-chip ${statusClass(
+                isUnderReview ? 'waiting' : statusTone(workItem?.status || 'In Progress')
+              )} px-2.5 py-1 text-xs font-black uppercase tracking-wider gap-1`}
             >
               {isUnderReview ? (
                 <>
-                  <Clock className="w-3 h-3 text-indigo-600" />
+                  <Clock className="w-3 h-3" />
                   Waiting for approval
                 </>
               ) : workItem?.status === 'Feedback' ? (
                 <>
-                  <RotateCcw className="w-3 h-3 text-amber-600" />
+                  <RotateCcw className="w-3 h-3" />
                   Changes requested
                 </>
               ) : (

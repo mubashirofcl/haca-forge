@@ -158,7 +158,7 @@ export const NotificationCenter: React.FC = () => {
         </button>
 
         {isOpen && (
-          <div className="absolute right-0 mt-3 w-80 sm:w-96 rounded-3xl glass-panel border border-white/90 shadow-2xl p-4 bg-white/95 backdrop-blur-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150 text-xs">
+          <div className="absolute right-0 mt-3 w-80 sm:w-96 rounded-3xl shell-popover border border-white/90 shadow-2xl p-4 bg-white/95 backdrop-blur-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150 text-xs">
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100/90">
               <div className="flex items-center gap-2">

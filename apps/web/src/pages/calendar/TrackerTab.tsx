@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../../lib/api';
+import { statusClass, statusTone } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import {
   Table,
@@ -74,16 +75,6 @@ interface AssignRecommendation {
     avgRevisions: number;
   }>;
 }
-
-const STAGE_STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  'Not Started': { bg: 'bg-slate-100 text-slate-700', text: 'text-slate-700', dot: 'bg-slate-400' },
-  'In Progress': { bg: 'bg-blue-50 text-blue-700', text: 'text-blue-700', dot: 'bg-blue-500' },
-  'Feedback': { bg: 'bg-amber-50 text-amber-700', text: 'text-amber-700', dot: 'bg-amber-500' },
-  'Pending': { bg: 'bg-purple-50 text-purple-700', text: 'text-purple-700', dot: 'bg-purple-500' },
-  'Approved': { bg: 'bg-emerald-50 text-emerald-700', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-  'Published': { bg: 'bg-teal-50 text-teal-700', text: 'text-teal-700', dot: 'bg-teal-500' },
-  'Blocked': { bg: 'bg-rose-50 text-rose-700', text: 'text-rose-700', dot: 'bg-rose-500' },
-};
 
 export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCalendar }) => {
   const { user } = useAuth();
@@ -452,7 +443,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
       {/* Sheet-like Tracker Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="ui-table w-full text-left text-xs border-collapse">
             <thead className="bg-slate-50/90 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
               <tr>
                 <th className="p-3 whitespace-nowrap">Content Piece</th>
@@ -521,7 +512,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                             <span className="text-slate-400 italic text-[11px]">No stages generated</span>
                           ) : (
                             piece.stages.map((st) => {
-                              const style = STAGE_STATUS_COLORS[st.status] || STAGE_STATUS_COLORS['Not Started'];
+                              const style = statusClass(statusTone(st.status, st.isLocked));
                               return (
                                 <div
                                   key={st._id}
@@ -540,11 +531,11 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                         <Lock className="w-3 h-3 text-slate-400" />
                                       </span>
                                     ) : (
-                                      <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+                                      <span className={`w-2 h-2 rounded-full status-dot ${style}`} />
                                     )}
                                   </div>
 
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${style.bg}`}>
+                                  <span className={`status-chip ${style} text-[9px] font-bold px-1.5 py-0.5`}>
                                     {st.status}
                                   </span>
 

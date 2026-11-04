@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
+import { statusClass, statusTone } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import { ResumableUploadTask } from '../../lib/uploadManager';
 import {
@@ -486,21 +487,15 @@ export const MyWorkPage: React.FC = () => {
                 </span>
               )}
               <span
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
-                  item.status === 'In Progress'
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    : item.status === 'Blocked'
-                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                className={`status-chip ${statusClass(
+                  item.status === 'In Progress' || item.status === 'Blocked'
+                    ? statusTone(item.status)
                     : isFeedbackRework
-                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                    ? 'changes'
                     : isWaitingApproval
-                    ? 'bg-indigo-100 text-indigo-800 border border-indigo-300'
-                    : item.status === 'Approved'
-                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                    : item.status === 'Published'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-100 text-slate-700'
-                }`}
+                    ? 'waiting'
+                    : statusTone(item.status)
+                )} px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider`}
               >
                 {isFeedbackRework ? 'Rework' : isWaitingApproval ? 'In Review' : item.status}
               </span>

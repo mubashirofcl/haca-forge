@@ -2,46 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Design tokens (UI retheme, phase UI-1)
+   Solid colours are stored as RGB channels so Tailwind can apply alpha
+   (`bg-ui-ink/10`). Use the `--ui-*` names in CSS, the `ui-*` names in classes.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Levels: canvas → frosted panel → near-white card */
+  --ui-canvas-rgb: 221 226 235;          /* #DDE2EB */
+  --ui-canvas-deep-rgb: 205 213 229;     /* #CDD5E5 */
+  --ui-card-rgb: 243 245 249;            /* #F3F5F9 */
+  --ui-card-hover-rgb: 250 251 253;      /* #FAFBFD */
+  --ui-panel: rgba(255, 255, 255, 0.38);
+  --ui-panel-border: rgba(255, 255, 255, 0.65);
+  --ui-line: rgba(39, 50, 71, 0.12);
+
+  /* Ink and text */
+  --ui-ink-rgb: 11 11 13;                /* #0B0B0D: primary, active, current stage */
+  --ui-text-rgb: 27 31 39;               /* #1B1F27 */
+  --ui-muted-rgb: 88 97 112;             /* #586170: 5.7:1 on card, 4.8:1 on canvas */
+
+  /* Accents: meaning only (progress, attention, chart data). Not for small text. */
+  --ui-blue-rgb: 127 163 220;            /* #7FA3DC */
+  --ui-blue-soft-rgb: 220 230 246;       /* #DCE6F6 */
+  --ui-coral-rgb: 216 106 104;           /* #D86A68: muted toward the reference */
+  --ui-coral-soft-rgb: 248 223 221;      /* #F8DFDD */
+
+  --ui-canvas: rgb(var(--ui-canvas-rgb));
+  --ui-canvas-deep: rgb(var(--ui-canvas-deep-rgb));
+  --ui-card: rgb(var(--ui-card-rgb));
+  --ui-card-hover: rgb(var(--ui-card-hover-rgb));
+  --ui-ink: rgb(var(--ui-ink-rgb));
+  --ui-text: rgb(var(--ui-text-rgb));
+  --ui-muted: rgb(var(--ui-muted-rgb));
+  --ui-blue: rgb(var(--ui-blue-rgb));
+  --ui-blue-soft: rgb(var(--ui-blue-soft-rgb));
+  --ui-coral: rgb(var(--ui-coral-rgb));
+  --ui-coral-soft: rgb(var(--ui-coral-soft-rgb));
+
+  /* Shape and depth: each level gets its own radius and shadow */
+  --ui-radius-panel: 32px;
+  --ui-radius-card: 24px;
+  --ui-radius-control: 9999px;
+  --ui-shadow-panel: 0 18px 40px -24px rgba(45, 58, 82, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --ui-shadow-card: 0 10px 24px -18px rgba(45, 58, 82, 0.3);
+  --ui-shadow-modal: 0 32px 64px -24px rgba(45, 58, 82, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+
+  /* Shell (header, sidebar): frozen at their pre-retheme rendered colour.
+     Measured from screenshots of the old translucent pills (#F7F8FF to #FAFBFF). */
+  --shell-surface: #f8f9ff;
+  --shell-surface-border: #fcfcff;
+}
+
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     color: #111827;
-    background: radial-gradient(circle at 12% 15%, rgba(122, 106, 246, 0.12) 0%, transparent 45%),
-      radial-gradient(circle at 88% 20%, rgba(79, 70, 229, 0.08) 0%, transparent 50%),
-      radial-gradient(circle at 50% 85%, rgba(122, 106, 246, 0.06) 0%, transparent 60%),
-      linear-gradient(135deg, #f4f6fa 0%, #edf1f8 50%, #e8edf5 100%);
-    background-attachment: fixed;
+    background: var(--ui-canvas);
     min-height: 100vh;
   }
 }
 
-/* Glassmorphism Surface Tokens */
-.glass-panel {
+/* ─────────────────────────────────────────────────────────────────────────────
+   Shell surfaces. These hold the header and sidebar at their old look so the
+   retheme below does not move them. Opaque on purpose: the old surfaces were
+   70% white over a lilac canvas; on the new canvas that would read grey.
+   ───────────────────────────────────────────────────────────────────────────── */
+.shell-header {
+  background: var(--shell-surface);
+  border: 1px solid var(--shell-surface-border);
+  box-shadow: 0px 20px 40px -15px rgba(0, 0, 0, 0.05), inset 0px 1px 0px rgba(255, 255, 255, 0.95);
+}
+
+/* Header flyouts (notifications, account menu) keep their old values verbatim. */
+.shell-popover {
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0px 20px 40px -15px rgba(0, 0, 0, 0.05), inset 0px 1px 0px rgba(255, 255, 255, 0.95);
 }
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: 18px;
-  box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.04), inset 0px 1px 0px rgba(255, 255, 255, 0.9);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.glass-card:hover {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: rgba(122, 106, 246, 0.35);
-  box-shadow: 0px 16px 36px -10px rgba(122, 106, 246, 0.12), inset 0px 1px 0px rgba(255, 255, 255, 1);
-  transform: translateY(-2px);
-}
-
-.glass-modal {
+.shell-menu {
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(24px) saturate(200%);
   -webkit-backdrop-filter: blur(24px) saturate(200%);
@@ -50,20 +91,330 @@
   box-shadow: 0px 30px 60px -15px rgba(0, 0, 0, 0.15), inset 0px 1px 0px rgba(255, 255, 255, 1);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Surfaces. Names kept from the glass system to limit churn. These rules sit
+   outside @layer on purpose: they have always overridden same-specificity
+   utilities placed beside them (e.g. `glass-card rounded-2xl`), and changing
+   that precedence would restyle ~90 call sites unpredictably.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Level 2: large frosted panel that groups content on the canvas. */
+.glass-panel {
+  background: var(--ui-panel);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--ui-panel-border);
+  box-shadow: var(--ui-shadow-panel);
+}
+
+/* Level 3: near-white card. Opaque, so no blur cost. */
+.glass-card {
+  background: var(--ui-card);
+  /* Transparent, not removed: keeps box sizes identical at every call site. */
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-card);
+  box-shadow: var(--ui-shadow-card);
+  transition: background-color 150ms ease;
+}
+
+/* Hover only where the card is actually clickable; no lift. */
+a.glass-card:hover,
+button.glass-card:hover,
+.glass-card[role='button']:hover,
+.glass-card.cursor-pointer:hover {
+  background: var(--ui-card-hover);
+}
+
+/* Dialogs, toasts and popovers: the top layer, nearly opaque for legibility. */
+.glass-modal {
+  /* Space-separated channels need the slash form; `rgba(var(--x-rgb), a)` is invalid and was dropped. */
+  background: rgb(var(--ui-card-hover-rgb) / 0.94);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--ui-panel-border);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow-modal);
+}
+
+/* Segmented-control track. */
 .glass-pill-container {
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 9999px;
-  box-shadow: inset 0px 1px 2px rgba(0, 0, 0, 0.03);
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-control);
 }
 
 .pill-active {
-  background: #0d0e12;
+  background: var(--ui-ink);
   color: #ffffff;
+  border-radius: var(--ui-radius-control);
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-card {
+    transition: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Phase UI-2: shared controls
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* The header (with its flyouts and mobile menu) and the sidebar keep the system
+   font they have always rendered in. Page content, modals and toasts inherit
+   Plus Jakarta Sans from `font-sans` on <body> (see tailwind.config.js). */
+.shell-scope {
+  font-family: ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+}
+
+/* Visible keyboard focus for page content and dialogs. The header is excluded so
+   it stays unchanged; the sidebar sets its own ring. */
+@layer base {
+  main :focus-visible,
+  .glass-modal :focus-visible,
+  [role='dialog'] :focus-visible {
+    outline: 2px solid var(--ui-ink);
+    outline-offset: 2px;
+  }
+}
+
+/* Controls live in the components layer so a call site can still adjust them
+   with utilities (e.g. `ui-input pl-10` for a leading icon). */
+@layer components {
+  /* Buttons */
+  .ui-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0 1.25rem;
+    border-radius: var(--ui-radius-control);
+    border: 1px solid transparent;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    transition: background-color 150ms ease, border-color 150ms ease;
+  }
+  .ui-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .ui-btn-primary {
+    background: var(--ui-ink);
+    color: #ffffff;
+  }
+  .ui-btn-primary:hover:not(:disabled) {
+    background: rgb(var(--ui-ink-rgb) / 0.86);
+  }
+  .ui-btn-secondary {
+    background: rgba(255, 255, 255, 0.6);
+    border-color: var(--ui-line);
+    color: var(--ui-text);
+  }
+  .ui-btn-secondary:hover:not(:disabled) {
+    background: #ffffff;
+  }
+
+  /* Circular outlined icon button (always 44px) */
+  .ui-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 9999px;
+    border: 1px solid var(--ui-line);
+    background: transparent;
+    color: var(--ui-text);
+    transition: background-color 150ms ease;
+  }
+  .ui-icon-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.7);
+  }
+
+  /* Tabs / segmented control: pale track, near-black active pill.
+     `.glass-pill-container` + `.pill-active` (above) are the legacy names for the same thing. */
+  .ui-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: var(--ui-radius-control);
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid var(--ui-line);
+  }
+  .ui-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 36px;
+    padding: 0 1rem;
+    border-radius: var(--ui-radius-control);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--ui-muted);
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .ui-tab:hover {
+    color: var(--ui-text);
+  }
+  .ui-tab[aria-selected='true'],
+  .ui-tab.is-active {
+    background: var(--ui-ink);
+    color: #ffffff;
+  }
+
+  /* Inputs and selects */
+  .ui-input,
+  .ui-select {
+    min-height: 44px;
+    padding: 0 1rem;
+    border-radius: var(--ui-radius-control);
+    border: 1px solid var(--ui-line);
+    background-color: rgba(255, 255, 255, 0.75);
+    color: var(--ui-text);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    transition: border-color 150ms ease, background-color 150ms ease;
+  }
+  .ui-input::placeholder {
+    color: var(--ui-muted);
+  }
+  .ui-input:hover,
+  .ui-select:hover {
+    background-color: #ffffff;
+  }
+  .ui-input:focus-visible,
+  .ui-select:focus-visible {
+    outline: 2px solid var(--ui-ink);
+    outline-offset: 2px;
+    background-color: #ffffff;
+  }
+  /* Native arrow replaced so the select matches the pill input. The chevron is an
+     inline SVG, so its colour (#586170 = --ui-muted) has to be written out here. */
+  .ui-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2.5rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23586170' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.875rem center;
+    background-size: 16px;
+  }
+}
+
+/* Tables: light header text, row dividers only. The descendant selectors outrank
+   the single-class utilities on existing <thead>/<tr>, so one class on <table>
+   is enough. */
+.ui-table thead,
+.ui-table thead tr {
+  background: transparent;
+  border-color: var(--ui-line);
+}
+.ui-table thead th {
+  color: var(--ui-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.ui-table tbody > tr {
+  border-color: var(--ui-line);
+}
+.ui-table tbody > tr + tr {
+  border-top: 1px solid var(--ui-line);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Status chips: one set for the 8 step statuses.
+   A tone class sets variables; `.status-chip`, `.status-dot` and `.status-tint`
+   read them. Every tone passes WCAG AA for its text (5.7:1 to 19.7:1).
+   Map a raw status to its tone with `statusTone()` in src/lib/statusTone.ts.
+   ───────────────────────────────────────────────────────────────────────────── */
+.status-locked      { --st-bg: transparent; --st-fg: #586170; --st-border: rgba(39, 50, 71, 0.3); --st-dot: #8a93a3; --st-border-style: dashed; }
+.status-not-started { --st-bg: rgba(39, 50, 71, 0.08); --st-fg: #3a4150; --st-border: transparent; --st-dot: #8a93a3; }
+.status-in-progress { --st-bg: #dce6f6; --st-fg: #23457c; --st-border: rgba(35, 69, 124, 0.18); --st-dot: var(--ui-blue); }
+.status-waiting     { --st-bg: #f3e7cf; --st-fg: #684811; --st-border: rgba(104, 72, 17, 0.18); --st-dot: #c79a3e; }
+.status-changes     { --st-bg: var(--ui-coral-soft); --st-fg: #8b2d2a; --st-border: rgba(139, 45, 42, 0.18); --st-dot: var(--ui-coral); }
+.status-approved    { --st-bg: #dbeee2; --st-fg: #1e5a3c; --st-border: rgba(30, 90, 60, 0.18); --st-dot: #4f9a73; }
+.status-blocked     { --st-bg: var(--ui-coral); --st-fg: var(--ui-ink); --st-border: transparent; --st-dot: var(--ui-coral); }
+.status-posted      { --st-bg: #ffffff; --st-fg: var(--ui-ink); --st-border: rgba(11, 11, 13, 0.55); --st-dot: var(--ui-ink); }
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   border-radius: 9999px;
-  box-shadow: 0 4px 12px rgba(13, 14, 18, 0.2);
+  background: var(--st-bg);
+  color: var(--st-fg);
+  border: 1px var(--st-border-style, solid) var(--st-border);
+}
+.status-dot {
+  background: var(--st-dot);
+}
+/* Softer fill for larger blocks (calendar event chips, tracker cells). */
+.status-tint {
+  background: var(--st-bg);
+  color: var(--st-fg);
+  border-color: var(--st-border);
+}
+
+/* Role badges: one set for the 5 roles, desaturated to sit with the palette. */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  background: var(--role-bg);
+  color: var(--role-fg);
+}
+.role-admin         { --role-bg: #e6e2f2; --role-fg: #46376f; }
+.role-creative-head { --role-bg: #f2e3d6; --role-fg: #76401c; }
+.role-sm-manager    { --role-bg: #dce6f6; --role-fg: #23457c; }
+.role-executive     { --role-bg: #e1e5ec; --role-fg: #2b3240; }
+.role-team-member   { --role-bg: #dbeee2; --role-fg: #1e5a3c; }
+
+/* Avatar: subtle white ring. Inside the header it keeps its old 1px ring.
+   In the components layer so a caller's own ring utility (e.g. ring-4) still wins. */
+@layer components {
+  .ui-avatar {
+    box-shadow: 0 0 0 2px #ffffff, 0 1px 3px rgba(45, 58, 82, 0.18);
+  }
+  .shell-scope .ui-avatar {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8), 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+}
+
+@layer components {
+  /* Drawers: a frosted panel edge with a card body. */
+  .ui-drawer {
+    background: rgb(var(--ui-card-rgb) / 0.97);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border-left: 1px solid var(--ui-panel-border);
+    box-shadow: var(--ui-shadow-modal);
+  }
+  .ui-scrim {
+    background: rgb(var(--ui-text-rgb) / 0.32);
+  }
+}
+
+/* Pulsing dots and bounces stop for people who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-bounce {
+    animation: none;
+  }
+  .ui-btn,
+  .ui-tab,
+  .ui-input,
+  .ui-select,
+  .ui-icon-btn {
+    transition: none;
+  }
 }
 
 /* Custom Range Slider */
@@ -353,3 +704,195 @@ input[type='range']::-webkit-slider-runnable-track {
   }
 }
 
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   macOS-style "Animate opening applications" (Dock bounce)
+   The icon jumps with a gravity curve, squashes slightly on landing, and its
+   shadow shrinks while it is in the air. Used by <AppLaunchLoader /> and the
+   sidebar icons (one launch bounce on click). Keep in sync with index.html.
+   ───────────────────────────────────────────────────────────────────────────── */
+@keyframes dock-bounce {
+  0% {
+    transform: translateY(0) scale(1, 1);
+    animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1);
+  }
+  45% {
+    transform: translateY(-55%) scale(1, 1);
+    animation-timing-function: cubic-bezier(0.65, 0, 0.8, 0.4);
+  }
+  86% {
+    transform: translateY(0) scale(1, 1);
+  }
+  92% {
+    transform: translateY(0) scale(1.05, 0.93);
+  }
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+}
+
+@keyframes dock-shadow {
+  0%,
+  86%,
+  100% {
+    opacity: 0.35;
+    transform: translateX(-50%) scaleX(1);
+  }
+  45% {
+    opacity: 0.12;
+    transform: translateX(-50%) scaleX(0.55);
+  }
+}
+
+@keyframes dock-indicator {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dock-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Continuous bounce while something is opening */
+.dock-bounce {
+  transform-origin: 50% 100%;
+  animation: dock-bounce 0.75s infinite;
+  will-change: transform;
+}
+
+/* Two launch bounces (sidebar click) */
+.dock-bounce-once {
+  transform-origin: 50% 100%;
+  animation: dock-bounce 0.7s 2;
+}
+
+.dock-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 70%;
+  height: 8px;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgba(15, 23, 42, 0.45), transparent);
+  animation: dock-shadow 0.75s infinite;
+}
+
+.dock-indicator {
+  animation: dock-indicator 0.4s ease-out 0.6s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dock-bounce,
+  .dock-bounce-once {
+    animation: dock-pulse 1.6s ease-in-out infinite;
+  }
+  .dock-bounce-once {
+    animation-iteration-count: 1;
+  }
+  .dock-shadow {
+    animation: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Enter animations for the `animate-in fade-in zoom-in-95 slide-in-from-*`
+   classes used across the app. They come from the tailwindcss-animate plugin,
+   which is not installed, so they were silently doing nothing. This is a small
+   CSS stand-in with the same class names (no new dependency).
+   ───────────────────────────────────────────────────────────────────────────── */
+@keyframes tw-enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+      scale(var(--tw-enter-scale, 1));
+  }
+}
+.animate-in {
+  animation: tw-enter 180ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+}
+.fade-in { --tw-enter-opacity: 0; }
+.zoom-in-95 { --tw-enter-scale: 0.95; }
+.slide-in-from-top { --tw-enter-translate-y: -100%; }
+.slide-in-from-top-2 { --tw-enter-translate-y: -0.5rem; }
+.slide-in-from-bottom { --tw-enter-translate-y: 100%; }
+.slide-in-from-bottom-2 { --tw-enter-translate-y: 0.5rem; }
+.slide-in-from-bottom-3 { --tw-enter-translate-y: 0.75rem; }
+.slide-in-from-right { --tw-enter-translate-x: 100%; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   macOS-style motion used by the shell
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Dock launch: a high bounce, a smaller second bounce, a squash on landing.
+   Applied to an inline wrapper around a sidebar icon when its page opens. */
+@keyframes dock-launch {
+  0% { transform: translateY(0) scale(1, 1); animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1); }
+  22% { transform: translateY(-12px) scale(1, 1); animation-timing-function: cubic-bezier(0.65, 0, 0.8, 0.4); }
+  42% { transform: translateY(0) scale(1.12, 0.88); animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1); }
+  60% { transform: translateY(-6px) scale(1, 1); animation-timing-function: cubic-bezier(0.65, 0, 0.8, 0.4); }
+  76% { transform: translateY(0) scale(1.06, 0.94); }
+  88% { transform: translateY(0) scale(0.98, 1.02); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+.dock-launch {
+  display: inline-flex;
+  transform-origin: 50% 100%;
+  animation: dock-launch 900ms both;
+}
+
+/* Header buttons (chat, notifications, profile): a single quick hop on click. */
+@keyframes dock-tap {
+  0% { transform: translateY(0) scale(1, 1); animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1); }
+  40% { transform: translateY(-5px) scale(1, 1); animation-timing-function: cubic-bezier(0.65, 0, 0.8, 0.4); }
+  75% { transform: translateY(0) scale(1.08, 0.92); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+.dock-tap {
+  transform-origin: 50% 100%;
+  animation: dock-tap 420ms both;
+}
+
+/* Menus open like a macOS popover: scale up from the corner they hang from. */
+@keyframes menu-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.92); }
+  70% { opacity: 1; transform: translateY(0) scale(1.01); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.menu-pop {
+  transform-origin: top right;
+  animation: menu-pop 220ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+}
+
+/* Page switch: the new page opens like an app window (a short zoom and fade).
+   `backwards` fill only, so no transform is left behind afterwards: a leftover
+   transform would trap `position: fixed` modals inside the page. */
+@keyframes window-open {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.page-open {
+  transform-origin: 50% 0;
+  animation: window-open 340ms cubic-bezier(0.2, 0.9, 0.3, 1.05) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .dock-launch,
+  .dock-tap,
+  .menu-pop,
+  .page-open {
+    animation: none;
+  }
+}

@@ -30,7 +30,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
 
   return (
     <div
-      className="absolute bottom-14 right-2 sm:right-6 w-72 sm:w-80 glass-panel bg-white/95 border border-slate-200/80 shadow-2xl rounded-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md"
+      className="absolute bottom-14 right-2 sm:right-6 w-72 sm:w-80 glass-modal bg-white/95 border border-slate-200/80 shadow-2xl rounded-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md"
       data-testid="chat-emoji-picker"
     >
       <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/60">

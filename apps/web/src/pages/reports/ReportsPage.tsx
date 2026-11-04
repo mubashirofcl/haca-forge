@@ -619,7 +619,7 @@ export const ReportsPage: React.FC = () => {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+                    <table className="ui-table w-full text-left text-xs">
                       <thead>
                         <tr className="border-b border-slate-100 bg-slate-50/40">
                           {table.columns.map((col, cIdx) => (

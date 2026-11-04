@@ -28,6 +28,7 @@ import { Avatar } from './Avatar';
 import { AvatarCropModal } from './AvatarCropModal';
 import { RatingsFeedbackSection } from './RatingsFeedbackSection';
 import { apiFetch } from '../lib/api';
+import { roleClass } from '../lib/statusTone';
 import {
   WORK_PREFERENCES,
   ROLE_LABELS,
@@ -381,23 +382,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }
   };
 
-  // Role Badge Color Mapping
+  // Role label (badge colours come from the shared .role-* classes)
   const roleDisplay = ROLE_LABELS[profile.role as UserRole] || profile.role?.replace('_', ' ') || 'Team Member';
-  const getBadgeStyle = (r: string) => {
-    switch (r) {
-      case 'admin':
-        return 'bg-purple-500/10 text-purple-700 border border-purple-200/60';
-      case 'creative_head':
-        return 'bg-amber-500/10 text-amber-800 border border-amber-200/60';
-      case 'sm_manager':
-        return 'bg-blue-500/10 text-blue-700 border border-blue-200/60';
-      case 'executive':
-        return 'bg-indigo-500/10 text-indigo-700 border border-indigo-200/60';
-      case 'team_member':
-      default:
-        return 'bg-emerald-500/10 text-emerald-700 border border-emerald-200/60';
-    }
-  };
 
   const isEditable = !readOnly && isSelf;
   const canSeeContact = Boolean(profile.email !== null && profile.email !== undefined);
@@ -434,7 +420,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <h1 className="text-2xl font-black text-slate-900 tracking-tight">
                 {profile.preferredName ? `${profile.preferredName} (${profile.name})` : profile.name}
               </h1>
-              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${getBadgeStyle(profile.role)}`}>
+              <span className={`role-badge ${roleClass(profile.role)} px-3 py-1 text-xs font-bold uppercase tracking-wider`}>
                 {roleDisplay}
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">

@@ -1,5 +1,83 @@
 # HACA Marketing OS — Conversion Progress
 
+## UI Retheme UI-2: Shared Components (Status: COMPLETE, awaiting approval for UI-3)
+
+Decisions applied: Plus Jakarta Sans for page content (header, its flyouts and the sidebar keep the system font); sidebar recoloured only; one shared CSS class set for statuses and roles (no new React component).
+
+### Gate
+- Before (04 November 2026): typecheck 0 errors; web build clean; API 584 passed (35 files); web 109 passed (16 files). Baseline 693.
+- After: typecheck 0 errors; web build clean (same pre-existing chunk-size warning); API 584 passed; web 109 passed. 693, 0 failures. No tests changed.
+
+### Root findings
+1. **Font:** Plus Jakarta Sans is loaded by the Google Fonts link in `apps/web/index.html:13` (weights 300–800) but never applied: `font-sans` on `<body>` resolved to Tailwind's default stack. Fixed by setting `fontFamily.sans` in `tailwind.config.js`; `.shell-scope` pins the old stack on `<header>` and `<aside>` in `Layout.tsx`.
+2. **No portals.** No `createPortal` in the app; modals, drawers, toasts and popovers render in place, so they inherit the body font. The search modal and toasts sit outside `<header>` and use Plus Jakarta Sans; header flyouts sit inside it and do not.
+3. **UI-1 regression found and fixed:** `.glass-modal` used `rgba(var(--ui-card-hover-rgb), 0.94)`, which is invalid with space-separated channels, so every `.glass-modal` was transparent. Now `rgb(var(...) / 0.94)`.
+4. **Status colour maps (8 sites, conflicting colours: "In Progress" was blue in some places and green in others):** `CalendarPage.tsx:56` `STATUS_COLORS`, `TrackerTab.tsx:78` `STAGE_STATUS_COLORS`, `PipelineStepper.tsx:53-86`, `WorkDetailPage.tsx:~617`, `MyWorkPage.tsx:~487`, `WorkListPage.tsx:~275` and `~320`, `WorkerProfilePage.tsx:~966`, `PersonWorkHistoryView.tsx:~113`, `WritingStudioPage.tsx:~591`, `TeamDashboardPage.tsx:~695`. All now use `.status-chip/.status-tint/.status-dot` + `.status-<tone>`.
+5. **Role colour maps:** one map, `ProfileView.tsx:386` `getBadgeStyle`; role chips also at `TeamDirectoryPage.tsx:355` (all grey) and `WorkerProfilePage.tsx:611` (all black). All three now use `.role-badge .role-<role>`.
+6. **Not step statuses (left alone):** plan statuses (`PlansTab.tsx:171,179`, `TeamDashboardPage.tsx:231`), review-round badge (`FeedbackPage.tsx:692`), clip statuses (`ClipCard.tsx:138`), capacity bands, account Active/Suspended.
+7. **PipelineStepper** is rendered only on Work Detail (`WorkDetailPage.tsx:679`), reached from My Work. UI.md says My Work cards include it; they do not.
+8. **Shared controls:** there are still no Button/Tabs/Input/Select/Table components. UI-2 adds the class set and applies it in shared components; page call sites move in UI-3/UI-4.
+9. **Overflow from the font change:** Calendar tab row +9px at 360px (fixed: `overflow-x-auto`). Issues page already overflowed 84px at 360px before this work (+13px with the new font); fixed by letting its filter row wrap.
+10. **Pre-existing, not fixed (UI-4):** `WorkDetailPage.tsx:1100` rating block puts `bg-gradient-to-br … text-white` beside `.glass-card`; the `.glass-card` `background` shorthand has always cancelled the gradient, so the heading is white on a light card.
+
+### Changes
+- `index.css`: `.shell-scope`; content focus ring (`main`, dialogs); `.ui-btn/-primary/-secondary`, `.ui-icon-btn` (44px), `.ui-tabs/.ui-tab`, `.ui-input/.ui-select` (in `@layer components` so utilities can adjust them); `.ui-table`; 8 status tones + `.status-chip/.status-tint/.status-dot`; 5 role tones + `.role-badge`; `.ui-avatar` (header keeps its old 1px ring); `.ui-drawer`, `.ui-scrim`; reduced-motion stops `animate-pulse`/`animate-bounce` and control transitions.
+- `tailwind.config.js`: `fontFamily.sans`.
+- `lib/statusTone.ts` (new): maps raw status/role to a tone class name. No colours.
+- `Layout.tsx`: `shell-scope` on header and sidebar; sidebar surface → frosted panel, ink active pill, `ui-muted` items, ink focus ring, coral badge, `ui-line` divider. Width, breakpoints, items and behaviour unchanged. Search modal: scrim, pill input, neutral hover.
+- `PipelineStepper.tsx`: rebuilt as stage cards joined by thin connectors with nodes (blue = completed hand-off, coral dashed = changes requested/blocked, grey = not reached). Ink = current stage. Icons plus screen-reader text for every state. Navigable stages are now `<button>`s (same navigation). Equal-width grid from md up, scrolling inside the panel when there are many stages; vertical spine below md.
+- `GlobalFilterBar.tsx`, `ProfileDrawer.tsx`, `PersonWorkHistoryDrawer.tsx`, `AvatarCropModal.tsx`, `Avatar.tsx`: shared surfaces and controls.
+- Status call sites listed above; role call sites listed above; `ui-table` on all 7 `<table>`s.
+
+### Verification
+- Screens: Dashboard, My Work, Work Detail (pipeline), Calendar, Team, search modal, Add-work modal at 1440/768/360; pipeline with 7 synthetic stages (changes requested, blocked, locked, long names) at all three widths. 0px horizontal overflow on all, and on 14 routes at 360px.
+- Header band identical to the pre-UI-2 capture (max 6/255 per channel, 0 pixels over 15). Account menu and notifications flyout identical.
+- Keyboard focus visible on sidebar items, modal inputs and results, pipeline stages, buttons and selects. Reduced motion confirmed (`animate-pulse` → `none`).
+- Status and role chip contrast: 5.7:1 to 19.7:1.
+- Note: a dev server started before this change keeps the old Tailwind config cached. Restart `npm run dev` to see the new font.
+
+### Remaining for UI-3 / UI-4
+- Page-level buttons, tabs, inputs and selects still use inline purple and indigo styles (dashboard hero, Calendar tabs, "Open Writing Studio", etc.).
+- Recharts colours, KPI strip, eyebrow labels, Dashboard panel grouping, My Work card borders by status.
+- Workspaces (Writing Studio, Review Studio, media) apart from the Writing Studio status chip.
+
+## UI Retheme UI-1: Foundation (Status: COMPLETE, awaiting approval for UI-2)
+
+Visual-only. Reference: cool grey-blue canvas, frosted panels, near-white cards, near-black active states.
+
+### Precondition gate (04 November 2026, before any edit)
+- `npm install` clean; `npm run typecheck` 0 errors; `npm run build --workspace=@mmp/web` clean.
+- `@mmp/api` 584 passed (35 files); `@mmp/web` 109 passed (16 files). Total 693, 0 failures.
+
+### Findings that differ from UI.md (VERIFY items resolved)
+1. **Plus Jakarta Sans is not rendering.** `index.html` puts Tailwind `font-sans` on `<body>`; Tailwind's default `font-sans` is the system stack and, as a utility, overrides the `@layer base` body rule. Computed font on every screen: `ui-sans-serif, system-ui, …` (Segoe UI on Windows). Not changed in UI-1; needs a decision because the fix also changes header typography.
+2. **FullCalendar is not a dependency.** The calendar month grid is custom markup in `CalendarPage.tsx`. UI.md §3.3 is wrong.
+3. **Recharts** is used only in `pages/team/WorkerProfilePage.tsx`.
+4. **Status colours are not in `@mmp/shared`.** The shared package maps labels only; colours are duplicated per page (`CalendarPage.tsx:56` `STATUS_COLORS`, `TrackerTab.tsx:78` `STAGE_STATUS_COLORS`, `ClipCard.tsx:138`, `PipelineStepper.tsx:53-86`, `TeamDashboardPage.tsx:231`). Role badges: `ProfileView.tsx:386`.
+5. **No shared Button, Tabs, Input, Select, Modal, Table, StatusChip, RoleBadge or KPI component exists.** All inline Tailwind. Shared components that do exist: `Avatar`, `PipelineStepper`, `GlobalFilterBar` (used only by `TeamDashboardPage`).
+6. **No app footer exists.** The only `<footer>` is the Writing Studio status bar (`WritingStudioStatusBar.tsx:37`, opaque, unchanged). No `.shell-footer` was created.
+7. UI.md §1.2 glass values did not match code (panel 0.75 vs 0.7, card 0.82/20-24px vs 0.78/18px, modal 0.95 vs 0.88, pill track slate vs white).
+8. `.glass-*` rules are unlayered and come after `@tailwind utilities`, so they override same-specificity utilities beside them (`glass-card rounded-2xl` renders at the glass radius). Precedence kept to limit churn.
+9. Accent debt for UI-2–4: ~1,215 purple/indigo/violet utility uses and 116 hard-coded `#7a6af6`.
+
+### Changes
+- `apps/web/src/index.css`: `:root` tokens (`--ui-*`, radii, shadows, `--shell-surface`); flat canvas on `body`; `.shell-header`, `.shell-sidebar`, `.shell-popover`, `.shell-menu` hold the old shell look (opaque `#F8F9FF` measured from the old rendered pills); `.glass-panel/.glass-card/.glass-modal/.glass-pill-container/.pill-active` restyled in place; card hover is colour-only and only on clickable cards (no lift); reduced-motion guard.
+- `apps/web/tailwind.config.js`: `ui-*` colours (alpha-capable), `rounded-ui-panel/card/control`, `shadow-ui-panel/card/modal`.
+- `apps/web/index.html`: removed `bg-slate-50` from `<body>` (it overrode the canvas colour).
+- `components/Layout.tsx`: header pills and hanging tab `glass-panel` → `shell-header`; tab corner fills → `var(--shell-surface)`; sidebar → `shell-sidebar`. Class names only.
+- `components/NotificationCenter.tsx` → `shell-popover`; `components/UserMenuDropdown.tsx` → `shell-menu` (header flyouts frozen).
+- `components/NotificationToast.tsx`, `pages/chat/EmojiPicker.tsx`: `glass-panel` → `glass-modal` (overlays need the opaque top-layer surface to stay legible).
+- Removed element: the white 1px outline on every `.glass-card` (now transparent, same box size).
+
+### Verification
+- Typecheck 0 errors; web build clean; API 584 passed, web 109 passed (693, 0 failures). No tests changed.
+- Header pixel check vs baseline at 1440/768/360 on Dashboard, Calendar, Reports, Team: surfaces within 2 RGB units, text and icons identical. Zero horizontal overflow at all 12 captures.
+- Contrast: `--ui-muted` 5.7:1 on card, 4.8:1 on canvas; `--ui-blue` 2.4:1 and `--ui-coral` 3.1:1 on card, so not for text.
+
+### Remaining gaps (expected, later phases)
+- Page sections that use inline `bg-white` instead of `.glass-card` (most of Dashboard) are still white; calendar day cells are white inside near-white cards. UI-3.
+- Purple primary buttons, eyebrow labels and decorative "Section 1 •" numbering remain. UI-2/UI-3.
+
 ## Phase PE: Profile Edit, Mobile OTP Verification & Mandatory Welcome Step Removal (Status: COMPLETE)
 
 ### Precondition & Final Verification Counts (Verified 03 November 2026)

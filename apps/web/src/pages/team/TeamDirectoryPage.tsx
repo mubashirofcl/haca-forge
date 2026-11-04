@@ -10,6 +10,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
+import { roleClass } from '../../lib/statusTone';
 import { Avatar } from '../../components/Avatar';
 import { ROLE_LABELS } from '@mmp/shared';
 
@@ -352,7 +353,7 @@ export const TeamDirectoryPage: React.FC = () => {
                         {displayName}
                       </h3>
                       <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                        <span className={`role-badge ${roleClass(member.role)} text-[10px] font-extrabold px-2 py-0.5`}>
                           {roleLabel}
                         </span>
                         {member.jobRole && (
