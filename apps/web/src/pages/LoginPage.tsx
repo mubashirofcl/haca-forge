@@ -20,6 +20,11 @@ import {
   EyeOff,
   Sparkles,
 } from 'lucide-react';
+import { DevQuickLogin, parseQuickLogins, type QuickLoginAccount } from '../components/DevQuickLogin';
+
+// Vite replaces DEV with false in a production build, so this list and its passwords are left out of the bundle.
+const QUICK_LOGINS: QuickLoginAccount[] =
+  import.meta.env.DEV && import.meta.env.MODE !== 'test' ? parseQuickLogins(import.meta.env.VITE_QUICK_LOGINS) : [];
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -91,16 +96,20 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    return signIn(email, password);
+  };
+
+  const signIn = async (signInEmail: string, signInPassword: string) => {
     setIsLoggingIn(true);
     setLoginError(null);
     setSuccessNotice(null);
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = signInEmail.trim().toLowerCase();
 
     try {
-      const loggedUser = await login({ email: cleanEmail, password });
+      const loggedUser = await login({ email: cleanEmail, password: signInPassword });
       if (loggedUser.role === 'team_member') {
         navigate('/my-work');
       } else {
@@ -250,7 +259,7 @@ export const LoginPage: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] transition-all shadow-xs"
+                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-ui-ink transition-all shadow-xs"
                 />
               </div>
             </div>
@@ -268,7 +277,7 @@ export const LoginPage: React.FC = () => {
                     setForgotSuccess(null);
                     setForgotError(null);
                   }}
-                  className="text-[11px] font-semibold text-[#7a6af6] hover:underline"
+                  className="text-[11px] font-semibold text-ui-ink hover:underline"
                 >
                   Forgot password?
                 </button>
@@ -282,7 +291,7 @@ export const LoginPage: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-11 pr-11 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] transition-all shadow-xs"
+                  className="w-full pl-11 pr-11 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-ui-ink transition-all shadow-xs"
                 />
                 <button
                   type="button"
@@ -314,114 +323,6 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Demo Accounts Helper */}
-          <div className="mt-6 pt-5 border-t border-slate-200/80">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-[#7a6af6]" />
-                Demo Quick-Fill Accounts
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium">Click to fill</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5 text-left">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('creativehead@demo.haca.local');
-                  setPassword('Head@Test101');
-                  setLoginError(null);
-                }}
-                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
-              >
-                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Creative Head</span>
-                <span className="text-[10px] text-slate-400 block truncate">creativehead@demo.haca.local</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('smmanager@demo.haca.local');
-                  setPassword('SMmgr@Test102');
-                  setLoginError(null);
-                }}
-                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
-              >
-                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">SM Manager</span>
-                <span className="text-[10px] text-slate-400 block truncate">smmanager@demo.haca.local</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('writer1@demo.haca.local');
-                  setPassword('Writer1@Test111');
-                  setLoginError(null);
-                }}
-                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
-              >
-                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Writer (Worker)</span>
-                <span className="text-[10px] text-slate-400 block truncate">writer1@demo.haca.local</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('designer1@demo.haca.local');
-                  setPassword('Design1@Test113');
-                  setLoginError(null);
-                }}
-                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
-              >
-                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Designer (Worker)</span>
-                <span className="text-[10px] text-slate-400 block truncate">designer1@demo.haca.local</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('shooter@demo.haca.local');
-                  setPassword('Shoot1@Test115');
-                  setLoginError(null);
-                }}
-                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
-              >
-                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Shooter (Worker)</span>
-                <span className="text-[10px] text-slate-400 block truncate">shooter@demo.haca.local</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('editor1@demo.haca.local');
-                  setPassword('Edit1@Test116');
-                  setLoginError(null);
-                }}
-                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
-              >
-                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Editor (Worker)</span>
-                <span className="text-[10px] text-slate-400 block truncate">editor1@demo.haca.local</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('admin@hacaforge.com');
-                  setPassword('Admin1212');
-                  setLoginError(null);
-                }}
-                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
-              >
-                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Admin</span>
-                <span className="text-[10px] text-slate-400 block truncate">admin@hacaforge.com</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('executive@demo.haca.local');
-                  setPassword('Exec@Test103');
-                  setLoginError(null);
-                }}
-                className="p-2 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-[#7a6af6] transition-all text-left group"
-              >
-                <span className="text-[11px] font-bold text-slate-800 block group-hover:text-[#7a6af6]">Executive</span>
-                <span className="text-[10px] text-slate-400 block truncate">executive@demo.haca.local</span>
-              </button>
-            </div>
-          </div>
 
           {/* Request Access Link */}
           <div className="mt-8 pt-6 border-t border-slate-200/80 text-center">
@@ -441,6 +342,16 @@ export const LoginPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        <DevQuickLogin
+          accounts={QUICK_LOGINS}
+          busy={isLoggingIn}
+          onPick={(account) => {
+            setEmail(account.email);
+            setPassword('');
+            void signIn(account.email, account.password);
+          }}
+        />
       </div>
 
       {/* Request Access Modal (Glassmorphic) */}
@@ -506,7 +417,7 @@ export const LoginPage: React.FC = () => {
                       placeholder="Jane Doe"
                       className={`w-full px-4 py-2.5 bg-white/90 border ${
                         fieldErrors.name ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
-                      } rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs`}
+                      } rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-ui-ink shadow-xs`}
                     />
                     {fieldErrors.name && (
                       <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.name}</p>
@@ -524,7 +435,7 @@ export const LoginPage: React.FC = () => {
                       placeholder="jane@company.com"
                       className={`w-full px-4 py-2.5 bg-white/90 border ${
                         fieldErrors.email ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
-                      } rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs`}
+                      } rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-ui-ink shadow-xs`}
                     />
                     {fieldErrors.email && (
                       <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.email}</p>
@@ -546,7 +457,7 @@ export const LoginPage: React.FC = () => {
                       placeholder="+1 (555) 000-0000"
                       className={`w-full px-4 py-2.5 bg-white/90 border ${
                         fieldErrors.phone ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
-                      } rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs`}
+                      } rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-ui-ink shadow-xs`}
                     />
                     {fieldErrors.phone && (
                       <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.phone}</p>
@@ -559,7 +470,7 @@ export const LoginPage: React.FC = () => {
                     <select
                       value={reqDept}
                       onChange={(e) => setReqDept(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-ui-ink shadow-xs cursor-pointer"
                     >
                       {DEPARTMENTS.map((dept) => (
                         <option key={dept.code} value={dept.name}>
@@ -582,7 +493,7 @@ export const LoginPage: React.FC = () => {
                     <select
                       value={reqJobRole}
                       onChange={(e) => setReqJobRole(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-ui-ink shadow-xs cursor-pointer"
                     >
                       {JOB_ROLES.map((role) => (
                         <option key={role} value={role}>
@@ -601,7 +512,7 @@ export const LoginPage: React.FC = () => {
                     <select
                       value={reqRole}
                       onChange={(e) => setReqRole(e.target.value as RequestableRole)}
-                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                      className="w-full px-4 py-2.5 bg-white/90 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-ui-ink shadow-xs cursor-pointer"
                     >
                       <option value="team_member">Team Member</option>
                       <option value="sm_manager">SM Manager</option>
@@ -628,7 +539,7 @@ export const LoginPage: React.FC = () => {
                     placeholder="Briefly describe your role and the work you will do in the marketing team."
                     className={`w-full p-3.5 bg-white/90 border ${
                       fieldErrors.reason ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
-                    } rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs resize-none`}
+                    } rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-ui-ink shadow-xs resize-none`}
                   />
                   {fieldErrors.reason && (
                     <p className="text-[11px] text-rose-600 mt-1 pl-2">{fieldErrors.reason}</p>
@@ -687,9 +598,9 @@ export const LoginPage: React.FC = () => {
                 </div>
 
                 {forgotResetLink && (
-                  <div className="p-4 rounded-2xl bg-purple-50/80 border border-purple-200 text-purple-900 text-xs space-y-2">
+                  <div className="p-4 rounded-2xl bg-ui-card border border-ui-line text-ui-ink text-xs space-y-2">
                     <div className="flex items-center gap-1.5 font-bold text-slate-900">
-                      <Sparkles className="w-4 h-4 text-[#7a6af6]" />
+                      <Sparkles className="w-4 h-4 text-ui-ink" />
                       <span>Development / Demo Direct Link:</span>
                     </div>
                     <p className="text-[11px] text-slate-600 leading-relaxed">
@@ -698,7 +609,7 @@ export const LoginPage: React.FC = () => {
                     <Link
                       to={forgotResetLink.replace(/^https?:\/\/[^/]+/, '')}
                       onClick={() => setShowForgotModal(false)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#7a6af6] hover:bg-[#6857ea] text-white text-xs font-bold rounded-full shadow-sm transition-transform hover:scale-[1.02]"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-ui-ink hover:bg-black text-white text-xs font-bold rounded-full shadow-sm transition-transform hover:scale-[1.02]"
                     >
                       <span>Set New Password Now</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -737,7 +648,7 @@ export const LoginPage: React.FC = () => {
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
                       placeholder="name@company.com"
-                      className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+                      className="w-full pl-11 pr-4 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-ui-ink shadow-xs"
                     />
                   </div>
                 </div>

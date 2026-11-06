@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LoginPage } from '../LoginPage';
@@ -18,8 +18,10 @@ const queryClient = new QueryClient({
   },
 });
 
-describe('LoginPage Quick-Fill Accounts', () => {
-  it('renders Shooter and Editor in Demo Quick-Fill Accounts and fills form on click', () => {
+// The demo quick-fill panel shipped real seed credentials (including the admin's) in the
+// client bundle. It was removed; these tests keep it from coming back.
+describe('LoginPage credentials', () => {
+  const renderPage = () =>
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
@@ -28,23 +30,18 @@ describe('LoginPage Quick-Fill Accounts', () => {
       </QueryClientProvider>
     );
 
-    // Verify shooter and editor buttons exist
-    const shooterBtn = screen.getByRole('button', { name: /shooter \(worker\)/i });
-    const editorBtn = screen.getByRole('button', { name: /editor \(worker\)/i });
-    expect(shooterBtn).toBeInTheDocument();
-    expect(editorBtn).toBeInTheDocument();
+  it('has no demo quick-fill accounts panel', () => {
+    renderPage();
+    expect(screen.queryByText(/demo quick-fill/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /shooter \(worker\)|editor \(worker\)|creative head|admin/i })).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/@demo\.haca\.local/);
+  });
 
+  it('starts with empty email and password fields', () => {
+    renderPage();
     const emailInput = screen.getByPlaceholderText('name@company.com') as HTMLInputElement;
     const passwordInput = screen.getByPlaceholderText('••••••••') as HTMLInputElement;
-
-    // Click Shooter
-    fireEvent.click(shooterBtn);
-    expect(emailInput.value).toBe('shooter@demo.haca.local');
-    expect(passwordInput.value).toBe('Shoot1@Test115');
-
-    // Click Editor
-    fireEvent.click(editorBtn);
-    expect(emailInput.value).toBe('editor1@demo.haca.local');
-    expect(passwordInput.value).toBe('Edit1@Test116');
+    expect(emailInput.value).toBe('');
+    expect(passwordInput.value).toBe('');
   });
 });
