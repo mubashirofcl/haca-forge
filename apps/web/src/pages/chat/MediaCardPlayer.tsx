@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useDialogFocus } from '../../lib/useDialogFocus';
 import { Play, Download, Eye, AlertCircle, FileText, CheckCircle2, Trash2 } from 'lucide-react';
 import { ChatSharedMediaCard } from '@mmp/shared';
 import { Avatar } from '../../components/Avatar';
@@ -13,6 +14,9 @@ interface MediaCardPlayerProps {
 export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
   const { user } = useAuth();
   const [showPlayer, setShowPlayer] = useState(false);
+  // Player keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
+  const playerRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(playerRef, showPlayer, () => setShowPlayer(false));
   const [isRevoked, setIsRevoked] = useState(card.isRevoked || false);
   const [revoking, setRevoking] = useState(false);
 
@@ -43,10 +47,10 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
   if (isRevoked) {
     return (
       <div
-        className="mt-2 p-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 text-amber-800 flex items-center gap-2.5 text-xs font-medium"
+        className="mt-2 p-3 rounded-xl border border-dashed status-tint status-waiting flex items-center gap-2.5 text-xs font-medium"
         data-testid="shared-media-revoked"
       >
-        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+        <AlertCircle className="w-4 h-4 shrink-0" />
         <span>This asset is no longer shared in this channel. Access was revoked.</span>
       </div>
     );
@@ -57,17 +61,17 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
 
   return (
     <div
-      className="mt-2.5 rounded-2xl border border-slate-200/90 bg-white/95 overflow-hidden shadow-sm hover:shadow-md transition-shadow max-w-sm sm:max-w-md"
+      className="mt-2.5 rounded-ui-card border border-ui-line bg-white overflow-hidden shadow-ui-card max-w-sm sm:max-w-md"
       data-testid="shared-media-card"
     >
       {/* Header bar */}
-      <div className="px-3.5 py-2 bg-gradient-to-r from-emerald-500/10 via-slate-50 to-indigo-50/20 border-b border-slate-100 flex items-center justify-between">
+      <div className="px-3.5 py-2 border-b border-ui-line flex items-center justify-between">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+          <span className="status-chip status-approved text-[11px] font-semibold px-2 py-0.5">
             <CheckCircle2 className="w-3 h-3" />
             Approved
           </span>
-          <span className="text-xs font-medium text-slate-500 truncate">
+          <span className="text-xs font-medium text-ui-muted truncate">
             {card.contentPieceTitle} • {card.stageKey}
           </span>
         </div>
@@ -77,7 +81,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
             type="button"
             onClick={handleUnshare}
             disabled={revoking}
-            className="text-[11px] font-medium text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-0.5 rounded transition-colors flex items-center gap-1"
+            className="text-xs font-medium text-ui-muted hover:text-ui-ink hover:bg-white/70 px-2 min-h-[44px] rounded-lg transition-colors flex items-center gap-1"
             title="Unshare asset"
             data-testid="unshare-btn"
           >
@@ -98,7 +102,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
                 className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity"
               />
             ) : (
-              <div className="text-slate-400 text-xs font-medium flex flex-col items-center gap-1">
+              <div className="text-ui-muted text-xs font-medium flex flex-col items-center gap-1">
                 <Play className="w-8 h-8 opacity-60" />
                 <span>Video Deliverable</span>
               </div>
@@ -106,7 +110,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
             <button
               type="button"
               onClick={() => setShowPlayer(true)}
-              className="absolute inset-0 m-auto w-12 h-12 rounded-full bg-black/60 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg backdrop-blur-sm transition-all hover:scale-110 active:scale-95"
+              className="absolute inset-0 m-auto w-12 h-12 rounded-full bg-black/60 hover:bg-ui-ink text-white flex items-center justify-center shadow-lg backdrop-blur-sm transition-all hover:scale-110 active:scale-95"
               title="Play Video"
             >
               <Play className="w-5 h-5 fill-white ml-0.5" />
@@ -120,7 +124,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
           />
         ) : (
           <div className="p-6 text-center text-slate-300 flex flex-col items-center gap-2">
-            <FileText className="w-10 h-10 text-indigo-400" />
+            <FileText className="w-10 h-10 text-ui-muted" />
             <span className="text-xs font-medium">{card.title}</span>
           </div>
         )}
@@ -130,7 +134,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
       <div className="p-3 bg-white space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h4 className="text-xs font-semibold text-slate-900 truncate" title={card.title}>
+            <h4 className="text-xs font-semibold text-ui-ink truncate" title={card.title}>
               {card.title}
             </h4>
             <div className="flex items-center gap-1.5 mt-1">
@@ -139,7 +143,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
                 name={card.owner?.preferredName || card.owner?.name || 'Owner'}
                 size="xs"
               />
-              <span className="text-[11px] text-slate-500 truncate">
+              <span className="text-[11px] text-ui-muted truncate">
                 {card.owner?.preferredName || card.owner?.name}
               </span>
             </div>
@@ -150,7 +154,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
               <button
                 type="button"
                 onClick={() => setShowPlayer(true)}
-                className="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1 transition-colors"
+                className="ui-btn ui-btn-secondary h-11 px-3 text-xs gap-1"
               >
                 <Eye className="w-3.5 h-3.5" />
                 Watch
@@ -162,7 +166,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
                 download
                 target="_blank"
                 rel="noreferrer"
-                className="px-2.5 py-1 text-xs font-medium rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 flex items-center gap-1 transition-colors"
+                className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white/70 hover:bg-white text-ui-ink flex items-center gap-1 transition-colors"
                 title="Download asset"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -173,7 +177,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
         </div>
 
         {card.note && (
-          <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 italic">
+          <p className="text-xs text-ui-muted bg-ui-canvas/50 p-2 rounded-lg italic">
             "{card.note}"
           </p>
         )}
@@ -182,10 +186,14 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
       {/* In-chat Modal Video Player */}
       {showPlayer && card.previewUrl && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in"
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
           onClick={() => setShowPlayer(false)}
         >
           <div
+            ref={playerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={card.title}
             className="relative bg-black rounded-2xl overflow-hidden max-w-3xl w-full max-h-[85vh] shadow-2xl border border-white/10"
             onClick={(e) => e.stopPropagation()}
           >
@@ -194,9 +202,10 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
               <button
                 type="button"
                 onClick={() => setShowPlayer(false)}
-                className="text-slate-400 hover:text-white px-2 py-0.5 rounded text-sm"
+                aria-label="Close player"
+                className="inline-flex items-center justify-center w-11 h-11 rounded-full text-white/80 hover:text-white hover:bg-white/10 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
-                ✕
+                <span aria-hidden="true">✕</span>
               </button>
             </div>
             <div className="aspect-video bg-black flex items-center justify-center">

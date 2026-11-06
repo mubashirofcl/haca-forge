@@ -21,7 +21,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="glass-modal p-8 shadow-modal-glass flex flex-col items-center gap-4 border border-white">
-          <div className="w-10 h-10 border-4 border-[#7a6af6] border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-10 h-10 border-4 border-ui-ink border-t-transparent rounded-full animate-spin"></div>
           <p className="text-xs font-bold text-slate-700">Verifying security credentials...</p>
         </div>
       </div>

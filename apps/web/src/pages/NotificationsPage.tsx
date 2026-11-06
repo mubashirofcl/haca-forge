@@ -90,23 +90,23 @@ export const NotificationsPage: React.FC = () => {
     if (type?.includes('decided') || type?.includes('accepted') || type?.includes('approved') || type?.includes('published')) {
       return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
     }
-    return <Inbox className="w-4 h-4 text-[#7a6af6]" />;
+    return <Inbox className="w-4 h-4 text-ui-ink" />;
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 space-y-6">
+    <div className="max-w-5xl mx-auto pb-12 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Notification Center</h1>
+            <h1 className="text-[28px] sm:text-[32px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink">Notification Center</h1>
             {unreadCount > 0 && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#7a6af6]/10 text-[#7a6af6]">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/70 text-ui-text">
                 {unreadCount} unread
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-[15px] text-ui-muted mt-1.5 max-w-[70ch]">
             Stay up to date with task handoffs, approvals, deadlines, and team activity
           </p>
         </div>
@@ -115,7 +115,7 @@ export const NotificationsPage: React.FC = () => {
           {unreadCount > 0 && (
             <button
               onClick={() => markAllReadMutation.mutate()}
-              className="px-4 py-2 rounded-2xl text-xs font-bold bg-white/80 hover:bg-white text-slate-700 border border-white/90 shadow-sm transition-all"
+              className="ui-btn ui-btn-secondary bg-transparent h-11"
             >
               Mark all as read
             </button>
@@ -123,7 +123,7 @@ export const NotificationsPage: React.FC = () => {
 
           <button
             onClick={() => navigate('/settings')}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-bold bg-[#0f172a] text-white hover:bg-slate-800 shadow-md transition-all"
+            className="ui-btn ui-btn-primary h-11"
           >
             <Settings className="w-3.5 h-3.5" />
             <span>Preferences</span>
@@ -132,9 +132,10 @@ export const NotificationsPage: React.FC = () => {
       </div>
 
       {/* Control Bar: Tabs & Search */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-2 rounded-3xl glass-panel border border-white/90 bg-white/80 backdrop-blur-xl shadow-sm">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 glass-panel rounded-ui-panel">
         {/* Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+        <div className="max-w-full overflow-x-auto no-scrollbar">
+        <div className="ui-tabs">
           {(
             [
               { id: 'all', label: 'All Notifications' },
@@ -150,41 +151,40 @@ export const NotificationsPage: React.FC = () => {
                 setActiveTab(tab.id);
                 setPage(1);
               }}
-              className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
-                activeTab === tab.id
-                  ? 'bg-[#0f172a] text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
+              aria-pressed={activeTab === tab.id}
+              className={`ui-tab ${activeTab === tab.id ? 'is-active' : ''}`}
             >
               {tab.label}
             </button>
           ))}
         </div>
+        </div>
 
         {/* Search */}
         <div className="relative w-full md:w-64">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-ui-muted absolute left-4 top-1/2 -translate-y-1/2" aria-hidden="true" />
           <input
             type="text"
             placeholder="Search notifications..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-2xl bg-white/90 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] transition-all"
+            aria-label="Search notifications"
+            className="ui-input w-full pl-10 pr-3"
           />
         </div>
       </div>
 
       {/* Notifications List */}
-      <div className="rounded-3xl glass-panel border border-white/90 bg-white/90 backdrop-blur-xl shadow-sm divide-y divide-slate-100 overflow-hidden">
+      <div className="glass-card overflow-hidden divide-y divide-ui-line">
         {isLoading ? (
-          <div className="py-20 text-center text-slate-400 text-sm">Loading notifications...</div>
+          <div className="py-20 text-center text-ui-muted text-sm">Loading notifications...</div>
         ) : filteredNotifications.length === 0 ? (
-          <div className="py-20 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
-            <div className="w-12 h-12 rounded-3xl bg-slate-50 flex items-center justify-center text-slate-300">
+          <div className="py-20 text-center text-ui-muted flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-white/70 flex items-center justify-center text-ui-muted">
               <Bell className="w-6 h-6" />
             </div>
-            <p className="text-sm font-semibold text-slate-600">No notifications found</p>
-            <p className="text-xs text-slate-400">You're all caught up on your marketing operations.</p>
+            <p className="text-sm font-semibold text-ui-text">No notifications found</p>
+            <p className="text-xs text-ui-muted">You're all caught up on your marketing operations.</p>
           </div>
         ) : (
           filteredNotifications.map((n: any) => {
@@ -192,20 +192,28 @@ export const NotificationsPage: React.FC = () => {
             return (
               <div
                 key={n._id}
-                className={`group flex items-start gap-4 p-4 transition-all duration-150 ${
-                  isUnread ? 'bg-indigo-50/40 hover:bg-indigo-50/60' : 'hover:bg-slate-50/80'
+                className={`group flex items-start gap-3 sm:gap-4 p-4 transition-colors ${
+                  isUnread ? 'bg-white' : 'hover:bg-white/60'
                 }`}
               >
-                <div className="p-2.5 rounded-2xl bg-white shadow-sm border border-slate-100 shrink-0 mt-0.5">
+                <div className="w-10 h-10 rounded-full bg-ui-card flex items-center justify-center shrink-0">
                   {getNotificationIcon(n.type)}
                 </div>
 
-                <div className="flex-1 min-w-0 pr-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-bold text-slate-900 leading-snug truncate">
-                      {n.title}
+                <div className="flex-1 min-w-0 sm:pr-4">
+                  {/* Title wraps on narrow screens; the time drops below it. */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+                    <h3 className={`min-w-0 text-sm leading-snug text-ui-ink flex items-baseline gap-2 ${isUnread ? 'font-semibold' : 'font-medium'}`}>
+                      {/* Unread: blue dot plus text for screen readers, not colour alone */}
+                      {isUnread && (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-ui-blue shrink-0 self-center" aria-hidden="true" />
+                          <span className="sr-only">Unread: </span>
+                        </>
+                      )}
+                      <span className="min-w-0 break-words sm:truncate">{n.title}</span>
                     </h3>
-                    <span className="text-xs text-slate-400 shrink-0">
+                    <span className="text-xs text-ui-muted shrink-0">
                       {new Date(n.createdAt).toLocaleDateString([], {
                         month: 'short',
                         day: 'numeric',
@@ -215,7 +223,7 @@ export const NotificationsPage: React.FC = () => {
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                  <p className="text-[13px] text-ui-text leading-relaxed mt-1 max-w-[70ch]">
                     {n.message}
                   </p>
 
@@ -225,7 +233,7 @@ export const NotificationsPage: React.FC = () => {
                       onClick={() => {
                         if (isUnread) markSingleReadMutation.mutate(n._id);
                       }}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#7a6af6] hover:underline mt-2.5"
+                      className="inline-flex items-center gap-1.5 min-h-[44px] -mb-3 text-xs font-semibold text-ui-ink hover:underline"
                     >
                       <span>Open Link</span>
                       <ExternalLink className="w-3 h-3" />
@@ -234,12 +242,13 @@ export const NotificationsPage: React.FC = () => {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-1.5 shrink-0 -mt-1 -mr-2 sm:mr-0">
                   {isUnread && (
                     <button
                       onClick={() => markSingleReadMutation.mutate(n._id)}
                       title="Mark as read"
-                      className="p-1.5 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                      aria-label="Mark as read"
+                      className="ui-icon-btn border-transparent"
                     >
                       <Check className="w-4 h-4" />
                     </button>
@@ -247,7 +256,8 @@ export const NotificationsPage: React.FC = () => {
                   <button
                     onClick={() => deleteMutation.mutate(n._id)}
                     title="Delete"
-                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                    aria-label="Delete notification"
+                    className="ui-icon-btn border-transparent"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -261,7 +271,7 @@ export const NotificationsPage: React.FC = () => {
       {/* Pagination */}
       {pagination.pages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-ui-muted">
             Showing page {pagination.page} of {pagination.pages} ({pagination.total} notifications)
           </span>
 
@@ -269,14 +279,14 @@ export const NotificationsPage: React.FC = () => {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/80 border border-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="ui-btn ui-btn-secondary h-11"
             >
               Previous
             </button>
             <button
               onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))}
               disabled={page >= pagination.pages}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/80 border border-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="ui-btn ui-btn-secondary h-11"
             >
               Next
             </button>

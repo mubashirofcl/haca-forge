@@ -273,7 +273,8 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
                   step="0.05"
                   value={zoom}
                   onChange={(e) => setZoom(parseFloat(e.target.value))}
-                  className="w-full"
+                  aria-label="Zoom"
+                  className="ui-range w-full h-11 cursor-pointer"
                 />
                 <ZoomIn className="w-4 h-4 text-slate-400 shrink-0" />
                 <button
@@ -293,7 +294,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline"
+                  className="text-xs font-semibold text-ui-ink hover:text-ui-ink underline"
                 >
                   Choose a different photo
                 </button>
@@ -302,9 +303,9 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
           ) : (
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="w-full py-12 px-6 border-2 border-dashed border-slate-300 hover:border-purple-400 rounded-3xl bg-slate-50/50 hover:bg-white text-center cursor-pointer transition-all space-y-3 group"
+              className="w-full py-12 px-6 border-2 border-dashed border-slate-300 hover:border-ui-ink rounded-3xl bg-slate-50/50 hover:bg-white text-center cursor-pointer transition-all space-y-3 group"
             >
-              <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto group-hover:scale-105 transition-transform">
+              <div className="w-14 h-14 rounded-2xl bg-ui-card text-ui-ink flex items-center justify-center mx-auto group-hover:scale-105 transition-transform">
                 <Upload className="w-7 h-7" />
               </div>
               <div>

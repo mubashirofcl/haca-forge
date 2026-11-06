@@ -58,7 +58,7 @@ export const NotificationToastContainer: React.FC = () => {
                   ? 'bg-rose-100 text-rose-600'
                   : isDeadline
                   ? 'bg-amber-100 text-amber-600'
-                  : 'bg-indigo-100 text-[#7a6af6]'
+                  : 'bg-ui-card-hover text-ui-ink'
               }`}
             >
               {isAlert ? (
@@ -82,7 +82,7 @@ export const NotificationToastContainer: React.FC = () => {
                 <Link
                   to={toast.link}
                   onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#7a6af6] hover:underline mt-1.5"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-ui-ink hover:underline mt-1.5"
                 >
                   <span>View Details</span>
                   <ExternalLink className="w-3 h-3" />

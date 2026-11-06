@@ -57,10 +57,10 @@ export const WelcomePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-radial from-slate-900 via-indigo-950 to-slate-950 text-white relative">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-ui-ink text-white relative">
       <div className="glass-modal max-w-lg w-full p-8 sm:p-10 rounded-3xl border border-white/20 shadow-2xl relative space-y-6">
         <div className="text-center space-y-2">
-          <div className="inline-block px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
+          <div className="inline-block px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-white/10 text-white border border-white/20">
             Welcome Setup
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
@@ -97,7 +97,7 @@ export const WelcomePage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsCropModalOpen(true)}
-              className="text-xs font-semibold text-purple-300 hover:text-purple-200"
+              className="text-xs font-semibold text-white underline hover:no-underline"
             >
               {avatarUrl ? 'Change Photo' : 'Upload Photo (Optional)'}
             </button>
@@ -114,7 +114,7 @@ export const WelcomePage: React.FC = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Jane Doe"
-              className="w-full px-4 py-3 rounded-2xl bg-white/10 border border-white/20 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 min-h-[44px]"
+              className="w-full px-4 py-3 rounded-2xl bg-white/10 border border-white/20 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-white min-h-[44px]"
             />
           </div>
 
@@ -129,7 +129,7 @@ export const WelcomePage: React.FC = () => {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+919876543210"
-              className="w-full px-4 py-3 rounded-2xl bg-white/10 border border-white/20 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 min-h-[44px]"
+              className="w-full px-4 py-3 rounded-2xl bg-white/10 border border-white/20 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-white min-h-[44px]"
             />
             {phone && !isPhoneValid && (
               <p className="text-xs text-rose-300 font-semibold mt-1">
@@ -142,7 +142,7 @@ export const WelcomePage: React.FC = () => {
             <button
               type="submit"
               disabled={submitting || !canSubmit}
-              className="w-full py-3.5 px-6 rounded-2xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:hover:bg-purple-600 text-white font-bold text-sm transition-all shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
+              className="w-full py-3.5 px-6 rounded-2xl bg-white hover:bg-ui-card disabled:opacity-40 disabled:hover:bg-white text-ui-ink font-bold text-sm transition-all shadow-lg flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
             >
               {submitting ? (
                 <span>Setting up your workspace...</span>

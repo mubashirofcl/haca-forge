@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useDialogFocus } from '../../lib/useDialogFocus';
 import { apiFetch } from '../../lib/api';
 import {
   DEPARTMENTS,
@@ -52,11 +53,18 @@ export const AccessRequestsPage: React.FC = () => {
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [deptFilter, setDeptFilter] = useState<string>('all');
+  const [deptOptions, setDeptOptions] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Dialog states
   const [selectedRequest, setSelectedRequest] = useState<AccessRequestItem | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | 'info' | null>(null);
+  // Action modal keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
+  const actionDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(actionDialogRef, !!(selectedRequest && actionType), () => {
+    setSelectedRequest(null);
+    setActionType(null);
+  });
 
   // Approve dialog form fields
   const [assignedRole, setAssignedRole] = useState<UserRole>('team_member');
@@ -120,6 +128,14 @@ export const AccessRequestsPage: React.FC = () => {
         `/admin/access-requests?${params.toString()}`
       );
       setRequests(res.data || []);
+      // Filter options come from the requests themselves. Keep ones already seen, so narrowing the list does not remove them.
+      setDeptOptions((prev) => {
+        const names = new Set(prev);
+        (res.data || []).forEach((r) => {
+          if (r.department) names.add(r.department);
+        });
+        return Array.from(names).sort((a, b) => a.localeCompare(b));
+      });
     } catch (err) {
       console.error('Failed to fetch requests', err);
     } finally {
@@ -217,16 +233,16 @@ export const AccessRequestsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            <h1 className="text-[28px] sm:text-[32px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink">
               Access Requests
             </h1>
             {pendingCount > 0 && (
-              <span className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-full border border-amber-200">
+              <span className="status-chip status-waiting text-xs font-semibold px-3 py-1">
                 {pendingCount} Pending
               </span>
             )}
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+          <p className="text-xs sm:text-sm text-ui-muted mt-1">
             Review public registrations, confirm role scope, and issue activation invites.
           </p>
         </div>
@@ -235,27 +251,25 @@ export const AccessRequestsPage: React.FC = () => {
           <button
             onClick={handleBulkApprove}
             disabled={isBulkApproving}
-            className="px-5 py-2.5 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-pill flex items-center gap-2 self-start sm:self-auto disabled:opacity-50"
+            className="ui-btn ui-btn-primary h-11 gap-2 self-start sm:self-auto"
           >
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <ShieldCheck className="w-4 h-4" aria-hidden="true" />
             <span>{isBulkApproving ? 'Approving...' : `Bulk Approve (${selectedIds.length})`}</span>
           </button>
         )}
       </div>
 
       {/* Filter Bar */}
-      <div className="glass-card p-4 rounded-3xl shadow-sm border border-slate-200/80 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="glass-card p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="ui-tabs flex-wrap max-w-full rounded-ui-card">
           {/* Status Pills */}
           {(['pending', 'approved', 'rejected', 'info_needed', 'all'] as const).map((st) => (
             <button
               key={st}
+              type="button"
+              aria-pressed={statusFilter === st}
               onClick={() => setStatusFilter(st)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold capitalize transition-all ${
-                statusFilter === st
-                  ? 'bg-[#0d0e12] text-white shadow-xs'
-                  : 'bg-white/80 text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
+              className={`ui-tab capitalize ${statusFilter === st ? 'is-active' : ''}`}
             >
               {st.replace('_', ' ')}
             </button>
@@ -265,28 +279,32 @@ export const AccessRequestsPage: React.FC = () => {
         {/* Department & Search dropdowns */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Department Filter */}
-          <select
-            value={deptFilter}
-            onChange={(e) => setDeptFilter(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
-          >
-            <option value="all">All Departments</option>
-            {DEPARTMENTS.map((d) => (
-              <option key={d.code} value={d.name}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+          {deptOptions.length > 0 && (
+            <select
+              aria-label="Department"
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              className="ui-select cursor-pointer"
+            >
+              <option value="all">All Departments</option>
+              {deptOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          )}
 
           {/* Search box */}
           <div className="relative flex-1 sm:w-56">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-ui-muted" />
             <input
+              aria-label="Search candidate"
               type="text"
               placeholder="Search candidate..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+              className="ui-input w-full pl-8 pr-3"
             />
           </div>
         </div>
@@ -294,13 +312,13 @@ export const AccessRequestsPage: React.FC = () => {
 
       {/* Select All Pending checkbox if there are pending items */}
       {statusFilter === 'pending' && filteredRequests.length > 0 && (
-        <div className="flex items-center gap-2 pl-2 text-xs text-slate-600">
+        <div className="flex items-center gap-2 pl-2 text-xs text-ui-text">
           <input
             type="checkbox"
             id="selectAllPending"
             checked={selectedIds.length === filteredRequests.length && filteredRequests.length > 0}
             onChange={selectAllPending}
-            className="w-4 h-4 rounded text-[#7a6af6] focus:ring-[#7a6af6] cursor-pointer"
+            className="w-4 h-4 rounded text-ui-ink focus:ring-ui-ink cursor-pointer"
           />
           <label htmlFor="selectAllPending" className="cursor-pointer font-medium">
             Select all {filteredRequests.length} pending request(s)
@@ -310,13 +328,13 @@ export const AccessRequestsPage: React.FC = () => {
 
       {/* Request Cards Grid */}
       {isLoading ? (
-        <div className="py-20 text-center text-xs text-slate-400 animate-pulse">
+        <div className="py-20 text-center text-xs text-ui-muted animate-pulse">
           Loading access requests...
         </div>
       ) : filteredRequests.length === 0 ? (
-        <div className="glass-card p-12 text-center rounded-3xl border border-slate-200/80">
-          <h3 className="text-base font-bold text-slate-900">No requests found</h3>
-          <p className="text-xs text-slate-500 mt-1">
+        <div className="glass-card p-12 text-center">
+          <h3 className="text-base font-bold text-ui-ink">No requests found</h3>
+          <p className="text-xs text-ui-muted mt-1">
             There are currently no access requests matching the selected filters.
           </p>
         </div>
@@ -326,20 +344,20 @@ export const AccessRequestsPage: React.FC = () => {
             return (
               <div
                 key={req._id}
-                className={`glass-card p-5 sm:p-6 rounded-3xl flex flex-col justify-between shadow-glass hover:scale-[1.01] transition-all border border-white/80 ${
-                  selectedIds.includes(req._id) ? 'ring-2 ring-[#7a6af6] bg-violet-50/20' : ''
+                className={`glass-card p-5 sm:p-6 flex flex-col justify-between ${
+                  selectedIds.includes(req._id) ? 'outline outline-2 outline-ui-ink' : ''
                 }`}
               >
                 <div>
                   {/* Top user bar */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 mb-3">
+                    <div className="flex items-center gap-3 min-w-0 max-w-full">
                       {req.status === 'pending' && (
                         <input
                           type="checkbox"
                           checked={selectedIds.includes(req._id)}
                           onChange={() => toggleSelect(req._id)}
-                          className="w-4 h-4 rounded text-[#7a6af6] focus:ring-[#7a6af6] cursor-pointer"
+                          className="w-4 h-4 rounded text-ui-ink focus:ring-ui-ink cursor-pointer"
                           title="Select for bulk approve"
                         />
                       )}
@@ -348,24 +366,24 @@ export const AccessRequestsPage: React.FC = () => {
                         userId={req._id}
                         size="md"
                       />
-                      <div>
-                        <h3 className="font-bold text-sm text-slate-900 leading-snug">{req.name}</h3>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                          <Mail className="w-3 h-3 text-slate-400" />
-                          <span>{req.email}</span>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-sm text-ui-ink leading-snug truncate">{req.name}</h3>
+                        <div className="text-[11px] text-ui-muted flex items-center gap-1 min-w-0">
+                          <Mail className="w-3 h-3 text-ui-muted shrink-0" aria-hidden="true" />
+                          <span className="truncate" title={req.email}>{req.email}</span>
                         </div>
                       </div>
                     </div>
 
                     <span
-                      className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                      className={`status-chip text-[11px] font-semibold px-2.5 py-1 capitalize shrink-0 ${
                         req.status === 'pending'
-                          ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                          ? 'status-waiting'
                           : req.status === 'approved'
-                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                          ? 'status-approved'
                           : req.status === 'rejected'
-                          ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                          : 'bg-blue-100 text-blue-700 border border-blue-200'
+                          ? 'status-changes'
+                          : 'status-in-progress'
                       }`}
                     >
                       {req.status.replace('_', ' ')}
@@ -373,99 +391,101 @@ export const AccessRequestsPage: React.FC = () => {
                   </div>
 
                   {/* Submitted attributes info box */}
-                  <div className="space-y-1.5 text-xs text-slate-700 bg-white/70 p-3.5 rounded-2xl border border-slate-100 my-3">
+                  <div className="space-y-1.5 text-xs text-ui-text bg-white/70 p-3.5 rounded-2xl border border-ui-line my-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-400 flex items-center gap-1">
+                      <span className="text-ui-muted flex items-center gap-1">
                         <Building className="w-3 h-3" /> Department:
                       </span>
-                      <span className="font-semibold text-slate-900">{req.department}</span>
+                      <span className="font-semibold text-ui-ink">{req.department}</span>
                     </div>
 
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-400 flex items-center gap-1">
+                      <span className="text-ui-muted flex items-center gap-1">
                         <Briefcase className="w-3 h-3" /> Job Role:
                       </span>
-                      <span className="font-semibold text-slate-900">{req.jobRole || 'None specified'}</span>
+                      <span className="font-semibold text-ui-ink">{req.jobRole || 'None specified'}</span>
                     </div>
 
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-400 flex items-center gap-1">
+                      <span className="text-ui-muted flex items-center gap-1">
                         <UserCheck className="w-3 h-3" /> Requested Role:
                       </span>
-                      <span className="font-bold text-[#7a6af6] capitalize">
+                      <span className="font-bold text-ui-ink capitalize">
                         {req.requestedRole?.replace('_', ' ')}
                       </span>
                     </div>
 
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-400 flex items-center gap-1">
+                      <span className="text-ui-muted flex items-center gap-1">
                         <Phone className="w-3 h-3" /> Phone:
                       </span>
-                      <span className="text-slate-700">{req.phone}</span>
+                      <span className="text-ui-text">{req.phone}</span>
                     </div>
                   </div>
 
                   {/* Reason text */}
                   <div className="mb-3">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                    <span className="text-[11px] text-ui-muted font-bold block mb-1">
                       Reason for Access
                     </span>
-                    <p className="text-xs text-slate-600 bg-white/50 p-2.5 rounded-xl border border-slate-100 line-clamp-3">
+                    <p className="text-xs text-ui-text bg-white/50 p-2.5 rounded-xl border border-ui-line line-clamp-3">
                       {req.reason}
                     </p>
                   </div>
 
                   {/* Review Outcome info if not pending */}
                   {req.status === 'approved' && (
-                    <div className="mt-3 p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs space-y-1">
-                      <div className="text-emerald-800 font-bold flex items-center gap-1">
+                    <div className="mt-3 p-3 status-tint status-approved rounded-xl text-xs space-y-1">
+                      <div className="font-bold flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Approved by {req.reviewedBy?.name || 'Admin'}
                       </div>
-                      <div className="text-slate-600">
-                        Assigned: <strong className="text-slate-900">{req.assignedRole?.replace('_', ' ')}</strong> ({req.assignedCapacity || 40}h/wk)
+                      <div className="text-ui-text">
+                        Assigned: <strong className="text-ui-ink">{req.assignedRole?.replace('_', ' ')}</strong> ({req.assignedCapacity || 40}h/wk)
                       </div>
                     </div>
                   )}
 
                   {req.status === 'rejected' && req.rejectReason && (
-                    <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-1">
-                      <div className="text-rose-800 font-bold flex items-center gap-1">
+                    <div className="mt-3 p-3 status-tint status-changes rounded-xl text-xs space-y-1">
+                      <div className="font-bold flex items-center gap-1">
                         <XCircle className="w-3.5 h-3.5" /> Rejection Reason
                       </div>
-                      <p className="text-slate-700">{req.rejectReason}</p>
+                      <p className="text-ui-text">{req.rejectReason}</p>
                     </div>
                   )}
 
                   {req.status === 'info_needed' && req.infoQuestion && (
-                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs space-y-1">
-                      <div className="text-blue-800 font-bold flex items-center gap-1">
+                    <div className="mt-3 p-3 status-tint status-in-progress rounded-xl text-xs space-y-1">
+                      <div className="font-bold flex items-center gap-1">
                         <HelpCircle className="w-3.5 h-3.5" /> Clarification Question
                       </div>
-                      <p className="text-slate-700">{req.infoQuestion}</p>
+                      <p className="text-ui-text">{req.infoQuestion}</p>
                     </div>
                   )}
                 </div>
 
                 {/* Actions for Pending or Info Needed Requests */}
                 {req.status === 'pending' && (
-                  <div className="pt-4 border-t border-slate-200/80 flex items-center justify-between gap-2 mt-2">
+                  <div className="pt-4 border-t border-ui-line flex items-center justify-between gap-2 mt-2">
                     <button
+                      type="button"
                       onClick={() => openApproveModal(req)}
-                      className="flex-1 py-2 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full flex items-center justify-center gap-1.5 shadow-sm transition-transform hover:scale-105"
+                      className="ui-btn ui-btn-primary h-11 flex-1 min-w-0 px-3 gap-1.5"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
                       <span>Approve</span>
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => {
                         setSelectedRequest(req);
                         setActionType('reject');
                         setActionReason('');
                       }}
-                      className="flex-1 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-full flex items-center justify-center gap-1.5 transition-colors"
+                      className="ui-btn ui-btn-secondary h-11 flex-1 min-w-0 px-3 gap-1.5"
                     >
-                      <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                      <XCircle className="w-3.5 h-3.5" aria-hidden="true" />
                       <span>Reject</span>
                     </button>
 
@@ -475,10 +495,12 @@ export const AccessRequestsPage: React.FC = () => {
                         setActionType('info');
                         setActionReason('');
                       }}
+                      type="button"
                       title="Request More Info"
-                      className="p-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-full transition-colors"
+                      aria-label="Request More Info"
+                      className="ui-icon-btn shrink-0"
                     >
-                      <HelpCircle className="w-4 h-4 text-blue-500" />
+                      <HelpCircle className="w-4 h-4" aria-hidden="true" />
                     </button>
                   </div>
                 )}
@@ -490,18 +512,24 @@ export const AccessRequestsPage: React.FC = () => {
 
       {/* Action Modal (Approve, Reject, or Info) */}
       {selectedRequest && actionType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="glass-modal max-w-lg w-full max-h-[92vh] overflow-y-auto p-5 sm:p-8 shadow-modal-glass border border-white relative rounded-3xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 mb-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 ui-scrim">
+          <div
+            ref={actionDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="access-action-title"
+            className="glass-modal max-w-lg w-full max-h-[92vh] overflow-y-auto p-5 sm:p-8 relative"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-ui-line mb-5">
               <div>
-                <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                <h3 id="access-action-title" className="text-base sm:text-lg font-bold text-ui-ink">
                   {actionType === 'approve'
                     ? `Approve Access: ${selectedRequest.name}`
                     : actionType === 'reject'
                     ? `Reject Request: ${selectedRequest.name}`
                     : `Request Info: ${selectedRequest.name}`}
                 </h3>
-                <p className="text-xs text-slate-500">{selectedRequest.email}</p>
+                <p className="text-xs text-ui-muted">{selectedRequest.email}</p>
               </div>
               <button
                 type="button"
@@ -509,15 +537,16 @@ export const AccessRequestsPage: React.FC = () => {
                   setSelectedRequest(null);
                   setActionType(null);
                 }}
-                className="w-8 h-8 rounded-full hover:bg-slate-200/60 text-slate-500 flex items-center justify-center"
+                aria-label="Close"
+                className="ui-icon-btn shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {actionMessage ? (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <div role="status" className="p-4 status-tint status-approved rounded-2xl text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                 <span>{actionMessage}</span>
               </div>
             ) : (
@@ -527,13 +556,14 @@ export const AccessRequestsPage: React.FC = () => {
                     {/* Final Role & Job Role */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        <label className="block text-xs font-semibold text-ui-text mb-1">
                           Final System Role *
                         </label>
                         <select
+                          aria-label="Final system role"
                           value={assignedRole}
                           onChange={(e) => setAssignedRole(e.target.value as UserRole)}
-                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                          className="ui-select w-full cursor-pointer"
                         >
                           {ROLE_KEYS.map((rk) => (
                             <option key={rk} value={rk}>
@@ -541,19 +571,20 @@ export const AccessRequestsPage: React.FC = () => {
                             </option>
                           ))}
                         </select>
-                        <p className="text-[10px] text-slate-400 mt-1 pl-2">
+                        <p className="text-[11px] text-ui-muted mt-1 pl-2">
                           Requested: {selectedRequest.requestedRole ? (ROLE_LABELS[selectedRequest.requestedRole as keyof typeof ROLE_LABELS] || selectedRequest.requestedRole.replace('_', ' ')) : ''}
                         </p>
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        <label className="block text-xs font-semibold text-ui-text mb-1">
                           Job Role *
                         </label>
                         <select
+                          aria-label="Job role"
                           value={assignedJobRole}
                           onChange={(e) => setAssignedJobRole(e.target.value)}
-                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                          className="ui-select w-full cursor-pointer"
                         >
                           {JOB_ROLES.map((role) => (
                             <option key={role} value={role}>
@@ -567,13 +598,14 @@ export const AccessRequestsPage: React.FC = () => {
                     {/* Department & Capacity */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        <label className="block text-xs font-semibold text-ui-text mb-1">
                           Department *
                         </label>
                         <select
+                          aria-label="Department"
                           value={assignedDept}
                           onChange={(e) => setAssignedDept(e.target.value)}
-                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs cursor-pointer"
+                          className="ui-select w-full cursor-pointer"
                         >
                           {DEPARTMENTS.map((dept) => (
                             <option key={dept.code} value={dept.name}>
@@ -584,7 +616,7 @@ export const AccessRequestsPage: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        <label className="block text-xs font-semibold text-ui-text mb-1">
                           Weekly Capacity (Hours)
                         </label>
                         <input
@@ -593,7 +625,7 @@ export const AccessRequestsPage: React.FC = () => {
                           max={80}
                           value={assignedCapacity}
                           onChange={(e) => setAssignedCapacity(Number(e.target.value))}
-                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+                          className="ui-input w-full"
                         />
                       </div>
                     </div>
@@ -601,7 +633,7 @@ export const AccessRequestsPage: React.FC = () => {
                   </>
                 ) : (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className="block text-xs font-semibold text-ui-text mb-1">
                       {actionType === 'reject' ? 'Rejection Reason *' : 'Question for Applicant *'}
                     </label>
                     <textarea
@@ -614,19 +646,19 @@ export const AccessRequestsPage: React.FC = () => {
                           ? 'Explain why this request is not approved...'
                           : 'State what clarification is needed before approval...'
                       }
-                      className="w-full p-3.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs resize-none"
+                      className="ui-input ui-textarea w-full resize-none"
                     />
                   </div>
                 )}
 
-                <div className="pt-3 flex justify-end gap-3 border-t border-slate-200/80">
+                <div className="pt-3 flex flex-wrap justify-end gap-3 border-t border-ui-line">
                   <button
                     type="button"
                     onClick={() => {
                       setSelectedRequest(null);
                       setActionType(null);
                     }}
-                    className="px-5 py-2.5 rounded-full border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors"
+                    className="ui-btn ui-btn-secondary h-11"
                   >
                     Cancel
                   </button>
@@ -635,7 +667,7 @@ export const AccessRequestsPage: React.FC = () => {
                     type="button"
                     disabled={isSubmitting}
                     onClick={handleAction}
-                    className="px-6 py-2.5 bg-[#0d0e12] hover:bg-black text-white text-xs font-bold rounded-full shadow-pill disabled:opacity-50 transition-transform active:scale-95"
+                    className="ui-btn ui-btn-primary h-11"
                   >
                     {isSubmitting ? 'Processing...' : 'Confirm'}
                   </button>

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useDialogFocus } from '../../lib/useDialogFocus';
 import { Share2, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { ChatChannelTypeDetail } from '@mmp/shared';
@@ -89,27 +90,31 @@ export function ShareToChatModal({
     }
   }
 
+  // Modal keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef, true, onClose);
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+      className="fixed inset-0 z-50 ui-scrim flex items-center justify-center p-4"
       data-testid="share-to-chat-modal"
     >
-      <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="share-to-chat-title" className="glass-modal max-w-lg w-full max-h-[90vh] overflow-y-auto">
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div className="px-5 py-4 border-b border-ui-line flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-white/70 text-ui-ink flex items-center justify-center">
               <Share2 className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">Share to Chat</h3>
-              <p className="text-xs text-slate-500">Post approved asset into team conversations</p>
+              <h3 id="share-to-chat-title" className="text-base font-bold text-ui-ink">Share to Chat</h3>
+              <p className="text-xs text-ui-muted">Post approved asset into team conversations</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            aria-label="Close"
+            className="ui-icon-btn"
           >
             <X className="w-4 h-4" />
           </button>
@@ -118,45 +123,45 @@ export function ShareToChatModal({
         {/* Modal Body */}
         <form onSubmit={handleShare} className="p-5 space-y-4">
           {error && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+            <div role="alert" className="p-3 rounded-xl status-tint status-changes text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {/* Asset Preview Card */}
-          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-white/60 border border-ui-line flex items-center gap-3">
             {thumbnailUrl ? (
               <img
                 src={thumbnailUrl}
                 alt={title}
-                className="w-14 h-14 rounded-lg object-cover bg-slate-800 shrink-0 border border-slate-200"
+                className="w-14 h-14 rounded-lg object-cover bg-slate-800 shrink-0 border border-ui-line"
               />
             ) : (
-              <div className="w-14 h-14 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center shrink-0">
+              <div className="w-14 h-14 rounded-lg bg-white/70 border border-ui-line text-ui-ink flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                <span className="status-chip status-approved text-[11px] font-semibold px-2 py-0.5">
                   Approved
                 </span>
-                <span className="text-xs text-slate-400 truncate">
+                <span className="text-xs text-ui-muted truncate">
                   {contentPieceTitle} • {stageKey}
                 </span>
               </div>
-              <h4 className="text-xs font-semibold text-slate-900 truncate mt-1">{title}</h4>
+              <h4 className="text-xs font-semibold text-ui-ink truncate mt-1">{title}</h4>
             </div>
           </div>
 
           {/* Destination Channel Selector */}
           <div>
-            <label htmlFor="destination-channel-select" className="block text-xs font-semibold text-slate-700 mb-1">
-              Destination Channel <span className="text-rose-500">*</span>
+            <label htmlFor="destination-channel-select" className="block text-xs font-semibold text-ui-text mb-1">
+              Destination Channel <span className="text-ui-ink" aria-hidden="true">*</span>
             </label>
             {loading ? (
-              <div className="p-2.5 rounded-xl border border-slate-200 text-xs text-slate-400">
+              <div className="p-2.5 rounded-xl border border-ui-line text-xs text-ui-muted">
                 Loading channels...
               </div>
             ) : (
@@ -164,7 +169,7 @@ export function ShareToChatModal({
                 id="destination-channel-select"
                 value={selectedChannelId}
                 onChange={(e) => setSelectedChannelId(e.target.value)}
-                className="w-full text-xs rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="ui-select w-full"
                 required
               >
                 {channels.map((c) => {
@@ -187,7 +192,7 @@ export function ShareToChatModal({
 
           {/* Note Input */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-ui-text mb-1">
               Add a note (optional)
             </label>
             <textarea
@@ -196,29 +201,29 @@ export function ShareToChatModal({
               placeholder="e.g. Approved hook cut ready for thumbnail design and reel edit..."
               rows={3}
               maxLength={1000}
-              className="w-full text-xs rounded-xl border border-slate-200 p-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400 resize-none"
+              className="ui-input ui-textarea w-full resize-none"
             />
           </div>
 
           {/* Scoped Privacy Notice */}
-          <p className="text-[11px] text-slate-500 bg-indigo-50/50 p-2.5 rounded-xl border border-indigo-100">
+          <p className="text-[11px] text-ui-muted bg-white/70 p-2.5 rounded-xl border border-ui-line">
             <strong>Security Notice:</strong> Sharing gives channel members view and download access to this specific asset only. Upstream drafts, pipelines, and review feedback remain private.
           </p>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-ui-line">
             <button
               type="button"
               onClick={onClose}
               disabled={sharing}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition-colors"
+              className="ui-btn ui-btn-secondary h-11"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={sharing || loading || !selectedChannelId}
-              className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-50 flex items-center gap-1.5"
+              className="ui-btn ui-btn-primary h-11 gap-1.5"
             >
               <Share2 className="w-3.5 h-3.5" />
               {sharing ? 'Sharing...' : 'Share to Chat'}

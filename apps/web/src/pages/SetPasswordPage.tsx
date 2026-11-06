@@ -106,7 +106,7 @@ export const SetPasswordPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden bg-ui-canvas">
       <div className="w-full max-w-[440px] z-10">
         <div className="text-center mb-8 flex flex-col items-center">
           <img
@@ -125,7 +125,7 @@ export const SetPasswordPage: React.FC = () => {
         <div className="glass-modal p-8 shadow-modal-glass border border-white">
           {isVerifying ? (
             <div className="text-center py-8 space-y-3">
-              <div className="w-8 h-8 border-2 border-[#7a6af6] border-t-transparent rounded-full animate-spin mx-auto" />
+              <div className="w-8 h-8 border-2 border-ui-ink border-t-transparent rounded-full animate-spin mx-auto" />
               <p className="text-xs text-slate-500 font-medium">Verifying security token...</p>
             </div>
           ) : !token || verifyError ? (
@@ -168,11 +168,11 @@ export const SetPasswordPage: React.FC = () => {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {targetAccount && (
-                <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-2xl text-xs text-purple-900 flex items-center gap-2.5">
-                  <ShieldCheck className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                <div className="p-3 bg-ui-card border border-ui-line rounded-2xl text-xs text-ui-ink flex items-center gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-ui-ink flex-shrink-0" />
                   <div className="leading-tight">
                     <span className="font-semibold block text-slate-800">{targetAccount.name}</span>
-                    <span className="text-[11px] text-purple-700">{targetAccount.email}</span>
+                    <span className="text-[11px] text-ui-ink">{targetAccount.email}</span>
                   </div>
                 </div>
               )}
@@ -196,7 +196,7 @@ export const SetPasswordPage: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter new secure password"
-                    className="w-full pl-11 pr-11 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+                    className="w-full pl-11 pr-11 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-ui-ink shadow-xs"
                   />
                   <button
                     type="button"
@@ -221,7 +221,7 @@ export const SetPasswordPage: React.FC = () => {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Re-enter password"
-                    className="w-full pl-11 pr-11 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] shadow-xs"
+                    className="w-full pl-11 pr-11 py-3 bg-white/80 border border-slate-200 rounded-full text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-ui-ink shadow-xs"
                   />
                   <button
                     type="button"
