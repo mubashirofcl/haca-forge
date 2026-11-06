@@ -33,6 +33,7 @@ router.post(
 router.patch(
   '/:id',
   requirePermission('work.update.own'),
+  workItemController.guardWorkItemPatch,
   validate(workItemUpdateSchema),
   workItemController.updateWorkItem
 );

@@ -3,7 +3,7 @@ import { WorkItem } from './model.js';
 import { Department } from '../departments/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logActivity, listRecentActivities } from '../activity/service.js';
-import { normalizeWorkType, WORK_TYPE_DEPARTMENT_MAP, getAvailableActions } from '@mmp/shared';
+import { normalizeWorkType, normalizeRole, WORK_TYPE_DEPARTMENT_MAP, getAvailableActions } from '@mmp/shared';
 
 export async function createWorkItem(data, user) {
   // 1. Resolve Department ID (auto-infer from workType if omitted)
@@ -286,12 +286,78 @@ export async function getWorkItemById(id, user) {
   return result;
 }
 
+/** The one field a step's owner sets through PATCH: the link saved after submitting a deliverable. */
+const OWNER_PATCH_FIELDS = new Set(['deliverableUrl']);
+
+function workItemNotFound() {
+  const error = new Error('Work item not found');
+  error.statusCode = 404;
+  error.code = 'NOT_FOUND';
+  return error;
+}
+
+function workItemPatchForbidden(message) {
+  const error = new Error(message);
+  error.statusCode = 403;
+  error.code = 'FORBIDDEN_ACTION';
+  return error;
+}
+
+/**
+ * Who may PATCH a work item. Ownership always comes from the stored step, never the request.
+ * - admin, sm_manager: every field.
+ * - The step's owner, in any other role: deliverableUrl only, until the step is Approved or Published.
+ * - team_member who owns another step of the same content piece: 403.
+ * - Any other team_member: 404, the same response as a missing item or an invalid id.
+ * - creative_head who does not own the step: 403.
+ */
+export async function assertCanPatchWorkItem(id, body, user) {
+  const role = normalizeRole(user.role);
+  if (role === 'admin' || role === 'sm_manager') return;
+
+  const isTeamMember = role === 'team_member';
+  if (isTeamMember && !mongoose.isValidObjectId(id)) throw workItemNotFound();
+
+  const stored = await WorkItem.findById(id).select('ownerId contentPieceId status').lean();
+  if (!stored) throw workItemNotFound();
+
+  const userId = (user._id || user.id || user.userId)?.toString();
+  const isOwner = Boolean(stored.ownerId && userId && stored.ownerId.toString() === userId);
+
+  if (isTeamMember && !isOwner) {
+    const onSamePiece =
+      stored.contentPieceId && userId
+        ? await WorkItem.exists({ contentPieceId: stored.contentPieceId, ownerId: userId })
+        : null;
+    if (!onSamePiece) throw workItemNotFound();
+  }
+
+  if (!isOwner) throw workItemPatchForbidden('Only an SM Manager or Admin can edit this work item');
+
+  const fields = Object.keys(body || {});
+  if (!fields.every((field) => OWNER_PATCH_FIELDS.has(field))) {
+    throw workItemPatchForbidden('The step owner can only update the deliverable link');
+  }
+  // An empty body changes nothing, and the deliverable flow can send one when no link was given.
+  if (fields.length > 0 && ['Approved', 'Published'].includes(stored.status)) {
+    throw workItemPatchForbidden('The deliverable link cannot change after the step is approved');
+  }
+}
+
 export async function updateWorkItem(id, data, user) {
   const workItem = await WorkItem.findById(id);
   if (!workItem) {
     const error = new Error('Work item not found');
     error.statusCode = 404;
     throw error;
+  }
+
+  // Nothing to change: succeed without saving or logging an update.
+  if (Object.keys(data).length === 0) {
+    return workItem.populate([
+      { path: 'departmentId', select: 'name code' },
+      { path: 'ownerId', select: 'name email role jobRole' },
+    ]);
   }
 
   if (data.title) workItem.title = data.title.trim();
@@ -303,7 +369,11 @@ export async function updateWorkItem(id, data, user) {
       workItem.assignedAt = data.ownerId ? new Date() : null;
     }
   }
-  if (data.deadline) workItem.deadline = data.deadline;
+  if (data.deadline) {
+    workItem.deadline = data.deadline;
+    workItem.dueDate = data.deadline;
+    workItem.dueDateSource = 'manual';
+  }
   if (data.estimatedEffortHrs !== undefined) workItem.estimatedEffortHrs = data.estimatedEffortHrs;
   if (data.priority) workItem.priority = data.priority;
   if (data.description !== undefined) {

@@ -243,6 +243,11 @@ const workItemSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    dueDateSource: {
+      type: String,
+      enum: ['auto', 'manual', null],
+      default: null,
+    },
     // Deliverable link fields
     contentLink: {
       type: String,

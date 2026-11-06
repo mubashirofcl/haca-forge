@@ -32,6 +32,16 @@ export async function getWorkItem(req, res, next) {
   }
 }
 
+/** Runs before validation, so a blocked user learns nothing from validation errors. */
+export async function guardWorkItemPatch(req, res, next) {
+  try {
+    await workItemService.assertCanPatchWorkItem(req.params.id, req.body, req.user);
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function updateWorkItem(req, res, next) {
   try {
     const item = await workItemService.updateWorkItem(req.params.id, req.body, req.user);
