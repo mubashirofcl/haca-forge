@@ -181,7 +181,8 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
           isResponse: true,
         });
 
-      expect(res.status).toBe(403);
+      // Not on this deliverable, so the item is not confirmed to exist.
+      expect(res.status).toBe(404);
     });
 
     it('allows assigned owner to submit owner response for Round 1', async () => {
@@ -431,7 +432,7 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
       const blocker = await Blocker.findOne({ workItemId: blockerWorkItem._id, status: 'Active' });
       const res = await request(app)
         .post(`/api/blockers/${blocker._id}/notify`)
-        .set('Authorization', `Bearer ${leadToken}`);
+        .set('Authorization', `Bearer ${adminToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);

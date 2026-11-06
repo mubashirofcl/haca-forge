@@ -5,11 +5,13 @@ import { logActivity } from '../activity/service.js';
 import { createNotification } from '../notifications/service.js';
 import { sendMail } from '../../lib/mailer.js';
 import { BLOCKER_DEPENDENCY_REASONS } from '@mmp/shared';
+import { isTeamMember, participantWorkItemIds, requireParticipant } from '../workItems/access.js';
 
 /**
  * Mark a deliverable Blocked and alert dependency owner if applicable
  */
 export async function createBlocker(data, user) {
+  if (isTeamMember(user)) await requireParticipant(data?.workItemId, user);
   const { workItemId, reason, notes = '', dependencyOwnerId } = data;
 
   // Validate mandatory dependencyOwnerId if reason requires it
@@ -307,6 +309,11 @@ export async function listBlockers(filters = {}, user) {
 
   if (filters.reason) {
     query.reason = filters.reason;
+  }
+
+  // A team_member sees only blockers on deliverables they participate in.
+  if (isTeamMember(user)) {
+    query.workItemId = { $in: await participantWorkItemIds(user) };
   }
 
   const blockers = await Blocker.find(query)

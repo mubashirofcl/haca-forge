@@ -23,6 +23,7 @@ import { env } from "./config/env.js";
 import { connectDB } from "./config/db.js";
 import { logger } from "./lib/logger.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { redactContact } from "./middleware/redactContact.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { initSentry, sentryErrorHandler } from "./config/sentry.js";
 import rateLimit from "express-rate-limit";
@@ -180,6 +181,7 @@ io.on("connection", (socket) => {
 registerChatSocketIO(io);
 
 // 6. API Routes
+app.use(redactContact);
 app.use("/api", statusRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/me", profileRoutes);

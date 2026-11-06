@@ -478,13 +478,13 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
       expect(updated.seenAt).toBeDefined();
     });
 
-    it('rejects another worker attempting to mark rating as seen (HTTP 403)', async () => {
+    it('another worker cannot mark a rating as seen, or learn it exists (HTTP 404)', async () => {
       const res = await request(app)
         .post(`/api/submissions/ratings/${testRating2._id}/seen`)
         .set('Authorization', `Bearer ${workerBToken}`);
 
-      expect(res.status).toBe(403);
-      expect(res.body.error?.message).toContain('You can only mark your own rating as seen');
+      expect(res.status).toBe(404);
+      expect(res.body.error?.message).not.toContain('You can only mark your own rating as seen');
     });
   });
 

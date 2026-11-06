@@ -10,10 +10,12 @@ import {
   reorderClipsSchema,
 } from '@mmp/shared';
 import * as mediaController from './controller.js';
+import { clipParam } from '../workItems/access.js';
 
 // Router for clip-specific actions (/api/clips/...)
 export const clipsRouter = Router();
 clipsRouter.use(authenticate);
+clipsRouter.param('id', clipParam);
 
 clipsRouter.patch('/:id', validate(mediaItemUpdateSchema), mediaController.updateClipHandler);
 clipsRouter.post('/:id/replace', mediaController.replaceClipHandler);

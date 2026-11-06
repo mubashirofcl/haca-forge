@@ -7,6 +7,8 @@ import { Person } from '../people/model.js';
 import { sanitizeDocumentPayload } from './sanitizer.js';
 import { logActivity } from '../activity/service.js';
 import { recordRoundSubmission } from '../workItems/rounds.js';
+import { assertCanHoldEditorLock, canSeePrivateReview, isTeamMember, requireParticipant } from '../workItems/access.js';
+import { visibleVersionsFilter } from '../workItems/viewerRules.js';
 import { createNotification, getSocketIO } from '../notifications/service.js';
 import {
   assertDecisionAllowed,
@@ -360,7 +362,13 @@ export async function listSubmissions(workItemId, user) {
     }
   }
 
-  return Submission.find({ workItemId, version: { $gt: 0 } })
+  const versionFilter = { workItemId, version: { $gt: 0 } };
+  if (isTeamMember(user)) {
+    const allowed = await visibleVersionsFilter(workItem, user);
+    if (allowed) versionFilter._id = { $in: allowed };
+  }
+
+  return Submission.find(versionFilter)
     .sort({ version: -1 })
     .populate('submittedById', 'name email role jobRole')
     .populate('reviewedById', 'name email role');
@@ -394,6 +402,25 @@ export async function getSubmissionById(submissionId, user) {
   }
 
   const workId = submission.workItemId?._id || submission.workItemId;
+
+  // A participant on someone else's step sees only its approved output.
+  if (isTeamMember(user) && submission.workItemId) {
+    const allowed = await visibleVersionsFilter(submission.workItemId, user);
+    if (allowed && !allowed.includes(String(submission._id))) {
+      const err = new Error('You do not have permission to view this submission');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN_ACTION';
+      throw err;
+    }
+  }
+
+  // Revision notes stay with the step owner and leadership.
+  if (submission.workItemId && !canSeePrivateReview(user, submission.workItemId)) {
+    const subPrivate = submission.toObject ? submission.toObject() : { ...submission };
+    subPrivate.comments = [];
+    return subPrivate;
+  }
+
   const commentQuery = workId
     ? { $or: [{ submissionId: submission._id }, { workItemId: workId }] }
     : { submissionId: submission._id };
@@ -509,7 +536,7 @@ export async function listComments(submissionId, user) {
   const ownerId = (workItem?.ownerId?._id || workItem?.ownerId)?.toString();
 
   // Privacy Guard
-  const isReviewer = role === 'creative_head' || role === 'admin';
+  const isReviewer = role === 'creative_head' || role === 'admin' || role === 'sm_manager';
   const isStepOwner = ownerId === userId;
   if (!isReviewer && !isStepOwner) {
     const err = new Error('Comments are private to the assigned worker and reviewers');
@@ -1087,7 +1114,7 @@ export async function getRatingsSummary(personId, user) {
     distribution,
     monthlyTrend,
     averagePerStepType,
-    recentFeedback,
+    recentFeedback: role === 'executive' ? [] : recentFeedback,
   };
 }
 
@@ -1096,6 +1123,7 @@ export async function getRatingsSummary(personId, user) {
 // ==========================================
 
 export async function claimEditorLock(workItemId, user) {
+  await assertCanHoldEditorLock(workItemId, user);
   const userId = (user._id || user.id || user.userId)?.toString();
   const userName = user.name || 'Another user';
   const cutoff = new Date(Date.now() - 60000); // 60s timeout
@@ -1123,6 +1151,7 @@ export async function claimEditorLock(workItemId, user) {
 }
 
 export async function releaseEditorLock(workItemId, user) {
+  await assertCanHoldEditorLock(workItemId, user);
   const userId = (user._id || user.id || user.userId)?.toString();
   await EditorLock.deleteOne({ workItemId, userId });
   return { released: true };
@@ -1158,7 +1187,7 @@ export async function listWorkItemComments(workItemId, user) {
   const userId = (user._id || user.id || user.userId)?.toString();
   const ownerId = (workItem.ownerId?._id || workItem.ownerId)?.toString();
 
-  const isReviewer = role === 'creative_head' || role === 'admin';
+  const isReviewer = role === 'creative_head' || role === 'admin' || role === 'sm_manager';
   const isStepOwner = ownerId === userId;
   if (!isReviewer && !isStepOwner) {
     const err = new Error('Comments are private to the assigned worker and reviewers');

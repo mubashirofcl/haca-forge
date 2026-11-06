@@ -300,17 +300,19 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
 
           <div className="flex items-center gap-2">
             {/* Stamp comment at second */}
-            <button
-              onClick={() => {
-                videoRef.current?.pause();
-                setIsPlaying(false);
-                setIsAddingComment(true);
-              }}
-              className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white font-medium text-[11px] flex items-center gap-1 transition-colors"
-            >
-              <Clock className="w-3 h-3" />
-              Comment @ {formatTime(currentTime)}
-            </button>
+            {(onAddVideoComment || onAddCommentAtSecond) && (
+              <button
+                onClick={() => {
+                  videoRef.current?.pause();
+                  setIsPlaying(false);
+                  setIsAddingComment(true);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white font-medium text-[11px] flex items-center gap-1 transition-colors"
+              >
+                <Clock className="w-3 h-3" />
+                Comment @ {formatTime(currentTime)}
+              </button>
+            )}
 
             {/* Playback speed selector */}
             <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-white/10">

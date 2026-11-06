@@ -755,5 +755,7 @@ export async function getTodoItems(user) {
 
 export async function getWorkItemActivities(id, user) {
   const item = await getWorkItemById(id, user);
-  return listRecentActivities({ entityType: 'work_item', entityId: item._id, limit: 50 });
+  const { sanitizeActivities } = await import('./viewerRules.js');
+  const activities = await listRecentActivities({ entityType: 'work_item', entityId: item._id, limit: 50 });
+  return sanitizeActivities(activities, user, item);
 }

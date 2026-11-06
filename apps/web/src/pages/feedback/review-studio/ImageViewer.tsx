@@ -114,6 +114,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
 
   // Image click to drop comment pin
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!onAddPointComment) return;
     if (isPanning) return;
     if (!imgRef.current) return;
 
@@ -192,7 +193,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
 
       {/* Main View Area */}
       <div
-        className="flex-1 relative overflow-hidden flex items-center justify-center p-4 cursor-crosshair"
+        className={`flex-1 relative overflow-hidden flex items-center justify-center p-4 ${onAddPointComment ? 'cursor-crosshair' : ''}`}
         onMouseDown={handleMouseDown}
       >
         {currentImage ? (

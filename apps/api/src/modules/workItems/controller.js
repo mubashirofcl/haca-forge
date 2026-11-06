@@ -1,5 +1,6 @@
 import * as workItemService from './service.js';
 import * as transitionService from './transition.service.js';
+import { applyWorkItemViewerRules } from './viewerRules.js';
 
 export async function createWorkItem(req, res, next) {
   try {
@@ -26,7 +27,7 @@ export async function listWorkItems(req, res, next) {
 export async function getWorkItem(req, res, next) {
   try {
     const item = await workItemService.getWorkItemById(req.params.id, req.user);
-    return res.status(200).json({ data: item });
+    return res.status(200).json({ data: await applyWorkItemViewerRules(item, req.user) });
   } catch (error) {
     next(error);
   }

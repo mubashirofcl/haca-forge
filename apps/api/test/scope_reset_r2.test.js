@@ -451,12 +451,12 @@ describe('SCOPE RESET R2: Role Model Change & Permissions Verification Suite', (
         expect(res.status).toBe(403);
       });
 
-      it('POST /api/work/:id/transition -> 403 when updating someone else deliverable', async () => {
+      it('POST /api/work/:id/transition -> 404 when not on someone else deliverable', async () => {
         const res = await request(app)
           .post(`/api/work/${otherWorkItem._id}/transition`)
           .set('Authorization', `Bearer ${memberToken}`)
           .send({ toStatus: 'Blocked', blockerReason: 'Waiting for feedback' });
-        expect(res.status).toBe(403);
+        expect(res.status).toBe(404);
       });
     });
 

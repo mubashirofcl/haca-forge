@@ -400,6 +400,7 @@ export const MediaWorkspacePage: React.FC = () => {
             stageItemId={workItem._id || workItem.id}
             workItemTitle={workItem.title}
             readOnly={true}
+            canSeeThreads={modeInfo.isOwner || ['admin', 'creative_head', 'sm_manager'].includes(String(user?.role))}
             onClose={() => navigate(-1)}
           />
         </div>

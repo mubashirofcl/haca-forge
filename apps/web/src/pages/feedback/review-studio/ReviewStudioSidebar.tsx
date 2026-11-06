@@ -35,6 +35,7 @@ interface UpstreamOutput {
 }
 
 interface ReviewStudioSidebarProps {
+  canComment?: boolean;
   brief?:
     | {
         title?: string;
@@ -70,6 +71,7 @@ export const ReviewStudioSidebar: React.FC<ReviewStudioSidebarProps> = ({
   onSelectComment,
   onResolveComment,
   onAddGeneralComment,
+  canComment = true,
   isDiffMode = false,
   onToggleDiffMode,
 }) => {
@@ -169,7 +171,7 @@ export const ReviewStudioSidebar: React.FC<ReviewStudioSidebarProps> = ({
         {activeTab === 'comments' && (
           <div className="space-y-4">
             {/* Quick add comment form */}
-            <form onSubmit={handleAddComment} className="space-y-2">
+            {canComment && <form onSubmit={handleAddComment} className="space-y-2">
               <textarea
                 value={generalCommentText}
                 onChange={(e) => setGeneralCommentText(e.target.value)}
@@ -186,16 +188,18 @@ export const ReviewStudioSidebar: React.FC<ReviewStudioSidebarProps> = ({
                   Post Comment
                 </button>
               </div>
-            </form>
+            </form>}
 
             <div className="space-y-2">
               {comments.length === 0 ? (
                 <div className="text-center py-8 text-slate-500 text-xs">
                   <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
                   <p>No comments pinned yet.</p>
-                  <p className="text-[11px] mt-1 text-slate-600">
-                    Select text in documents, click timeline in video, or click image to drop a pin.
-                  </p>
+                  {canComment && (
+                    <p className="text-[11px] mt-1 text-slate-600">
+                      Select text in documents, click timeline in video, or click image to drop a pin.
+                    </p>
+                  )}
                 </div>
               ) : (
                 comments.map((comment, idx) => {

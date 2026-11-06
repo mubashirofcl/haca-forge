@@ -11,6 +11,8 @@ import {
 } from '@mmp/shared';
 import * as submissionController from './controller.js';
 
+import { requireCommentAccess, requireRatingAccess, requireSubmissionAccess } from '../workItems/access.js';
+
 const router = Router();
 
 router.use(authenticate);
@@ -20,24 +22,25 @@ router.get('/review-queue', submissionController.reviewQueueHandler);
 router.get('/queue', submissionController.reviewQueueHandler);
 
 // 2. Ratings Endpoints
-router.post('/ratings/:id/seen', submissionController.markRatingSeenHandler);
-router.patch('/ratings/:id', validate(ratingEditSchema), submissionController.editRatingHandler);
+// :id means a different object on these routes, so each has its own explicit check.
+router.post('/ratings/:id/seen', requireRatingAccess, submissionController.markRatingSeenHandler);
+router.patch('/ratings/:id', requireRatingAccess, validate(ratingEditSchema), submissionController.editRatingHandler);
 router.get('/ratings/summary/:personId', submissionController.ratingsSummaryHandler);
 
 // 3. Comments Resolution
-router.patch('/comments/:id/resolve', submissionController.resolveCommentHandler);
-router.post('/comments/:id/resolve', submissionController.resolveCommentHandler);
+router.patch('/comments/:id/resolve', requireCommentAccess, submissionController.resolveCommentHandler);
+router.post('/comments/:id/resolve', requireCommentAccess, submissionController.resolveCommentHandler);
 
 // 4. Submissions Root (Query by workItemId / Create or Submit)
 router.get('/', submissionController.listSubmissionsQueryHandler);
 router.post('/', submissionController.createOrSubmitHandler);
 
 // 5. Submission Operations
-router.get('/:id', submissionController.getSubmissionHandler);
-router.post('/:id/comments', validate(submissionCommentCreateSchema), submissionController.addCommentHandler);
-router.get('/:id/comments', submissionController.listCommentsHandler);
-router.post('/:id/approve', validate(submissionReviewApproveSchema), submissionController.approveHandler);
-router.post('/:id/request-revision', validate(submissionReviewRevisionSchema), submissionController.requestRevisionHandler);
+router.get('/:id', requireSubmissionAccess, submissionController.getSubmissionHandler);
+router.post('/:id/comments', requireSubmissionAccess, validate(submissionCommentCreateSchema), submissionController.addCommentHandler);
+router.get('/:id/comments', requireSubmissionAccess, submissionController.listCommentsHandler);
+router.post('/:id/approve', requireSubmissionAccess, validate(submissionReviewApproveSchema), submissionController.approveHandler);
+router.post('/:id/request-revision', requireSubmissionAccess, validate(submissionReviewRevisionSchema), submissionController.requestRevisionHandler);
 
 export default router;
 

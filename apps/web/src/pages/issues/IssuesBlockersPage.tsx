@@ -114,6 +114,13 @@ interface OpenWorkItemOption {
 
 export const IssuesBlockersPage: React.FC = () => {
   const { user } = useAuth();
+  // Same rule as the API: resolving or reminding is for the step owner, an SM Manager or an Admin.
+  const canActOnBlocker = (blocker: BlockerItem) => {
+    if (user?.role === 'admin' || user?.role === 'sm_manager') return true;
+    if (user?.role === 'executive') return false;
+    const viewerId = (user as any)?._id || (user as any)?.id || (user as any)?.userId;
+    return Boolean(viewerId && (blocker.workItemId as any)?.ownerId?._id === viewerId);
+  };
   const navigate = useNavigate();
 
   const [blockers, setBlockers] = useState<BlockerItem[]>([]);
@@ -549,14 +556,16 @@ export const IssuesBlockersPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => handleNotifyDependency(b._id)}
-                        disabled={remindingId === b._id}
-                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm flex items-center gap-1.5 transition-all shrink-0 disabled:opacity-50"
-                      >
-                        <Bell className="w-3.5 h-3.5" />
-                        <span>{remindingId === b._id ? 'Sending...' : 'Ping Owner'}</span>
-                      </button>
+                      {canActOnBlocker(b) && (
+                        <button
+                          onClick={() => handleNotifyDependency(b._id)}
+                          disabled={remindingId === b._id}
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm flex items-center gap-1.5 transition-all shrink-0 disabled:opacity-50"
+                        >
+                          <Bell className="w-3.5 h-3.5" />
+                          <span>{remindingId === b._id ? 'Sending...' : 'Ping Owner'}</span>
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -566,13 +575,15 @@ export const IssuesBlockersPage: React.FC = () => {
                       Reported by {b.blockedById?.name || 'Owner'}
                     </span>
 
-                    <button
-                      onClick={() => setResolvingBlocker(b)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center gap-1.5 transition-all shadow-sm"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Resolve & Unblock</span>
-                    </button>
+                    {canActOnBlocker(b) && (
+                      <button
+                        onClick={() => setResolvingBlocker(b)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center gap-1.5 transition-all shadow-sm"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Resolve & Unblock</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

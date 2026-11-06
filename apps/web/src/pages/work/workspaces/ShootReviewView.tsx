@@ -21,6 +21,8 @@ interface ShootReviewViewProps {
   onFinishReview?: () => void;
   /** The step can no longer be decided (409): the parent explains why and refreshes. */
   onStaleDecision?: (message: string) => void;
+  /** Clip review threads are private to the step owner and leadership. */
+  canSeeThreads?: boolean;
   onClose?: () => void;
 }
 
@@ -31,6 +33,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
   readOnly = false,
   onFinishReview,
   onStaleDecision,
+  canSeeThreads = true,
   onClose,
 }) => {
   const [clips, setClips] = useState<MediaItemType[]>([]);
@@ -309,15 +312,17 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
               </div>
 
               {/* WhatsApp-Style Thread Beside Player */}
-              <div className="w-full lg:w-96 flex-shrink-0 h-80 lg:h-auto">
-                <MediaThread
-                  clipId={selectedClip._id}
-                  clipTitle={selectedClip.title}
-                  onSeekTime={(secs) => setSeekSeconds(secs)}
-                  externalTimestamp={momentRef}
-                  onClearTimestamp={() => setMomentRef(null)}
-                />
-              </div>
+              {canSeeThreads && (
+                <div className="w-full lg:w-96 flex-shrink-0 h-80 lg:h-auto">
+                  <MediaThread
+                    clipId={selectedClip._id}
+                    clipTitle={selectedClip.title}
+                    onSeekTime={(secs) => setSeekSeconds(secs)}
+                    externalTimestamp={momentRef}
+                    onClearTimestamp={() => setMomentRef(null)}
+                  />
+                </div>
+              )}
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-sm gap-2">

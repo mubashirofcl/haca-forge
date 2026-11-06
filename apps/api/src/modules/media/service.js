@@ -4,6 +4,7 @@ import { User } from '../people/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { getWorkspaceMode } from '@mmp/shared';
 import { createNotification } from '../notifications/service.js';
+import { canSeePrivateReview, canSeeStepOutput, getParticipation, isTeamMember } from '../workItems/access.js';
 
 /**
  * Sanitize plain text to ensure no dangerous HTML/scripts
@@ -137,18 +138,35 @@ export async function listClips(stageItemId, user) {
     throw error;
   }
 
-  const mode = getWorkspaceMode(user, workItem);
-  if (mode === 'none') {
-    const error = new Error('You do not have access to view this stage');
-    error.statusCode = 403;
-    error.code = 'FORBIDDEN_ACTION';
-    throw error;
+  // A participant on someone else's step sees only the approved clips of an earlier, finished step.
+  const userIdForClips = (user.userId || user._id || user.id)?.toString();
+  const isOtherOwnersStep = isTeamMember(user) && (workItem.ownerId?._id || workItem.ownerId)?.toString() !== userIdForClips;
+  if (isOtherOwnersStep) {
+    const participation = await getParticipation(workItem, user);
+    if (!canSeeStepOutput(workItem, participation)) {
+      const error = new Error('You do not have access to view this stage');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN_ACTION';
+      throw error;
+    }
+  } else {
+    const mode = getWorkspaceMode(user, workItem);
+    if (mode === 'none') {
+      const error = new Error('You do not have access to view this stage');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN_ACTION';
+      throw error;
+    }
   }
 
-  const clips = await MediaItem.find({ stageItemId })
+  let clips = await MediaItem.find({ stageItemId })
     .populate('decidedById', 'name email role')
     .sort({ order: 1, createdAt: 1 })
     .lean();
+  if (isOtherOwnersStep) {
+    const replacedIds = new Set(clips.filter((c) => c.replacesId).map((c) => String(c.replacesId)));
+    clips = clips.filter((c) => c.status === 'approved' && !replacedIds.has(String(c._id)));
+  }
 
   const userIdStr = (user.userId || user._id || user.id)?.toString();
 
@@ -171,7 +189,7 @@ export async function listClips(stageItemId, user) {
 
   const enrichedClips = clips.map((clip) => ({
     ...clip,
-    unreadCount: unreadCountsMap[clip._id.toString()] || 0,
+    unreadCount: isOtherOwnersStep ? 0 : unreadCountsMap[clip._id.toString()] || 0,
   }));
 
   // Retrieve script shot list from Script stage of the same contentPiece
@@ -492,19 +510,7 @@ export async function listMessages(clipId, user) {
     throw error;
   }
 
-  const userIdStr = (user.userId || user._id || user.id)?.toString();
-  const ownerIdStr = (workItem.ownerId?._id || workItem.ownerId)?.toString();
-  const isOwner = Boolean(userIdStr && ownerIdStr && userIdStr === ownerIdStr);
-  const role = user.role;
-
-  const canRead =
-    isOwner ||
-    role === 'creative_head' ||
-    role === 'admin' ||
-    role === 'sm_manager' ||
-    role === 'executive';
-
-  if (!canRead) {
+  if (!canSeePrivateReview(user, workItem)) {
     const error = new Error('You do not have access to view this message thread');
     error.statusCode = 403;
     error.code = 'FORBIDDEN_ACTION';
@@ -530,6 +536,21 @@ export async function listMessages(clipId, user) {
 export async function markMessagesSeen(clipId, user) {
   const userIdStr = (user.userId || user._id || user.id)?.toString();
   if (!userIdStr) return { success: true };
+
+  // Only someone who can read the thread can mark it seen.
+  const clip = await MediaItem.findById(clipId).select('stageItemId').lean();
+  const workItem = clip ? await WorkItem.findById(clip.stageItemId).select('ownerId').lean() : null;
+  if (!clip || !workItem) {
+    const error = new Error('Clip not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (!canSeePrivateReview(user, workItem)) {
+    const error = new Error('You do not have access to view this message thread');
+    error.statusCode = 403;
+    error.code = 'FORBIDDEN_ACTION';
+    throw error;
+  }
 
   await MediaMessage.updateMany(
     {

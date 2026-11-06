@@ -8,10 +8,15 @@ import {
   workItemTransitionSchema,
 } from '@mmp/shared';
 import * as workItemController from './controller.js';
+import { workItemParam } from './access.js';
 
 const router = Router();
 
 router.use(authenticate);
+
+// Every :id route on this router, including those added by submissions and media.
+router.param('id', workItemParam);
+router.param('stageItemId', workItemParam);
 
 // Special Aggregated Endpoints (mounted before /:id)
 router.get('/my-work', requirePermission('work.update.own'), workItemController.getMyWork);

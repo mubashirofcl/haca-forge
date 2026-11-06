@@ -269,10 +269,10 @@ describe('Reviewer rule on every decision path', () => {
       expect((await WorkItem.findById(w._id).lean()).status).toBe('Pending');
     });
 
-    it.each(['sm', 'exec', 'other'])('%s cannot decide', async (who) => {
+    it.each([['sm', 403], ['exec', 403], ['other', 404]])('%s cannot decide', async (who, status) => {
       const w = await makeStep(name.startsWith('shoot') ? 'Shoot' : 'Design');
       const res = await paths[name](w, who);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(status);
       expect((await state(w)).ratings).toBe(0);
       expect((await WorkItem.findById(w._id).lean()).status).toBe('Pending');
     });
@@ -693,11 +693,11 @@ describe('Reopening a finished step', () => {
   };
 
   describe.each(['Approved', 'Published'])('from %s', (status) => {
-    it.each(['owner', 'sm', 'exec', 'other'])('%s cannot reopen', async (who) => {
+    it.each([['owner', 403], ['sm', 403], ['exec', 403], ['other', 404]])('%s cannot reopen', async (who, code) => {
       const w = await makeStep('Design', status);
       await makeSub(w, 1, 'approved');
       const res = await move(w, who, 'In Progress');
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(code);
       expect((await WorkItem.findById(w._id).lean()).status).toBe(status);
     });
 

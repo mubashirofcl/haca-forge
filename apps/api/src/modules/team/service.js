@@ -271,7 +271,8 @@ export async function getPersonBaseProfile(targetPersonId, actor) {
   }
 
   // Executive privacy redaction: hide email, phone, whatsapp
-  const isExecutive = normalizeRole(actor.role) === 'executive';
+  const isSelf = String(actor._id || actor.id || actor.userId) === String(targetPersonId);
+  const isExecutive = normalizeRole(actor.role) === 'executive' && !isSelf;
 
   return {
     _id: person._id,
@@ -813,7 +814,8 @@ export async function getPersonActivity(targetPersonId, actor, query = {}) {
     .populate('actorId', 'name role avatarUrl')
     .lean();
 
-  return events;
+  const { sanitizeActivities } = await import('../workItems/viewerRules.js');
+  return sanitizeActivities(events, actor);
 }
 
 /**

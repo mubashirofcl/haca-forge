@@ -35,7 +35,26 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
 
   const fromStatus = workItem.status;
 
-  // 1. Check if same status
+  // 1. Who may touch this item comes first, so the answers below never reach anyone else.
+  const userId = (user._id || user.id || user.userId)?.toString();
+  const ownerIdStr = (workItem.ownerId?._id || workItem.ownerId)?.toString();
+  const userRole = normalizeRole(user.role);
+
+  if (userRole === 'executive') {
+    const error = new Error('Executives cannot perform status transitions');
+    error.statusCode = 403;
+    error.code = 'FORBIDDEN_ACTION';
+    throw error;
+  }
+
+  if (userRole === 'team_member' && ownerIdStr !== userId) {
+    const error = new Error('You can only update status for work items assigned to you');
+    error.statusCode = 403;
+    error.code = 'FORBIDDEN_OWNERSHIP';
+    throw error;
+  }
+
+  // Same status: nothing to do
   if (fromStatus === toStatus) {
     return workItem;
   }
@@ -52,24 +71,7 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
   }
 
   // 3. Central Role & Ownership Authorization Guard
-  const userId = (user._id || user.id || user.userId)?.toString();
-  const ownerIdStr = (workItem.ownerId?._id || workItem.ownerId)?.toString();
-  const userRole = normalizeRole(user.role);
   const { actions, isOwner } = getAvailableActions(user, workItem);
-
-  if (userRole === 'executive') {
-    const error = new Error('Executives cannot perform status transitions');
-    error.statusCode = 403;
-    error.code = 'FORBIDDEN_ACTION';
-    throw error;
-  }
-
-  if (userRole === 'team_member' && ownerIdStr !== userId) {
-    const error = new Error('You can only update status for work items assigned to you');
-    error.statusCode = 403;
-    error.code = 'FORBIDDEN_OWNERSHIP';
-    throw error;
-  }
 
   let requiredAction = null;
   if (fromStatus === 'Not Started' && toStatus === 'In Progress') {

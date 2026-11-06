@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.js';
 import { requirePermission, requireAnyPermission } from '../../middleware/requirePermission.js';
 import * as feedbackController from './controller.js';
+import { requireBodyWorkItemAccess, workItemParam } from '../workItems/access.js';
 
 export const feedbackRouter = Router();
 
 feedbackRouter.use(authenticate);
+feedbackRouter.param('workItemId', workItemParam);
 
 // Feedback threads list
 feedbackRouter.get(
@@ -30,6 +32,7 @@ feedbackRouter.post(
 feedbackRouter.post(
   '/',
   requireAnyPermission('feedback.give', 'feedback.respond'),
+  requireBodyWorkItemAccess,
   feedbackController.createFeedbackEntry
 );
 

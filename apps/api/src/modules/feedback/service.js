@@ -6,6 +6,7 @@ import { createNotification } from '../notifications/service.js';
 import { calculateMemberWorkloadMetrics } from '../assignment/service.js';
 import { resolveScope } from '../../lib/scope.js';
 import { REVISION_ROOT_CAUSES, normalizeRole } from '@mmp/shared';
+import { isTeamMember, requireParticipant } from '../workItems/access.js';
 import {
   assertDecisionAllowed,
   claimSubmission,
@@ -27,19 +28,23 @@ export async function getFeedbackForWorkItem(workItemId, user) {
     throw error;
   }
 
-  // Scoping check for team members
+  // Feedback is private to the step owner and leadership. Executives see the item, not the notes.
   const userId = (user._id || user.id || user.userId)?.toString();
-  if (user.role === 'team_member' && workItem.ownerId?._id?.toString() !== userId) {
-    // Check if team member is from the same department
-    const userPerson = await Person.findOne({ userId });
-    if (
-      !userPerson?.departmentId ||
-      userPerson.departmentId.toString() !== workItem.departmentId?._id?.toString()
-    ) {
-      const error = new Error('You do not have access to this work item feedback');
-      error.statusCode = 403;
-      throw error;
-    }
+  if (isTeamMember(user) && workItem.ownerId?._id?.toString() !== userId) {
+    const error = new Error('You do not have access to this work item feedback');
+    error.statusCode = 403;
+    throw error;
+  }
+  if (normalizeRole(user.role) === 'executive') {
+    const flagForExecutive = await RevisionFlag.findOne({ workItemId })
+      .populate('ownerId', 'name role jobRole')
+      .populate('classifiedBy', 'name role');
+    return {
+      workItem,
+      entries: [],
+      rounds: [],
+      flag: flagForExecutive ? { ...flagForExecutive.toObject(), isOver48HoursUnclassified: flagForExecutive.isOver48HoursUnclassified } : null,
+    };
   }
 
   // Fetch entries sorted chronologically
@@ -94,6 +99,7 @@ export async function getFeedbackForWorkItem(workItemId, user) {
  */
 export async function createFeedbackEntry(data, user) {
   const { workItemId, text, attachments = [] } = data;
+  if (isTeamMember(user)) await requireParticipant(workItemId, user);
   let { round, roundStatus = 'Revision Required', isResponse = false } = data;
 
   const workItem = await WorkItem.findById(workItemId)
@@ -486,7 +492,7 @@ export async function listFeedbackThreads(filters = {}, user) {
 
       return {
         workItem: item,
-        latestEntry,
+        latestEntry: normalizeRole(user.role) === 'executive' ? null : latestEntry,
         totalEntries,
         revisions: item.revisions || 0,
         flag: flag

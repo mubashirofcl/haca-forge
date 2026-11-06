@@ -668,6 +668,10 @@ export const ReviewStudioPage: React.FC = () => {
     activeSubmission?.workItemId?.ownerId
   )?.toString();
   const isOwner = Boolean(ownerId && ownerId === currentUserId);
+  // Same reviewer rule as the API: creative_head and admin decide, never on their own work.
+  const isDecisionRole = user?.role === 'creative_head' || user?.role === 'admin';
+  const canDecide = isDecisionRole && !isOwner;
+  const canComment = isDecisionRole || isOwner;
   const isPrivileged = user?.role === 'admin' || user?.role === 'creative_head' || user?.role === 'sm_manager';
   const canShare = Boolean(isApproved && (isPrivileged || isOwner) && user?.role !== 'executive');
 
@@ -840,6 +844,8 @@ export const ReviewStudioPage: React.FC = () => {
               }
               hideHeader={true}
               onStaleDecision={handleStaleDecision}
+              readOnly={!canDecide}
+              canSeeThreads={user?.role !== 'executive'}
               onFinishReview={async () => {
                 const subId = activeSubmission._id || activeSubmission.id;
                 const remaining = queue.filter((item) => (item.id || (item as any)._id) !== subId);
@@ -869,7 +875,7 @@ export const ReviewStudioPage: React.FC = () => {
                   comments={comments}
                   activeCommentId={activeCommentId}
                   onSelectComment={setActiveCommentId}
-                  onAddTextComment={handleAddTextComment}
+                  onAddTextComment={canComment ? handleAddTextComment : undefined}
                   isDiffMode={isDiffMode}
                   diffBaseContent={diffBaseText}
                 />
@@ -882,7 +888,7 @@ export const ReviewStudioPage: React.FC = () => {
                   comments={comments}
                   activeCommentId={activeCommentId}
                   onSelectComment={setActiveCommentId}
-                  onAddVideoComment={handleAddVideoComment}
+                  onAddVideoComment={canComment ? handleAddVideoComment : undefined}
                 />
               )}
 
@@ -892,7 +898,7 @@ export const ReviewStudioPage: React.FC = () => {
                   comments={comments}
                   activeCommentId={activeCommentId}
                   onSelectComment={setActiveCommentId}
-                  onAddPointComment={handleAddPointComment}
+                  onAddPointComment={canComment ? handleAddPointComment : undefined}
                 />
               )}
 
@@ -918,6 +924,7 @@ export const ReviewStudioPage: React.FC = () => {
                 onSelectComment={setActiveCommentId}
                 onResolveComment={handleResolveComment}
                 onAddGeneralComment={handleAddGeneralComment}
+                canComment={canComment}
                 isDiffMode={isDiffMode}
                 onToggleDiffMode={() => setIsDiffMode(!isDiffMode)}
               />
@@ -927,7 +934,7 @@ export const ReviewStudioPage: React.FC = () => {
       </div>
 
       {/* Persistent Docked Decision Bar (only for non-shoot stages since ShootReviewView has its own dedicated review controls) */}
-      {activeSubmission && !isShootStage && (
+      {activeSubmission && !isShootStage && canDecide && (
         <DecisionBar
           key={`${activeSubmission._id || activeSubmission.id}-${decisionResetKey}`}
           hasComments={comments.length > 0}

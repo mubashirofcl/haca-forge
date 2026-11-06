@@ -1,3 +1,5 @@
+import { isTeamMember, requireParticipant } from '../workItems/access.js';
+import { visibleVersionIdsInPiece } from '../workItems/viewerRules.js';
 import * as submissionService from './service.js';
 
 export async function getDraftHandler(req, res, next) {
@@ -177,12 +179,19 @@ export async function listSubmissionsQueryHandler(req, res, next) {
   try {
     const { workItemId, contentPieceId } = req.query;
     if (workItemId) {
+      if (isTeamMember(req.user)) await requireParticipant(workItemId, req.user);
       const versions = await submissionService.listSubmissions(workItemId, req.user);
       return res.json(versions);
     }
     if (contentPieceId) {
       const { Submission } = await import('./model.js');
-      const versions = await Submission.find({ contentPieceId, version: { $gt: 0 } })
+      const pieceFilter = { contentPieceId, version: { $gt: 0 } };
+      if (isTeamMember(req.user)) {
+        const { ownStepIds, ids } = await visibleVersionIdsInPiece(contentPieceId, req.user);
+        if (ownStepIds.length === 0) return res.json([]);
+        pieceFilter.$or = [{ workItemId: { $in: ownStepIds } }, { _id: { $in: ids } }];
+      }
+      const versions = await Submission.find(pieceFilter)
         .sort({ version: -1 })
         .populate('submittedById', 'name email role jobRole')
         .populate('reviewedById', 'name email role');
@@ -196,6 +205,7 @@ export async function listSubmissionsQueryHandler(req, res, next) {
 
 export async function createOrSubmitHandler(req, res, next) {
   try {
+    if (isTeamMember(req.user)) await requireParticipant(req.body?.workItemId, req.user);
     const {
       workItemId,
       contentPieceId,

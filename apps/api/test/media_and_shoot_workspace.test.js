@@ -757,6 +757,9 @@ describe('Media & Shoot Workspace Backend Engine', () => {
 
   describe('6. Downstream Edit Stage receives ONLY approved clips', () => {
     it('populates approved clips from Shoot stage on getWorkItemById for Edit step', async () => {
+      // Edit only sees the clips of a finished Shoot step.
+      await WorkItem.findByIdAndUpdate(shootStage._id, { status: 'Approved' });
+
       // 1 approved clip, 1 rejected clip
       await MediaItem.create({
         stageItemId: shootStage._id,

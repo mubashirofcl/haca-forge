@@ -60,6 +60,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   }, [diffMode, activePrevious, activeContent]);
 
   const handleMouseUp = () => {
+    if (!onAddTextComment && !onAddCommentOnSelection) return;
     const sel = window.getSelection();
     if (sel && sel.toString().trim().length > 0) {
       const text = sel.toString().trim();

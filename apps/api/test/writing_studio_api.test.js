@@ -169,7 +169,16 @@ describe('WS2: Writing Studio API & Single-Editor Lock Suite', () => {
       expect(res.body.data.heldBy).toBe(writerUser.name);
     });
 
-    it('informs second writer that document is locked by first writer', async () => {
+    it('informs a second editor that the document is locked by the first', async () => {
+      // Only the step owner or an admin can hold the lock, so the second editor is an admin.
+      await Person.updateOne({ _id: writer2User._id }, { role: 'admin' });
+      writer2User.role = 'admin';
+      writer2Token = jwt.sign(
+        { userId: writer2User._id.toString(), email: writer2User.email, role: 'admin', name: writer2User.name },
+        env.JWT_SECRET,
+        { expiresIn: '2h' }
+      );
+
       const res = await request(app)
         .post(`/api/work/${scriptWorkItem._id}/editor-lock`)
         .set('Authorization', `Bearer ${writer2Token}`)
@@ -207,7 +216,7 @@ describe('WS2: Writing Studio API & Single-Editor Lock Suite', () => {
       expect(checkRes.body.data.locked).toBe(false);
     });
 
-    it('allows second writer to claim lock once previous lock is released', async () => {
+    it('allows a second editor to claim the lock once the previous lock is released', async () => {
       const res = await request(app)
         .post(`/api/work/${scriptWorkItem._id}/editor-lock`)
         .set('Authorization', `Bearer ${writer2Token}`)
@@ -437,6 +446,10 @@ describe('WS2: Writing Studio API & Single-Editor Lock Suite', () => {
 
   describe('5. Shot List Handoff to Downstream Shoot Work Item', () => {
     it('automatically populates scriptShotList when loading Shoot work item', async () => {
+      // The Shoot step sees the Script step's approved output.
+      await WorkItem.findByIdAndUpdate(scriptWorkItem._id, { status: 'Approved' });
+      await Submission.updateMany({ workItemId: scriptWorkItem._id, version: { $gt: 0 } }, { status: 'approved' });
+
       const res = await request(app)
         .get(`/api/work/${shootWorkItem._id}`)
         .set('Authorization', `Bearer ${shooterToken}`)
