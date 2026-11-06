@@ -1,5 +1,691 @@
 # HACA Marketing OS — Conversion Progress
 
+**Current test count (after Phase 3.5):** 1404 passing, 0 failing: API 1148 (46 files), web 256 (33 files). Typecheck 0 errors; web build clean. The working tree and a clean worktree now give the same counts.
+
+## Phase 3.5: Landing the uncommitted work (Status: COMPLETE; committed locally, not pushed)
+
+- Why: 138 uncommitted files sat under every phase. They caused conflicts, hid a leak in Phase 3, and made working-tree and clean-worktree test counts differ by 100 API and 114 web tests.
+- Landed as 14 commits, each gated alone in a clean worktree except this notes commit: 422cd76, 0962ddf, af960a2, eb2b102, fe5062a, 3edfc8b, 092fc78, 8620857, 699c07c, 52587e7, aa52f41, 174d7a8, 3acb0eb, then this file.
+- Sentry removal (group 1): `apps/api/src/config/sentry.js` and `apps/web/src/lib/sentry.ts` are deleted, with their imports and `SENTRY_DSN` / `VITE_SENTRY_DSN`. Two `SENTRY_DSN` keys are removed from `render.yaml`. No Sentry package was installed, and the web helper only wrote to the console, so no error reporting was lost. `ErrorBoundary` still catches render errors, shows its fallback and logs to the console; `components/__tests__/ErrorBoundary.test.tsx` (4) was added because nothing covered it. The fallback text still says "error diagnostics have logged the details", which now means the browser console.
+- Split across groups by hunk: `packages/shared/src/index.ts`, `apps/web/src/App.tsx`, `apps/web/.env.example`, `apps/web/src/components/ErrorBoundary.tsx`.
+- Moved between groups, with approval: the `ErrorBoundary` Sentry lines to group 1, and `CalendarTabs.test.tsx` from group 6 to group 7.
+- Flaky test: `TeamMemberRouteBoundaries` failed 2 tests in the group 7 full web run and passed 8 of 8 when rerun alone. It passed in every other run. The cause is not proven; it looks timing-related under load.
+- Smoke test after group 13, on a clean worktree and a disposable database: team_member (step owner and non-participant), sm_manager, executive, creative_head and admin. No page errors, broken screens or 5xx responses. No contact details or private notes reached the wrong role. Real database counts and last work-item update time unchanged.
+- Incident: the disk filled during this phase and MongoDB aborted, because it could not write its diagnostic file. A private copy of the data was recovered and validated first, then the service was restarted by the owner. `marketing_portal` validated clean with counts unchanged; no repair was run. The npm cache and pnpm store were cleared to free space.
+- Phase 3 close-out, reported and not fixed:
+  - My Work has no "Resolve Blocker" button. A step owner has no working screen for it, only the API. Owner blocker resolution is planned for a later phase.
+  - Work Detail's "Resolve blocker" shows only to a creative_head or admin who does not own the step. From the code, the creative_head gets a 403. It moves the step to In Progress but leaves the blocker record Active.
+- Other known issues, not fixed: the web calls `GET /api/content-pieces/:id`, which has no route, so Review Studio's Outputs tab stays empty. An executive opening My Work by URL gets a 403 on the data but sees "All caught up". Demo passwords remain in `baselineUsers.js`, and in git history for `LoginPage.tsx`.
+- Next phase, not started: `/uploads` protection investigation.
+
+## Phase 3: Access boundaries (Status: COMPLETE; committed locally, not pushed)
+
+- Root cause: most routes checked a role permission but not whether the person was on that deliverable. Any team member could read any work item, read revision notes through `/submissions/:id`, and resolve any blocker. Executives could write editor locks and clip seen marks, and received contact details.
+- One access check in `workItems/access.js`. Someone not on the deliverable gets the same 404 body as a missing or invalid ID. A participant who may see the step but not do the action gets 403. Invalid-ID behaviour for other roles is unchanged.
+- `router.param` runs after `authenticate`, so an unauthenticated request stays 401, and before route permission checks. It is set on each router, and explicit middleware is used where `:id` means different things on one router. A route inventory test covers every `:id` route, the `/api/work-items` aliases, and submission, clip, rating, comment and blocker IDs.
+- Participants see pipeline status for every step. They see outputs only for their own step and approved earlier steps (`workItems/viewerRules.js`). Later outputs, unapproved versions, rejected clips and earlier-step review threads stay hidden.
+- Revision notes, rating feedback and clip threads: step owner, admin, creative_head and sm_manager only. Executives are excluded.
+- Contact details: `middleware/redactContact.js` removes email, phone and WhatsApp from every REST response for team_member and executive, at any depth, except their own record.
+- `/transition` checks ownership before the same-status and invalid-move returns.
+- Blockers: the list is scoped to deliverables a team member is on; leadership visibility is unchanged. Resolve and notify: step owner, sm_manager or admin. Behaviour change: creative_head cannot resolve or notify on a step they do not own, and neither can a dependency owner who is not the step owner.
+- Editor locks: step owner or admin. Creative head and SM manager opening the Writing Studio get a 403 that the page already handles.
+- Screens: decision controls, the comment box and the three viewer comment entry points are hidden from sm_manager and executive. Clip threads are hidden from executive and read-only participants. Ping and Resolve appear only for people allowed to use them.
+- Isolation found a real leak: at HEAD, steps can be Mongoose documents and the filter copied their internals, including a later step's output. Fixed in the filter, with a test.
+- Tests: `apps/api/test/access_boundaries.test.js` (66), `apps/web/src/pages/feedback/__tests__/ReviewAccessControls.test.tsx` (13). Older tests updated where they relied on removed behaviour. `IssuesExecutiveReadOnly.test.tsx` was also updated, but it belongs to an earlier uncommitted phase and is not in this commit.
+- Checked in a browser on a disposable database: team_member (step owner, earlier-step and later-step participant, non-participant), sm_manager, executive, creative_head and admin. The read-only Shoot screen works for an allowed participant, showing the approved clip only, with no rejected clip or thread. Plan, tracker, team, calendar and dashboard screens work after redaction. Real writes: creative_head approval, sm_manager resolve, admin ping. Real database counts and last work-item update time unchanged.
+- Not changed, for the next phase: Socket.IO `comment:new` sends the author's email to the step owner and head and admin rooms (`submissions/service.js`). Chat socket events and chat shared assets, reports, and public `/uploads` are not reviewed.
+- Existing bug found, not changed: the web calls `GET /api/content-pieces/:id`, which has no route. Both callers handle the 404, so the Outputs tab in Review Studio stays empty.
+- Next phase, not started: `/uploads` protection investigation.
+
+## Approval integrity close-out (Status: COMPLETE; committed locally, not pushed)
+
+- Rating, tags and note clear after a stale refresh and whenever the review item changes, in Review Studio and Shoot review.
+- Shoot send-back now returns the step to In Progress, like a normal revision. The version closes and no rating is created. The send-back note goes to the owner's notification only; My Work shows a generic message for it.
+- Round times: `workItems/rounds.js` keeps each round's submit time, on both submit paths. A round already submitted keeps its time and the next submission starts a new round.
+- Fixed: `/transition` wrote the "changes requested" decision on the new round instead of the reviewed one.
+- An owner cannot take a review step out of Pending or Feedback while its latest version awaits review: 409, on `/transition` and `POST /api/blockers`, with no revision counted. No real step or screen relied on this. `submit-clips` is exempt because it is the submission. Steps that do not require review are unaffected.
+- My Work now uses the latest version's state: a resubmitted step shows as under review, and a sent-back step shows Rework with Resubmit. Blocked and help actions are hidden while under review, here and on Work Detail.
+- Fixed: Resubmit in My Work from Feedback sent a same-status request that saved nothing. It now moves to Pending.
+- Checked in a browser on a disposable database: Feedback page, owner resubmit, withdrawal blocked, Work Detail Shoot button, Shoot send-back and resubmission, reopening, and admin, sm_manager and executive review screens. Real database counts and last work-item update time unchanged.
+- Found, not changed: Review Studio shows Approve and Request Revision to sm_manager and executive (the API returns 403), and the review queue returns contact emails to executives. Carried into Phase 3. There is no reopen button on any screen; reopening is API only. A superseded clip can still be approved, which has no effect on the step.
+- Next: Phase 3 access boundaries investigation. KPI work not started.
+
+## Approval integrity (Status: COMPLETE; committed locally, not pushed)
+
+- Root cause: the approval rules were not in one place. Resubmitting did not retire older versions, the queue listed every submitted version, and each decision path checked different things.
+- One shared check in `submissions/reviewDecision.js`, run before any write on approve, request revision, shoot review and Feedback "Revision Required": the version must be the latest real one and `submitted`, sent after the step's last decision, on a step in Pending or Feedback. creative_head and admin decide; nobody decides on their own work.
+- Shoot approval needs every required clip approved on every route, with at least one clip. A clip replaced by a newer one no longer counts. Clip-level review is unchanged.
+- Partial writes: MongoDB runs standalone, so there are no transactions. Everything is checked first, one atomic update claims the submission so only one decision can win, and a failed required write undoes the claim and anything written after it. Events and notifications run after the step is saved and cannot fail the decision. A process crash between writes is not covered.
+- Feedback route: approval returns 409 and the option is gone from the page. `/transition` cannot approve a review step, with or without a submission. The Shoot exception and "Done and forward" are removed.
+- Live caller found: My Work sent Shoot owners to `toStatus: 'Approved'`. No real step used it. My Work and Work Detail now send Shoot owners to the Shoot workspace.
+- Fixed: `/transition` created Shoot and Edit submissions with `kind: 'media'`, which is not an allowed value, and the error was swallowed, so those steps got no submission. It now uses `video`.
+- Reopening: creative_head and admin only, through `/transition`, never on their own work. Ratings stay. The old version cannot be decided again; a new submission and decision are needed.
+- Downstream steps on reopen: nothing happens to them. They stay unlocked with their status unchanged, so a Post step can still go ahead. `reconcileContentPieceStageLocks` only ever unlocks. Left as is.
+- Queue GET is read-only, and lists only the latest real version on a step awaiting review. Existing records were not changed, so the 7 stale real entries are hidden, not repaired.
+- Review Studio shows a clear message on a 409 and refreshes the queue. Work Detail shows a message instead of approving a review step with no submission.
+- Tests: `apps/api/test/review_decision_integrity.test.js` (152), `apps/web/src/pages/feedback/__tests__/ReviewDecisionFlows.test.tsx` (10). 27 older tests were updated because they relied on removed behaviour.
+- Checked in a browser on a disposable database: approval, request revision, stale version, already decided, shoot approval with clips, shoot send back, no-submission message, My Work Shoot button. Real database counts and last work-item update time unchanged.
+- Not checked in a browser: reopening, the Feedback page and the Work Detail Shoot button; API or unit tests cover them. Other roles' screens beyond creative_head and one team_member.
+- Known limits: the star rating stays selected after a stale version refreshes, so a reviewer must re-check it. A resubmit from Feedback can overwrite that round's submit time; to review in the KPI phase. An owner can still pull back their own Pending or Feedback step to In Progress through `/transition`, which counts as a revision.
+- `docs/PROGRESS.md` is not part of the commit, because it holds notes from other uncommitted phases.
+- Next phases, not started: GET access, project KPIs.
+
+## PATCH /api/work/:id access fix (Status: COMPLETE; committed in 9c4748d)
+
+- Root cause: the route only checked `work.update.own`, which does not look at ownership, and `updateWorkItem` applied changes without checking the user. A team member who did not own an item could change its title, owner, deadline, priority and skip state.
+- New guard `assertCanPatchWorkItem` runs before validation, so a blocked user learns nothing from validation errors. Ownership comes from the stored step. Requests are fully allowed or fully rejected. It covers `/api/work/:id` and `/api/work-items/:id`.
+- admin, sm_manager: every field. executive: 403, unchanged.
+- Step owner in any other role: `deliverableUrl` only, and 403 once the step is Approved or Published. An empty body stays allowed, because the deliverable flow can send one when no link was given.
+- team_member owning another step of the same content piece: 403. Any other team_member: 404, with the same response for a non-participant item, a missing item and an invalid id.
+- creative_head not owning the step: 403.
+- A PATCH with a deadline now sets `deadline`, `dueDate` and `dueDateSource: 'manual'` together. A PATCH without one leaves all three alone.
+- `dueDateSource` was added to the WorkItem schema (default null), because the field did not exist there and writes to it were dropped. Side effect: `plan.service.js` and `contentPiece.service.js`, which already set it on steps, now save it too. No data was changed or migrated.
+- An empty PATCH is a true no-op: 200, nothing saved, no update event.
+- Tests: `apps/api/test/work_patch_access.test.js` (230, each case on both paths). The original attack, rerun on the test database, now gets 404 and changes nothing.
+- `dueDateSource` readers: plan grid and row panel read it from `ContentPiece.stagePlan`, a separate field. Nothing reads the WorkItem field, so saving it changes no behaviour today.
+- Worker flow checked in a browser on the Design step, disposable database: with a link and with an uploaded file only, submission and link saved, step in Feedback (shown as Waiting for approval), and in the review queue. With neither, the form shows an error and sends nothing. Shoot and Edit screens were not run, and no screen sent an empty PATCH.
+- Review of `/api/work/:id/transition`, not changed: it has an ownership check, but a same-status request returns the item with 200 and an invalid transition returns 400 before the check runs. A non-owner team_member gets 403, not 404.
+- Next phases, not started: approval integrity, GET access, project KPIs.
+
+## Calendar: status colours and individual work badge (Status: COMPLETE; committed in Phase 3.5)
+
+- Month entries are coloured by status tone, with the status also in words for screen readers. Week, List, Custom and the preview use the shared status labels. A key under the calendar explains the colours and the badge.
+- Individual badge: on work from an individual plan, or not part of any plan. `GET /api/work/calendar` now sends `isIndividual`. The word shows at 1536px and wider; narrower month cells show the icon only.
+- Publish and Needed by dates now take the status of the piece's final step (a change: before, they showed Approved or Planned from the plan row). A row with no steps stays Approved or Planned.
+- Fixed: `isOverdue` was never sent to the calendar (`.lean()` drops the virtual), so the overdue marker never showed. Week, List and Custom now show the exact days.
+- Fixed: Publish entries have no priority, which the preview's code could not handle. "Open Workplace" now opens the final step, and is hidden when there is none. List view no longer prints "undefinedh".
+- Checked read-only at 1600, 1024 and 360 on real November 2026 data: no overflow, no clipped day lists, badge visible at each width, Publish preview opens with no page errors. Admin only. On screen: Approved, In progress, Not started, Posted and Locked. Waiting, Changes requested and Blocked are not in the data, and no overdue entry is in November.
+- Not changed: most pieces show two Publish entries on the same day (the publish date and the Post step).
+
+## Login page: quick sign in for local development (Status: COMPLETE; committed in Phase 3.5)
+
+- One-click buttons for Admin and the 12 demo accounts, shown only on the Vite dev server (`DevQuickLogin.tsx`, `LoginPage.tsx`).
+- Accounts live in `apps/web/.env.local` (ignored by git), as base64 JSON in `VITE_QUICK_LOGINS`. Base64 is not encryption. No passwords are in source or in this file.
+- Production build scan: 0 passwords and 0 demo emails in `dist`. The panel code itself is in the bundle but has no accounts and renders nothing.
+- All 13 passwords matched their stored hashes (read-only compare). In the browser, Admin signed in for real and reached /dashboard; the other 12 buttons sent the right account, with the request stopped before it reached the API.
+
+## Plan grid: Publish Time column removed (Status: COMPLETE; committed in Phase 3.5)
+
+- Removed from the grid columns, with its cell code. Paste from Excel and the template never used this column.
+- Kept: the Publish time field in the row side panel, and the saved value. From reading the API code (not run for this change): rows saved without a time get 18:00, and the import still accepts a publish time header.
+
+## Work Detail workflow redesign (Status: COMPLETE; committed in Phase 3.5)
+
+- Replaces the staggered look described below: cards sit in one aligned row with equal heights, joined by straight status-coloured arrows. Dashed arrows mean not reached or needs attention. Phones stack the cards with down arrows.
+- Each card has a status-tinted head (step number and status), the step name, the worker row (photo, name, job role), then times, then deadline, days late and revisions.
+- Photo comes from the shared `Avatar`: initials when there is no photo, a placeholder when unassigned. `GET /api/work/:id` now returns the owner's `avatarUrl`.
+- On real data only 2 of 63 users have a photo and neither owns a work item, so real cards show initials today. A photo was confirmed loading on a card by changing the API response inside the test browser tab only.
+- Checked read-only at 1536, 1024, 768 and 360 on three real items: no page overflow, arrows touch both cards and sit centred. Waiting, Changes requested, Blocked and Locked were not seen on real data.
+
+## Work Detail workflow diagram (Status: COMPLETE; committed in Phase 3.5)
+
+- `PipelineStepper.tsx` is now a workflow diagram: Start and End labels, status-coloured cards, curved connectors with ports, a summary strip, and a colour key. Phones stack the cards with straight lines.
+- Lines are coloured by hand-off: done (solid green), active (solid blue), attention (dashed red), idle (dashed grey).
+- Each card shows owner, deadline with days late, started, submitted or resubmitted, approved or posted, and revisions. The Post step has no submitted row. The summary shows overall started, finished and final deadline.
+- `getWorkItemById` fills blank step times in the response from the activity log and submissions. Saved records are not changed, and saved times win. On real data before this change, 18 started steps had no start time, 12 had no submit time, and 13 finished steps had no finish time; all of these can be filled from that history.
+- A time that truly has no record shows a dash on the card and "Not recorded" in the summary.
+- Tests: `PipelineStepper.test.tsx` (8), `work_detail_step_times.test.js` (3).
+- Checked read-only in a browser at 1536, 1024, 768 and 360 on two real items: no page overflow, lines end on their ports (0px off), cards in a row are equal height on wide screens. The Published colour key entry was added after this check and is covered by a unit test only. Waiting, Changes requested and Blocked colours are covered by unit tests or not seen on real data.
+
+## Overdue days and Work Items table (Status: COMPLETE; committed in Phase 3.5)
+
+- `overdueDays` and `formatOverdue` in `@mmp/shared` count whole calendar days, the same way as "Late by". `components/OverdueChip.tsx` shows "Overdue by 8 days", "Overdue by 1 day" or "Overdue today".
+- Used on Work Items (table and grid), Dashboard, My Work, Work Detail, Team Directory, Team Workload and the Calendar item preview; the Calendar month dot's tooltip shows it too. The Tracker keeps its "Late by" column. Summary cards still show a count.
+- `.status-chip` now has default padding at zero specificity, so existing padding classes still win. The Plan Grid row column was widened to fit.
+- Work Items table: title on its own line with type and stage chips beneath; date with the overdue chip beneath; dates read "29 Oct 2026"; even cell spacing.
+- Tests: `components/__tests__/OverdueChip.test.tsx` (4).
+
+## Header and calendar filters (Status: COMPLETE; committed in Phase 3.5)
+
+- **Header Team Chat:** new `components/HeaderChatAvatars.tsx`: 32px faces, one 6px overlap, 2px ring, "+N" chip for the rest of the team. Faces are recent DM partners, then group creators, then Team Chat members (photos first), never yourself. Hidden below 1024px. The Search chevron is also hidden below 1024px, where it overflowed its segment.
+- **Calendar selector:** the chips became one labelled `ui-select` dropdown (colour dot for the chosen calendar); the "Viewing" text was removed.
+- **Calendar Month tab layout:** row 1 is navigation or date range with the view tabs opposite; row 2 is the filters at full width.
+- **Custom dates:** a fourth view, Custom, with From/To date pickers (default today + 30 days). It uses the existing `start`/`end` on `/api/work/calendar`, inclusive in local time, and shows the agenda. An end before the start shows an error and loads nothing. The range is not kept in the URL, so a reload returns to the Month view.
+- **Departments:** "WhatsApp" came from the fixed `DEPARTMENTS` list in `@mmp/shared`, seeded into the DB by `seedReferenceData`; it has 0 people and 0 work items.
+  - New `GET /api/departments?inUse=true`: departments with an active person or a work item. Without the flag, every department is still listed.
+  - Calendar and Dashboard filters use it; the Dashboard's hardcoded fallback was removed, and a stale `departmentId` in the URL is cleared.
+  - Team Workload chips show departments with members only (the "7 creative departments" copy was removed). Access Requests filters by departments named in its requests. Team Directory already used real members.
+  - Every one of these filters is hidden when it has nothing to list.
+  - Not changed: the sign-up and Access Requests assignment forms still use the fixed list; `seedReferenceData` still seeds all 7; no department records were deleted.
+- **Tests:** `pages/calendar/__tests__/CalendarFilters.test.tsx` (6), `apps/api/test/departments_in_use.test.js` (2).
+Note: on 5 Nov the machine had about 1.8 GB of free commit memory, and plain `npm test --workspace=@mmp/web` crashed a Vitest worker ("Zone Allocation failed – process out of memory", with about 78 MB of heap in use). The same suite passes with `npx vitest run --maxWorkers=2`. No test failed.
+
+## Excel-style plan grid PG-4: Simpler full-screen grid (Status: COMPLETE; committed in Phase 3.5)
+
+Baseline: 859 (API 674, web 185). Web-only change; no API, role or workflow rules changed.
+
+**1. Full screen**
+- New route `/calendar/plan-grid?calendar=&month=&plan=`, rendered with `Layout focusMode`: the header is unchanged, the sidebar is hidden, and content uses the full width.
+- The Calendar tabs and panels are not rendered. One "Back to plans" button returns to `/calendar?tab=plans`.
+- Calendar, month and plan are kept in the URL, so a reload keeps the place.
+- Team members get the not-found page (RoleBoundary), and the API still returns 404.
+- Older `?tab=plans&grid=1…` links redirect to the new route.
+
+**2. Default planning view** (`plan-grid/columns.ts`)
+- Columns (Publish Time since removed): Posting Date, Topic, Type, Brief, Publish Time, Script/Shoot/Edit/Posting Owner and Deadline, Content Link, Remarks.
+- Posting Date, Topic and Type are frozen.
+- Deadlines are native date pickers with "Set by you" for edited ones. A new row shows "Auto" until it is saved.
+- Step owners use the Add Row rule: people with that step in their work preferences.
+
+**3. Content/Design**
+- No longer grid columns. They are shown, with owner and deadline, in the row panel's Steps & Deadlines section for design rows.
+- Data, autofill, template/upload support and the API are unchanged.
+- A row missing a step owner or deadline shows a ⚠ "Needs attention" marker (screen-reader text lists what is missing), and the panel shows a "Needs attention" chip with the list.
+
+**4. Progress**
+- The 10 Excel workflow columns (status, done date, approval, published, turnaround) are behind one "Show progress" toggle (`aria-pressed`).
+- The toggle appears only once the plan has approved rows (before that every status is blank). It is not shown on phones.
+- The per-group hide controls were removed.
+
+**5. Dates**: Posting Date and every editable deadline use `<input type="date">` (keyboard accessible, no dependency).
+- A picked date saves after 0.7 s or on blur.
+- A single Excel-style value pasted into a date cell ("2 Nov, 2026", "16/11/2026", or month-resolved "05/11/2031") is read with the grid month.
+- Read-only dates show as "2 Nov 2026".
+
+**6. Row entry, one rule set**
+- New `pages/calendar/planRowSteps.ts` holds the Add Row form's step logic: steps and offsets, auto deadlines, posting-date change, type/reel change, autofill merge, owner/deadline overrides and validation. `PlansTab`'s Add Row form now uses it.
+- "Add row" opens the row panel with every Add Row field, Steps & Deadlines from the same helpers, owner suggestions from the same `POST …/autofill` endpoint, and the same checks before saving (required fields, past/after-publish/order, work preference, source video).
+- Saving still goes through the grid API (validatePlanAndRows, same offsets).
+- Typing in the grid, row panel edits and "Paste from Excel" (now its own dialog) all still work. Multi-row paste onto Posting Date/Topic/Type and other Excel-aligned cells still works too.
+- Bug fixed: `calculateDueDateString` subtracted days in local time and read the result back in UTC, so in IST every Add Row deadline came out one day early until the autofill reply arrived. A posting-date change never refreshed it. It is now computed in UTC.
+
+**7. Repeated actions** (inventory, then removals; no capability lost)
+
+| Action | Removed | Kept (single entry point) |
+|---|---|---|
+| Add individual work | Plans tab header button | Calendar page header (SM/Admin only; it was shown to the Creative Head, whose plan creation the API refuses) |
+| Open plan grid | Selected-plan "Open in grid"/"Review in grid"; wizard "Monthly Content Plan" option | Plans tab header: "Open plan grid" (SM/Admin) / "Review in plan grid" (CH) / "View plan grid" (Exec); opens on the selected monthly plan. The Feedback-page link to the grid stays (a different page). |
+| Download Template | Plans tab header | Grid toolbar |
+| Upload | (old modal was already unreachable; kept in code) | Grid toolbar |
+| Submit for review | Selected monthly plan "Submit/Resubmit"; monthly row "Resubmit" | Grid toolbar (whole plan); row panel "Submit row"/"Resubmit row" (single row) |
+| Approval actions | Monthly plans: PlansTab "Review Mode" (Approve All/Selected/Request Changes); Feedback page Approve buttons and row checkboxes/notes | Grid (Approve selected, Approve whole plan, row panel Approve/Request changes) |
+| Add/Edit/Delete row (monthly) | Selected-plan "Add Row", row Edit/Rework/Delete, clickable step chips | Grid: Add row, cells, row panel (edit, delete) |
+
+- Individual plans are not in the grid, so their Add Row, Submit and Creative Head review stay in the plan detail and on the Feedback page. They are their only entry points.
+
+**8. Reliability**: browser check on a disposable stack (Vite :5298 → API :8091 → `marketing_portal_uicheck`, departments seeded; stopped and dropped afterwards).
+- **SM, Reel through Add row:** suggested owners came back, and auto deadlines were Script 12 Apr, Shoot 15, Edit 18, Post 20. A manual Edit deadline was saved.
+- **SM, Static Post typed in the grid:** the date was picked; Script/Shoot/Edit showed N/A; a Posting owner change and a manual Script deadline in the grid both autosaved. In the row panel, Content/Design steps were shown and a Design owner was set.
+- **SM, paste and submit:** Paste from Excel (`28/04/2027`, `Carousal` → Carousel Post) was saved. After a reload the URL and rows were kept. Submit worked.
+- **Creative Head:** approved the reel and returned the post with a note.
+- **SM again:** the approved row was locked (0 inputs). Show progress listed the 10 progress columns. The feedback showed in the panel, and "Resubmit row" worked.
+- **Admin:** edits but has no review actions.
+- **Executive:** read-only, with only Back and Show progress; writes get 403.
+- **Team member:** not-found page, and the API returns 404.
+- At 1440/768/360 for SM, CH, admin and executive: sidebar hidden, Calendar tabs gone, header kept, page overflow 0, and no unlabelled fields, unnamed buttons, small targets or page errors. The only contrast flag is the disabled "Approve selected (0)", which is exempt.
+- Fixed during the check:
+  - Compact row status dots had no size, so they were invisible at 768px.
+  - Plan list and detail periods were shown in local time: an IST viewer saw "4/1/2027 – 5/1/2027" for April. They are now shown as stored dates.
+
+**Tests**
+- Web: `PlanGrid.test.tsx` was rewritten (21). It covers default columns and the hidden Progress view, deadline maths and manual override, date picking, typing and paste into date cells, design owners in the panel with Needs attention, Add Row parity (same endpoint, steps and checks), Paste from Excel and multi-row paste, locked approved rows, and single-row submit.
+- `CalendarTabs.test.tsx`: three tests were rewritten for single entry points. An individual-plan fixture proves its Add Row form and review stay.
+- `PlanGridRoles.test.tsx`: phone and accessibility tests were updated for date pickers. The approval-tab tests now cover monthly (grid link only) and individual (review kept).
+
+## Excel-style plan grid PG-3: Review, roles, mobile (Status: COMPLETE; committed in Phase 3.5)
+
+Baseline: 841 (API 668, web 173). The 21:39–21:41 demo-account plan changes were left untouched.
+
+**Approval restriction**
+- `reviewPlan` (approve_all, approve_selected, request_changes, reject) now allows `creative_head` only; admin gets `403 FORBIDDEN_APPROVAL`.
+- Admin keeps every other permission: plan create/edit, grid editing, submit, and step approvals in `transition.service` (unchanged).
+- What depended on admin approval:
+  1. The old plan detail "Review Mode" in `PlansTab` (`isCreativeHead` counted admin). It now shows for the Creative Head only.
+  2. Feedback > "Plans waiting for approval" (`PlansApprovalTab`) showed Approve/Request Changes to everyone. It now shows them to the Creative Head only; others see "Only the Creative Head can approve or return plan rows." and a "View in plan grid" link.
+  3. No API or web test depended on admin approving plan rows.
+
+**Team member**: all `/api/calendar-plans/grid*` routes return 404, in the same body shape as the `/team` isolation 404; this was 403 in PG-1. Other roles are unchanged.
+
+**Creative Head review in the grid**
+- Paths in: Plans & Approval → "Review in plan grid"; selected monthly plan → "Review in grid"; Feedback → Plans waiting for approval → "Review in plan grid". The last uses a deep link: `/calendar?tab=plans&grid=1&gridCalendar=…&gridMonth=…&gridPlan=…`.
+- The grid opens filtered to "Only rows waiting for review (n)", which can be switched off. There are no editing controls: cells are plain text, and the API still returns 403 for planning writes.
+- Actions:
+  - Select rows → "Approve selected" (`approve_selected`).
+  - Row panel → "Approve row", or "Request changes" with a required note (`request_changes`).
+  - "Approve whole plan" (`approve_all`, after a confirm dialog). VERIFY: it is enabled only when every row that is not yet approved is submitted, because the existing `approve_all` rule approves every row, drafts included.
+- Review Feedback stays visible in the row panel.
+
+**Executive**
+- "View plan grid": a read-only note, plain-text cells, no Template, Upload, Paste, Submit, Review or Delete, and a row panel without Save or Delete.
+- Grid data carries names only.
+- Every direct write returns 403: grid rows, upload, review, submit, PATCH/DELETE/POST rows.
+
+**Mobile and tablet**
+- Below 1024px the frozen columns are narrower (100+116+170+132 px), so other columns scroll into view at 768px; row status shows as a dot with a screen-reader label.
+- Below 640px the grid becomes row cards. Each card shows date, type, topic, status, owners and visible problems, with an "Edit row", "Review row" or "View row" button. The row panel then also edits Posting date, Topic, Type, the step owners and Remarks.
+- "Add row" opens the panel for a new row. Submit stays in the toolbar. Paste is desktop/tablet only, with a note saying so.
+
+**Accessibility**
+- The table is named by calendar and month. Each row header reads "Row n: topic". Cells are named "Column, row n, topic". The Turnaround header includes its explanation.
+- Failed cells have `aria-invalid` and a visible "⚠ message" under the cell, linked with `aria-describedby`.
+- Row panels, the preview dialog and the new confirm dialogs (whole-plan approval, delete row; delete no longer uses `window.confirm`) all use `useDialogFocus`.
+- Errors from actions taken inside the panel now show in the panel with `role="alert"`; before, they were hidden behind the drawer.
+
+**Tests**
+- API: `plan_grid_pg3.test.js` (6) covers:
+  - the full flow (paste → submit → approve one row → return one with a note → approved row locked, returned row editable with feedback);
+  - admin refused for all 4 review actions;
+  - admin's other permissions;
+  - the Creative Head blocked from planning edits;
+  - executive read-only and 403 on 7 write routes;
+  - team member 404 on 3 grid routes.
+- Web: `PlanGridRoles.test.tsx` (12) covers Creative Head review, executive read-only, phone add/edit, accessible names and cell errors, and the admin and Creative Head views of the approval tab.
+- Changed tests:
+  - `plan_grid_pg1.test.js`: team member 403 → 404.
+  - `PlanGrid.test.tsx`: the viewer test now expects plain text instead of disabled inputs.
+
+**Browser check**
+- Ran on the disposable stack: Vite :5299 → API :8090 → `marketing_portal_uicheck`, with 7 departments seeded there so approval could create steps. The stack was stopped and the DB dropped afterwards.
+- SM pasted 2 rows (preview: `05/03/2027` → 5 Mar 2027, `Poster` → Static Post), saved and submitted. The Creative Head approved one and returned one. As SM, the approved row was locked and the returned row showed the feedback.
+- Executive saw no actions and got 403 on writes; admin got 403 on review; the team member got 404 and saw no grid entry.
+- 1440/768/360 for SM, Creative Head, executive and admin: page overflow 0; no unlabeled fields, unnamed buttons or small targets.
+- Contrast flags:
+  - "Approve selected (0)" is a disabled button, which is exempt.
+  - "Approved" at 768 was screen-reader text measured against the status dot. Fixed by moving the label outside the dot.
+
+## Excel-style plan grid PG-2: SM grid (Status: COMPLETE; committed in Phase 3.5)
+
+Baseline: 816 (API 655, web 161).
+
+**Data**
+- `PLAN-2027-01-001` was repaired: the period end went from 2026-12-31 to 2027-01-31 23:59:59.999Z, and a re-check found 0 bad plans.
+- Later, at 21:39–21:41 IST, the activity log shows "Test SM Manager" working in the app:
+  - created `PLAN-2027-02-001`;
+  - deleted `PLAN-2027-01-001` and `PLAN-2026-11-002`;
+  - added and submitted a row.
+- These were not script changes and were left as they are.
+- Business timezone: Asia/Kolkata, as approved.
+
+**Decisions applied**
+1. Content Owner and Design Owner are optional columns placed after Script Owner and Edit Owner. They show N/A on rows without those steps. The 18 Excel columns are unchanged (`PLAN_GRID_COLUMNS`); the screen uses `PLAN_GRID_DISPLAY_COLUMNS`.
+2. Reels default to Script + Shoot. The flags live in the row panel. A Script or Shoot owner on a variant without that step is a cell error ("This reel has no Script step…"); a Content or Design owner on a reel is flagged too.
+3. Types: typed or pasted `Poster` → Static Post and `Carousal` → Carousel Post. The Type list offers all 15 documented types and sends `typeExact`, so the print Poster type stays selectable.
+4. Slash dates:
+   - An unambiguous DD/MM date is accepted.
+   - Otherwise the date is accepted only when exactly one reading falls in the grid month (`resolvedByMonth`); anything else stays a cell error.
+   - Paste and upload show a preview with the resolved date ("5 Jan 2027, from “05/01/2027”, read using the grid month") before saving.
+5. Status mapping:
+   - Approval and Done Date sources as proposed in PG-1.
+   - Approval wording now matches the app: Pending = Waiting for approval, Feedback = Changes requested.
+   - Locked steps show "Locked".
+   - Turnaround is unchanged and has a header tooltip ("Days from row approval to publishing…").
+6. Template and upload:
+   - The template has the 18 columns plus Content Owner and Design Owner, with grey read-only headers, a Type list and a "How to fill" sheet. `?layout=legacy` still returns the older 23-column file.
+   - New `POST /api/calendar-plans/grid/upload` (dry run first) matches owners by exact name. Older files are detected and still work: owner emails are resolved to people, and the old deadlines become step deadlines.
+   - The older `/preview` endpoint also accepts exact names, with the same ambiguity error.
+7. Paste speed: `buildAutofillContext()` loads members, open hours and 90-day revisions in 3 queries per request. The rules are unchanged, and earlier rows of the same paste still count in row order. A test checks it gives the same output as the per-row version. A 12-row paste loads members once.
+
+**Bug fixed on the way**: the upload CSV sniff ("a comma in the first 100 bytes") also matched `.xlsx` zip bytes, so real Excel files were read as CSV and came back empty. Zip files are now detected first; this affected the older upload too.
+
+**UI** (`pages/calendar/plan-grid/`: `PlanGrid.tsx`, `PlanGridPreviewDialog.tsx`, `PlanGridRowPanel.tsx`, `types.ts`)
+- Plans tab: "Open plan grid" replaces "New Plan" and "Upload & Preview". "Add individual work" and "Download Template" stay. A selected monthly plan has "Open in grid". In the wizard, "Monthly Content Plan" now opens the grid.
+- Grid:
+  - Calendar and month pickers; a plan selector when a month has several plans (nothing merged; editing waits for a choice).
+  - Two-row header with the 7 groups; every group except Plan can be collapsed, and collapsing hides columns without removing them.
+  - Row column, Posting Date, Topic and Type are frozen. The grid scrolls inside its own box.
+- Editing:
+  - Text cells save on blur or Enter; Type and owner selects save on change. Owners are sent by id, which separates two people with the same name. "Auto-assign" returns the step to autofill, and suggested owners show an "Auto" chip.
+  - Enter / Shift+Enter / ↑ / ↓ move between rows. ← / → move between cells at the text edges. Esc reverts.
+- Paste: multi-row Excel paste from any cell (header row detected or not) goes through a dry-run preview, then save. Rows that fail stay in the grid unsaved, with the bad cells marked (`aria-invalid` plus a described error) and listed in a "rows need fixing" bar.
+- Row panel: brief, publish time, priority, content link, reel steps, source video, step deadlines (auto or set by you, with "Use auto"), program/event, reference link, review feedback, row status, and delete.
+- Submit for review uses the existing endpoint and is blocked while unsaved rows remain.
+
+**Tests**
+- API: `test/plan_grid_pg2.test.js` (13). `plan_grid_pg1.test.js` was updated: the ambiguous-date row now uses `03/04/2031`, and a month-resolved row and resolved-type checks were added.
+- Web: `plan-grid/__tests__/PlanGrid.test.tsx` (12).
+- Changed tests:
+  - `step_deadlines_plan_form.test.js`: the 23-column test now requests `?layout=legacy`.
+  - `CalendarTabs.test.tsx`: the SM and executive tests use the new entry point.
+
+**Browser check** (SM, 1440/768/360, writes blocked, only dry-run validation allowed):
+- No page overflow; grid and preview at 360 are 0 px wider than the page.
+- No contrast failures, small targets, purple, unlabeled fields or unnamed buttons.
+- 20 columns; the row panel traps focus.
+- The paste preview resolved `05/01/2027` → 5 Jan 2027 and `Poster` → Static Post, and flagged "Nobody Here".
+- December shows the plan selector.
+
+## Excel-style plan grid PG-1: Data and API (Status: COMPLETE; committed in Phase 3.5)
+
+Baseline before the change: 795 passing (API 634, web 161), typecheck and build clean.
+
+**Period bug ("SM January 2027 shows 1/1/2027 - 12/31/2026")**
+- Root cause: in the New Plan wizard, changing Period Start updated the title but left Period End at the previous default (31 Dec). The API never checked the order.
+- Stored record: `PLAN-2027-01-001` (0 rows) has periodEnd `2026-12-31`. It was not rewritten. A dry-run repair finds only this plan: `scratchpad/repair-plan-periods.mjs`, with `--apply` only after approval.
+- API fix:
+  - New `resolvePlanPeriod` in `plan.service.js`. `month: 'YYYY-MM'` gives the whole month, from day 1 00:00Z to the last day 23:59:59.999Z (the existing date-only convention).
+  - End before start is now rejected with `400 INVALID_PERIOD` for every kind. This is a reported behaviour change; it was accepted before.
+  - Custom-range monthly plans that send no `month` still work, so the existing overlap-warning tests are unchanged.
+- Wizard fix: changing Period Start now resets Period End to the end of that month, and the form refuses an end before the start.
+- `APP_TIME_ZONE = 'Asia/Kolkata'` (VERIFY: no timezone is configured anywhere; IST is taken from the report schedules). A plan's month is read in IST, so plans stored at UTC midnight and at local midnight both land in the right month.
+
+**Shared (`packages/shared`)**
+- `PLAN_GRID_COLUMNS`: the 18 Excel columns with groups, editable/frozen flags and the owner step for each owner column.
+- Month helpers: `monthPeriod`, `planMonthKey`, `monthKeyInAppTz`.
+- Paste helpers: `parseClipboardTsv` (handles quoted cells) and `pastedRowsToCells` (header detection, or placement from the paste column).
+- `parseGridDate` accepts `2 Nov, 2026`, `16/11/2026`, ISO dates and `Nov 2, 2026`. Ambiguous day/month dates are rejected, never guessed.
+- `parseGridType` maps Poster → Static Post and Carousal → Carousel Post, otherwise exact app type names only.
+- `matchGridOwner`: exact trimmed name; duplicate names count as ambiguous.
+
+**API (`planGrid.service.js`, mounted before `/:id`)**
+- `GET /api/calendar-plans/grid?calendar=&month=&planId=` returns the month's monthly plans (a selector when there are several, with `periodIssue` flags), rows in the 18-column shape plus app fields, and permissions. It never creates a plan.
+  - People (names only) are returned to editors only.
+  - Team members get 403.
+- `POST /api/calendar-plans/grid/rows` accepts `{ calendar, month, planId?, rows:[{clientKey,rowId?,cells}] | tsv, startColumn?, dryRun? }`.
+  - Only `sm_manager` and admin may use it.
+  - Results are per row (`saved`, `valid`, `invalid`, `locked`) with `cellErrors` keyed by column, warnings and ignored workflow cells.
+  - The draft plan is created on the first valid row. A month with several plans returns `409 PLAN_SELECTION_REQUIRED`; duplicates are never merged. Approved rows are locked.
+  - It reuses the existing autofill (blank owners only), deadline offsets, `getPipelineForContent` and `validatePlanAndRows`. Existing plan rows are passed as context so duplicates are flagged on the new row.
+- Existing endpoints are unchanged apart from the period checks above.
+
+**Tests**: `apps/api/test/plan_grid_pg1.test.js` (21) covers month periods, the January bug, date/type/owner parsing, clipboard parsing, multi-row paste with the November column structure (synthetic data), unmatched and ambiguous values, autofill with manual overrides, bulk validation, approved-row lock, the duplicate-plan selector, role permissions (SM, admin, Creative Head, executive, team member), and the template download and upload preview.
+
+**Open for approval (VERIFY)**: see the PG-1 report. Topics: Approval column source, done-date source, Content/Design owner columns, Reel step flags, `Poster` vocabulary, ambiguous slash dates, admin row review, the template/upload format, and paste speed (about 0.4 s per row from the existing autofill).
+
+## Release fixes (Status: COMPLETE; committed in Phase 3.5)
+
+Blockers
+1. `LoginPage.tsx`: removed the "Demo quick-fill accounts" panel, so the client code has no hard-coded emails or passwords. A rebuilt `apps/web/dist` was scanned against every password and email in `apps/api/.env` and `baselineUsers.js`, plus demo patterns: 0 hits. **The admin password was shipped in earlier bundles, so it must be rotated outside this task.** The old quick-fill test was replaced: `pages/__tests__/LoginPage.test.tsx` now checks that the panel is absent and both fields start empty.
+2. `MediaThread.tsx`: own-message bubble is now `bg-white border-ui-ink text-ui-ink`; it was white on white. Mark done, Reply and Reopen are 44px. New test: `workspaces/__tests__/MediaThreadBubble.test.tsx` (2).
+
+Fix before release
+3. `WorkListPage.tsx` rethemed: no purple, uppercase or font-black; status chips for status, priority and overdue; labelled `ui-select`/`ui-input` filters at 44px; named row-open button; view toggles carry `aria-label` and `aria-pressed`; grid cards are buttons inside a list.
+4. `aria-label` added to the filter controls in `GlobalFilterBar`, `TrackerTab`, `TeamDirectoryPage` and `AccessRequestsPage` (16 controls).
+5. Purple, indigo and gradients removed from `PersonWorkHistoryView`, `NotificationToast`, `ProtectedRoute`, the `App` spinner, `ErrorBoundary`, `AvatarCropModal`, `PersonWorkPage`, `LoginPage`, `SetPasswordPage` and `WelcomePage`. They now use ink, ui-card and ui-line. `WelcomePage` stays dark, on solid ink.
+6. `CalendarPage`: out-of-month cells are no longer faded; only the date number is muted.
+7. `ReviewStudioPage`: the role badge shows the viewer's role (`ROLE_LABELS`), not a hard-coded "Creative Head".
+8. Removed the internal "Screen N •" labels on Feedback, Issues and Workload; removed the whole "Screen 14 • Phase 7" label on Reports.
+9. Team member route boundaries: new `components/RoleBoundary.tsx` wraps `/reports`, `/workload`, `/feedback` and `/issues` in `App.tsx`. For `team_member` these pages never mount: there are no data requests and no counts, and the not-found state from `/team/:id` is shown instead. API behaviour and other roles are unchanged. New test: `src/__tests__/TeamMemberRouteBoundaries.test.tsx` (8), which renders the real `App` routes.
+
+Verification: 12 affected routes × 5 roles × 1440/768/360 (180 views), with all non-GET API calls blocked.
+- No page overflow, purple, gradients, unnamed buttons or unlabelled fields; no focus-ring gaps.
+- writer1 sees "Page Not Found" on all four routes; the other roles see the pages.
+- The remaining contrast hits are exempt or false positives: disabled Send Back button, disabled Approved radio label, and the hidden avatar "Edit" overlay.
+- The remaining small targets, sub-11px text and uppercase weekdays are on the Later list (calendar chips, tracker link, team and profile chips) and were left as they are.
+
+## Final polish follow-up (Status: COMPLETE)
+
+- ShootReviewView clip gallery: each clip is now a `<button aria-pressed>` (44px min height); the cards contain no other controls. Works in the Shoot workspace and inside Review Studio.
+- Design workspace: `MediaWorkspacePage` now passes the existing `revisionComments` (same submission comments the Edit workspace gets) to `DesignWorkspace`, which shows a read-only "Revision feedback (n)" section in the left panel with Creative Head/Admin comments (author, date, text). No API change; no write actions added. Share-to-chat button moved to the shared 44px primary button.
+- Tests added: `apps/web/src/pages/work/workspaces/__tests__/GalleryAndDesignFeedback.test.tsx` (3): gallery clips are buttons with pressed state and can be selected; Design shows only reviewer feedback; nothing extra when there is none.
+- Audit extended: clickable/target/contrast checks now scan the whole page (minus the frozen app shell) instead of only `<main>`, and treat `<summary>` as keyboard-operable. Re-run: workspaces (stored + editable) and Review Studio media — 0 issues; the only small targets are the 8 timeline markers (documented exception with a 44px list).
+- Note: the local API on :8080 stopped during the checks (not caused by any code change); it was restarted with `npm run dev` against the normal `marketing_portal` DB.
+- Gate: typecheck 0; web build clean; API 634 + web 150 = 784 passed, 0 failed.
+
+## Final polish (Status: STOPPED — clip check found a keyboard bug; resolved in the follow-up above)
+
+- Writing Studio: caption, snippet and comment fields now `ui-input ui-textarea` (visible borders). Editor untouched.
+- Avatar crop: zoom slider uses a new scoped `.ui-range` (ink thumb, hairline track) plus `aria-label="Zoom"` and a 44px hit area. The global range rule (Teleprompter) is unchanged.
+- Clip review live check on a disposable stack (API :8090 → DB `marketing_portal_uicheck`, Redis off, console email; Vite :5299 via a scratchpad config; real :8080/:5199 blocked; DB dropped and processes stopped afterwards):
+  - Approve Clip and Reshoot Needed work for Creative Head in the Shoot workspace and in Review Studio (server: `approved` / `reshoot_needed`); Reshoot dialog opens with focus inside, closes on confirm; Send Back becomes enabled.
+  - Videographer (step still Pending) sees the read-only review view: Scene B marked "Reshoot !" with an unread badge; the note is in that clip's thread. The "Reviewer Feedback" banner in the Shoot workspace only appears after Send Back (by design).
+  - **Bug:** ShootReviewView clip gallery items are clickable `div`s with no tabindex/role (`apps/web/src/pages/work/workspaces/ShootReviewView.tsx` ~line 339, `onClick={() => setSelectedClip(clip)}`). Keyboard users can only review the default clip, in both contexts and for both roles. Not fixed (stop rule).
+  - Audit gap found: the clickable-element check only scanned inside `<main>`; full-screen workspaces have no `<main>`, so their clickable `div`s were never checked (ClipCard root is covered by its "Open" button; the ShootReviewView gallery is not).
+- Design revision view (read-only finding): request-revision stores the note as a `SubmissionComment` and in the notification text. `MediaWorkspacePage` loads it into `revisionComments` but passes it only to `EditWorkspace`; `DesignWorkspace` has no such prop. Work Detail's "Rework Feedback" banner reads `latestSubmission.feedback`/`rootCause`, which the Submission model does not have, so it never shows the note. A Designer currently sees the note only in Notifications. No feature added.
+- Gate: typecheck 0; web build clean; API 634 + web 147 = 781 passed, 0 failed.
+
+## UI Retheme UI-4C: Production workspaces, ShootReviewView, Review Studio media (Status: COMPLETE; committed in Phase 3.5)
+
+- Baseline 781 (API 634 + web 147). Final gate: typecheck 0; web build clean; API 634 + web 147 = 781 passed, 0 failed. No tests added, changed or removed.
+- Approach: the workspaces were full-screen dark apps. Chrome (headers, panels, forms, threads, checklists, dialogs) moved to the light theme with a scripted class mapper (dark neutrals → light surfaces; solid accents → ink; emerald/rose/amber tints → `status-tint status-approved/changes/waiting`; fields → `ui-input`/`ui-textarea`/`ui-select`; no gradients, uppercase or `font-black`). Media surfaces stay dark and neutral: `VideoPlayer.tsx` (excluded from the mapper), every `bg-black` well, clip thumbnails, the Review Studio stage.
+- Files: `pages/work/workspaces/` — `MediaWorkspacePage`, `DesignWorkspace`, `ShootWorkspace`, `EditWorkspace`, `PostWorkspace`, `ShootReviewView`, `ClipCard`, `MediaThread`, `UploadManager`, `EarlierOutputsViewer`, `VideoPlayer`; `pages/feedback/review-studio/VideoPlayerViewer.tsx`, `ImageViewer.tsx`; `index.css` (new scoped `.ui-media-range` scrubber thumb).
+- Accessibility:
+  - Dialogs: ShootReviewView Reshoot, Approve Step and Send Back, and the Shoot clip lightbox → `role="dialog"`, labelled, `useDialogFocus`, named close buttons.
+  - ClipCard: the whole card is mouse-clickable and contains other controls, so an "Open {clip}" button over the thumbnail is the keyboard path to the clip dialog; favourite has a name and `aria-pressed`; the shot select is named.
+  - Workspace tabs (Edit, Shoot side panel) expose `aria-pressed`; Approve Step stars are named `N star(s)` with `aria-pressed` and are 44px; quality tags `aria-pressed`, 44px; Edit checklist toggles named, 44px; message fields, send buttons and back buttons named; visible labels paired with controls (Edit 5, Post 3, ShootReviewView 3, Design 2).
+  - Review Studio media: all player controls 44px and named; Enter/Space toggles play on the video surface; speed buttons `aria-pressed`; timeline markers keep the 10px dot with a 24px named hit area (44px would overlap the seek bar and neighbours) plus a "Timecoded comments" list of 44px seek buttons; image pins keep their 28px look with a 44px hit area and a full name; **Add pin at centre** is the keyboard path to the existing pin form. Same 44px/naming/keyboard treatment on the workspace `VideoPlayer`.
+  - Fixed during this pass (earlier-phase oversight): `.ui-textarea` only sets size and radius, so standalone uses had no field border. All uses outside Writing Studio now use `ui-input ui-textarea` (WorkDetail 7, Feedback 3, DecisionBar 2, ReviewStudioSidebar 1, Edit 3, ShootReviewView 3, ClipCard 1, Design 1, MediaThread 1).
+  - Shoot sticky submit bar made opaque (`bg-ui-canvas`); Design slide-number badge opaque over images.
+- Live check (non-GET `/api` aborted; an extra pass served each work item as "In Progress" in the browser only to reach upload/checklist states): Design, Shoot, Edit, Post as owner, creative_head and executive at 1440/768/360, every workspace tab, ShootReviewView in Review Studio — 55 views, 0 overflow, 0 undersized targets, 0 clickable non-controls, 0 unnamed controls, 0 unlabelled fields, no purple. Shoot clip dialog opens from the keyboard, focus inside, thread present, Escape closes. Review Studio: Approve Step dialog passes focus/trap/Escape/return. Media: controls 44px, keyboard play/pause works, timecoded list seeks, pin form opens at (50%, 50%), nothing saved.
+- Feature presence (owner views): Design — copy, slide order, dimension guides, uploads ✓; Shoot — shot list, upload states, clip metadata, per-clip discussion, Approve Clip ✓ (Reshoot banner appears only when a clip is flagged); Edit — raw footage, pre-flight, revision checklist, cut upload ✓; Post — download, copy caption, copy hashtags, checklist, live URL, publish time ✓.
+- Remaining gaps / VERIFY:
+  - Edit workspace has **no zip download** of raw footage in the code (each clip/link is listed individually). Not added (no new features).
+  - Design workspace shows no separate revision/version view in the owner screen; revision context comes from Work Detail and Review Studio. VERIFY intended behaviour.
+  - Clip-level Approve/Reshoot buttons were not exercised live because every seeded clip is already approved; unit tests cover them.
+  - The global `input[type=range]` thumb is still the legacy purple (`#7a6af6`) for non-media sliders (Teleprompter, avatar crop). Left unchanged because the Teleprompter must not change; the video scrubbers use the scoped `.ui-media-range`.
+  - Writing Studio sidebar still uses standalone `ui-textarea` (caption, snippets, comments): fields have no visible border. Not changed in this pass because Writing Studio was out of scope; a one-line class fix each.
+  - Role-specific views: creative_head and executive see the review view of each workspace, so owner-only tools are absent there by design.
+- `docs/UI.md` rewritten to match the code (tokens, surfaces, controls/status, pipeline, shell, workspaces) with the requested corrections.
+
+## UI Retheme UI-4B: Writing Studio (Status: COMPLETE; committed in Phase 3.5)
+
+- Baseline: 781 (API 634 + web 147, from the root-cause correction). Final gate: typecheck 0; web build clean; API 634 + web 147 = 781 passed, 0 failed. No tests changed.
+- Files (all in `pages/work/writing-studio/`), style/semantics only:
+  - `WritingStudioPage.tsx`: header, loading, read-only banners (`status-*`, `role="status"`), Submit as the single primary action, status chip no longer uppercase, title is an `h1`; fallback-link modal → `glass-modal` dialog + `useDialogFocus`; layout: below `md` the docked sidebar stacks under the canvas (was squeezing the A4 page to ~40px at 360).
+  - `WritingStudioRibbon.tsx`: tabs and toggle tools (bold, italic, align, lists, highlight, zoom, link, comments, focus) use `aria-pressed` with an ink active state; all tools 44px; icon-only tools named; coloured icon tints removed; one primary per tab (Insert Template, Export .docx); selects use `ui-select` and are named; Rename/Link → dialogs with `useDialogFocus`. Font list (incl. Manjari/Gayathri), formatting commands, import/export and print handlers unchanged.
+  - `WritingStudioSidebar.tsx`: light panel; tabs → `ui-tabs`; uppercase labels removed; duration/hook/caption/shot-list tools restyled in place (no logic change); caption/hashtag fields labelled; snippet actions visible on keyboard focus and on touch screens; comment cards: the jump-to-text action is now a button around the quote and text (was a clickable `div` containing a Resolve button and a reply input); reply input and send button named.
+  - `WritingStudioStatusBar.tsx`: light bar; save status in an always-mounted `role="status"` region with `status-*` chips; zoom select named, 44px.
+  - `FindReplaceModal.tsx`, `VersionHistoryModal.tsx`: dialog semantics + `useDialogFocus`; version rows were clickable `div`s → `<button aria-pressed>`; responsive split view. Text change: "FIND" / "REPLACE WITH" → "Find" / "Replace with" (labels now tied to their inputs).
+  - `WritingStudioCanvas.tsx`: canvas backdrop colour only.
+- Unchanged by design: `TeleprompterModal.tsx` (byte-identical), A4 page (`.a4-page` stays white, 210mm), print stylesheet and `writing-studio-*` print classes, Malayalam fonts, TipTap editor config, script table, autosave and single-editor lock, `.docx`/`.txt` import/export, hook/duration/shot list/caption tools.
+- Bug found and fixed during checks: Rename, Link and Find dialogs used `autoFocus`, so focus moved inside before `useDialogFocus` could record the opener and fell back to `<main>` on close. Now the hook focuses the field (Find uses `initialFocusRef`); focus returns to the opener.
+- Live check (non-GET `/api` aborted, so the editor lock and autosave never wrote): writer1, creative_head, admin, sm_manager, executive at 1440/768/360 — 0 overflow, 0 undersized targets, 0 clickable non-controls, no purple; A4 white at 794px; Manjari/Gayathri present; print media hides header/ribbon/status bar and keeps A4 white; all 5 dialogs pass focus-in, Tab trap, Escape, focus-return; Teleprompter opens and closes with Escape. An editable state was served in the browser only to reach the fallback-link dialog.
+- Remaining gaps / VERIFY:
+  - Links inside the document still render with the editor's `text-indigo-600` class (`WritingStudioCanvas.tsx:82`). Left unchanged: it is part of the editor output saved into document HTML.
+  - The Teleprompter keeps its own dark styling and small controls (left unchanged as instructed).
+
+## Root-cause correction: 7 canonical revision root causes (Status: COMPLETE)
+
+- Investigation: new writes accepted non-canonical values. Classify (`revisionClassifySchema` + service) allowed all 12 `REVISION_ROOT_CAUSES`; `request-revision` accepted any string (stored only in ActivityEvent metadata). Screens: Review Studio had its own 5 values, Work Detail its own 6, Feedback and Issues & Blockers offered all 12. `RevisionFlag.rootCause` enum keeps all 12, so legacy values remain valid on read. No migration needed or done.
+- Changes:
+  - `@mmp/shared`: `revisionClassifySchema.rootCause` and `submissionReviewRevisionSchema.rootCause` → `z.enum(CANONICAL_REVISION_ROOT_CAUSES)` (request-revision stays optional); added `CanonicalRevisionRootCause`, `LEGACY_REVISION_ROOT_CAUSES`, `isCanonicalRevisionRootCause`. Shared `dist/` rebuilt (gitignored).
+  - API: classify service checks the canonical list; reference data `revisionRootCauses` → canonical list; media reshoot transition passes `'Technical error'` instead of `'Technical issue'` (the transition ignores it; nothing stored).
+  - Web: Review Studio (`DecisionBar`), Work Detail Request Rework, Feedback Classify and Issues & Blockers Classify all render `CANONICAL_REVISION_ROOT_CAUSES` from `@mmp/shared`; local lists removed. The UI only offers Classify on unclassified flags; re-classifying a legacy flag through the API now requires a canonical value.
+- Tests: added `apps/api/test/revision_root_causes_canonical.test.js` (20: canonical list, request-revision rejects 4 legacy/non-canonical values and accepts canonical, classify rejects each legacy value and accepts each canonical value, legacy re-classify needs canonical, legacy flag readable via list and dashboard and not rewritten) and `apps/web/src/pages/feedback/__tests__/RootCauseChoices.test.tsx` (6: all four screens show exactly the 7 values; legacy flags render on Feedback and Issues with GET-only requests). Updated to canonical values: `review_studio_and_workspaces.test.js` (`Creative Choice` → `Creative direction unclear`), `workspaces_ws4_journeys.test.js` (`Off brief` → `Brief unclear`), `ReviewStudio.test.tsx` (`quality` → `Brief unclear`, 2 assertions).
+- Gate: typecheck 0; web build clean; API 634 + web 147 = 781 passed, 0 failed.
+
+## UI Retheme UI-4A: Work Detail, Feedback, Review Studio (Status: COMPLETE; committed in Phase 3.5)
+
+- Baseline: 755 (API 614 + web 141). Final gate: typecheck 0; web build clean; API 614 + web 141 = 755 passed, 0 failed. No tests added, changed or removed (no test depended on a changed class).
+- Files changed (style/semantics only; no route, API, permission, workflow, timer or data change):
+  - `pages/work/WorkDetailPage.tsx`: gradients/purple/indigo removed; one primary action at a time, other actions secondary (`ui-btn`, 44px); status chips use `status-*`; uppercase micro-labels → sentence-case `ui-muted`; workspace launch cards → one calm light card; tabs → `ui-tabs`/`ui-tab` with `aria-pressed`; copy/delete/close icon buttons named; **rating card is now light with an ink heading (white-heading fix)**, stars stay amber with `role="img"` + text score; all 7 modals light `glass-modal` with `role="dialog"`, `aria-labelledby` and `useDialogFocus`; 15 form labels paired with their controls; star pickers named (`N star(s)`, `aria-pressed`), tag toggles `aria-pressed`; `motion-safe` on pulse/spin.
+  - `pages/feedback/FeedbackPage.tsx`: dark purple cockpit → light page header + 4 metric cards; main tabs and filters → `ui-tabs`; thread cards were clickable `div`s → `<button aria-pressed>`; flag banner/round chips → `status-*`; radio group labelled, 44px; textareas named; Classify modal → dialog semantics + `useDialogFocus`, labels paired. Text change: "ROUND n" → "Round n" (was all-caps in source).
+  - `pages/feedback/PlansApprovalTab.tsx`: plan header was a clickable `div` with a nested `button` → one `<button aria-expanded>` (chevron decorative); table checkboxes named with 44px hit areas; row note inputs named; status chips `status-*`; purple removed.
+  - `review-studio/ReviewStudioPage.tsx`, `ReviewStudioSidebar.tsx`, `DecisionBar.tsx`: shell, header, sidebar and decision bar moved to the light theme; indigo/purple removed; viewer switcher → `ui-tabs` with `aria-pressed` + names; queue/back buttons named; comment cards: body is a `<button aria-pressed>`, Resolve stays a separate button; versions use `aria-current`; stars 44px with `aria-pressed`; root-cause select labelled.
+  - `review-studio/DocumentViewer.tsx`, `ImageViewer.tsx`, `VideoPlayerViewer.tsx`, `LinkOpenerViewer.tsx`: media stage stays dark; only indigo accents → white/neutral, `motion-safe` on hover zoom/pulse, close button named. Media, pins, timecodes, slide order, players unchanged.
+- No new hard-coded colours (only Tailwind neutral/white inside the dark media stage).
+- Live check (Puppeteer, all non-GET `/api` aborted; browser-only stubs for one submitted plan, one flagged thread, and one work item served as Pending): admin, creative_head, sm_manager, executive, team_member at 1440/768/360 on `/work/:id` (incl. a rated item), `/feedback` (both tabs), Review Studio — 0 overflow, 0 clickable non-controls, 0 undersized targets outside the media stage; header height unchanged (72px). Every dialog: focus in, Tab/Shift+Tab trapped, Escape closes, focus returns. Review Studio: Approve disabled until a star is chosen (mandatory rating), stars keyboard-operable, root-cause select present, version switching by keyboard (v4 → v2), 8 timecode markers render. Contrast flags only on disabled controls (exempt).
+- Remaining gaps / VERIFY:
+  - Root causes differ across screens (unchanged, behaviour): Review Studio DecisionBar sends 5 values (`quality`, `Creative Choice`, `Technical Flaw`, `Brief Ambiguity`, `Scope Change`); Work Detail Request Rework offers 6 others; Feedback Classify lists all 12 `REVISION_ROOT_CAUSES` while its label says "1 of 7". None match the 7 canonical causes exactly. Needs a product decision.
+  - `ShootReviewView` (shared with the Shoot workspace, UI-4C) still has indigo accents and renders inside Review Studio for Shoot items.
+  - Inside the dark media stage, video controls (20–28px), timeline markers (10px) and image pins (28px) are under 44px; the `<video>` element has a click handler without a keyboard equivalent. Left unchanged (dense media tools, positioned on media).
+  - The Review Studio document canvas was already a dark panel (not white); left unchanged.
+  - The sidebar returns to the Comments tab after switching version (pre-existing: loading unmounts it).
+
+## Restore admin user-management actions (Status: COMPLETE; committed in Phase 3.5)
+
+- Baseline (MongoDB running): typecheck 0; web build clean; API 591 + web 117 = 708.
+- Restored in the existing flow, admin only, no new routes or backend changes:
+  - `/team`: **Invite user** (`InviteUserDialog.tsx`, `POST /api/people`; name, email, role, optional job role; no password field).
+  - `/team/:id`: **Change role** (two-step: choose, then confirm showing current and new role; `PATCH /api/team/:id { role }`), **Reset password** (confirm; `POST /api/team/:id/reset-password`), **Force logout** (confirm; `POST /api/team/:id/force-logout`), in `AdminAccountActions.tsx`.
+  - Shown only when the viewer is `admin` and the profile is not their own. All dialogs use `useDialogFocus`, `role="dialog"`, labelled titles, 44px buttons. Errors show in the dialog (`role="alert"`) and keep it open; success shows in an always-mounted `role="status"` region.
+- Backend behaviour confirmed (unchanged):
+  - Invite creates the account with `mustSetPassword: true` and sends **no email**; the person sets a password via "Forgot password?" on the sign-in page. Duplicate email → 409. No email-format check on the server; missing name → 500 (UI validates both).
+  - Reset password only sets `mustSetPassword: true` (no token, no email, no password returned). Sign-in is blocked until the person uses "Forgot password?". Existing sessions are **not** ended.
+  - Force logout deletes all sessions (refresh stops working); an existing access token stays valid until it expires (`JWT_EXPIRES_IN`, default 15m).
+  - Role change takes effect on the next request (auth reloads the user from the DB). An unknown role is rejected by the model enum but returns 500, not 400.
+  - Self-service: the API allows an admin to change their own role, reset their own password and force-log-out themselves. The UI hides all of these on the admin's own profile (same rule as Suspend).
+- Tests added: `apps/api/test/admin_user_management_api.test.js` (23), `apps/web/src/pages/team/__tests__/AdminUserManagement.test.tsx` (24). No existing tests changed.
+- Live check (Puppeteer, our Vite on 5199, all non-GET `/api` calls aborted): `/team` and `/team/:id` at 1440 and 360 — 0 overflow, 0 targets under 44px, 0 clickable non-controls; every dialog: focus moves in, Tab/Shift+Tab stay inside, visible focus, Escape closes, focus returns to the opener; confirm with a failed request shows an error and no success. Non-admin roles (creative_head, sm_manager, executive, team_member) see none of the four actions. Only flag: the existing avatar "Edit" hover overlay (invisible until hover; unchanged).
+- Final gate: typecheck 0; web build clean; API 614 + web 141 = 755 passed, 0 failed.
+
+## UI-4A pre-checks (Status: RESOLVED, see entry above)
+
+- Baseline: typecheck 0; web build clean; API 589 + web 117 = 706 passed.
+- Admin DM privacy (API): message reads were already covered (`chat_system.test.js`, admin gets 403). Added 2 tests: admin cannot open a non-member DM's details (403/404, no channel or messages returned), and another pair's DM is not in admin's channel list. Chat behaviour unchanged. API 591 passed.
+- Admin user management from `/team` (`WorkerProfilePage.tsx`):
+  - Present: Suspend / Reactivate (line ~694), edit registered email (Edit Profile modal, admin on another person, line ~1609).
+  - Missing in the UI: Invite user, change system role (Edit Operational Details edits job role, department and capacity only), reset password, force logout. The API still has `POST /api/people`, `PATCH /api/team/:id` (accepts `role` from admin), `POST /api/team/:id/reset-password`, `POST /api/team/:id/force-logout`.
+  - Invite, role edit and reset-password UI were in `pages/admin/UsersPage.tsx`, deleted as unrouted in commit `11ed385` (2026-11-03). Force logout had no UI there either.
+- Per instruction, UI-4A build not started. No UI files changed.
+
+## Privacy check + UI Retheme UI-3C: Admin, Settings, Chat (Status: COMPLETE; committed in Phase 3.5)
+
+### Privacy check: team member boundaries
+- Before: as team_member, `GET /api/team` returned 403 (confirms the resource exists); other people's profile reads already returned 404; `GET /api/team/:other/changes` returned 403.
+- Change (`apps/api/src/modules/team/routes.js`): `notFoundForWorkers` middleware in front of the directory and `/:id/changes` routes. Roles without `team.profile.view` (team_member only) get 404 `NOT_FOUND` for the directory and for another person's records; their own `:id` is unchanged. Admin, creative_head, sm_manager and executive are unchanged.
+- Tests (`apps/api/test/team_profile_api.test.js`): "team_member is denied access to /api/team with 403" now expects 404 (requested behaviour change). Added: 404 on another member's changes log; 404 for every read of another profile (base, overview, work, performance, ratings, activity); creative_head still lists the directory (200).
+- Live as team_member: `/team` shows "Failed to load directory · Not found", `/team/:other` shows "Profile Not Found"; no other person's name or email appears. Own profile loads (200).
+- Workload: `/api/workload` returns 200 with only the requesting member (1 department, 1 member, summary from self). No teammate data exposed; behaviour unchanged.
+- Gate after the check (UI-3C baseline): typecheck 0; build clean; API 589 + web 116 = 705 passed.
+
+### UI-3C findings
+- `/admin/users` only redirects to `/team` (rethemed in UI-3B); no separate Admin Users screen exists.
+- `/admin/access-requests` (requires `user.approve`) → `AccessRequestsPage`. `/settings` → `SettingsPage`. `/chat`, `/chat/:channelId` → `ChatPage` with `GroupModal`, `ShareToChatModal`, `MediaCardPlayer`, `EmojiPicker`.
+- Clickable non-controls found: Group modal member rows (`<div onClick>`). Converted to `<button aria-pressed>`.
+- Dialogs without keyboard handling: Access Requests action modal, Group modal, Share to Chat modal, in-chat video player, chat info drawer (< xl).
+- `useDialogFocus` bug (dev only): under React StrictMode a dialog that mounts already open (Group, Share to Chat) lost focus to the opener straight after opening, and focus went to `<main>` on close. Production builds do not double-mount. Fixed in the hook (see below).
+
+### UI-3C changes
+- `AccessRequestsPage.tsx`: page title scale; pending count and request status as shared chips (pending → waiting, approved → approved, rejected → changes, info needed → in-progress); filter bar as one panel; status filter as the shared tab track (buttons with `aria-pressed`, 44px); cards as `glass-card` with selection outline; decision notes as status tints; Approve / Reject as 44px shared buttons; "Request More Info" icon button named; action modal with `role="dialog"`, `aria-labelledby`, named Close and `useDialogFocus`; long emails truncate (no overflow at 360). Approve / reject / info / bulk approve logic and Admin-only gating unchanged.
+- `SettingsPage.tsx`: page title scale; tab buttons keep `<button>` with `aria-pressed`, ink active pill; panels as `glass-card`; success / error banners as status tints with `role="status"` / `role="alert"`; password rules use the approved tone; buttons shared (sign-out buttons neutral secondary). Validation and actions unchanged.
+- `ChatPage.tsx`: panes as `glass-card`; message area takes the card surface; other people's bubbles white with `--ui-line`; message toolbar and composer icon buttons 44px named; send button ink; "jump to latest" 44px; info tabs on the shared tab track (still `role="tab"` / `aria-selected`); archived chip and notice in the waiting tone; mention highlight ring ink; destructive menu items neutral text with icon; "Add" members 44px; info drawer uses `ui-scrim` / `ui-drawer` and `useDialogFocus`. Executive read-only notice, DM privacy, `@everyone`, group creation rules, mentions, reactions, pins and media cards unchanged. No presence or typing indicators added.
+- `GroupModal.tsx`, `ShareToChatModal.tsx`: `glass-modal`, `role="dialog"`, `aria-labelledby` on the existing heading, named 44px Close, shared buttons, error as `role="alert"` tint, `useDialogFocus`. Group member rows are toggle buttons.
+- `MediaCardPlayer.tsx`: decorative gradient header strip removed; Approved chip shared; "Watch" is a 44px secondary button; Unshare 44px neutral; video player dialog named with `useDialogFocus` and a 44px "Close player" button. Media is not tinted (dark backdrops behind video and images are kept on purpose).
+- `EmojiPicker.tsx`: neutral palette mapped to tokens.
+- `lib/useDialogFocus.ts`: a run counter skips the focus restore when a newer run has started, and the original opener is kept across the StrictMode re-run.
+- Hard-coded colour: `#1e5a3c` for met password rules = the existing `.status-approved` text colour (7.1:1 on white).
+
+### Verification
+- Final gate: typecheck 0 errors; web build clean; API 589 + web 117 = 706 passed, 0 failures. Tests added: `useDialogFocus` StrictMode test (fails without the hook fix). No existing web test changed.
+- Screens at 1440 / 768 / 360 for admin, executive, creative_head, sm_manager, team_member (Settings, Chat; Access Requests for admin): 0 horizontal overflow, 0 text-contrast failures, 0 interactive targets under 44px, 0 clickable non-controls.
+- Access Requests with pending items: the seed has none, so the list response was stubbed in the browser only (two placeholder applicants, nothing stored). Approve, Reject and Request More Info dialogs open, are named, trap Tab, close on Escape and return focus; no overflow at 360. Confirm was never pressed.
+- Chat: every non-GET API call except login was blocked during checks (8 read-marker posts per run), so no read state changed. Executive: no composer, no reactions, no New group, read-only notice shown. Team member: no New group. Group modal and info drawer pass the keyboard checks for every role that has them. No presence dots or typing text.
+- Settings tabs: Enter selects, `aria-pressed` follows.
+- Reduced motion leaves nothing animating. Header: `Layout.tsx` unchanged in this pass.
+
+### Remaining / VERIFY
+- VERIFY: DM privacy against live data. The seed has no DMs, so the "admin cannot read another pair's DM" check had nothing to test; chat API code was not touched.
+- VERIFY: shared media cards with real data (none in the seed); covered by `ChatSuite` / `ChatSharePolish` tests.
+- Access Requests checkboxes are 16px native inputs with adjacent labels (unchanged).
+- For UI-4: Login / auth screens, Feedback page (dark hero), workspaces and Work Detail remain on the old palette.
+
+## UI-3 fixes + UI Retheme UI-3B: Team and reporting (Status: COMPLETE)
+
+### Fix 1: executive read-only Issues screen
+- Route: `POST /api/blockers` (and `PATCH /:id/resolve`, `POST /:id/notify`) require `work.request` or `work.update.own` (`apps/api/src/modules/blockers/routes.js:10-13`). Executive holds neither; admin, creative_head, sm_manager and team_member hold at least one. The API already returned 403 for executive, so no backend change was needed.
+- UI (`IssuesBlockersPage.tsx`): "Report Deliverable Blocker" and its modal, "Ping Owner", and "Resolve & Unblock" and its modal now render only when the user holds one of those two permissions (same check as the API). No other role changes.
+- Tests: `apps/api/test/executive_role.test.js` + 2 (executive gets 403 on resolve and notify; create was already covered). New `apps/web/src/pages/issues/__tests__/IssuesExecutiveReadOnly.test.tsx` (2): executive sees none of the three actions; team_member still sees all three. Permissions come from the real `ROLE_PERMISSIONS`.
+- Live: executive at 1440 and 360 sees no blocker actions; `POST /api/blockers` as executive → 403; admin still sees the report button.
+
+### Fix 2: remaining modal keyboard handling
+- `useDialogFocus` + `role="dialog"`, `aria-modal`, `aria-labelledby` on My Work "Mark blocked" and "Submit" modals and Tracker "Assign" and "Change date" modals.
+- Found and fixed (pre-existing): Tracker row action buttons did not stop the click reaching the row, so Assign / Change date also opened the timeline dialog on top. The Actions cell now stops propagation (`TrackerTab.tsx`, Actions `<td>`).
+- Live (1440 and 360): focus moves to Close, dialog named, Tab / Shift+Tab stay inside, Escape closes, focus returns to the opener for all four. My Work modals were opened against a client-side copy of the queue with one item marked In Progress (nothing saved).
+- Gate after the fixes (UI-3B baseline): typecheck 0; build clean; API 586 + web 116 = 702 passed.
+
+### UI-3B findings
+- Routes: `/team` → `TeamDirectoryPage`; `/team/:id` and `/profile` → `WorkerProfilePage` (My Profile is the self view); `/workload` → `TeamWorkloadPage`; `/reports` → `ReportsPage`. All use `ProtectedRoute`; access is enforced by the API (team_member gets a permission error on Team Directory and a self-scoped Workload, unchanged).
+- Not reachable from any route (left unchanged): `ProfilePage.tsx`, `ProfileView.tsx`, `ProfileDrawer.tsx`, `RatingsFeedbackSection.tsx`, `PersonWorkPage.tsx`.
+- Recharts is used only in `WorkerProfilePage` (two single-series bar charts).
+- Workload band colours were duplicated in Workload, Team Directory, Worker Profile and the Dashboard workload section (emerald / amber / rose).
+- Existing "Load (Highest first)" sort on Team Directory is a capacity sort, not performance; unchanged.
+
+### UI-3B changes
+- `index.css`: `.band-healthy` (blue), `.band-high` (neutral ink), `.band-overloaded` (coral) with `.band-chip`, `.band-tint`, `.band-bar`. Text 7.5 / 10.2 / 6.6:1.
+- `lib/statusTone.ts`: `bandClass()`, `bandForPct()` (same thresholds; real percentages passed in, only bar widths are capped as before).
+- `TeamWorkloadPage.tsx`: page title; overload alert in the coral band tint; one KPI card where Healthy / High / Overloaded are pressed filter buttons with the band label and icon; 44px department toggles; member name and expanded work rows are buttons; band chips and bars; recommendation modal with `useDialogFocus`.
+- `TeamDirectoryPage.tsx`: page title; filter panel; 44px status toggles; cards as `glass-card`; name is a link; band chips and bars; count chips use status tones.
+- `WorkerProfilePage.tsx` (`/team/:id`, `/profile`): header panel; avatar is a button only when self/admin; status, verified and notice chips use shared tones; one KPI card; shared tabs and range select; charts use `--ui-blue`, muted axes, `--ui-line` grid and direct value labels; Reassign, Edit Operational Details and Edit Profile modals with `useDialogFocus`; 3-rating minimum, redaction and action gates untouched.
+- `ReportsPage.tsx`: page title (decorative gradient removed); shared tabs; report and rule cards; rule toggle is a named 44px `role="switch"` with `aria-checked`; status chips; viewer panels and table; preview and rule-details modals with `useDialogFocus`.
+- `TeamDashboardPage.tsx`: workload band summary and member bars use the shared band classes (shared consistency).
+
+### Verification
+- Final gate: typecheck 0 errors; web build clean; API 586 + web 116 = 702 passed, 0 failures. No existing test changed.
+- Screens at 1440 / 768 / 360 for admin, executive, creative_head, sm_manager, team_member: 0 horizontal overflow, 0 text-contrast failures, 0 interactive targets under 44px, 0 clickable non-controls.
+- Privacy and access: executive sees no email/WhatsApp, the "Contact details restricted" note, and no profile actions; creative_head sees Reassign + Edit Operational Details; sm_manager sees Reassign; admin sees all four. Team member boundaries unchanged.
+- Keyboard: band filter (Enter toggles), member drawer, recommendation, rule details, Edit Profile, Reassign and Edit Operational Details dialogs all move focus in, trap Tab, close on Escape and return focus. Reduced motion leaves nothing animating.
+- Header: `Layout.tsx` unchanged in this pass.
+
+### Remaining
+- Avatar initials still use their per-person gradient (existing identity colours).
+- Rating stars remain amber (rating glyph).
+
+## UI Retheme UI-3A: Work and planning (Status: COMPLETE; committed in Phase 3.5)
+
+Visual and accessibility only. No route, API, data, permission or label-text changes.
+
+### Baseline (clean, before any edit)
+- Typecheck 0 errors; web build clean; API 584 + web 114 = 698 passed.
+
+### Findings
+- Routes `/my-work`, `/calendar` (Plans, Tracker tabs), `/issues`, `/notifications` all use `ProtectedRoute` with no role list; role gating is inside the pages (e.g. `PlansTab.tsx:198-201`, `TrackerTab.tsx:81`). `PlansApprovalTab` lives under `/feedback` and is not in this batch.
+- Calendar is custom markup; FullCalendar is not installed.
+- Before: 227 purple/indigo/violet uses, 1 gradient hero (`IssuesBlockersPage.tsx:334`), 42 decorative `uppercase`, 88 `text-slate-400`, 45 `text-slate-500` (4.36:1 on the card, fails AA), 44 native controls without shared classes, two one-off plan colour maps (`PlansTab.tsx:171,179`), and clickable non-controls (`MyWorkPage.tsx:518` h3, `PlansTab.tsx:1234` row div, `TrackerTab.tsx:475` tr, `IssuesBlockersPage.tsx:510,621` h3).
+- No test asserts classes on these screens.
+- Pre-existing, unchanged: executive sees "Report Deliverable Blocker" on `/issues` (never gated, same in HEAD). Flagged for a decision; access rules were not changed.
+
+### Changes
+- `MyWorkPage.tsx`: page title on the canvas; six KPI tiles → one card with hairline dividers; filter chips → shared tabs (`aria-pressed`); search → `ui-input` with a name and a 44px clear button; cards lose tinted borders/backgrounds (overdue = thin coral outline); priority, status, "waiting", rework and blocked use shared tones; card actions → `ui-btn` (44px); open-detail and copy-link → named icon buttons; title is now a button inside the heading; modals use shared buttons, scrim and close button; upload progress uses `ui-blue`.
+- `PlansTab.tsx`: header → frosted panel; plan list → card with dividers, rows are buttons (`aria-pressed`); `STATUS_BADGES` / `ROW_STATUS_BADGES` now hold shared tones (labels unchanged); calendar tags use `.cal-*` dots; Approve All / New Plan / Submit → primary, Request Changes / Rework → coral tint, others secondary; icon buttons named; four modals → `glass-modal`.
+- `TrackerTab.tsx`: filter area → frosted panel; quick filters → 44px pressed toggles; table in a card; topic is a button that opens the timeline (row click kept for the mouse); timeline modal uses `useDialogFocus`; locked stage cells no longer use `opacity-60` (fixed the contrast failure); row actions → shared buttons; owner, topic and "Skip step" hit areas raised to 44px without growing rows.
+- `IssuesBlockersPage.tsx`: gradient hero → page title + one KPI card (coral icons for blocker counts); toolbar → panel with shared tabs, select and search; cards → `glass-card`; clickable titles → buttons in headings; actions and modals → shared buttons and surfaces.
+- `NotificationsPage.tsx`: page title; tabs → shared tabs; search named; list → card with dividers; unread = blue dot + screen-reader "Unread:" + bolder title (was background only); named 44px icon actions; titles wrap on mobile with the time below.
+- All five files: purple/indigo → ink/neutral by meaning; `text-slate-400/500` → `ui-muted`; decorative uppercase removed (weekday headers kept); native controls → `ui-select` / `ui-input`; scrims → `ui-scrim`.
+- `index.css`: `.ui-textarea` (multi-line variant of `.ui-input`); `animate-ping` added to the reduced-motion rule.
+
+### Verification
+- Final gate: typecheck 0 errors; web build clean; API 584 + web 114 = 698 passed, 0 failures. No tests changed.
+- Screenshots of every batch screen at 1440 / 768 / 360 as admin, executive, creative_head, sm_manager and team_member: 0 horizontal overflow.
+- Live audit (admin, executive, team_member; 1440 and 360): 0 text-contrast failures; 0 interactive targets under 44px; reduced motion leaves nothing animating.
+- Keyboard: My Work title (Enter opens the item) and tabs (Space toggles); plan row (Enter selects); Tracker topic opens the timeline with focus inside, Tab trapped, Escape closes, focus returns; Issues and Notifications tabs.
+- Role gates: the number of permission/role conditions per file is identical to HEAD and no diff line touches one. Executive: no plan create/upload actions, no Tracker Actions column.
+- Header identical to the pre-change capture apart from the notification count (data) and avatar image resampling.
+
+### Remaining for UI-3B / UI-3C / later
+- `PlansApprovalTab` (`/feedback`) and `FeedbackPage` are outside 3A.
+- My Work and Tracker modals other than the timeline do not yet move focus or close on Escape.
+- Tracker remains a wide table that scrolls inside its card on mobile.
+
+## Accessibility fixes before UI-3 (M1–M5) (Status: COMPLETE; committed in Phase 3.5)
+
+From the pre-UI-3 review. Visual and accessibility changes only; no copy, route, API, data or RBAC changes.
+
+### Baseline
+- The baseline run started for this pass overlapped the edits (its web run already included the new test file), so it is not a clean pre-edit baseline. The last clean baseline on unchanged code is the Dashboard + Calendar pass: API 584 + web 109 = 693.
+
+### Changes
+- **New:** `apps/web/src/lib/useDialogFocus.ts`. Moves focus into a dialog on open, closes on Escape, keeps Tab / Shift+Tab inside, returns focus to the opener on close, or to `<main>` if the opener no longer exists. No dependency.
+- **M1** `CalendarPage.tsx`: month chips, week cards and list cards are now `<button type="button">` (previously clickable `div`s). Inner `div`/`h4` became `span`s with the same classes (a button may only contain phrasing content). No nested interactive elements existed. Visible ink focus ring added.
+- **M2** `CalendarPage.tsx`: preview modal uses the hook; initial focus on Close.
+- **M3** `PersonWorkHistoryDrawer.tsx`: `role="dialog"`, `aria-modal`, `aria-labelledby` (heading id via `useId`), and the hook; initial focus on Close.
+- **M4** `TeamDashboardPage.tsx`: "Today's priorities" rows are `<button type="button">` with the same navigation. The `h4` / `div` / `p` inside became `span`s. No nested interactive elements existed.
+- **M5** `Layout.tsx`: sidebar padding `px-3.5` → `px-[13px]`. Nav links now 44×44; rail width (72px), breakpoints, items and behaviour unchanged.
+
+### Tests
+- Added `apps/web/src/lib/__tests__/useDialogFocus.test.tsx` (5 tests): initial focus, Escape, Tab / Shift+Tab trapping and focus pulled back in, focus restored to the opener, fallback to `<main>` when the opener is gone. No existing test changed.
+
+### Verification
+- Typecheck 0 errors; web build clean; API 584 + web 114 = 698 passed, 0 failures.
+- Live, as admin and executive, at 1440 and 360: calendar item reachable by Tab and opened with Enter; focus lands on Close; Tab and Shift+Tab stay in the dialog; Escape closes; focus returns to the item. Same for the Tracker work-history drawer (returns to the owner button). "Today's priorities" row reachable by Tab, Enter opens `/work/<id>`. Sidebar links 44×44, rail 72px. 0 horizontal overflow. Executive: 0 action buttons on Dashboard and Calendar. Header identical to the previous capture.
+- Executive access: calendar items, the preview modal, Tracker owner buttons / drawer and priority rows were all already available to executive (navigation or read-only views); none are actions.
+
+## UI Retheme corrections: Dashboard + Calendar (Status: COMPLETE; committed in Phase 3.5)
+
+Rollback point before this pass: commit `642a5df` (UI-1 + UI-2).
+
+### Findings
+- One dashboard component (`pages/dashboard/TeamDashboardPage.tsx`) serves admin, creative_head, sm_manager and executive; team_member is redirected to My Work. All fixes apply to every leadership role.
+- `GlobalFilterBar` is used only on the Dashboard (not Calendar or Tracker).
+- The executive test (`DashboardRoleViews.test.tsx:310`) expects the word "Executive" on the dashboard, and the hero role chip is the only place it appears there, so the role chip was kept (restyled with the shared `.role-badge`), not removed.
+- Calendar identity colours live in `@mmp/shared` `CALENDARS`, which the API also uses; left untouched. The UI now uses `.cal-*` dot classes instead.
+
+### Changes
+- `TeamDashboardPage.tsx`: purple hero → plain page title on the canvas (role badge, 28–32px ink title, 15px muted line, ink "New Deliverable" + outlined "Calendar & Plans"; same permission gate). Filters, month plan status and KPIs in one `.glass-panel`; month plan status in a `.glass-card`; 7 KPI cards → one card with a hairline-divided stat strip (2 / 4 / 7 columns, Overdue spans the leftover cells), stats are now keyboard-reachable buttons. Approval queue in a `.glass-panel` with two `.glass-card`s and an ink "Open Approvals Console". Other sections moved to panels. All "Section N •" prefixes removed; uppercase tracking labels → sentence case; purple → ink / ui-text; progress bars → `ui-blue` on `ui-line`; plan-status colour map replaced by shared status tones; overdue and blocked use coral tones. Overdue KPI no longer pulses.
+- `CalendarPage.tsx`: plain page title; one control panel (row 1: `ui-tabs` view tabs + calendar selector; row 2 on the Month tab: circular prev/next, Today, month title, three `ui-select` filters with labels, Month/Week/List `ui-tabs`); month grid in its own panel with `bg-ui-card` day cells, a 1.5px ink ring for today and an ink date dot; event chips `bg-ui-blue-soft`; neutral calendar tags with dots; preview modal uses shared buttons, icon button and chips. "Calendar:" / "Viewing:" colons removed.
+- `GlobalFilterBar.tsx`: no own surface (sits in the panel); "Universal Filters" pill removed; the active-filter count now shows on the Reset button.
+- `index.css`: `.ui-tab` raised to 44px (touch target; nothing used it before); `.cal-dot` + `.cal-<key>` (ink, blue, coral, grey, hollow ring for Other).
+
+### Verification
+- Typecheck 0 errors; web build clean; API 584 + web 109 = 693 passed, 0 failures. No tests changed.
+- Screens: Dashboard, Calendar, Tracker at 1440 / 768 / 360 as admin and as executive. 0px horizontal overflow on all 18.
+- Executive: no "New Deliverable", "Add individual work" or "Open Approvals Console" anywhere. Admin sees all three.
+- Dashboard title block at 360px ends at 37% of the first screen.
+- Header identical to the UI-2 capture apart from the notification count, which changed in the data (2 → 1).
+
+### Remaining gaps
+- `TrackerTab.tsx` and `PlansTab.tsx` internals (uppercase labels, purple accents, native selects) were out of scope.
+- Capacity-band colours on the dashboard workload section are still emerald / amber / rose.
+
 ## UI Retheme UI-2: Shared Components (Status: COMPLETE, awaiting approval for UI-3)
 
 Decisions applied: Plus Jakarta Sans for page content (header, its flyouts and the sidebar keep the system font); sidebar recoloured only; one shared CSS class set for statuses and roles (no new React component).
