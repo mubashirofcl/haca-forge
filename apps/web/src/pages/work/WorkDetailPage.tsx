@@ -848,7 +848,7 @@ export const WorkDetailPage: React.FC = () => {
               </button>
             )}
 
-            {actions.includes('mark_blocked') && (
+            {!isUnderReview && actions.includes('mark_blocked') && (
               <button
                 onClick={() => {
                   const prevOwner = item.suggestedDependencyOwner || item.previousStage?.owner;
@@ -862,7 +862,7 @@ export const WorkDetailPage: React.FC = () => {
               </button>
             )}
 
-            {actions.includes('request_help') && (
+            {!isUnderReview && actions.includes('request_help') && (
               <button
                 onClick={() => {
                   const msg = prompt('Enter your question or help request for the team:');

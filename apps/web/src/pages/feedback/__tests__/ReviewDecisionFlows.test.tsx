@@ -67,6 +67,41 @@ describe('Review Studio: a stale or decided version', () => {
     expect(await screen.findByText(/All Caught Up/i)).toBeInTheDocument();
   });
 
+  it('clears the rating after a stale refresh, so it cannot carry over to the newer version', async () => {
+    asHead();
+    const newer = { ...sub, id: 's2', _id: 's2', version: 2 };
+    apiFetch.mockImplementation(async (url: string, opts?: any) => {
+      if (url === '/api/submissions/review-queue') return apiFetch.mock.calls.filter(([u]: any[]) => u === url).length === 1 ? [sub] : [newer];
+      if (opts?.method === 'POST') throw stale('This version is out of date.');
+      if (url.includes('/api/submissions/s2')) return newer;
+      if (url.includes('/api/submissions/s1')) return sub;
+      return [];
+    });
+    render(<MemoryRouter initialEntries={['/feedback/review-studio']}><ReviewStudioPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByLabelText(/4 stars/i));
+    fireEvent.click(screen.getByRole('button', { name: /approve/i }));
+    await screen.findByRole('alert');
+    await waitFor(() => expect(screen.getByRole('button', { name: /approve/i })).toBeDisabled());
+    expect(screen.queryByText('4/5')).not.toBeInTheDocument();
+    expect(posts('/approve')).toHaveLength(1);
+  });
+
+  it('clears the rating when the review item changes', async () => {
+    asHead();
+    const next = { ...sub, id: 's2', _id: 's2', workItemId: { ...sub.workItemId, _id: 'w2', title: 'Other step' } };
+    apiFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/submissions/review-queue') return [sub, next];
+      if (url.includes('/api/submissions/s2')) return next;
+      if (url.includes('/api/submissions/s1')) return sub;
+      return [];
+    });
+    render(<MemoryRouter initialEntries={['/feedback/review-studio']}><ReviewStudioPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByLabelText(/4 stars/i));
+    expect(screen.getByRole('button', { name: /approve/i })).not.toBeDisabled();
+    fireEvent.keyDown(window, { key: ']' });
+    await waitFor(() => expect(screen.getByRole('button', { name: /approve/i })).toBeDisabled());
+  });
+
   it('other failures are still reported as errors, and do not refresh', async () => {
     asHead();
     const queueCalls = showStudio(() => Promise.reject(Object.assign(new Error('Server error'), { statusCode: 500 })));
@@ -148,6 +183,40 @@ describe('My Work submit button', () => {
     render(<MemoryRouter><MyWorkPage /></MemoryRouter>);
   };
 
+  const showItem = (extra: any) => {
+    asOwner();
+    const data = myWork('Edit');
+    Object.assign(data.data.today[0], extra);
+    apiFetch.mockImplementation(async (url: string) => (url.includes('/my-work') ? data : { data: {} }));
+    render(<MemoryRouter><MyWorkPage /></MemoryRouter>);
+  };
+
+  it('after a Shoot send-back the owner sees Rework and goes to the workspace to resubmit', async () => {
+    showItem({ stageKey: 'Shoot', title: 'Shoot step', status: 'In Progress', revisions: 1, latestSubmissionStatus: 'changes_requested' });
+    fireEvent.click(await screen.findByRole('button', { name: /Resubmit \(Rev 2\)/ }));
+    expect(mockNavigate).toHaveBeenCalledWith('/work/w1/shoot');
+    expect(screen.getByText('Rework')).toBeInTheDocument();
+  });
+
+  it('a resubmitted step shows as under review, with nothing to submit or block', async () => {
+    showItem({ status: 'Feedback', revisions: 1, latestSubmissionStatus: 'submitted' });
+    expect(await screen.findByText('Waiting for approval')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Resubmit/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mark blocked/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Request help/ })).not.toBeInTheDocument();
+  });
+
+  it('resubmitting from Feedback sends a real move, not a same-status request', async () => {
+    showItem({ status: 'Feedback', revisions: 1, latestSubmissionStatus: 'changes_requested' });
+    fireEvent.click(await screen.findByRole('button', { name: /Resubmit/ }));
+    const submit = await screen.findByRole('button', { name: 'Submit to Creative Head' });
+    const form = submit.closest('form')!;
+    fireEvent.change(within(form).getAllByRole('textbox')[0], { target: { value: 'https://example.test/cut' } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(posts('/transition')).toHaveLength(1));
+    expect(JSON.parse(posts('/transition')[0][1].body).toStatus).toBe('Pending');
+  });
+
   it('a Shoot owner goes to the Shoot workspace; nothing is approved', async () => {
     show('Shoot');
     fireEvent.click(await screen.findByRole('button', { name: /Submit for approval/ }));
@@ -201,6 +270,14 @@ describe('Work Detail', () => {
     await approveFromDetail();
     await waitFor(() => expect(posts('/transition')).toHaveLength(1));
     expect(JSON.parse(posts('/transition')[0][1].body).toStatus).toBe('Approved');
+  });
+
+  it('an owner under review has no blocked or help actions', async () => {
+    asOwner();
+    show(item({ status: 'Feedback', isLocked: false, latestSubmission: { _id: 's1', status: 'submitted', version: 1 } }));
+    expect(await screen.findByText(/Under Review by Creative Head/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mark blocked/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Request help/ })).not.toBeInTheDocument();
   });
 
   it('a Shoot owner goes to the Shoot workspace to submit', async () => {

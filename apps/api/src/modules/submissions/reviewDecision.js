@@ -47,6 +47,18 @@ export function isAwaitingDecision(workItem, submission) {
   return !decided || !submission.submittedAt || new Date(submission.submittedAt).getTime() > decided;
 }
 
+/**
+ * An owner cannot take a step out of review while its latest version waits on a reviewer:
+ * not by pulling it back, marking it blocked, or any other move. Writes nothing.
+ */
+export async function assertOwnerCanLeaveReview(workItem) {
+  if (!workItem.reviewRequired || !AWAITING_STATUSES.includes(workItem.status)) return;
+  const latest = await latestRealSubmission(workItem._id);
+  if (isAwaitingDecision(workItem, latest)) {
+    throw decisionError(409, 'SUBMISSION_AWAITING_REVIEW', 'This step is waiting for review, so it cannot be changed until a reviewer has decided.');
+  }
+}
+
 /** creative_head and admin decide; nobody decides on their own work. */
 export function assertReviewer(user, workItem, decision = 'approve') {
   const role = normalizeRole(user.role);

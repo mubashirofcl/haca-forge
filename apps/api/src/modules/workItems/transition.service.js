@@ -4,6 +4,7 @@ import { BLOCKER_REASONS, normalizeRole, getAvailableActions, getWorkspaceMode }
 import { resolveScope } from '../../lib/scope.js';
 import { Person } from '../people/model.js';
 import { logger } from '../../lib/logger.js';
+import { recordRoundSubmission } from './rounds.js';
 
 export const ALLOWED_TRANSITIONS = {
   'Not Started': ['In Progress', 'Blocked'],
@@ -18,6 +19,8 @@ export const ALLOWED_TRANSITIONS = {
 /**
  * @param options.reviewDecision Set only by the review decision code (submissions/reviewDecision.js),
  *   never from a request. It alone may apply a review decision to a step that requires review.
+ * @param options.ownerSubmission Set only by submit-clips, never from a request. The owner has just
+ *   sent a new version, so this move is the submission itself, not a withdrawal.
  */
 export async function transitionWorkItem(id, transitionData, user, options = {}) {
   const { toStatus, blockerReason, blockerNote, deliverableUrl, publishedUrl, comment } =
@@ -131,6 +134,12 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
       error.code = 'FORBIDDEN_SELF_APPROVAL';
       throw error;
     }
+  }
+
+  // An owner cannot take a step out of review while its latest version waits on a reviewer.
+  if (isOwner && !options.reviewDecision && !options.ownerSubmission) {
+    const { assertOwnerCanLeaveReview } = await import('../submissions/reviewDecision.js');
+    await assertOwnerCanLeaveReview(workItem);
   }
 
   // A step that requires review is decided through the review flow, which needs a rating.
@@ -253,6 +262,9 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
     }
   }
 
+  // A decision belongs to the round that was reviewed, not the new round started below.
+  const roundBeingDecided = workItem.rounds?.length ? workItem.rounds[workItem.rounds.length - 1] : null;
+
   // 6. Starting work and round tracking
   if (toStatus === 'In Progress') {
     if (!workItem.startedAt) {
@@ -296,10 +308,9 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
     workItem.revisions = (workItem.revisions || 0) + 1;
     workItem.changesRequestedAt = now;
     workItem.decisionAt = now;
-    if (workItem.rounds && workItem.rounds.length > 0) {
-      const curRound = workItem.rounds[workItem.rounds.length - 1];
-      if (!curRound.decisionAt) curRound.decisionAt = now;
-      if (!curRound.decision) curRound.decision = 'changes_requested';
+    if (roundBeingDecided) {
+      if (!roundBeingDecided.decisionAt) roundBeingDecided.decisionAt = now;
+      if (!roundBeingDecided.decision) roundBeingDecided.decision = 'changes_requested';
     }
     if (workItem.ownerId) {
       const { createNotification } = await import('../notifications/service.js');
@@ -336,19 +347,7 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
     } else {
       workItem.resubmittedAt = now;
     }
-    if (!workItem.rounds || workItem.rounds.length === 0) {
-      workItem.rounds = [
-        {
-          roundNumber: 1,
-          startedAt: workItem.startedAt || now,
-          submittedAt: now,
-          intervals: [],
-        },
-      ];
-    } else {
-      const curRound = workItem.rounds[workItem.rounds.length - 1];
-      curRound.submittedAt = now;
-    }
+    recordRoundSubmission(workItem, now);
   }
 
   if (toStatus === 'Approved') {

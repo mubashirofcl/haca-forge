@@ -46,6 +46,13 @@ export async function createBlocker(data, user) {
     throw error;
   }
 
+  // An owner cannot take a step out of review while its latest version waits on a reviewer.
+  const userIdStr = (user._id || user.id || user.userId)?.toString();
+  if (ownerIdStr && ownerIdStr === userIdStr) {
+    const { assertOwnerCanLeaveReview } = await import('../submissions/reviewDecision.js');
+    await assertOwnerCanLeaveReview(workItem);
+  }
+
   // Deactivate any previous active blockers for this item
   await Blocker.updateMany(
     { workItemId, status: 'Active' },

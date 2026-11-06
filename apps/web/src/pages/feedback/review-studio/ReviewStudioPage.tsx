@@ -76,6 +76,8 @@ export const ReviewStudioPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // Shown when a decision was refused because the version is stale or already decided.
   const [staleNotice, setStaleNotice] = useState<string | null>(null);
+  // Remounts the decision controls after a refresh, so a rating or note never carries over.
+  const [decisionResetKey, setDecisionResetKey] = useState(0);
 
   // Active submission details
   const [activeSubmission, setActiveSubmission] = useState<any | null>(null);
@@ -579,6 +581,7 @@ export const ReviewStudioPage: React.FC = () => {
   /** A 409 means this version can no longer be decided: say why, and reload the queue. */
   const handleStaleDecision = (message: string) => {
     setStaleNotice(`${message} The review queue has been refreshed.`);
+    setDecisionResetKey((key) => key + 1);
     return fetchReviewQueue();
   };
 
@@ -828,6 +831,7 @@ export const ReviewStudioPage: React.FC = () => {
         ) : isShootStage ? (
           <div className="flex-1 h-full overflow-hidden">
             <ShootReviewView
+              key={`${shootStageItemId}-${decisionResetKey}`}
               stageItemId={shootStageItemId}
               workItemTitle={
                 activeSubmission.workItemId?.title ||
@@ -925,6 +929,7 @@ export const ReviewStudioPage: React.FC = () => {
       {/* Persistent Docked Decision Bar (only for non-shoot stages since ShootReviewView has its own dedicated review controls) */}
       {activeSubmission && !isShootStage && (
         <DecisionBar
+          key={`${activeSubmission._id || activeSubmission.id}-${decisionResetKey}`}
           hasComments={comments.length > 0}
           commentCount={comments.length}
           isSubmitting={isSubmittingDecision}

@@ -632,7 +632,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
       expect(res.body.error.code).toBe('CLIPS_WAITING_REVIEW');
     });
 
-    it('sets step to Changes requested (Feedback) when any clip needs reshoot', async () => {
+    it('returns the step to In Progress when any clip needs reshoot', async () => {
       await MediaItem.findByIdAndUpdate(clip1._id, { status: 'approved' });
       await MediaItem.findByIdAndUpdate(clip2._id, { status: 'reshoot_needed' });
 
@@ -645,7 +645,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
       expect(res.body.data.outcome).toBe('changes_requested');
 
       const updatedStage = await WorkItem.findById(shootStage._id);
-      expect(updatedStage.status).toBe('Feedback');
+      expect(updatedStage.status).toBe('In Progress');
       expect(updatedStage.revisions).toBe(1);
     });
 

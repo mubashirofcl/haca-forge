@@ -6,6 +6,7 @@ import { ContentPiece } from '../calendar/contentPiece.model.js';
 import { Person } from '../people/model.js';
 import { sanitizeDocumentPayload } from './sanitizer.js';
 import { logActivity } from '../activity/service.js';
+import { recordRoundSubmission } from '../workItems/rounds.js';
 import { createNotification, getSocketIO } from '../notifications/service.js';
 import {
   assertDecisionAllowed,
@@ -299,19 +300,7 @@ export async function submitForApproval(workItemId, submitData = {}, user) {
     workItem.resubmittedAt = submissionDate;
   }
 
-  if (!workItem.rounds || workItem.rounds.length === 0) {
-    workItem.rounds = [
-      {
-        roundNumber: 1,
-        startedAt: workItem.startedAt || submissionDate,
-        submittedAt: submissionDate,
-        intervals: [],
-      },
-    ];
-  } else {
-    const curRound = workItem.rounds[workItem.rounds.length - 1];
-    curRound.submittedAt = submissionDate;
-  }
+  recordRoundSubmission(workItem, submissionDate);
 
   if (fileUrl || linkUrl) {
     workItem.deliverableUrl = fileUrl || linkUrl;

@@ -806,7 +806,8 @@ export async function submitClipsForApproval(stageItemId, user) {
   const updatedWorkItem = await transitionWorkItem(
     workItem._id,
     { toStatus: 'Pending', notes: 'Footage clips submitted for Creative Head review' },
-    user
+    user,
+    { ownerSubmission: true }
   );
 
   // Notify Creative Head
@@ -826,7 +827,7 @@ export async function submitClipsForApproval(stageItemId, user) {
 
 /**
  * 13. Finish review of shoot step (Creative Head / Admin)
- * If any clip is reshoot_needed -> step becomes Changes requested (Feedback).
+ * If any clip is reshoot_needed -> step returns to In Progress for the owner to reshoot.
  * If all clips are approved -> approve step with 1 to 5 rating.
  * A step cannot be approved while a clip is waiting_review or reshoot_needed.
  */
@@ -866,20 +867,18 @@ export async function finishShootStepReview(stageItemId, reviewData, user) {
 
   const { transitionWorkItem } = await import('../workItems/transition.service.js');
 
-  // Outcome 1: If any clip is reshoot_needed -> Changes requested (Feedback)
+  // Outcome 1: If any clip is reshoot_needed -> back to In Progress, like a normal revision
   if (flaggedClips.length > 0) {
     const submission = await assertDecisionAllowed({ user, workItem, decision: 'revision' });
     await claimSubmission(submission, 'changes_requested', user);
 
     let updatedWorkItem;
     try {
-      const alreadyFeedback = workItem.status === 'Feedback';
       updatedWorkItem = await transitionWorkItem(
         workItem._id,
         {
-          toStatus: 'Feedback',
-          rootCause: 'Technical issue',
-          notes:
+          toStatus: 'In Progress',
+          comment:
             reviewData.note ||
             reviewData.feedback ||
             `${flaggedClips.length} clip(s) flagged for reshoot`,
@@ -887,15 +886,6 @@ export async function finishShootStepReview(stageItemId, reviewData, user) {
         user,
         { reviewDecision: true }
       );
-      if (alreadyFeedback) {
-        // Same status, so /transition changed nothing. The revision still has to count.
-        const decidedAt = new Date();
-        updatedWorkItem = await WorkItem.findByIdAndUpdate(
-          workItem._id,
-          { $inc: { revisions: 1 }, $set: { changesRequestedAt: decidedAt, decisionAt: decidedAt } },
-          { new: true }
-        );
-      }
     } catch (error) {
       await releaseSubmission(submission);
       throw error;

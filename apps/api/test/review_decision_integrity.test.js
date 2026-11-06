@@ -371,23 +371,54 @@ describe('Shoot review', () => {
     expect((await MediaItem.findById(clip._id).lean()).status).toBe('approved');
   });
 
-  it('a flagged clip sends the step back and closes the version', async () => {
-    const w = await makeStep('Shoot');
+  it('a flagged clip returns the step to In Progress, closes the version and creates no rating', async () => {
+    const submittedAt = new Date(Date.now() - 60000);
+    const w = await makeStep('Shoot', 'Pending', { submittedAt, rounds: [{ roundNumber: 1, startedAt: new Date(Date.now() - 3600000), submittedAt, intervals: [] }] });
     await makeSub(w);
     await makeClip(w, 'reshoot_needed');
     expect((await shoot(w, 'head', { note: 'Reshoot' })).status).toBe(200);
     const after = await state(w);
-    expect(after.step).toMatchObject({ status: 'Feedback', revisions: 1 });
+    expect(after.step).toMatchObject({ status: 'In Progress', revisions: 1, rounds: 2 });
     expect(after.subs[0].status).toBe('changes_requested');
     expect(after.ratings).toBe(0);
+    const [reviewed, next] = (await WorkItem.findById(w._id).lean()).rounds;
+    expect(reviewed.decision).toBe('changes_requested');
+    expect(reviewed.submittedAt.getTime()).toBe(submittedAt.getTime());
+    expect(next.decision ?? null).toBeNull();
+    expect(next.submittedAt ?? null).toBeNull();
   });
 
-  it('a flagged clip on a step already in Feedback still counts the revision', async () => {
+  it('a flagged clip on a step in Feedback does the same, and counts one revision', async () => {
     const w = await makeStep('Shoot', 'Feedback');
     await makeSub(w);
     await makeClip(w, 'reshoot_needed');
     expect((await shoot(w, 'head', { note: 'Reshoot' })).status).toBe(200);
-    expect((await state(w)).step.revisions).toBe(1);
+    const after = await state(w);
+    expect(after.step).toMatchObject({ status: 'In Progress', revisions: 1 });
+  });
+
+  it('after a send back the owner is told to rework, and can resubmit clips for review', async () => {
+    const w = await makeStep('Shoot');
+    await makeSub(w);
+    const flagged = await makeClip(w, 'reshoot_needed');
+    await shoot(w, 'head', { note: 'Reshoot' });
+
+    const { getMyWork } = await import('../src/modules/workItems/service.js');
+    const buckets = await getMyWork(P.owner);
+    const mine = Object.values(buckets).flat().find((i) => i._id && String(i._id) === String(w._id));
+    expect(mine.status).toBe('In Progress');
+    expect(mine.latestSubmissionStatus).toBe('changes_requested');
+    const { getAvailableActions } = await import('@mmp/shared');
+    expect(getAvailableActions(P.owner, mine).actions).toContain('submit_for_approval');
+
+    // A flagged clip must be replaced first.
+    expect((await call('post', `/api/work/${w._id}/submit-clips`, 'owner')).status).toBe(400);
+    await makeClip(w, 'uploaded', { replacesId: flagged._id, version: 2 });
+    expect((await call('post', `/api/work/${w._id}/submit-clips`, 'owner')).status).toBe(200);
+    const after = await state(w);
+    expect(after.step.status).toBe('Pending');
+    expect(after.subs.map((s) => s.status)).toEqual(['changes_requested', 'submitted']);
+    expect(after.step.revisions).toBe(1);
   });
 
   it.each([[{}], [{ score: 0 }], [{ score: 6 }]])('a missing or invalid rating leaves no writes: %j', async (body) => {
@@ -556,6 +587,100 @@ describe('/transition', () => {
     expect(after.step.status).toBe('Pending');
     expect(after.subs).toHaveLength(1);
     expect(after.subs[0]).toMatchObject({ v: 1, status: 'submitted' });
+  });
+});
+
+describe('Round timing', () => {
+  const rounds = async (w) => (await WorkItem.findById(w._id).lean()).rounds;
+  const submit = (w, body = { kind: 'video', linkUrl: 'https://example.test/next' }) => call('post', `/api/work/${w._id}/submit`, 'owner', body);
+
+  it('resubmitting after a Feedback-route revision keeps the earlier submit time', async () => {
+    const first = new Date(Date.now() - 600000);
+    const w = await makeStep('Edit', 'Feedback', { submittedAt: first, rounds: [{ roundNumber: 1, startedAt: new Date(Date.now() - 900000), submittedAt: first, intervals: [] }] });
+    await makeSub(w);
+    expect((await feedback(w)).status).toBe(201);
+    expect((await submit(w)).status).toBeLessThan(300);
+    const after = await rounds(w);
+    expect(after).toHaveLength(2);
+    expect(after[0].submittedAt.getTime()).toBe(first.getTime());
+    expect(after[0].decision).toBe('changes_requested');
+    // The rework runs from the decision to the resubmit.
+    expect(after[1].startedAt.getTime()).toBe(after[0].decisionAt.getTime());
+    expect(after[1].submittedAt).toBeTruthy();
+  });
+
+  it('sending another version with no decision keeps the time and adds no work time', async () => {
+    const first = new Date(Date.now() - 600000);
+    const w = await makeStep('Edit', 'Feedback', { submittedAt: first, rounds: [{ roundNumber: 1, startedAt: new Date(Date.now() - 900000), submittedAt: first, intervals: [] }] });
+    await makeSub(w);
+    expect((await submit(w)).status).toBeLessThan(300);
+    const after = await rounds(w);
+    expect(after[0].submittedAt.getTime()).toBe(first.getTime());
+    expect(after[1].startedAt.getTime()).toBe(after[1].submittedAt.getTime());
+    expect((await WorkItem.findById(w._id).lean()).submittedAt.getTime()).toBe(first.getTime());
+  });
+
+  it('a /transition resubmit keeps the earlier submit time too', async () => {
+    const first = new Date(Date.now() - 600000);
+    const w = await makeStep('Edit', 'Feedback', { submittedAt: first, rounds: [{ roundNumber: 1, startedAt: new Date(Date.now() - 900000), submittedAt: first, intervals: [] }] });
+    await makeSub(w);
+    await feedback(w);
+    expect((await move(w, 'owner', 'Pending')).status).toBe(200);
+    const after = await rounds(w);
+    expect(after[0].submittedAt.getTime()).toBe(first.getTime());
+    expect(after).toHaveLength(2);
+  });
+
+  it('a normal first submit still uses the open round', async () => {
+    const w = await makeStep('Edit', 'In Progress');
+    expect((await submit(w)).status).toBeLessThan(300);
+    const after = await rounds(w);
+    expect(after).toHaveLength(1);
+    expect(after[0].submittedAt).toBeTruthy();
+  });
+});
+
+describe('An owner cannot withdraw a submission awaiting review', () => {
+  describe.each(['Pending', 'Feedback'])('from %s', (status) => {
+    it.each(status === 'Pending' ? ['In Progress', 'Blocked', 'Published'] : ['In Progress', 'Blocked', 'Pending'])('to %s: refused, and revisions do not change', async (to) => {
+      const w = await makeStep('Edit', status, { revisions: 2 });
+      await makeSub(w);
+      const before = await state(w);
+      const res = await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: to, blockerReason: 'Waiting for feedback', publishedUrl: 'https://example.test/live' });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('SUBMISSION_AWAITING_REVIEW');
+      await expectUnchanged(w, before);
+      expect((await state(w)).step.revisions).toBe(2);
+    });
+
+    it('marking it blocked through the blockers route is refused too', async () => {
+      const w = await makeStep('Edit', status);
+      await makeSub(w);
+      const before = await state(w);
+      const res = await call('post', '/api/blockers', 'owner', { workItemId: w._id, reason: 'Waiting for feedback', note: 'x', dependencyOwnerId: P.other._id.toString() });
+      expect(res.status).toBe(409);
+      await expectUnchanged(w, before);
+    });
+  });
+
+  it('an owner can move on once the version has been decided', async () => {
+    const w = await makeStep('Edit');
+    await makeSub(w);
+    await feedback(w);
+    expect((await move(w, 'owner', 'Blocked')).status).not.toBe(409);
+  });
+
+  it('submit-clips is the submission, so it is not treated as a withdrawal', async () => {
+    const w = await makeStep('Shoot', 'Feedback');
+    await makeClip(w, 'uploaded');
+    expect((await call('post', `/api/work/${w._id}/submit-clips`, 'owner')).status).toBe(200);
+    expect((await state(w)).step.status).toBe('Pending');
+  });
+
+  it('a step that does not require review is unaffected', async () => {
+    const w = await makeStep('Post', 'Feedback', { reviewRequired: false });
+    await makeSub(w);
+    expect((await move(w, 'owner', 'In Progress')).status).toBe(200);
   });
 });
 

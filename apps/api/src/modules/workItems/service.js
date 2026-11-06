@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { WorkItem } from './model.js';
 import { Department } from '../departments/model.js';
+import { Submission } from '../submissions/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logActivity, listRecentActivities } from '../activity/service.js';
 import { normalizeWorkType, normalizeRole, WORK_TYPE_DEPARTMENT_MAP, getAvailableActions } from '@mmp/shared';
@@ -503,8 +504,16 @@ export async function getMyWork(user) {
   const upcoming = [];
   const completed = [];
 
+  const latestVersions = await Submission.aggregate([
+    { $match: { workItemId: { $in: rawItems.map((i) => i._id) }, version: { $gt: 0 } } },
+    { $sort: { version: -1 } },
+    { $group: { _id: '$workItemId', status: { $first: '$status' } } },
+  ]);
+  const latestStatusOf = new Map(latestVersions.map((row) => [String(row._id), row.status]));
+
   for (const rawItem of rawItems) {
     const item = rawItem.toObject();
+    item.latestSubmissionStatus = latestStatusOf.get(String(item._id)) || null;
     if (item.contentPieceId && item.isLocked) {
       const pieceId = item.contentPieceId._id || item.contentPieceId;
       if (item.stageOrder <= 1) {

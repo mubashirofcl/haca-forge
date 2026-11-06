@@ -255,7 +255,8 @@ export const MyWorkPage: React.FC = () => {
 
     try {
       const isPost = selectedItemForSubmit.stageKey === 'Post';
-      const toStatus = isPost ? 'Published' : 'Feedback';
+      // From Feedback, a move to the same status would change nothing and save nothing.
+      const toStatus = isPost ? 'Published' : selectedItemForSubmit.status === 'Feedback' ? 'Pending' : 'Feedback';
 
       if (isPost) {
         const linkToValidate = socialReferenceUrl.trim() || deliverableUrl.trim();
@@ -434,8 +435,15 @@ export const MyWorkPage: React.FC = () => {
     const isTerminal = item.status === 'Approved' || item.status === 'Published';
     const isActuallyOverdue = isPastDeadline && !isTerminal;
 
-    const isFeedbackRework = item.status === 'Feedback' && item.revisions > 0;
-    const isWaitingApproval = item.status === 'Pending' || (item.status === 'Feedback' && item.revisions === 0);
+    // The latest version decides: a resubmitted step is under review, even after earlier revisions.
+    const latestStatus = (item as any).latestSubmissionStatus as string | null | undefined;
+    const isWaitingApproval =
+      item.status === 'Pending' ||
+      (item.status === 'Feedback' && (latestStatus ? latestStatus === 'submitted' : item.revisions === 0));
+    const isFeedbackRework =
+      !isWaitingApproval &&
+      item.revisions > 0 &&
+      (item.status === 'Feedback' || (item.status === 'In Progress' && latestStatus === 'changes_requested'));
     const measures = calculateIndividualWorkMeasures(item);
 
     return (
@@ -782,7 +790,7 @@ export const MyWorkPage: React.FC = () => {
                     </button>
                   )}
 
-                  {actions.includes('mark_blocked') && (
+                  {!isWaitingApproval && actions.includes('mark_blocked') && (
                     <button
                       onClick={() => {
                         setSelectedItemForBlock(item);
@@ -799,7 +807,7 @@ export const MyWorkPage: React.FC = () => {
                     </button>
                   )}
 
-                  {actions.includes('request_help') && (
+                  {!isWaitingApproval && actions.includes('request_help') && (
                     <button
                       onClick={() => {
                         setSelectedItemForBlock(item);
