@@ -2,7 +2,7 @@ import * as deptService from './service.js';
 
 export async function list(req, res, next) {
   try {
-    const departments = await deptService.listDepartments();
+    const departments = await deptService.listDepartments({ inUse: req.query.inUse === 'true' });
     return res.status(200).json({ success: true, data: departments, departments });
   } catch (error) {
     next(error);

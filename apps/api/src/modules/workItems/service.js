@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
 import { WorkItem } from './model.js';
 import { Department } from '../departments/model.js';
-import { Submission } from '../submissions/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { logActivity, listRecentActivities } from '../activity/service.js';
+import { ActivityEvent } from '../activity/model.js';
+import { Submission } from '../submissions/model.js';
 import { normalizeWorkType, normalizeRole, WORK_TYPE_DEPARTMENT_MAP, getAvailableActions } from '@mmp/shared';
 
 export async function createWorkItem(data, user) {
@@ -165,10 +166,57 @@ export async function listWorkItems(filters = {}, user) {
   return items;
 }
 
+/**
+ * Older steps were worked on before their timing fields were saved, but the
+ * same moments exist in the activity log and in submissions. Fill only the
+ * blanks, for this response. Saved records are not changed.
+ */
+async function withRecordedStepTimes(stages) {
+  const plain = stages.map((s) => s.toObject());
+  const missing = plain.filter((s) => {
+    if (s.status === 'Not Started') return false;
+    return !s.startedAt || !s.submittedAt || (['Approved', 'Published'].includes(s.status) && !s.approvedAt) || (s.status === 'Published' && !s.postedAt);
+  });
+  if (missing.length === 0) return plain;
+
+  const ids = missing.map((s) => s._id);
+  const [events, submissions] = await Promise.all([
+    ActivityEvent.find({
+      entityType: 'work_item',
+      entityId: { $in: [...ids, ...ids.map(String)] },
+      toStatus: { $in: ['In Progress', 'Approved', 'Published'] },
+    })
+      .select('entityId toStatus timestamp createdAt')
+      .sort({ timestamp: 1 })
+      .lean(),
+    Submission.find({ workItemId: { $in: ids }, version: { $gt: 0 }, submittedAt: { $ne: null } })
+      .select('workItemId status submittedAt reviewedAt')
+      .sort({ submittedAt: 1 })
+      .lean(),
+  ]);
+
+  for (const stage of missing) {
+    const id = String(stage._id);
+    const eventTimes = (toStatus) =>
+      events.filter((e) => String(e.entityId) === id && e.toStatus === toStatus).map((e) => e.timestamp || e.createdAt);
+    const subs = submissions.filter((sub) => String(sub.workItemId) === id);
+    const done = ['Approved', 'Published'].includes(stage.status);
+
+    stage.startedAt ||= eventTimes('In Progress')[0] || null;
+    if (!stage.submittedAt && subs.length > 0) {
+      stage.submittedAt = subs[0].submittedAt;
+      if (subs.length > 1) stage.resubmittedAt ||= subs[subs.length - 1].submittedAt;
+    }
+    if (done) stage.approvedAt ||= eventTimes('Approved').at(-1) || subs.filter((sub) => sub.status === 'approved' && sub.reviewedAt).at(-1)?.reviewedAt || null;
+    if (stage.status === 'Published') stage.postedAt ||= eventTimes('Published').at(-1) || null;
+  }
+  return plain;
+}
+
 export async function getWorkItemById(id, user) {
   const workItem = await WorkItem.findById(id)
     .populate('departmentId', 'name code')
-    .populate('ownerId', 'name email role jobRole');
+    .populate('ownerId', 'name email role jobRole avatarUrl');
 
   if (!workItem) {
     const error = new Error('Work item not found');
@@ -188,10 +236,10 @@ export async function getWorkItemById(id, user) {
     }
 
     const siblingStages = await WorkItem.find({ contentPieceId: result.contentPieceId })
-      .select('stageKey stageOrder status isLocked isSkipped ownerId title deadline deliverableUrl publishedUrl revisions')
-      .populate('ownerId', 'name email role jobRole')
+      .select('stageKey stageOrder status isLocked isSkipped ownerId title deadline deliverableUrl publishedUrl revisions startedAt submittedAt resubmittedAt approvedAt postedAt')
+      .populate('ownerId', 'name email role jobRole avatarUrl')
       .sort({ stageOrder: 1 });
-    result.pieceStages = siblingStages;
+    result.pieceStages = await withRecordedStepTimes(siblingStages);
 
     if (result.stageOrder > 1) {
       const prevStage = siblingStages.find((s) => s.stageOrder === result.stageOrder - 1);
@@ -627,7 +675,21 @@ export async function getMyWork(user) {
 }
 
 import { ContentPiece } from '../calendar/contentPiece.model.js';
+import { CalendarPlan } from '../calendar/plan.model.js';
 import { isPostableWorkType } from '@mmp/shared';
+
+/** Same rule as the WorkItem isOverdue virtual, which .lean() results do not carry. */
+function isPastDeadline(deadline, status) {
+  if (!deadline || status === 'Approved' || status === 'Published') return false;
+  return new Date(deadline) < new Date();
+}
+
+/** Plan ids of the given plans that are individual (one-off) work, not a monthly or project plan. */
+async function individualPlanIds(planIds) {
+  if (planIds.length === 0) return new Set();
+  const plans = await CalendarPlan.find({ _id: { $in: planIds }, kind: 'individual' }).select('_id').lean();
+  return new Set(plans.map((plan) => String(plan._id)));
+}
 
 export async function getCalendarWorkItems(filters = {}, user) {
   const query = {};
@@ -667,6 +729,17 @@ export async function getCalendarWorkItems(filters = {}, user) {
     .sort({ deadline: 1 })
     .lean();
 
+  // Individual work: from an individual plan, or not part of any plan.
+  const stepPieces = await ContentPiece.find({ _id: { $in: workItems.map((w) => w.contentPieceId).filter(Boolean) } })
+    .select('planId')
+    .lean();
+  const individualSteps = await individualPlanIds(stepPieces.map((piece) => piece.planId));
+  const planOfPiece = new Map(stepPieces.map((piece) => [String(piece._id), String(piece.planId)]));
+  for (const item of workItems) {
+    item.isOverdue = isPastDeadline(item.deadline, item.status);
+    item.isIndividual = !item.contentPieceId || individualSteps.has(planOfPiece.get(String(item.contentPieceId)));
+  }
+
   // If not scoped to worker personal view, also include publish date events from ContentPiece
   if (user?.role !== 'team_member' && startParam && endParam) {
     const pieceQuery = {
@@ -683,17 +756,31 @@ export async function getCalendarWorkItems(filters = {}, user) {
       .populate('postingOwnerId', 'name email role')
       .lean();
 
+    const individualPieces = await individualPlanIds(pieces.map((p) => p.planId));
+    // A publish date shows the state of the piece's final step, so its colour matches that step.
+    const finalSteps = await WorkItem.find({ contentPieceId: { $in: pieces.map((p) => p._id) } })
+      .select('contentPieceId stageOrder status isLocked')
+      .sort({ stageOrder: 1 })
+      .lean();
+    const finalStepOfPiece = new Map(finalSteps.map((step) => [String(step.contentPieceId), step]));
+
     const publishItems = pieces.map((p) => {
       const isPostable = isPostableWorkType(p.contentType);
       const prefix = isPostable ? 'Publish' : 'Needed by';
       const ownerName = p.postingOwnerId?.name ? ` (${p.postingOwnerId.name})` : '';
+      const finalStep = finalStepOfPiece.get(String(p._id));
+      const status = finalStep ? finalStep.status : p.rowStatus === 'approved' ? 'Approved' : 'Planned';
       return {
         _id: `pub_${p._id.toString()}`,
         title: `${prefix}: ${p.topic}${ownerName}`,
         displayTitle: `${prefix}: ${p.topic}${ownerName}`,
         topic: p.topic,
         workType: p.contentType,
-        status: p.rowStatus === 'approved' ? 'Approved' : 'Planned',
+        status,
+        isLocked: Boolean(finalStep?.isLocked),
+        isOverdue: finalStep ? isPastDeadline(p.postingDate, status) : false,
+        isIndividual: individualPieces.has(String(p.planId)),
+        workItemId: finalStep?._id || null,
         deadline: p.postingDate,
         calendar: p.calendar || 'sm',
         isPublishDate: true,

@@ -2569,6 +2569,17 @@ export function toMidnightDate(d: string | Date): Date {
   return date;
 }
 
+/** Whole calendar days past a deadline (0 if it falls today or later). Same date-only count as "Late by". */
+export function overdueDays(deadline: string | Date, now: string | Date = new Date()): number {
+  const diff = toMidnightDate(now).getTime() - toMidnightDate(deadline).getTime();
+  return Math.max(0, Math.round(diff / (24 * 60 * 60 * 1000)));
+}
+
+export function formatOverdue(days: number): string {
+  if (days <= 0) return "Overdue today";
+  return `Overdue by ${days} ${days === 1 ? "day" : "days"}`;
+}
+
 /**
  * Calculates sum of paused interval durations (blocked or pending) within a time window.
  */
