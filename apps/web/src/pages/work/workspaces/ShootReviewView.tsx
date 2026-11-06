@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useDialogFocus } from '../../../lib/useDialogFocus';
 import {
   CheckCircle2,
   AlertCircle,
@@ -60,6 +61,13 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
 
   const [sendBackModalOpen, setSendBackModalOpen] = useState(false);
   const [sendBackNote, setSendBackNote] = useState<string>('');
+  // Modal keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
+  const reshootDialogRef = useRef<HTMLDivElement>(null);
+  const approveStepDialogRef = useRef<HTMLDivElement>(null);
+  const sendBackDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(reshootDialogRef, reshootModalOpen, () => setReshootModalOpen(false));
+  useDialogFocus(approveStepDialogRef, approveStepModalOpen, () => setApproveStepModalOpen(false));
+  useDialogFocus(sendBackDialogRef, sendBackModalOpen, () => setSendBackModalOpen(false));
 
   const fetchClips = async () => {
     try {
@@ -200,24 +208,26 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
+    <div className="flex flex-col h-full bg-ui-canvas text-ui-ink font-sans overflow-hidden">
       {/* Top Header / Context */}
       {!hideHeader && (
-        <div className="h-14 bg-slate-900/90 border-b border-white/10 px-4 flex items-center justify-between flex-shrink-0 backdrop-blur-md">
+        <div className="h-14 bg-white/60 border-b border-ui-line px-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             {onClose && (
               <button
+                type="button"
                 onClick={onClose}
-                className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                aria-label="Back"
+                className="ui-icon-btn shrink-0"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4" aria-hidden="true" />
               </button>
             )}
             <div>
-              <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-400">
+              <span className="text-[11px] font-bold text-ui-ink">
                 Creative Head Review
               </span>
-              <h2 className="text-sm font-bold text-white truncate max-w-md">
+              <h2 className="text-sm font-bold text-ui-ink truncate max-w-md">
                 {workItemTitle}
               </h2>
             </div>
@@ -226,9 +236,9 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
           {/* Coverage pill */}
           <div className="flex items-center gap-2">
             {coverage && (
-              <span className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs text-slate-300 font-medium">
-                Shot Coverage: <strong className="text-white">{coverage}</strong>
-                {shotList.length > 0 && <span className="text-slate-400 ml-1">({shotList.length} defined)</span>}
+              <span className="px-3 py-1 rounded-full bg-white/60 border border-ui-line text-xs text-ui-text font-medium">
+                Shot Coverage: <strong className="text-ui-ink">{coverage}</strong>
+                {shotList.length > 0 && <span className="text-ui-muted ml-1">({shotList.length} defined)</span>}
               </span>
             )}
           </div>
@@ -236,14 +246,14 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
       )}
 
       {errorMsg && (
-        <div className="p-3 bg-rose-500/20 border-b border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-rose-400" />
+        <div className="status-tint status-changes p-3 border-b text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-rose-800" />
           <span>{errorMsg}</span>
         </div>
       )}
 
       {loading && (
-        <div className="p-2 text-center text-xs text-slate-400 bg-white/5 border-b border-white/10">
+        <div className="p-2 text-center text-xs text-ui-muted bg-white/60 border-b border-ui-line">
           Loading clips for review...
         </div>
       )}
@@ -265,21 +275,21 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
                 />
 
                 {/* Per-Clip Decision Bar */}
-                <div className="mt-3 p-3 rounded-2xl bg-slate-900/80 border border-white/10 backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
+                <div className="mt-3 p-3 rounded-2xl bg-white/60 border border-ui-line flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">Clip Decision:</span>
+                    <span className="text-xs text-ui-muted">Clip Decision:</span>
                     {selectedClip.status === 'approved' ? (
-                      <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1">
+                      <span className="status-tint status-approved px-3 py-1 rounded-full border text-xs font-bold flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>Approved</span>
                       </span>
                     ) : selectedClip.status === 'reshoot_needed' ? (
-                      <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-bold flex items-center gap-1">
+                      <span className="status-tint status-changes px-3 py-1 rounded-full border text-xs font-bold flex items-center gap-1">
                         <AlertCircle className="w-3.5 h-3.5" />
                         <span>Reshoot needed</span>
                       </span>
                     ) : (
-                      <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-medium">
+                      <span className="status-tint status-waiting px-3 py-1 rounded-full border text-xs font-medium">
                         Waiting for review
                       </span>
                     )}
@@ -291,7 +301,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
                         type="button"
                         disabled={isSubmittingReview || selectedClip.status === 'reshoot_needed'}
                         onClick={() => setReshootModalOpen(true)}
-                        className="min-h-[44px] px-4 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                        className="status-tint status-changes min-h-[44px] px-4 rounded-full border font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
                       >
                         <AlertCircle className="w-4 h-4" />
                         <span>Reshoot needed</span>
@@ -301,7 +311,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
                         type="button"
                         disabled={isSubmittingReview || selectedClip.status === 'approved'}
                         onClick={handleApproveClip}
-                        className="min-h-[44px] px-5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
+                        className="min-h-[44px] px-5 rounded-full bg-ui-ink hover:bg-black text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                         <span>Approve clip</span>
@@ -325,19 +335,19 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
               )}
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-sm gap-2">
-              <Film className="w-12 h-12 text-slate-700" />
+            <div className="flex-1 flex flex-col items-center justify-center text-ui-muted text-sm gap-2">
+              <Film className="w-12 h-12 text-ui-text" />
               <p>No clips available for review.</p>
             </div>
           )}
         </div>
 
         {/* Right Gallery of Clips */}
-        <div className="w-full lg:w-72 bg-slate-900/60 border-t lg:border-t-0 lg:border-l border-white/10 p-4 flex flex-col gap-3 overflow-y-auto">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-300 uppercase tracking-wider">
+        <div className="w-full lg:w-72 bg-white/60 border-t lg:border-t-0 lg:border-l border-ui-line p-4 flex flex-col gap-3 overflow-y-auto">
+          <div className="flex items-center justify-between text-xs font-semibold text-ui-text">
             <span>Clips Gallery ({clips.length})</span>
             {coverage && (
-              <span className="text-[10px] text-indigo-300 normal-case bg-indigo-500/15 px-2 py-0.5 rounded-full border border-indigo-500/30 font-sans font-medium">
+              <span className="text-[11px] text-ui-ink normal-case bg-white px-2 py-0.5 rounded-full border border-ui-ink font-sans font-medium">
                 {coverage}
               </span>
             )}
@@ -347,37 +357,39 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
             {clips.map((clip) => {
               const isSelected = selectedClip?._id === clip._id;
               return (
-                <div
+                <button
+                  type="button"
                   key={clip._id}
+                  aria-pressed={isSelected}
                   onClick={() => setSelectedClip(clip)}
-                  className={`p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1.5 ${
+                  className={`w-full text-left min-h-[44px] p-2.5 rounded-xl border transition-colors flex flex-col gap-1.5 ${
                     isSelected
-                      ? 'bg-indigo-600/20 border-indigo-500 shadow-md'
+                      ? 'bg-white border-ui-ink shadow-md'
                       : clip.status === 'reshoot_needed'
-                      ? 'bg-rose-950/20 border-rose-500/40 hover:border-rose-500/70'
+                      ? 'status-tint status-changes border-ui-line hover:border-ui-line'
                       : clip.status === 'approved'
-                      ? 'bg-emerald-950/10 border-emerald-500/30 hover:border-emerald-500/60'
-                      : 'bg-white/5 border-white/10 hover:border-white/25'
+                      ? 'status-tint status-approved border-ui-line hover:border-ui-line'
+                      : 'bg-white/60 border-ui-line hover:border-ui-line'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-1 text-[11px]">
-                    <span className="font-semibold text-slate-100 truncate">{clip.title}</span>
+                  <span className="flex items-center justify-between gap-1 text-[11px] w-full">
+                    <span className="font-semibold text-ui-ink truncate">{clip.title}</span>
                     {(clip.unreadCount || 0) > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white font-bold text-[9px]">
+                      <span className="px-1.5 py-0.2 rounded-full bg-ui-ink text-white font-bold text-[11px]">
                         {clip.unreadCount}
                       </span>
                     )}
-                  </div>
+                  </span>
 
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                  <span className="flex items-center justify-between text-[11px] text-ui-muted font-mono w-full">
                     <span>Take {clip.take || 1}</span>
                     <span>
-                      {clip.status === 'approved' && <span className="text-emerald-400">Approved ✓</span>}
-                      {clip.status === 'reshoot_needed' && <span className="text-rose-400">Reshoot !</span>}
-                      {clip.status === 'waiting_review' && <span className="text-amber-400">Waiting</span>}
+                      {clip.status === 'approved' && <span className="text-emerald-800">Approved ✓</span>}
+                      {clip.status === 'reshoot_needed' && <span className="text-rose-800">Reshoot !</span>}
+                      {clip.status === 'waiting_review' && <span className="text-amber-800">Waiting</span>}
                     </span>
-                  </div>
-                </div>
+                  </span>
+                </button>
               );
             })}
           </div>
@@ -385,16 +397,16 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
       </div>
 
       {/* Persistent Summary Bar at Bottom */}
-      <div className="p-4 bg-slate-900 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
+      <div className="p-4 bg-white/60 border-t border-ui-line flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
         <div className="flex items-center gap-3 text-xs">
-          <span className="text-slate-400 font-medium">Review Progress:</span>
-          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
+          <span className="text-ui-muted font-medium">Review Progress:</span>
+          <span className="status-tint status-approved px-2.5 py-1 rounded-full font-bold">
             {approvedCount} Approved
           </span>
-          <span className="px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 font-bold">
+          <span className="status-tint status-changes px-2.5 py-1 rounded-full font-bold">
             {reshootCount} Reshoot needed
           </span>
-          <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold">
+          <span className="status-tint status-waiting px-2.5 py-1 rounded-full font-bold">
             {waitingCount} Pending review
           </span>
         </div>
@@ -406,7 +418,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
               type="button"
               disabled={!canSendBack || isSubmittingReview}
               onClick={() => setSendBackModalOpen(true)}
-              className="min-h-[44px] px-5 rounded-full bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-md"
+              className="min-h-[44px] px-5 rounded-full bg-ui-ink hover:bg-black disabled:opacity-40 text-white font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-md"
             >
               <AlertCircle className="w-4 h-4" />
               <span>Send Back (Changes Requested)</span>
@@ -417,14 +429,14 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
               type="button"
               disabled={!canApproveStep || isSubmittingReview}
               onClick={() => setApproveStepModalOpen(true)}
-              className="min-h-[44px] px-6 rounded-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+              className="min-h-[44px] px-6 rounded-full bg-ui-ink hover:bg-black disabled:opacity-40 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-lg active:scale-95"
             >
-              <Sparkles className="w-4 h-4 text-amber-300" />
+              <Sparkles className="w-4 h-4 text-amber-800" />
               <span>Approve Step with Rating</span>
             </button>
           </div>
         ) : (
-          <div className="text-xs text-slate-400 italic">
+          <div className="text-xs text-ui-muted italic">
             Read-Only Deliverable View
           </div>
         )}
@@ -432,31 +444,40 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
 
       {/* Reshoot Needed Modal (Feedback message required) */}
       {reshootModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-white/20 rounded-2xl p-6 shadow-2xl flex flex-col gap-4 animate-scaleIn">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-400" />
+        <div className="fixed inset-0 z-50 ui-scrim flex items-center justify-center p-4">
+          <div
+            ref={reshootDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sr-reshoot-title"
+            className="glass-modal w-full max-w-md max-h-[92vh] overflow-y-auto p-6 flex flex-col gap-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h3 id="sr-reshoot-title" className="text-base font-bold text-ui-ink flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-800" />
                 <span>Request Reshoot for "{selectedClip?.title}"</span>
               </h3>
               <button
                 onClick={() => setReshootModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                type="button"
+              aria-label="Close"
+              className="ui-icon-btn shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Feedback / Direction for Shooter <span className="text-rose-400">*</span>
+              <label htmlFor="sr-field-1" className="block text-xs font-semibold text-ui-text mb-1">
+                Feedback / Direction for Shooter <span className="text-rose-800">*</span>
               </label>
               <textarea
+                id="sr-field-1"
                 rows={3}
                 value={reshootMessage}
                 onChange={(e) => setReshootMessage(e.target.value)}
                 placeholder="Explain what needs to be changed (e.g. framing, lighting, camera shake)..."
-                className="w-full bg-white/5 border border-white/15 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                className="ui-input ui-textarea w-full"
               />
             </div>
 
@@ -464,7 +485,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
               <button
                 type="button"
                 onClick={() => setReshootModalOpen(false)}
-                className="min-h-[44px] px-4 rounded-full hover:bg-white/10 text-slate-300 text-xs font-medium"
+                className="min-h-[44px] px-4 rounded-full hover:bg-white text-ui-text text-xs font-medium"
               >
                 Cancel
               </button>
@@ -472,7 +493,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
                 type="button"
                 disabled={!reshootMessage.trim() || isSubmittingReview}
                 onClick={handleReshootSubmit}
-                className="min-h-[44px] px-5 rounded-full bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+                className="min-h-[44px] px-5 rounded-full bg-ui-ink hover:bg-black disabled:opacity-40 text-white text-xs font-bold transition-all shadow-md active:scale-95"
               >
                 Confirm Reshoot
               </button>
@@ -483,16 +504,24 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
 
       {/* Approve Step with Rating Modal */}
       {approveStepModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-white/20 rounded-2xl p-6 shadow-2xl flex flex-col gap-4 animate-scaleIn">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
+        <div className="fixed inset-0 z-50 ui-scrim flex items-center justify-center p-4">
+          <div
+            ref={approveStepDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sr-approve-title"
+            className="glass-modal w-full max-w-md max-h-[92vh] overflow-y-auto p-6 flex flex-col gap-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h3 id="sr-approve-title" className="text-base font-bold text-ui-ink flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-800" />
                 <span>Approve Shoot Deliverable</span>
               </h3>
               <button
                 onClick={() => setApproveStepModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                type="button"
+              aria-label="Close"
+              className="ui-icon-btn shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -500,8 +529,8 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
 
             {/* 1-5 Star Rating Selector */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Quality Rating (1 to 5 Stars) <span className="text-amber-400">*</span>
+              <label className="block text-xs font-semibold text-ui-text mb-1.5">
+                Quality Rating (1 to 5 Stars) <span className="text-amber-800">*</span>
               </label>
               <div className="flex items-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -509,13 +538,16 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
                     key={star}
                     type="button"
                     onClick={() => setRatingScore(star)}
-                    className="p-2 rounded-xl hover:bg-white/10 transition-colors"
+                    aria-label={`${star} star${star === 1 ? '' : 's'}`}
+                    aria-pressed={ratingScore === star}
+                    className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-xl hover:bg-white transition-colors"
                   >
                     <Star
+                      aria-hidden="true"
                       className={`w-7 h-7 ${
                         star <= ratingScore
-                          ? 'fill-amber-400 text-amber-400'
-                          : 'text-slate-600'
+                          ? 'fill-amber-400 text-amber-800'
+                          : 'text-ui-muted'
                       }`}
                     />
                   </button>
@@ -525,7 +557,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
 
             {/* Quality Tags */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-ui-text mb-1.5">
                 Quality Tags (Optional)
               </label>
               <div className="flex flex-wrap gap-2">
@@ -536,10 +568,11 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
                       key={tag}
                       type="button"
                       onClick={() => toggleTag(tag)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                      aria-pressed={active}
+                      className={`min-h-[44px] px-3 rounded-full text-xs font-semibold transition-colors ${
                         active
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'
+                          ? 'bg-ui-ink text-white'
+                          : 'bg-white/60 border border-ui-line text-ui-muted hover:bg-white'
                       }`}
                     >
                       {tag}
@@ -551,15 +584,16 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
 
             {/* Qualitative Feedback */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label htmlFor="sr-field-2" className="block text-xs font-semibold text-ui-text mb-1">
                 Written Feedback
               </label>
               <textarea
+                id="sr-field-2"
                 rows={2}
                 value={ratingFeedback}
                 onChange={(e) => setRatingFeedback(e.target.value)}
                 placeholder="Commend great framing, audio clarity, or take organization..."
-                className="w-full bg-white/5 border border-white/15 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="ui-input ui-textarea w-full"
               />
             </div>
 
@@ -567,7 +601,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
               <button
                 type="button"
                 onClick={() => setApproveStepModalOpen(false)}
-                className="min-h-[44px] px-4 rounded-full hover:bg-white/10 text-slate-300 text-xs font-medium"
+                className="min-h-[44px] px-4 rounded-full hover:bg-white text-ui-text text-xs font-medium"
               >
                 Cancel
               </button>
@@ -575,7 +609,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
                 type="button"
                 disabled={isSubmittingReview}
                 onClick={handleFinishApproveStep}
-                className="min-h-[44px] px-6 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+                className="min-h-[44px] px-6 rounded-full bg-ui-ink hover:bg-black text-white text-xs font-bold transition-all shadow-md active:scale-95"
               >
                 Approve & Unlock Edit Step
               </button>
@@ -586,35 +620,44 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
 
       {/* Send Back Step Modal */}
       {sendBackModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-white/20 rounded-2xl p-6 shadow-2xl flex flex-col gap-4 animate-scaleIn">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-400" />
+        <div className="fixed inset-0 z-50 ui-scrim flex items-center justify-center p-4">
+          <div
+            ref={sendBackDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sr-sendback-title"
+            className="glass-modal w-full max-w-md max-h-[92vh] overflow-y-auto p-6 flex flex-col gap-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h3 id="sr-sendback-title" className="text-base font-bold text-ui-ink flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-800" />
                 <span>Send Back Step for Revisions</span>
               </h3>
               <button
                 onClick={() => setSendBackModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                type="button"
+              aria-label="Close"
+              className="ui-icon-btn shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-300">
-              There are <strong className="text-rose-400">{reshootCount} clip(s)</strong> flagged for reshoot. The step status will return to Changes requested (Feedback) and the shooter will be notified.
+            <p className="text-xs text-ui-text">
+              There are <strong className="text-rose-800">{reshootCount} clip(s)</strong> flagged for reshoot. The step status will return to Changes requested (Feedback) and the shooter will be notified.
             </p>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label htmlFor="sr-field-3" className="block text-xs font-semibold text-ui-text mb-1">
                 Overall Note to Shooter
               </label>
               <textarea
+                id="sr-field-3"
                 rows={2}
                 value={sendBackNote}
                 onChange={(e) => setSendBackNote(e.target.value)}
                 placeholder="Add overall revision notes or deadline reminder..."
-                className="w-full bg-white/5 border border-white/15 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                className="ui-input ui-textarea w-full"
               />
             </div>
 
@@ -622,7 +665,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSendBackModalOpen(false)}
-                className="min-h-[44px] px-4 rounded-full hover:bg-white/10 text-slate-300 text-xs font-medium"
+                className="min-h-[44px] px-4 rounded-full hover:bg-white text-ui-text text-xs font-medium"
               >
                 Cancel
               </button>
@@ -630,7 +673,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
                 type="button"
                 disabled={isSubmittingReview}
                 onClick={handleFinishSendBack}
-                className="min-h-[44px] px-6 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+                className="min-h-[44px] px-6 rounded-full bg-ui-ink hover:bg-black text-white text-xs font-bold transition-all shadow-md active:scale-95"
               >
                 Confirm & Send Back
               </button>

@@ -183,9 +183,9 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
             key={`btn-time-${index}-${totalSecs}`}
             type="button"
             onClick={() => onSeekTime && onSeekTime(totalSecs)}
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 mx-1 rounded-md bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-mono text-xs font-semibold border border-indigo-500/30 transition-colors"
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 mx-1 rounded-md bg-white hover:bg-white text-ui-ink font-mono text-xs font-semibold border border-ui-ink transition-colors"
           >
-            <Clock className="w-3 h-3 text-indigo-400" />
+            <Clock className="w-3 h-3 text-ui-ink" />
             <span>{part.trim()}</span>
           </button>
         );
@@ -205,18 +205,18 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950/80 rounded-2xl border border-white/10 backdrop-blur-xl overflow-hidden shadow-2xl">
+    <div className="flex flex-col h-full bg-white/60 rounded-2xl border border-ui-line overflow-hidden">
       {/* Header */}
-      <div className="p-3.5 bg-slate-900/90 border-b border-white/10 flex items-center justify-between flex-shrink-0">
+      <div className="p-3.5 bg-white/60 border-b border-ui-line flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-lg bg-white text-ui-ink flex items-center justify-center">
             <MessageSquare className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <h4 className="text-xs font-bold text-slate-100 truncate">
+            <h4 className="text-xs font-bold text-ui-ink truncate">
               Thread: {clipTitle}
             </h4>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-ui-muted">
               {messages.length} message{messages.length === 1 ? '' : 's'}
             </p>
           </div>
@@ -227,7 +227,7 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
             <button
               type="button"
               onClick={() => setShowShareModal(true)}
-              className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 text-xs font-medium flex items-center gap-1 transition-colors"
+              className="status-tint status-approved px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors"
               title="Share approved clip to chat"
               data-testid="thread-share-to-chat-btn"
             >
@@ -236,7 +236,7 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
             </button>
           )}
           {isReadOnlyRole && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 text-[10px] text-slate-300 font-medium">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/60 text-[11px] text-ui-text font-medium">
               <Lock className="w-3 h-3" />
               <span>Read-only</span>
             </span>
@@ -251,14 +251,14 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
         className="flex-1 overflow-y-auto p-4 space-y-3 relative"
       >
         {loading ? (
-          <div className="h-full flex items-center justify-center text-slate-400 text-xs">
+          <div className="h-full flex items-center justify-center text-ui-muted text-xs">
             Loading messages...
           </div>
         ) : messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs gap-2 p-6 text-center">
-            <MessageSquare className="w-8 h-8 text-slate-600" />
+          <div className="h-full flex flex-col items-center justify-center text-ui-muted text-xs gap-2 p-6 text-center">
+            <MessageSquare className="w-8 h-8 text-ui-muted" />
             <p>No feedback yet on this clip.</p>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-ui-muted">
               Use "Reference this moment" while playing to pin timecodes.
             </p>
           </div>
@@ -284,8 +284,8 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
                 <div
                   className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-3 shadow-md relative group transition-all ${
                     isMine
-                      ? 'bg-indigo-600/90 text-white rounded-tr-none'
-                      : 'bg-slate-900 border border-white/15 text-slate-100 rounded-tl-none'
+                      ? 'bg-white border border-ui-ink text-ui-ink rounded-tr-none'
+                      : 'bg-white/60 border border-ui-line text-ui-ink rounded-tl-none'
                   } ${isDone ? 'opacity-80' : ''}`}
                 >
                   {/* Quoted reply banner if present */}
@@ -293,11 +293,11 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
                     <div
                       className={`mb-2 p-2 rounded-lg text-[11px] border-l-2 ${
                         isMine
-                          ? 'bg-indigo-950/40 border-indigo-300 text-indigo-100'
-                          : 'bg-white/5 border-indigo-400 text-slate-300'
+                          ? 'bg-white border-ui-ink text-ui-ink'
+                          : 'bg-white/60 border-ui-ink text-ui-text'
                       }`}
                     >
-                      <span className="font-semibold text-indigo-300">
+                      <span className="font-semibold text-ui-ink">
                         {msg.replyToPreview?.authorName ||
                           (typeof msg.replyToId === 'object' && (msg.replyToId as any).authorId?.name
                             ? (msg.replyToId as any).authorId.name
@@ -321,8 +321,8 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
                     <span className="font-semibold">{authorName}</span>
                     {authorRole && (
                       <span
-                        className={`px-1.5 py-0.2 rounded text-[9px] uppercase tracking-wider font-bold ${
-                          isMine ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-400'
+                        className={`px-1.5 py-0.2 rounded text-[11px] font-bold ${
+                          isMine ? 'bg-white text-ui-ink' : 'bg-white/60 text-ui-muted'
                         }`}
                       >
                         {authorRole}
@@ -333,25 +333,25 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
                   {/* Message body (links not clickable by default) */}
                   <div
                     className={`text-xs leading-relaxed break-words whitespace-pre-wrap select-text ${
-                      isDone ? 'line-through text-slate-400' : ''
+                      isDone ? 'line-through text-ui-muted' : ''
                     }`}
                   >
                     {renderMessageContent(msg.text)}
                   </div>
 
                   {/* Footer: Done status, Reply button & Ticks */}
-                  <div className="flex items-center justify-between gap-3 mt-2 pt-1 border-t border-white/10 text-[10px]">
+                  <div className="flex items-center justify-between gap-3 mt-2 pt-1 border-t border-ui-line text-[11px]">
                     {/* Done / Reopen controls */}
                     <div className="flex items-center gap-1.5">
                       {isDone ? (
-                        <div className="inline-flex items-center gap-1 text-emerald-400 font-semibold">
+                        <div className="inline-flex items-center gap-1 text-emerald-800 font-semibold">
                           <CheckCircle2 className="w-3 h-3" />
                           <span>Done</span>
                           {isReviewer && (
                             <button
                               type="button"
                               onClick={() => handleToggleDone(msg, false)}
-                              className="ml-1 text-[9px] text-amber-300 hover:underline flex items-center gap-0.5"
+                              className="ml-1 min-h-[44px] px-2 text-[11px] text-amber-800 hover:underline flex items-center gap-0.5"
                             >
                               <RotateCcw className="w-2.5 h-2.5" />
                               <span>Reopen</span>
@@ -363,7 +363,7 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
                           type="button"
                           onClick={() => handleToggleDone(msg, true)}
                           title="Mark feedback as done"
-                          className="min-h-[28px] px-1.5 rounded hover:bg-white/10 text-slate-300 hover:text-white flex items-center gap-1 transition-colors"
+                          className="min-h-[44px] px-2 rounded hover:bg-ui-card-hover text-ui-text hover:text-ui-ink flex items-center gap-1 transition-colors"
                         >
                           <Check className="w-3 h-3" />
                           <span>Mark done</span>
@@ -371,7 +371,7 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-slate-400 ml-auto">
+                    <div className="flex items-center gap-1.5 text-ui-muted ml-auto">
                       {!isReadOnlyRole && (
                         <button
                           type="button"
@@ -379,7 +379,7 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
                             setReplyingTo(msg);
                             inputRef.current?.focus();
                           }}
-                          className="min-h-[28px] px-1.5 rounded hover:bg-white/10 text-slate-300 hover:text-white flex items-center gap-0.5 transition-colors"
+                          className="min-h-[44px] px-2 rounded hover:bg-ui-card-hover text-ui-text hover:text-ui-ink flex items-center gap-0.5 transition-colors"
                         >
                           <Reply className="w-3 h-3" />
                           <span>Reply</span>
@@ -392,9 +392,9 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
                       {isMine && (
                         <span title={isSeenByOther ? 'Seen' : 'Sent'}>
                           {isSeenByOther ? (
-                            <CheckCheck className="w-3.5 h-3.5 text-sky-300 inline" />
+                            <CheckCheck className="w-3.5 h-3.5 text-ui-ink inline" />
                           ) : (
-                            <Check className="w-3 h-3 text-slate-300 inline" />
+                            <Check className="w-3 h-3 text-ui-text inline" />
                           )}
                         </span>
                       )}
@@ -413,7 +413,7 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
         <button
           type="button"
           onClick={jumpToLatest}
-          className="absolute bottom-20 right-4 z-10 px-3 py-1.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg flex items-center gap-1 transition-all active:scale-95"
+          className="absolute bottom-20 right-4 z-10 px-3 py-1.5 rounded-full bg-ui-ink hover:bg-black text-white text-xs font-semibold shadow-lg flex items-center gap-1 transition-all active:scale-95"
         >
           <ArrowDown className="w-3.5 h-3.5" />
           <span>Latest</span>
@@ -422,12 +422,12 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
 
       {/* Reply Quote Banner */}
       {replyingTo && (
-        <div className="px-4 py-2 bg-slate-900 border-t border-white/10 flex items-center justify-between text-xs text-slate-300">
+        <div className="px-4 py-2 bg-white/60 border-t border-ui-line flex items-center justify-between text-xs text-ui-text">
           <div className="flex items-center gap-2 truncate">
-            <Reply className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+            <Reply className="w-3.5 h-3.5 text-ui-ink flex-shrink-0" />
             <span className="truncate">
               Replying to{' '}
-              <strong className="text-indigo-300">
+              <strong className="text-ui-ink">
                 {(replyingTo.authorId as any)?.name || 'User'}
               </strong>
               : {replyingTo.text}
@@ -436,9 +436,9 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
           <button
             type="button"
             onClick={() => setReplyingTo(null)}
-            className="p-1 hover:bg-white/10 rounded transition-colors"
+            className="p-1 hover:bg-white rounded transition-colors"
           >
-            <X className="w-3.5 h-3.5 text-slate-400" />
+            <X className="w-3.5 h-3.5 text-ui-muted" />
           </button>
         </div>
       )}
@@ -447,7 +447,7 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
       {!isReadOnlyRole ? (
         <form
           onSubmit={handleSendMessage}
-          className="p-3 bg-slate-900/90 border-t border-white/10 flex items-end gap-2 flex-shrink-0"
+          className="p-3 bg-white/60 border-t border-ui-line flex items-end gap-2 flex-shrink-0"
         >
           <textarea
             ref={inputRef}
@@ -461,20 +461,22 @@ export const MediaThread: React.FC<MediaThreadProps> = ({
               }
             }}
             placeholder="Type a message or reference time (e.g. at 0:12)..."
-            className="flex-1 bg-white/5 border border-white/15 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 resize-none max-h-24 focus:outline-none min-h-[44px]"
+            aria-label="Message"
+            className="ui-input ui-textarea flex-1 resize-none max-h-24 min-h-[44px]"
           />
 
           <button
             type="submit"
             title="Send message"
+            aria-label="Send message"
             disabled={!inputText.trim() || isSubmitting}
-            className="min-h-[44px] min-w-[44px] rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white flex items-center justify-center transition-all active:scale-95 shadow-md flex-shrink-0"
+            className="min-h-[44px] min-w-[44px] rounded-xl bg-ui-ink hover:bg-black disabled:opacity-40 text-white flex items-center justify-center transition-all active:scale-95 shadow-md flex-shrink-0"
           >
             <Send className="w-4 h-4" />
           </button>
         </form>
       ) : (
-        <div className="p-3 bg-slate-900/60 border-t border-white/10 text-center text-xs text-slate-400 flex-shrink-0">
+        <div className="p-3 bg-white/60 border-t border-ui-line text-center text-xs text-ui-muted flex-shrink-0">
           Thread is read-only for your current role.
         </div>
       )}

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useDialogFocus } from '../../../lib/useDialogFocus';
 import {
   Film,
   FileText,
@@ -76,6 +77,9 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
 
   // Player & Thread view modal / bottom sheet
   const [activeClip, setActiveClip] = useState<MediaItemType | null>(null);
+  // Clip lightbox keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
+  const clipDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(clipDialogRef, Boolean(activeClip), () => setActiveClip(null));
   const [seekSeconds, setSeekSeconds] = useState<number | null>(null);
   const [momentTimestamp, setMomentTimestamp] = useState<string | null>(null);
 
@@ -258,12 +262,12 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
+    <div className="flex flex-col h-full bg-ui-canvas text-ui-ink font-sans overflow-hidden">
       {/* Top Banner / Error notice */}
       {errorBanner && (
-        <div className="p-3 bg-rose-500/20 border-b border-rose-500/40 text-rose-200 text-xs flex items-center justify-between px-6 animate-fadeIn">
+        <div className="status-tint status-changes p-3 border-b text-xs flex items-center justify-between px-6 animate-fadeIn">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-800 flex-shrink-0" />
             <span>{errorBanner}</span>
           </div>
           <button onClick={() => setErrorBanner(null)} className="p-1 hover:bg-rose-500/30 rounded">
@@ -274,9 +278,9 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
 
       {/* Success banner after submit */}
       {submitSuccess && (
-        <div className="p-3 bg-emerald-500/20 border-b border-emerald-500/40 text-emerald-200 text-xs flex items-center justify-between px-6 animate-fadeIn">
+        <div className="status-tint status-approved p-3 border-b text-xs flex items-center justify-between px-6 animate-fadeIn">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-800" />
             <span>Footage submitted for review! The Creative Head will be notified.</span>
           </div>
           <button onClick={() => setSubmitSuccess(false)} className="p-1 hover:bg-emerald-500/30 rounded">
@@ -303,27 +307,27 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Film className="w-4 h-4 text-indigo-400" />
-                <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                <Film className="w-4 h-4 text-ui-ink" />
+                <h2 className="text-sm font-bold text-ui-ink">
                   Footage Clips ({clips.length} of 10)
                 </h2>
               </div>
               {coverageString && (
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-white text-ui-ink border border-ui-ink">
                   {coverageString}
                 </span>
               )}
             </div>
 
             {loading ? (
-              <div className="p-8 text-center text-slate-500 text-xs">
+              <div className="p-8 text-center text-ui-muted text-xs">
                 Loading footage clips...
               </div>
             ) : clips.length === 0 ? (
-              <div className="p-8 border border-white/10 rounded-2xl bg-white/5 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
-                <Film className="w-8 h-8 text-slate-600" />
-                <p className="font-semibold text-slate-300">No clips uploaded yet</p>
-                <p className="text-[11px] text-slate-400">
+              <div className="p-8 border border-ui-line rounded-2xl bg-white/60 text-center text-ui-muted text-xs flex flex-col items-center gap-2">
+                <Film className="w-8 h-8 text-ui-muted" />
+                <p className="font-semibold text-ui-text">No clips uploaded yet</p>
+                <p className="text-[11px] text-ui-muted">
                   Drag and drop clips above, or use your phone camera to record clips directly.
                 </p>
               </div>
@@ -349,19 +353,19 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
           </section>
 
           {/* Persistent Submit Bar at Bottom of Left Panel */}
-          <div className="mt-auto pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 bg-slate-950/90 backdrop-blur-md sticky bottom-0 py-3 z-10">
+          <div className="mt-auto pt-4 border-t border-ui-line flex flex-wrap items-center justify-between gap-3 bg-ui-canvas sticky bottom-0 py-3 z-10">
             <div>
-              <p className="text-xs font-bold text-white">
+              <p className="text-xs font-bold text-ui-ink">
                 {clips.length} clip{clips.length === 1 ? '' : 's'} ready
                 {coverageString ? `, ${coverageString}` : ''}
               </p>
               {submitDisabledReason ? (
-                <p className="text-[11px] text-amber-400 flex items-center gap-1 mt-0.5">
+                <p className="text-[11px] text-amber-800 flex items-center gap-1 mt-0.5">
                   <AlertCircle className="w-3 h-3 flex-shrink-0" />
                   <span>{submitDisabledReason}</span>
                 </p>
               ) : (
-                <p className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
+                <p className="text-[11px] text-emerald-800 flex items-center gap-1 mt-0.5">
                   <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
                   <span>Ready for review submission</span>
                 </p>
@@ -372,7 +376,7 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
               type="button"
               disabled={!isSubmitValid}
               onClick={handleSubmitForApproval}
-              className="min-h-[44px] px-6 rounded-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95 flex items-center gap-2"
+              className="min-h-[44px] px-6 rounded-full bg-ui-ink hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-all shadow-lg active:scale-95 flex items-center gap-2"
             >
               <Send className="w-4 h-4" />
               <span>{isSubmitting ? 'Submitting...' : 'Submit for approval'}</span>
@@ -381,45 +385,48 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
         </div>
 
         {/* Right Docked Panel: Tabs (Shot List, Script, Brief) */}
-        <div className="w-full md:w-80 lg:w-96 bg-slate-900/60 border-t md:border-t-0 md:border-l border-white/10 flex flex-col flex-shrink-0 backdrop-blur-xl">
+        <div className="w-full md:w-80 lg:w-96 bg-white/60 border-t md:border-t-0 md:border-l border-ui-line flex flex-col flex-shrink-0">
           {/* Tabs bar */}
-          <div className="flex items-center border-b border-white/10 bg-slate-900/80 px-2 flex-shrink-0">
+          <div className="flex items-center border-b border-ui-line bg-white/60 px-2 flex-shrink-0">
             <button
               type="button"
               onClick={() => setRightTab('shotlist')}
+              aria-pressed={rightTab === 'shotlist'}
               className={`flex-1 min-h-[44px] py-2.5 text-xs font-bold border-b-2 transition-all flex items-center justify-center gap-1.5 ${
                 rightTab === 'shotlist'
-                  ? 'border-indigo-500 text-white bg-white/5'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'border-ui-ink text-ui-ink bg-white/60'
+                  : 'border-transparent text-ui-muted hover:text-ui-ink'
               }`}
             >
-              <ListChecks className="w-3.5 h-3.5 text-indigo-400" />
+              <ListChecks className="w-3.5 h-3.5 text-ui-ink" />
               <span>Shot List</span>
             </button>
 
             <button
               type="button"
               onClick={() => setRightTab('script')}
+              aria-pressed={rightTab === 'script'}
               className={`flex-1 min-h-[44px] py-2.5 text-xs font-bold border-b-2 transition-all flex items-center justify-center gap-1.5 ${
                 rightTab === 'script'
-                  ? 'border-indigo-500 text-white bg-white/5'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'border-ui-ink text-ui-ink bg-white/60'
+                  : 'border-transparent text-ui-muted hover:text-ui-ink'
               }`}
             >
-              <FileText className="w-3.5 h-3.5 text-emerald-400" />
+              <FileText className="w-3.5 h-3.5 text-emerald-800" />
               <span>Script</span>
             </button>
 
             <button
               type="button"
               onClick={() => setRightTab('brief')}
+              aria-pressed={rightTab === 'brief'}
               className={`flex-1 min-h-[44px] py-2.5 text-xs font-bold border-b-2 transition-all flex items-center justify-center gap-1.5 ${
                 rightTab === 'brief'
-                  ? 'border-indigo-500 text-white bg-white/5'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'border-ui-ink text-ui-ink bg-white/60'
+                  : 'border-transparent text-ui-muted hover:text-ui-ink'
               }`}
             >
-              <Info className="w-3.5 h-3.5 text-amber-400" />
+              <Info className="w-3.5 h-3.5 text-amber-800" />
               <span>Brief</span>
             </button>
           </div>
@@ -430,14 +437,14 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
             {rightTab === 'shotlist' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-200">Shot Coverage Checklist</span>
-                  <span className="text-[11px] font-mono text-slate-400">
+                  <span className="font-semibold text-ui-ink">Shot Coverage Checklist</span>
+                  <span className="text-[11px] font-mono text-ui-muted">
                     {coverageString || `${availableShots.length} shots`}
                   </span>
                 </div>
 
                 {availableShots.length === 0 ? (
-                  <p className="text-slate-500 italic p-4 text-center">
+                  <p className="text-ui-muted italic p-4 text-center">
                     No visual shot list was extracted from the script scenes.
                   </p>
                 ) : (
@@ -457,18 +464,18 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
                           key={idx}
                           className={`p-3 rounded-xl border transition-all ${
                             isCovered
-                              ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
-                              : 'bg-white/5 border-white/10 text-slate-300'
+                              ? 'status-tint status-approved border-ui-line text-emerald-800'
+                              : 'bg-white/60 border-ui-line text-ui-text'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2">
                               {isCovered ? (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                <CheckCircle2 className="w-4 h-4 text-emerald-800 flex-shrink-0" />
                               ) : (
                                 <div className="w-4 h-4 rounded-full border border-slate-500 flex-shrink-0" />
                               )}
-                              <span className="font-bold text-xs text-white">
+                              <span className="font-bold text-xs text-ui-ink">
                                 {shotRefKey}: {shot.visual || 'Scene shot'}
                               </span>
                             </div>
@@ -478,7 +485,7 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleLinkShotToActiveClip(shotRefKey)}
-                                className="min-h-[32px] px-2 rounded bg-indigo-600/60 hover:bg-indigo-600 text-[10px] font-semibold text-white transition-all flex items-center gap-1"
+                                className="min-h-[32px] px-2 rounded bg-white hover:bg-black text-[11px] font-semibold text-ui-ink transition-all flex items-center gap-1"
                               >
                                 <LinkIcon className="w-3 h-3" />
                                 <span>Link</span>
@@ -487,7 +494,7 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
                           </div>
 
                           {shot.audio && (
-                            <p className="text-[11px] text-slate-400 italic mt-1.5 pl-6">
+                            <p className="text-[11px] text-ui-muted italic mt-1.5 pl-6">
                               Audio: "{shot.audio}"
                             </p>
                           )}
@@ -502,13 +509,13 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
             {/* Tab 2: Script Content */}
             {rightTab === 'script' && (
               <div className="space-y-2">
-                <span className="font-semibold text-slate-200">Approved Script</span>
+                <span className="font-semibold text-ui-ink">Approved Script</span>
                 {scriptContent ? (
-                  <div className="p-3 bg-white/5 rounded-xl border border-white/10 text-slate-300 whitespace-pre-wrap leading-relaxed select-text font-serif">
+                  <div className="p-3 bg-white/60 rounded-xl border border-ui-line text-ui-text whitespace-pre-wrap leading-relaxed select-text font-serif">
                     {scriptContent}
                   </div>
                 ) : (
-                  <p className="text-slate-500 italic p-4 text-center">
+                  <p className="text-ui-muted italic p-4 text-center">
                     No approved script available for this content piece yet.
                   </p>
                 )}
@@ -518,42 +525,42 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
             {/* Tab 3: Brief */}
             {rightTab === 'brief' && (
               <div className="space-y-3">
-                <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-2">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                <div className="p-3 bg-white/60 rounded-xl border border-ui-line space-y-2">
+                  <span className="text-[11px] font-bold text-ui-muted">
                     Topic
                   </span>
-                  <p className="font-semibold text-white">{brief?.title || workItem.title}</p>
+                  <p className="font-semibold text-ui-ink">{brief?.title || workItem.title}</p>
 
                   {brief?.description && (
                     <>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block pt-2">
+                      <span className="text-[11px] font-bold text-ui-muted block pt-2">
                         Objective / Brief
                       </span>
-                      <p className="text-slate-300 whitespace-pre-wrap">{brief.description}</p>
+                      <p className="text-ui-text whitespace-pre-wrap">{brief.description}</p>
                     </>
                   )}
 
                   {brief?.targetAudience && (
                     <>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block pt-2">
+                      <span className="text-[11px] font-bold text-ui-muted block pt-2">
                         Target Audience
                       </span>
-                      <p className="text-slate-300">{brief.targetAudience}</p>
+                      <p className="text-ui-text">{brief.targetAudience}</p>
                     </>
                   )}
 
                   {brief?.hookIdea && (
                     <>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block pt-2">
+                      <span className="text-[11px] font-bold text-ui-muted block pt-2">
                         Hook Concept
                       </span>
-                      <p className="text-slate-300 italic">"{brief.hookIdea}"</p>
+                      <p className="text-ui-text italic">"{brief.hookIdea}"</p>
                     </>
                   )}
 
                   {shootDate && (
-                    <div className="pt-2 text-[11px] text-slate-400 flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                    <div className="pt-2 text-[11px] text-ui-muted flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-ui-ink" />
                       <span>Target Date: {new Date(shootDate).toLocaleDateString()}</span>
                     </div>
                   )}
@@ -566,21 +573,28 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
 
       {/* Modal / Bottom Sheet: Large Video Player + WhatsApp Thread */}
       {activeClip && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col md:items-center md:justify-center p-0 md:p-6 animate-fadeIn">
-          <div className="w-full h-full md:max-w-6xl md:max-h-[90vh] bg-slate-900 border border-white/20 rounded-none md:rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 ui-scrim flex flex-col md:items-center md:justify-center p-0 md:p-6">
+          <div
+            ref={clipDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shoot-clip-title"
+            className="glass-modal w-full h-full md:max-w-6xl md:max-h-[90vh] rounded-none md:rounded-3xl flex flex-col overflow-hidden"
+          >
             {/* Modal Header */}
-            <div className="h-14 bg-slate-950/80 border-b border-white/10 px-4 flex items-center justify-between flex-shrink-0">
+            <div className="h-14 bg-white/60 border-b border-ui-line px-4 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2 min-w-0">
-                <Film className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-                <h3 className="text-sm font-bold text-white truncate">{activeClip.title}</h3>
-                <span className="text-xs text-slate-400">
+                <Film className="w-4 h-4 text-ui-ink flex-shrink-0" />
+                <h3 id="shoot-clip-title" className="text-sm font-bold text-ui-ink truncate">{activeClip.title}</h3>
+                <span className="text-xs text-ui-muted">
                   (Take {activeClip.take || 1})
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveClip(null)}
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                aria-label="Close clip"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-white text-ui-muted hover:text-ui-ink transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -600,7 +614,7 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
               </div>
 
               {/* Thread beside player */}
-              <div className="w-full md:w-96 border-t md:border-t-0 md:border-l border-white/10 h-72 md:h-auto flex-shrink-0">
+              <div className="w-full md:w-96 border-t md:border-t-0 md:border-l border-ui-line h-72 md:h-auto flex-shrink-0">
                 <MediaThread
                   clipId={activeClip._id}
                   clipTitle={activeClip.title}

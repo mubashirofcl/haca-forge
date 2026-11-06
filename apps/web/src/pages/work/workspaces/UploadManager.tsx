@@ -282,8 +282,8 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
     <div className="space-y-4">
       {/* Error Banner */}
       {errorBanner && (
-        <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs animate-fadeIn">
-          <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+        <div className="status-tint status-changes flex items-center gap-2 p-3 border rounded-xl text-xs animate-fadeIn">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-800" />
           <span className="flex-1 font-medium">{errorBanner}</span>
           <button
             onClick={() => setErrorBanner(null)}
@@ -301,10 +301,10 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
         onDrop={handleDrop}
         className={`relative border-2 border-dashed rounded-2xl p-6 transition-all duration-200 text-center ${
           disabled
-            ? 'border-white/10 bg-white/5 opacity-50 cursor-not-allowed'
+            ? 'border-ui-line bg-white/60 opacity-50 cursor-not-allowed'
             : isDragging
-            ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10'
-            : 'border-white/15 bg-white/5 hover:border-white/30 hover:bg-white/[0.08]'
+            ? 'border-ui-ink bg-white shadow-lg'
+            : 'border-ui-line bg-white/60 hover:border-ui-line hover:bg-white/[0.08]'
         } backdrop-blur-md`}
       >
         <input
@@ -334,15 +334,15 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
         />
 
         <div className="flex flex-col items-center justify-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500/20 to-purple-500/20 border border-white/20 flex items-center justify-center text-indigo-400">
+          <div className="w-12 h-12 rounded-2xl border border-ui-line flex items-center justify-center text-ui-ink">
             <UploadCloud className="w-6 h-6" />
           </div>
 
           <div>
-            <p className="text-sm font-semibold text-slate-100">
+            <p className="text-sm font-semibold text-ui-ink">
               Drag & drop clips here, or browse files
             </p>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-ui-muted mt-1">
               Supports MP4, MOV, WebM (up to 500 MB) & images. 9:16 vertical recommended.
             </p>
           </div>
@@ -352,7 +352,7 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
               type="button"
               disabled={disabled}
               onClick={() => fileInputRef.current?.click()}
-              className="min-h-[44px] px-5 rounded-full bg-slate-900 border border-white/20 text-white font-medium text-xs hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+              className="min-h-[44px] px-5 rounded-full bg-white/60 border border-ui-line text-ui-ink font-medium text-xs hover:bg-white transition-all shadow-sm active:scale-95 disabled:opacity-50"
             >
               Choose Files
             </button>
@@ -362,14 +362,14 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
               type="button"
               disabled={disabled}
               onClick={() => cameraInputRef.current?.click()}
-              className="min-h-[44px] px-4 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-slate-200 font-medium text-xs flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+              className="min-h-[44px] px-4 rounded-full bg-white/60 hover:bg-white border border-ui-line text-ui-ink font-medium text-xs flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
             >
-              <Camera className="w-4 h-4 text-indigo-300" />
+              <Camera className="w-4 h-4 text-ui-ink" />
               <span>Record Clip</span>
             </button>
           </div>
 
-          <div className="text-[11px] text-slate-400">
+          <div className="text-[11px] text-ui-muted">
             {currentClipsCount} of {maxClips} clips uploaded
           </div>
         </div>
@@ -378,9 +378,9 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
       {/* Active Uploads Queue Cards */}
       {items.length > 0 && (
         <div className="space-y-2.5">
-          <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+          <div className="text-xs font-semibold text-ui-text flex items-center justify-between">
             <span>Upload Queue ({items.length})</span>
-            <span className="text-[11px] text-slate-400 font-normal">
+            <span className="text-[11px] text-ui-muted font-normal">
               2 parallel uploads
             </span>
           </div>
@@ -389,29 +389,29 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
             {items.map((item) => (
               <div
                 key={item.id}
-                className="p-3.5 rounded-xl bg-slate-900/60 border border-white/10 backdrop-blur-md flex flex-col gap-2 transition-all"
+                className="p-3.5 rounded-xl bg-white/60 border border-ui-line flex flex-col gap-2 transition-all"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0 text-slate-300">
+                    <div className="w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0 text-ui-text">
                       {item.kind === 'video' ? (
-                        <FileVideo className="w-4 h-4 text-indigo-400" />
+                        <FileVideo className="w-4 h-4 text-ui-ink" />
                       ) : (
-                        <FileImage className="w-4 h-4 text-emerald-400" />
+                        <FileImage className="w-4 h-4 text-emerald-800" />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-slate-100 truncate">
+                      <p className="text-xs font-medium text-ui-ink truncate">
                         {item.name}
                       </p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-ui-muted">
                         {formatSize(item.sizeBytes)} •{' '}
                         {item.status === 'uploading' && `${item.progress}%`}
                         {item.status === 'queued' && 'Queued'}
                         {item.status === 'paused' && 'Paused'}
                         {item.status === 'completed' && 'Completed'}
                         {item.status === 'error' && (
-                          <span className="text-rose-400">{item.errorMessage || 'Error'}</span>
+                          <span className="text-rose-800">{item.errorMessage || 'Error'}</span>
                         )}
                       </p>
                     </div>
@@ -424,7 +424,7 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
                         type="button"
                         onClick={() => handlePause(item)}
                         title="Pause upload"
-                        className="min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 transition-colors"
+                        className="min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] flex items-center justify-center rounded-lg bg-white/60 hover:bg-white text-ui-text transition-colors"
                       >
                         <Pause className="w-3.5 h-3.5" />
                       </button>
@@ -435,7 +435,7 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
                         type="button"
                         onClick={() => handleResume(item)}
                         title="Resume upload"
-                        className="min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] flex items-center justify-center rounded-lg bg-indigo-600/80 hover:bg-indigo-600 text-white transition-colors"
+                        className="min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] flex items-center justify-center rounded-lg bg-white hover:bg-black text-ui-ink transition-colors"
                       >
                         <Play className="w-3.5 h-3.5" />
                       </button>
@@ -446,14 +446,14 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
                         type="button"
                         onClick={() => handleRetry(item)}
                         title="Retry upload"
-                        className="min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] flex items-center justify-center rounded-lg bg-amber-600/80 hover:bg-amber-600 text-white transition-colors"
+                        className="status-tint status-waiting min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] flex items-center justify-center rounded-lg text-ui-ink transition-colors"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>
                     )}
 
                     {item.status === 'completed' ? (
-                      <div className="w-7 h-7 flex items-center justify-center text-emerald-400">
+                      <div className="w-7 h-7 flex items-center justify-center text-emerald-800">
                         <CheckCircle2 className="w-4 h-4" />
                       </div>
                     ) : (
@@ -461,7 +461,7 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
                         type="button"
                         onClick={() => handleCancel(item)}
                         title="Cancel upload"
-                        className="min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] flex items-center justify-center rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition-colors"
+                        className="min-h-[44px] min-w-[44px] sm:min-h-[32px] sm:min-w-[32px] flex items-center justify-center rounded-lg hover:bg-rose-500/20 text-ui-muted hover:text-rose-800 transition-colors"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -471,9 +471,9 @@ export const UploadManager: React.FC<UploadManagerProps> = ({
 
                 {/* Progress bar */}
                 {item.status === 'uploading' && (
-                  <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                  <div className="w-full bg-white/70 rounded-full h-1.5 overflow-hidden">
                     <div
-                      className="bg-indigo-500 h-1.5 rounded-full transition-all duration-150"
+                      className="bg-ui-ink h-1.5 rounded-full transition-all duration-150"
                       style={{ width: `${item.progress}%` }}
                     />
                   </div>

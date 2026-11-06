@@ -451,30 +451,30 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
   const nextCutVersion = (versions[0]?.versionNumber || 0) + 1;
 
   return (
-    <div className="flex flex-col h-full w-full bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <div className="flex flex-col h-full w-full bg-ui-canvas text-ui-ink overflow-hidden font-sans">
       {/* Top Workspace Header */}
-      <div className="px-5 py-3.5 bg-slate-900/90 backdrop-blur-md border-b border-white/10 flex flex-wrap items-center justify-between gap-3">
+      <div className="px-5 py-3.5 bg-white/60 border-b border-ui-line flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+            <h2 className="text-base sm:text-lg font-bold text-ui-ink tracking-tight">
               {workItem.title}
             </h2>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 font-medium">
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-white text-ui-ink border border-ui-ink font-medium">
               Edit Workspace
             </span>
             {isReel && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">
+              <span className="status-tint status-waiting text-xs px-2 py-0.5 rounded-full border font-medium">
                 Reel Format (9:16, &le;90s)
               </span>
             )}
             {isRevisionRequested && (
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-1 animate-pulse">
+              <span className="status-tint status-changes text-xs px-2.5 py-0.5 rounded-full border font-semibold flex items-center gap-1 motion-safe:animate-pulse">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 Revision Requested (Round #{workItem.revisions || 1})
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-ui-muted mt-0.5">
             Review your master cut, discuss live notes with Creative Head, and submit revised cuts.
           </p>
         </div>
@@ -485,7 +485,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
             <button
               type="button"
               onClick={() => setShowShareModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors shadow-sm"
+              className="px-3 py-1.5 rounded-xl bg-ui-ink hover:bg-black text-white font-semibold text-xs flex items-center gap-1.5 transition-colors shadow-sm"
               title="Share approved cut to chat"
               data-testid="edit-share-to-chat-btn"
             >
@@ -493,10 +493,10 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
               <span>Share to chat</span>
             </button>
           )}
-          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-white/10 text-slate-300 font-mono text-[11px]">
+          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 border border-ui-line text-ui-text font-mono text-[11px]">
             <span
               className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50' : 'bg-slate-500'
+                isConnected ? 'bg-emerald-400 shadow-sm' : 'bg-slate-500'
               }`}
             />
             {isConnected ? 'Live Chat Sync' : 'Connecting...'}
@@ -505,20 +505,21 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center px-4 pt-2 border-b border-white/10 gap-2 bg-slate-900/40 overflow-x-auto">
+      <div className="flex items-center px-4 pt-2 border-b border-ui-line gap-2 bg-white/60 overflow-x-auto">
         <button
           onClick={() => setActiveTab('cut')}
+          aria-pressed={activeTab === 'cut'}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-colors whitespace-nowrap min-h-[44px] ${
             activeTab === 'cut'
-              ? 'bg-slate-950 text-violet-400 border-t-2 border-violet-500'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-ui-canvas text-ui-ink border-t-2 border-ui-ink'
+              : 'text-ui-muted hover:text-ui-ink'
           }`}
           aria-label="Master Cut Upload & Live Chat"
         >
           <Film className="w-4 h-4" />
           <span>Master Cut & Live Chat</span>
           {comments.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.2 rounded-full bg-violet-500/30 text-violet-200 text-[10px] font-mono">
+            <span className="ml-1 px-1.5 py-0.2 rounded-full bg-white text-ui-ink text-[11px] font-mono">
               {comments.length}
             </span>
           )}
@@ -527,10 +528,11 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
         {!readOnly && (
           <button
             onClick={() => setActiveTab('upload')}
+            aria-pressed={activeTab === 'upload'}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-colors whitespace-nowrap min-h-[44px] ${
               activeTab === 'upload'
-                ? 'bg-slate-950 text-violet-400 border-t-2 border-violet-500'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-ui-canvas text-ui-ink border-t-2 border-ui-ink'
+                : 'text-ui-muted hover:text-ui-ink'
             }`}
           >
             <UploadCloud className="w-4 h-4" />
@@ -540,10 +542,11 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
         <button
           onClick={() => setActiveTab('footage')}
+          aria-pressed={activeTab === 'footage'}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-colors whitespace-nowrap min-h-[44px] ${
             activeTab === 'footage'
-              ? 'bg-slate-950 text-violet-400 border-t-2 border-violet-500'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-ui-canvas text-ui-ink border-t-2 border-ui-ink'
+              : 'text-ui-muted hover:text-ui-ink'
           }`}
         >
           <Video className="w-4 h-4" />
@@ -552,10 +555,11 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
         <button
           onClick={() => setActiveTab('script')}
+          aria-pressed={activeTab === 'script'}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-colors whitespace-nowrap min-h-[44px] ${
             activeTab === 'script'
-              ? 'bg-slate-950 text-violet-400 border-t-2 border-violet-500'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-ui-canvas text-ui-ink border-t-2 border-ui-ink'
+              : 'text-ui-muted hover:text-ui-ink'
           }`}
         >
           <FileText className="w-4 h-4" />
@@ -564,10 +568,11 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
         <button
           onClick={() => setActiveTab('versions')}
+          aria-pressed={activeTab === 'versions'}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-colors whitespace-nowrap min-h-[44px] ${
             activeTab === 'versions'
-              ? 'bg-slate-950 text-violet-400 border-t-2 border-violet-500'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-ui-canvas text-ui-ink border-t-2 border-ui-ink'
+              : 'text-ui-muted hover:text-ui-ink'
           }`}
         >
           <History className="w-4 h-4" />
@@ -578,11 +583,11 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
         {errorMsg && (
-          <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center justify-between">
+          <div className="status-tint status-changes p-3.5 rounded-2xl border text-xs flex items-center justify-between">
             <span>{errorMsg}</span>
             <button
               onClick={() => setErrorMsg(null)}
-              className="text-rose-400 hover:text-white font-bold text-xs"
+              className="text-rose-800 hover:text-ui-ink font-bold text-xs"
             >
               Dismiss
             </button>
@@ -594,21 +599,21 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Revision Banner if Revision Requested */}
             {isRevisionRequested && (
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/5">
+              <div className="status-tint status-waiting p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <div className="status-tint status-waiting w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 mt-0.5">
                     <AlertTriangle className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                      <span className="text-xs font-bold text-amber-800">
                         Revision Requested by Creative Head (Round #{workItem.revisions || 1})
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/30 font-semibold">
+                      <span className="status-tint status-waiting text-[11px] px-2 py-0.5 rounded-full border font-semibold">
                         Action Required
                       </span>
                     </div>
-                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                    <p className="text-xs text-ui-text mt-1 leading-relaxed">
                       Creative Head requested changes on this cut. Review the feedback and timestamped notes in the Live Discussion panel on the right, make your adjustments, and upload the revised cut below.
                     </p>
                   </div>
@@ -618,7 +623,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveTab('upload')}
-                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md hover:scale-[1.02] transition-transform whitespace-nowrap"
+                    className="px-4 py-2 rounded-xl bg-ui-ink hover:bg-black text-white font-bold text-xs flex items-center gap-1.5 shadow-md hover:scale-[1.02] transition-transform whitespace-nowrap"
                   >
                     <UploadCloud className="w-4 h-4" />
                     <span>Upload Revised Cut</span>
@@ -631,14 +636,14 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
             {effectiveCutUrl ? (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 {/* Left: Video Player (~60% on desktop) */}
-                <div className="lg:col-span-7 bg-slate-900/80 border border-white/10 rounded-2xl p-4 md:p-5 space-y-3.5 shadow-xl">
+                <div className="lg:col-span-7 bg-white/60 border border-ui-line rounded-2xl p-4 md:p-5 space-y-3.5">
                   {/* Player Top Meta Bar */}
-                  <div className="flex items-center justify-between text-xs pb-1 border-b border-white/5">
+                  <div className="flex items-center justify-between text-xs pb-1 border-b border-ui-line">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-sm">
+                      <span className="font-bold text-ui-ink text-sm">
                         Master Cut v{currentCutVersion}
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 font-mono">
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-white text-ui-ink border border-ui-ink font-mono">
                         Active Submission
                       </span>
                     </div>
@@ -649,7 +654,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                         download
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-[11px] flex items-center gap-1 transition-colors"
+                        className="px-2.5 py-1 rounded-lg bg-white/60 hover:bg-white text-ui-text hover:text-ui-ink text-[11px] flex items-center gap-1 transition-colors"
                         title="Download Video File"
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -659,7 +664,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                         href={effectiveCutUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-[11px] flex items-center gap-1 transition-colors"
+                        className="px-2.5 py-1 rounded-lg bg-white/60 hover:bg-white text-ui-text hover:text-ui-ink text-[11px] flex items-center gap-1 transition-colors"
                         title="Open in new window"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -678,13 +683,13 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                   </div>
 
                   {/* Format & Current Time Info */}
-                  <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                  <div className="flex items-center justify-between text-xs text-ui-muted pt-1">
                     <div className="flex items-center gap-3">
-                      <span className="font-mono text-slate-300 bg-slate-950 px-2 py-0.5 rounded border border-white/10 text-[11px]">
+                      <span className="font-mono text-ui-text bg-ui-canvas px-2 py-0.5 rounded border border-ui-line text-[11px]">
                         Playback: {formatSeconds(currentTime)}
                       </span>
                       {isReel && (
-                        <span className="text-[11px] text-amber-300/90 font-medium">
+                        <span className="text-[11px] text-amber-800 font-medium">
                           9:16 Vertical Reel
                         </span>
                       )}
@@ -696,7 +701,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                         setTaggedTimecode(currentTime);
                         setChatInput((prev) => (prev ? `${prev} @${formatSeconds(currentTime)} ` : `@${formatSeconds(currentTime)} `));
                       }}
-                      className="text-[11px] text-violet-400 hover:text-violet-300 flex items-center gap-1 bg-violet-500/10 hover:bg-violet-500/20 px-2 py-0.5 rounded border border-violet-500/20 transition-colors"
+                      className="text-[11px] text-ui-ink hover:text-ui-ink flex items-center gap-1 bg-white hover:bg-white px-2 py-0.5 rounded border border-ui-ink transition-colors"
                       title="Insert current video timestamp into chat"
                     >
                       <Clock className="w-3 h-3" />
@@ -706,34 +711,34 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                 </div>
 
                 {/* Right: Live Chat & Feedback Discussion (~40% on desktop) */}
-                <div className="lg:col-span-5 bg-slate-900/90 border border-white/10 rounded-2xl flex flex-col h-[600px] shadow-xl overflow-hidden">
+                <div className="lg:col-span-5 bg-white/60 border border-ui-line rounded-2xl flex flex-col h-[600px] overflow-hidden">
                   {/* Chat Header */}
-                  <div className="p-3.5 bg-slate-900 border-b border-white/10 flex items-center justify-between">
+                  <div className="p-3.5 bg-white/60 border-b border-ui-line flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <MessageSquare className="w-4 h-4 text-violet-400" />
-                      <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                      <MessageSquare className="w-4 h-4 text-ui-ink" />
+                      <h3 className="text-xs font-bold text-ui-ink">
                         Live Discussion & Feedback
                       </h3>
-                      <span className="px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[10px] font-mono">
+                      <span className="px-1.5 py-0.5 rounded-full bg-white/70 text-ui-text text-[11px] font-mono">
                         {comments.length}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-[10px] font-mono text-emerald-400 uppercase font-semibold">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 motion-safe:animate-pulse" />
+                      <span className="text-[11px] font-mono text-emerald-800 font-semibold">
                         Live
                       </span>
                     </div>
                   </div>
 
                   {/* Scrollable Messages Stream */}
-                  <div className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-slate-950/40">
+                  <div className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-white/60">
                     {comments.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
-                        <MessageSquare className="w-8 h-8 text-slate-600 mb-2 stroke-1" />
-                        <p className="text-xs font-medium text-slate-300">No review comments yet</p>
-                        <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
+                      <div className="h-full flex flex-col items-center justify-center text-center p-6 text-ui-muted">
+                        <MessageSquare className="w-8 h-8 text-ui-muted mb-2 stroke-1" />
+                        <p className="text-xs font-medium text-ui-text">No review comments yet</p>
+                        <p className="text-[11px] text-ui-muted mt-1 max-w-xs">
                           Start the conversation with Creative Head below or tag specific moments in the video cut.
                         </p>
                       </div>
@@ -763,28 +768,28 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                             key={comment.id}
                             className={`p-3 rounded-xl border transition-all text-xs space-y-1.5 ${
                               isReviewer
-                                ? 'bg-purple-950/30 border-purple-500/30 text-purple-100'
-                                : 'bg-slate-900/80 border-white/10 text-slate-200'
+                                ? 'bg-white border-ui-ink text-ui-ink'
+                                : 'bg-white/60 border-ui-line text-ui-ink'
                             }`}
                           >
                             {/* Author & Timestamp */}
                             <div className="flex items-center justify-between text-[11px]">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-white">
+                                <span className="font-bold text-ui-ink">
                                   {comment.authorName || (isReviewer ? 'Creative Head' : 'Video Editor')}
                                 </span>
                                 <span
-                                  className={`text-[9px] px-1.5 py-0.2 rounded-full font-semibold uppercase ${
+                                  className={`text-[11px] px-1.5 py-0.2 rounded-full font-semibold ${
                                     isReviewer
-                                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                      : 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                                      ? 'bg-white text-ui-ink border border-ui-ink'
+                                      : 'bg-white text-ui-ink border border-ui-ink'
                                   }`}
                                 >
                                   {isReviewer ? 'Creative Head' : 'Video Editor'}
                                 </span>
                               </div>
 
-                              <div className="flex items-center gap-1.5 text-slate-400 text-[10px]">
+                              <div className="flex items-center gap-1.5 text-ui-muted text-[11px]">
                                 {comment.createdAt && (
                                   <span>{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 )}
@@ -796,7 +801,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleSeekToTime(comment.timecode)}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-mono border border-amber-500/30 cursor-pointer transition-colors"
+                                className="status-tint status-waiting inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono border cursor-pointer transition-colors"
                                 title="Click to seek player to this timecode"
                               >
                                 <Play className="w-2.5 h-2.5 fill-current" />
@@ -805,28 +810,28 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                             )}
 
                             {/* Comment Text */}
-                            <p className={`leading-relaxed text-xs ${isResolved ? 'line-through text-slate-500' : ''}`}>
+                            <p className={`leading-relaxed text-xs ${isResolved ? 'line-through text-ui-muted' : ''}`}>
                               {comment.content}
                             </p>
 
                             {/* Resolution checkbox if from reviewer */}
                             {isReviewer && (
-                              <div className="pt-1 flex items-center justify-between border-t border-white/5 text-[11px]">
+                              <div className="pt-1 flex items-center justify-between border-t border-ui-line text-[11px]">
                                 <button
                                   type="button"
                                   onClick={() => toggleCheckComment(comment.id)}
                                   className={`flex items-center gap-1.5 text-[11px] font-medium transition-colors cursor-pointer ${
-                                    isResolved ? 'text-emerald-400' : 'text-slate-400 hover:text-white'
+                                    isResolved ? 'text-emerald-800' : 'text-ui-muted hover:text-ui-ink'
                                   }`}
                                 >
                                   {isResolved ? (
                                     <>
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-800" />
                                       <span>Addressed & Fixed</span>
                                     </>
                                   ) : (
                                     <>
-                                      <Square className="w-3.5 h-3.5 text-slate-500" />
+                                      <Square className="w-3.5 h-3.5 text-ui-muted" />
                                       <span>Mark addressed</span>
                                     </>
                                   )}
@@ -843,10 +848,10 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                   {/* Chat Input Bar */}
                   <form
                     onSubmit={handleSendChat}
-                    className="p-3 bg-slate-900 border-t border-white/10 space-y-2"
+                    className="p-3 bg-white/60 border-t border-ui-line space-y-2"
                   >
                     {taggedTimecode != null && (
-                      <div className="flex items-center justify-between px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
+                      <div className="status-tint status-waiting flex items-center justify-between px-2.5 py-1 rounded-md border text-[11px]">
                         <span className="flex items-center gap-1 font-mono">
                           <Clock className="w-3 h-3" />
                           Referencing moment: @{formatSeconds(taggedTimecode)}
@@ -854,7 +859,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                         <button
                           type="button"
                           onClick={() => setTaggedTimecode(null)}
-                          className="text-amber-400 hover:text-white font-bold text-xs"
+                          className="text-amber-800 hover:text-ui-ink font-bold text-xs"
                         >
                           &times;
                         </button>
@@ -871,14 +876,16 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                             ? 'Type review feedback or a message for the editor...'
                             : 'Type a message or response to Creative Head...'
                         }
-                        className="flex-1 text-xs px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        aria-label="Message"
+                        className="ui-input flex-1 min-w-0"
                       />
 
                       <button
                         type="submit"
                         disabled={!chatInput.trim() || isSendingChat}
-                        className="px-3.5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold text-xs flex items-center justify-center transition-all cursor-pointer shadow-md"
+                        className="min-h-[44px] min-w-[44px] px-3.5 rounded-xl bg-ui-ink hover:bg-black disabled:opacity-40 text-white font-semibold text-xs flex items-center justify-center transition-colors"
                         title="Send message"
+                        aria-label="Send message"
                       >
                         <Send className="w-3.5 h-3.5" />
                       </button>
@@ -891,13 +898,13 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
               <div className="max-w-3xl mx-auto space-y-6">
                 {/* Revision Checklist (if revision comments exist) */}
                 {comments.length > 0 && (
-                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-3">
+                  <div className="status-tint status-waiting p-4 rounded-2xl border space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
                         <CheckSquare className="w-4 h-4" />
                         Revision Checklist (Tick off addressed feedback)
                       </h4>
-                      <span className="text-[11px] font-mono text-amber-300 font-semibold">
+                      <span className="text-[11px] font-mono text-amber-800 font-semibold">
                         {Object.values(checkedComments).filter(Boolean).length} of {comments.length} resolved
                       </span>
                     </div>
@@ -910,8 +917,8 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                             onClick={() => toggleCheckComment(comment.id)}
                             className={`p-2.5 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-all ${
                               isChecked
-                                ? 'bg-emerald-950/40 border-emerald-500/40 text-slate-300'
-                                : 'bg-slate-900/80 border-white/10 text-slate-200'
+                                ? 'status-tint status-approved border-ui-line text-ui-text'
+                                : 'bg-white/60 border-ui-line text-ui-ink'
                             }`}
                           >
                             <button
@@ -922,22 +929,22 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                                 e.stopPropagation();
                                 toggleCheckComment(comment.id);
                               }}
-                              className="mt-0.5 text-indigo-400"
+                              className="-m-3 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-ui-ink shrink-0"
                               aria-label={isChecked ? 'Mark pending' : 'Mark fixed'}
                             >
                               {isChecked ? (
-                                <CheckSquare className="w-4 h-4 text-emerald-400" />
+                                <CheckSquare className="w-4 h-4 text-emerald-800" />
                               ) : (
-                                <Square className="w-4 h-4 text-slate-500" />
+                                <Square className="w-4 h-4 text-ui-muted" />
                               )}
                             </button>
                             <div className="text-xs">
                               {comment.timecode != null && (
-                                <span className="font-mono text-amber-400 mr-1.5 font-bold">
+                                <span className="font-mono text-amber-800 mr-1.5 font-bold">
                                   @{formatSeconds(comment.timecode)}
                                 </span>
                               )}
-                              <span className={isChecked ? 'line-through text-slate-500' : ''}>
+                              <span className={isChecked ? 'line-through text-ui-muted' : ''}>
                                 {comment.content}
                               </span>
                             </div>
@@ -951,13 +958,13 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                 {/* Upload Area */}
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-8 border-2 border-dashed border-white/20 hover:border-violet-500/60 rounded-2xl bg-white/5 hover:bg-white/[0.08] transition-all flex flex-col items-center justify-center text-center cursor-pointer group"
+                  className="p-8 border-2 border-dashed border-ui-line hover:border-ui-ink rounded-2xl bg-white/60 hover:bg-white/[0.08] transition-all flex flex-col items-center justify-center text-center cursor-pointer group"
                 >
-                  <div className="w-14 h-14 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <div className="w-14 h-14 rounded-2xl bg-white border border-ui-ink text-ui-ink flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                     <UploadCloud className="w-7 h-7" />
                   </div>
-                  <h3 className="text-sm font-semibold text-white">Upload Rendered Master Cut</h3>
-                  <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                  <h3 className="text-sm font-semibold text-ui-ink">Upload Rendered Master Cut</h3>
+                  <p className="text-xs text-ui-muted mt-1 max-w-sm">
                     MP4, MOV, or WebM up to 500 MB. Non-blocking reel aspect ratio & duration pre-flight checks.
                   </p>
                   <input
@@ -971,25 +978,25 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
                 {/* Active Upload Status */}
                 {file && (
-                  <div className="p-4 rounded-xl bg-slate-900/80 border border-white/10 space-y-2">
+                  <div className="p-4 rounded-xl bg-white/60 border border-ui-line space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-white truncate">{file.name}</span>
-                      <span className="text-slate-400 font-mono">
+                      <span className="font-semibold text-ui-ink truncate">{file.name}</span>
+                      <span className="text-ui-muted font-mono">
                         {(file.size / (1024 * 1024)).toFixed(1)} MB
                       </span>
                     </div>
-                    <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
+                    <div className="w-full bg-ui-canvas rounded-full h-1.5 overflow-hidden">
                       <div
                         className={`h-full transition-all duration-200 ${
-                          uploadStatus === 'completed' ? 'bg-emerald-500' : 'bg-violet-500'
+                          uploadStatus === 'completed' ? 'bg-ui-ink' : 'bg-ui-ink'
                         }`}
                         style={{ width: `${uploadProgress}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <div className="flex items-center justify-between text-[11px] text-ui-muted">
                       <span>
                         {uploadStatus === 'completed' && (
-                          <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                          <span className="text-emerald-800 flex items-center gap-1 font-semibold">
                             <CheckCircle className="w-3.5 h-3.5" /> Upload complete & verified
                           </span>
                         )}
@@ -1003,7 +1010,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                                 setUploadStatus('idle');
                                 setFile(null);
                               }}
-                              className="text-rose-400 hover:text-rose-300 underline text-[10px]"
+                              className="text-rose-800 hover:text-rose-800 underline text-[11px]"
                             >
                               Cancel
                             </button>
@@ -1011,7 +1018,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                         )}
                       </span>
                       {videoMeta?.duration && (
-                        <span className="font-mono text-slate-300">
+                        <span className="font-mono text-ui-text">
                           Duration: {Math.round(videoMeta.duration)}s |{' '}
                           {videoMeta.width}x{videoMeta.height}
                         </span>
@@ -1022,13 +1029,13 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
                 {/* Pre-Flight Non-Blocking Warning Banners */}
                 {warnings.length > 0 && (
-                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-1">
-                    <div className="font-bold flex items-center gap-1.5 text-amber-300">
-                      <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  <div className="status-tint status-waiting p-3.5 rounded-xl border text-xs space-y-1">
+                    <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                      <AlertTriangle className="w-4 h-4 text-amber-800" />
                       Pre-Flight Creative Warnings (Non-Blocking)
                     </div>
                     {warnings.map((w, idx) => (
-                      <p key={idx} className="pl-5 text-amber-200/90">
+                      <p key={idx} className="pl-5 text-amber-800">
                         &bull; {w}
                       </p>
                     ))}
@@ -1037,15 +1044,16 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
                 {/* Edit Notes */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">
+                  <label htmlFor="edit-field-1" className="text-xs font-semibold text-ui-text">
                     Editor Notes (Audio mix, Color grading, Cut highlights)
                   </label>
                   <textarea
+                    id="edit-field-1"
                     value={editNotes}
                     onChange={(e) => setEditNotes(e.target.value)}
                     rows={3}
                     placeholder="e.g. Added background track at -18dB. Color graded with warm contrast."
-                    className="w-full text-xs p-3 rounded-xl bg-slate-900/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="ui-input ui-textarea w-full"
                   />
                 </div>
 
@@ -1054,21 +1062,22 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowLinkFallback(!showLinkFallback)}
-                    className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1"
+                    className="text-xs text-ui-ink hover:text-ui-ink flex items-center gap-1"
                   >
                     <LinkIcon className="w-3.5 h-3.5" />
                     {showLinkFallback ? 'Hide Backup Frame.io / Drive Link' : '+ Add Backup Cloud Link'}
                   </button>
 
                   {showLinkFallback && (
-                    <div className="mt-2 p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
-                      <label className="text-xs text-slate-400">External Preview Link:</label>
+                    <div className="mt-2 p-3 rounded-xl bg-white/60 border border-ui-line space-y-2">
+                      <label htmlFor="edit-field-2" className="text-xs text-ui-muted">External Preview Link:</label>
                       <input
+                        id="edit-field-2"
                         type="url"
                         value={fallbackUrl}
                         onChange={(e) => setFallbackUrl(e.target.value)}
                         placeholder="https://app.frame.io/player/..."
-                        className="w-full text-xs p-2.5 rounded-lg bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                        className="ui-input w-full font-mono"
                       />
                     </div>
                   )}
@@ -1080,7 +1089,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                     type="button"
                     disabled={isSubmitting}
                     onClick={handleSubmit}
-                    className="min-h-[44px] px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold text-sm transition-all shadow-lg hover:shadow-violet-500/25 flex items-center gap-2 cursor-pointer"
+                    className="min-h-[44px] px-6 py-2.5 rounded-xl bg-ui-ink hover:bg-black disabled:opacity-40 text-white font-semibold text-sm transition-all shadow-lg flex items-center gap-2 cursor-pointer"
                   >
                     <Send className="w-4 h-4" />
                     {isSubmitting ? 'Submitting Cut...' : 'Submit for Approval'}
@@ -1093,12 +1102,12 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
             {hasExistingCut && (
               <div
                 ref={uploadSectionRef}
-                className="mt-8 p-6 rounded-2xl bg-slate-900/70 border border-white/10 space-y-4"
+                className="mt-8 p-6 rounded-2xl bg-white/60 border border-ui-line space-y-4"
               >
                 {readOnly ? (
-                  <div className="p-4 rounded-xl bg-slate-950/60 border border-white/10 flex items-center justify-between text-xs text-slate-300">
+                  <div className="p-4 rounded-xl bg-white/60 border border-ui-line flex items-center justify-between text-xs text-ui-text">
                     <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-violet-400" />
+                      <Clock className="w-4 h-4 text-ui-ink" />
                       <span>
                         Deliverable is currently in <strong>{workItem.status || 'Feedback'}</strong> status.
                         New uploads are disabled while waiting for decision or review.
@@ -1107,13 +1116,13 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div className="flex items-center justify-between border-b border-ui-line pb-3">
                       <div>
-                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          <UploadCloud className="w-4 h-4 text-violet-400" />
+                        <h3 className="text-sm font-bold text-ui-ink flex items-center gap-2">
+                          <UploadCloud className="w-4 h-4 text-ui-ink" />
                           Upload Revised Cut (Cut v{nextCutVersion})
                         </h3>
-                        <p className="text-xs text-slate-400 mt-0.5">
+                        <p className="text-xs text-ui-muted mt-0.5">
                           Upload your updated export after incorporating revision notes.
                         </p>
                       </div>
@@ -1122,15 +1131,15 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                     {/* Upload dropzone */}
                     <div
                       onClick={() => fileInputRef.current?.click()}
-                      className="p-6 border-2 border-dashed border-white/20 hover:border-violet-500/60 rounded-xl bg-white/5 hover:bg-white/[0.08] transition-all flex flex-col items-center justify-center text-center cursor-pointer group"
+                      className="p-6 border-2 border-dashed border-ui-line hover:border-ui-ink rounded-xl bg-white/60 hover:bg-white/[0.08] transition-all flex flex-col items-center justify-center text-center cursor-pointer group"
                     >
-                      <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                      <div className="w-12 h-12 rounded-xl bg-white border border-ui-ink text-ui-ink flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
                         <UploadCloud className="w-6 h-6" />
                       </div>
-                      <h4 className="text-xs font-semibold text-white">
+                      <h4 className="text-xs font-semibold text-ui-ink">
                         Select New Video Cut (MP4, MOV, WebM up to 500 MB)
                       </h4>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
+                      <p className="text-[11px] text-ui-muted mt-0.5">
                         Click or drag & drop file to replace or upload Cut v{nextCutVersion}
                       </p>
                       <input
@@ -1144,25 +1153,25 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
                     {/* Active Upload Status */}
                     {file && (
-                      <div className="p-3.5 rounded-xl bg-slate-950 border border-white/10 space-y-2">
+                      <div className="p-3.5 rounded-xl bg-ui-canvas border border-ui-line space-y-2">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-white truncate">{file.name}</span>
-                          <span className="text-slate-400 font-mono text-[11px]">
+                          <span className="font-semibold text-ui-ink truncate">{file.name}</span>
+                          <span className="text-ui-muted font-mono text-[11px]">
                             {(file.size / (1024 * 1024)).toFixed(1)} MB
                           </span>
                         </div>
-                        <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                        <div className="w-full bg-white/60 rounded-full h-1.5 overflow-hidden">
                           <div
                             className={`h-full transition-all duration-200 ${
-                              uploadStatus === 'completed' ? 'bg-emerald-500' : 'bg-violet-500'
+                              uploadStatus === 'completed' ? 'bg-ui-ink' : 'bg-ui-ink'
                             }`}
                             style={{ width: `${uploadProgress}%` }}
                           />
                         </div>
-                        <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <div className="flex items-center justify-between text-[11px] text-ui-muted">
                           <span>
                             {uploadStatus === 'completed' && (
-                              <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                              <span className="text-emerald-800 flex items-center gap-1 font-semibold">
                                 <CheckCircle className="w-3.5 h-3.5" /> Upload complete & verified
                               </span>
                             )}
@@ -1176,7 +1185,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                                     setUploadStatus('idle');
                                     setFile(null);
                                   }}
-                                  className="text-rose-400 hover:text-rose-300 underline text-[10px]"
+                                  className="text-rose-800 hover:text-rose-800 underline text-[11px]"
                                 >
                                   Cancel
                                 </button>
@@ -1184,7 +1193,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                             )}
                           </span>
                           {videoMeta?.duration && (
-                            <span className="font-mono text-slate-300">
+                            <span className="font-mono text-ui-text">
                               {Math.round(videoMeta.duration)}s | {videoMeta.width}x{videoMeta.height}
                             </span>
                           )}
@@ -1194,15 +1203,16 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
                     {/* Notes & Submit */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-300">
+                      <label htmlFor="edit-field-3" className="text-xs font-semibold text-ui-text">
                         Revision Notes (What did you adjust in this cut?)
                       </label>
                       <textarea
+                        id="edit-field-3"
                         value={editNotes}
                         onChange={(e) => setEditNotes(e.target.value)}
                         rows={2}
                         placeholder="e.g. Adjusted pacing at 0:14, cleaned audio noise, refined color grade."
-                        className="w-full text-xs p-3 rounded-xl bg-slate-950 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        className="ui-input ui-textarea w-full"
                       />
                     </div>
 
@@ -1211,7 +1221,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                         type="button"
                         disabled={isSubmitting || (!uploadedUrl && !fallbackUrl.trim())}
                         onClick={handleSubmit}
-                        className="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                        className="px-6 py-2.5 rounded-xl bg-ui-ink hover:bg-black disabled:opacity-40 text-white font-semibold text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
                       >
                         <Send className="w-4 h-4" />
                         {isSubmitting ? 'Submitting Revised Cut...' : `Submit Cut v${nextCutVersion} for Approval`}
@@ -1227,16 +1237,16 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
         {/* TAB 2: UPLOAD (DEDICATED FULL TAB) */}
         {activeTab === 'upload' && (
           readOnly ? (
-            <div className="max-w-3xl mx-auto p-6 rounded-2xl bg-slate-900/80 border border-white/10 text-center space-y-3">
-              <Clock className="w-8 h-8 text-violet-400 mx-auto" />
-              <h3 className="text-sm font-bold text-white">Uploads Disabled in Read-Only Mode</h3>
-              <p className="text-xs text-slate-400">
+            <div className="max-w-3xl mx-auto p-6 rounded-2xl bg-white/60 border border-ui-line text-center space-y-3">
+              <Clock className="w-8 h-8 text-ui-ink mx-auto" />
+              <h3 className="text-sm font-bold text-ui-ink">Uploads Disabled in Read-Only Mode</h3>
+              <p className="text-xs text-ui-muted">
                 This item is currently in {workItem.status || 'review'}. Switch to Master Cut & Live Chat to review feedback.
               </p>
               <button
                 type="button"
                 onClick={() => setActiveTab('cut')}
-                className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs"
+                className="px-4 py-2 rounded-xl bg-ui-ink hover:bg-black text-white font-semibold text-xs"
               >
                 Go to Master Cut & Live Chat
               </button>
@@ -1245,13 +1255,13 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
           <div className="max-w-3xl mx-auto space-y-6">
             {/* Revision Checklist (if revision comments exist) */}
             {comments.length > 0 && (
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-3">
+              <div className="status-tint status-waiting p-4 rounded-2xl border space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <h4 className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
                     <CheckSquare className="w-4 h-4" />
                     Revision Checklist (Tick off addressed feedback)
                   </h4>
-                  <span className="text-[11px] font-mono text-amber-300 font-semibold">
+                  <span className="text-[11px] font-mono text-amber-800 font-semibold">
                     {Object.values(checkedComments).filter(Boolean).length} of {comments.length} resolved
                   </span>
                 </div>
@@ -1264,29 +1274,30 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                         onClick={() => toggleCheckComment(comment.id)}
                         className={`p-2.5 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-all ${
                           isChecked
-                            ? 'bg-emerald-950/40 border-emerald-500/40 text-slate-300'
-                            : 'bg-slate-900/80 border-white/10 text-slate-200'
+                            ? 'status-tint status-approved border-ui-line text-ui-text'
+                            : 'bg-white/60 border-ui-line text-ui-ink'
                         }`}
                       >
                         <button
                           type="button"
                           role="checkbox"
                           aria-checked={isChecked}
-                          className="mt-0.5 text-indigo-400"
+                          aria-label={isChecked ? 'Mark pending' : 'Mark fixed'}
+                          className="-m-3 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-ui-ink shrink-0"
                         >
                           {isChecked ? (
-                            <CheckSquare className="w-4 h-4 text-emerald-400" />
+                            <CheckSquare className="w-4 h-4 text-emerald-800" />
                           ) : (
-                            <Square className="w-4 h-4 text-slate-500" />
+                            <Square className="w-4 h-4 text-ui-muted" />
                           )}
                         </button>
                         <div className="text-xs">
                           {comment.timecode != null && (
-                            <span className="font-mono text-amber-400 mr-1.5 font-bold">
+                            <span className="font-mono text-amber-800 mr-1.5 font-bold">
                               @{formatSeconds(comment.timecode)}
                             </span>
                           )}
-                          <span className={isChecked ? 'line-through text-slate-500' : ''}>
+                          <span className={isChecked ? 'line-through text-ui-muted' : ''}>
                             {comment.content}
                           </span>
                         </div>
@@ -1300,13 +1311,13 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
             {/* Upload Area */}
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="p-8 border-2 border-dashed border-white/20 hover:border-violet-500/60 rounded-2xl bg-white/5 hover:bg-white/[0.08] transition-all flex flex-col items-center justify-center text-center cursor-pointer group"
+              className="p-8 border-2 border-dashed border-ui-line hover:border-ui-ink rounded-2xl bg-white/60 hover:bg-white/[0.08] transition-all flex flex-col items-center justify-center text-center cursor-pointer group"
             >
-              <div className="w-14 h-14 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <div className="w-14 h-14 rounded-2xl bg-white border border-ui-ink text-ui-ink flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                 <UploadCloud className="w-7 h-7" />
               </div>
-              <h3 className="text-sm font-semibold text-white">Upload Rendered Master Cut</h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm">
+              <h3 className="text-sm font-semibold text-ui-ink">Upload Rendered Master Cut</h3>
+              <p className="text-xs text-ui-muted mt-1 max-w-sm">
                 MP4, MOV, or WebM up to 500 MB. Non-blocking reel aspect ratio & duration pre-flight checks.
               </p>
               <input
@@ -1320,25 +1331,25 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
             {/* Active Upload Status */}
             {file && (
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-white/10 space-y-2">
+              <div className="p-4 rounded-xl bg-white/60 border border-ui-line space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-white truncate">{file.name}</span>
-                  <span className="text-slate-400 font-mono">
+                  <span className="font-semibold text-ui-ink truncate">{file.name}</span>
+                  <span className="text-ui-muted font-mono">
                     {(file.size / (1024 * 1024)).toFixed(1)} MB
                   </span>
                 </div>
-                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
+                <div className="w-full bg-ui-canvas rounded-full h-1.5 overflow-hidden">
                   <div
                     className={`h-full transition-all duration-200 ${
-                      uploadStatus === 'completed' ? 'bg-emerald-500' : 'bg-violet-500'
+                      uploadStatus === 'completed' ? 'bg-ui-ink' : 'bg-ui-ink'
                     }`}
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                <div className="flex items-center justify-between text-[11px] text-ui-muted">
                   <span>
                     {uploadStatus === 'completed' && (
-                      <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                      <span className="text-emerald-800 flex items-center gap-1 font-semibold">
                         <CheckCircle className="w-3.5 h-3.5" /> Upload complete & verified
                       </span>
                     )}
@@ -1352,7 +1363,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                             setUploadStatus('idle');
                             setFile(null);
                           }}
-                          className="text-rose-400 hover:text-rose-300 underline text-[10px]"
+                          className="text-rose-800 hover:text-rose-800 underline text-[11px]"
                         >
                           Cancel
                         </button>
@@ -1360,7 +1371,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                     )}
                   </span>
                   {videoMeta?.duration && (
-                    <span className="font-mono text-slate-300">
+                    <span className="font-mono text-ui-text">
                       Duration: {Math.round(videoMeta.duration)}s |{' '}
                       {videoMeta.width}x{videoMeta.height}
                     </span>
@@ -1371,13 +1382,13 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
             {/* Pre-Flight Non-Blocking Warning Banners */}
             {warnings.length > 0 && (
-              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-amber-300">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+              <div className="status-tint status-waiting p-3.5 rounded-xl border text-xs space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                  <AlertTriangle className="w-4 h-4 text-amber-800" />
                   Pre-Flight Creative Warnings (Non-Blocking)
                 </div>
                 {warnings.map((w, idx) => (
-                  <p key={idx} className="pl-5 text-amber-200/90">
+                  <p key={idx} className="pl-5 text-amber-800">
                     &bull; {w}
                   </p>
                 ))}
@@ -1386,15 +1397,16 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
             {/* Edit Notes */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">
+              <label htmlFor="edit-field-4" className="text-xs font-semibold text-ui-text">
                 Editor Notes (Audio mix, Color grading, Cut highlights)
               </label>
               <textarea
+                id="edit-field-4"
                 value={editNotes}
                 onChange={(e) => setEditNotes(e.target.value)}
                 rows={3}
                 placeholder="e.g. Added background track at -18dB. Color graded with warm contrast."
-                className="w-full text-xs p-3 rounded-xl bg-slate-900/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="ui-input ui-textarea w-full"
               />
             </div>
 
@@ -1403,21 +1415,22 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
               <button
                 type="button"
                 onClick={() => setShowLinkFallback(!showLinkFallback)}
-                className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1"
+                className="text-xs text-ui-ink hover:text-ui-ink flex items-center gap-1"
               >
                 <LinkIcon className="w-3.5 h-3.5" />
                 {showLinkFallback ? 'Hide Backup Frame.io / Drive Link' : '+ Add Backup Cloud Link'}
               </button>
 
               {showLinkFallback && (
-                <div className="mt-2 p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
-                  <label className="text-xs text-slate-400">External Preview Link:</label>
+                <div className="mt-2 p-3 rounded-xl bg-white/60 border border-ui-line space-y-2">
+                  <label htmlFor="edit-field-5" className="text-xs text-ui-muted">External Preview Link:</label>
                   <input
+                    id="edit-field-5"
                     type="url"
                     value={fallbackUrl}
                     onChange={(e) => setFallbackUrl(e.target.value)}
                     placeholder="https://app.frame.io/player/..."
-                    className="w-full text-xs p-2.5 rounded-lg bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                    className="ui-input w-full font-mono"
                   />
                 </div>
               )}
@@ -1429,7 +1442,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleSubmit}
-                className="min-h-[44px] px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold text-sm transition-all shadow-lg hover:shadow-violet-500/25 flex items-center gap-2 cursor-pointer"
+                className="min-h-[44px] px-6 py-2.5 rounded-xl bg-ui-ink hover:bg-black disabled:opacity-40 text-white font-semibold text-sm transition-all shadow-lg flex items-center gap-2 cursor-pointer"
               >
                 <Send className="w-4 h-4" />
                 {isSubmitting ? 'Submitting Cut...' : 'Submit for Approval'}
@@ -1442,20 +1455,20 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
         {/* TAB 3: RAW FOOTAGE (Read-only) */}
         {activeTab === 'footage' && (
           <div className="max-w-3xl mx-auto space-y-3">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-2">
+            <h3 className="text-sm font-bold text-ui-ink mb-2">
               Approved Footage Packages
             </h3>
             {rawFootage.length === 0 ? (
-              <p className="text-xs text-slate-500">No raw footage clips attached.</p>
+              <p className="text-xs text-ui-muted">No raw footage clips attached.</p>
             ) : (
               rawFootage.map((clip: any, idx: number) => (
                 <div
                   key={clip.id || idx}
-                  className="p-3.5 rounded-xl bg-slate-900/80 border border-white/10 flex items-center justify-between gap-3 text-xs"
+                  className="p-3.5 rounded-xl bg-white/60 border border-ui-line flex items-center justify-between gap-3 text-xs"
                 >
                   <div className="flex items-center gap-2 truncate">
-                    <Video className="w-4 h-4 text-violet-400 flex-shrink-0" />
-                    <span className="font-semibold text-white truncate">
+                    <Video className="w-4 h-4 text-ui-ink flex-shrink-0" />
+                    <span className="font-semibold text-ui-ink truncate">
                       {clip.name || `Footage Clip #${idx + 1}`}
                     </span>
                   </div>
@@ -1467,7 +1480,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                         setActiveVideoUrl(clip.url);
                         setActiveTab('cut');
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-violet-600/30 hover:bg-violet-600/50 text-violet-200 flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 rounded-lg bg-white hover:bg-white text-ui-ink flex items-center gap-1.5 transition-colors"
                       title="Load clip in player"
                     >
                       <Eye className="w-3.5 h-3.5" />
@@ -1477,7 +1490,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                       href={clip.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 rounded-lg bg-white/60 hover:bg-white text-ui-ink flex items-center gap-1.5 transition-colors"
                     >
                       <Download className="w-3.5 h-3.5" />
                       Download
@@ -1491,11 +1504,11 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
         {/* TAB 4: SCRIPT (Read-only) */}
         {activeTab === 'script' && (
-          <div className="max-w-3xl mx-auto p-6 rounded-2xl bg-slate-900/60 border border-white/10 space-y-4">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+          <div className="max-w-3xl mx-auto p-6 rounded-2xl bg-white/60 border border-ui-line space-y-4">
+            <h3 className="text-sm font-bold text-ui-ink">
               Approved Script
             </h3>
-            <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap bg-slate-950/60 p-4 rounded-xl border border-white/5">
+            <div className="text-xs text-ui-text leading-relaxed whitespace-pre-wrap bg-white/60 p-4 rounded-xl border border-ui-line">
               {scriptContent || 'No script available.'}
             </div>
           </div>
@@ -1504,29 +1517,29 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
         {/* TAB 5: PAST VERSIONS */}
         {activeTab === 'versions' && (
           <div className="max-w-3xl mx-auto space-y-3">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-2">
+            <h3 className="text-sm font-bold text-ui-ink mb-2">
               Cut Version History
             </h3>
             {versions.length === 0 ? (
-              <p className="text-xs text-slate-500">No past versions submitted yet.</p>
+              <p className="text-xs text-ui-muted">No past versions submitted yet.</p>
             ) : (
               versions.map((v) => (
                 <div
                   key={v.id}
-                  className="p-4 rounded-xl bg-slate-900/80 border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
+                  className="p-4 rounded-xl bg-white/60 border border-ui-line flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-sm">Cut v{v.versionNumber}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-white/10 text-slate-300 text-[10px] font-mono">
+                      <span className="font-bold text-ui-ink text-sm">Cut v{v.versionNumber}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-white/60 text-ui-text text-[11px] font-mono">
                         {v.status}
                       </span>
                     </div>
-                    <span className="text-[11px] text-slate-400 block">
+                    <span className="text-[11px] text-ui-muted block">
                       Submitted: {new Date(v.submittedAt).toLocaleString()}
                     </span>
                     {v.notes && (
-                      <p className="text-[11px] text-slate-400 italic">
+                      <p className="text-[11px] text-ui-muted italic">
                         Notes: "{v.notes}"
                       </p>
                     )}
@@ -1541,7 +1554,7 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                           setActiveVersionNumber(v.versionNumber);
                           setActiveTab('cut');
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition"
+                        className="px-3 py-1.5 rounded-lg bg-ui-ink hover:bg-black text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
                         <span>Watch Cut v{v.versionNumber}</span>

@@ -139,30 +139,30 @@ export const ClipCard: React.FC<ClipCardProps> = ({
     const label = getMediaItemStatusLabel(clip.status);
     if (isApproved) {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+        <span className="status-tint status-approved inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-bold">
+          <CheckCircle2 className="w-3 h-3 text-emerald-800" />
           <span>Approved</span>
         </span>
       );
     }
     if (isReshootNeeded) {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold animate-pulse">
-          <AlertCircle className="w-3 h-3 text-rose-400" />
+        <span className="status-tint status-changes inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-bold motion-safe:animate-pulse">
+          <AlertCircle className="w-3 h-3 text-rose-800" />
           <span>Reshoot needed</span>
         </span>
       );
     }
     if (isWaitingReview) {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-          <Clock className="w-3 h-3 text-amber-400" />
+        <span className="status-tint status-waiting inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-bold">
+          <Clock className="w-3 h-3 text-amber-800" />
           <span>Waiting for review</span>
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-700/60 text-slate-300 border border-white/10 text-[10px] font-medium">
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/70 text-ui-text border border-ui-line text-[11px] font-medium">
         <span>{label}</span>
       </span>
     );
@@ -175,12 +175,12 @@ export const ClipCard: React.FC<ClipCardProps> = ({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onClick={onSelect}
-      className={`group relative rounded-2xl p-4 transition-all duration-200 cursor-pointer flex flex-col gap-3 backdrop-blur-xl ${
+      className={`group relative rounded-2xl p-4 transition-all duration-200 cursor-pointer flex flex-col gap-3 ${
         isReshootNeeded
-          ? 'bg-rose-950/20 border-2 border-rose-500/60 shadow-lg shadow-rose-900/20'
+          ? 'status-tint status-changes border-2 border-ui-line shadow-lg'
           : isSelected
-          ? 'bg-slate-900/90 border-2 border-indigo-500 shadow-xl shadow-indigo-500/10'
-          : 'bg-slate-900/60 border border-white/15 hover:border-white/30 hover:bg-slate-900/80 shadow-md'
+          ? 'bg-white/60 border-2 border-ui-ink'
+          : 'bg-white/60 border border-ui-line hover:border-ui-line hover:bg-white shadow-md'
       }`}
     >
       <input
@@ -193,15 +193,15 @@ export const ClipCard: React.FC<ClipCardProps> = ({
 
       {/* Flagged Reviewer Message Banner on Top */}
       {isReshootNeeded && (
-        <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs flex flex-col gap-1.5 animate-fadeIn">
-          <div className="flex items-center justify-between font-bold text-[11px] uppercase tracking-wider text-rose-300">
+        <div className="status-tint status-changes p-3 rounded-xl border text-xs flex flex-col gap-1.5 animate-fadeIn">
+          <div className="flex items-center justify-between font-bold text-[11px] text-rose-800">
             <span className="flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+              <AlertCircle className="w-3.5 h-3.5 text-rose-800" />
               <span>Reviewer Feedback</span>
             </span>
-            <span className="text-[10px] lowercase font-normal opacity-75">Reshoot required</span>
+            <span className="text-[11px] lowercase font-normal opacity-75">Reshoot required</span>
           </div>
-          <p className="italic text-xs text-rose-100">
+          <p className="italic text-xs text-rose-800">
             "{latestReviewMessage || clip.notes || 'Please reshoot this clip to meet visual criteria.'}"
           </p>
           {canEdit && (
@@ -211,7 +211,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
                 e.stopPropagation();
                 replaceInputRef.current?.click();
               }}
-              className="mt-1 min-h-[38px] px-3 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95"
+              className="mt-1 min-h-[38px] px-3 rounded-full bg-ui-ink hover:bg-black text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Replace This Clip</span>
@@ -225,7 +225,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {!isLocked && (
             <div
-              className="text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing p-1"
+              className="text-ui-muted hover:text-ui-text cursor-grab active:cursor-grabbing p-1"
               title="Drag to reorder"
             >
               <GripVertical className="w-4 h-4" />
@@ -240,12 +240,12 @@ export const ClipCard: React.FC<ClipCardProps> = ({
               onChange={(e) => setTitleInput(e.target.value)}
               onBlur={handleTitleSubmit}
               onKeyDown={(e) => e.key === 'Enter' && handleTitleSubmit()}
-              className="flex-1 bg-white/10 border border-indigo-500 rounded px-2 py-0.5 text-xs text-white focus:outline-none"
+              className="ui-input flex-1"
             />
           ) : (
             <h3
               onDoubleClick={() => !isLocked && setIsEditingTitle(true)}
-              className="text-sm font-semibold text-slate-100 truncate flex-1 hover:text-indigo-300 transition-colors"
+              className="text-sm font-semibold text-ui-ink truncate flex-1 hover:text-ui-ink transition-colors"
               title="Double click to edit title"
             >
               {clip.title}
@@ -260,10 +260,12 @@ export const ClipCard: React.FC<ClipCardProps> = ({
             onClick={toggleFavorite}
             disabled={isLocked}
             title={clip.favourite ? 'Remove from favourites' : 'Mark as favourite'}
-            className={`p-1.5 rounded-lg transition-colors ${
+            aria-label="Favourite"
+            aria-pressed={Boolean(clip.favourite)}
+            className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg transition-colors ${
               clip.favourite
-                ? 'text-amber-400 hover:bg-amber-400/10'
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                ? 'text-amber-800 hover:bg-white'
+                : 'text-ui-muted hover:text-ui-text hover:bg-white'
             }`}
           >
             <Star className={`w-4 h-4 ${clip.favourite ? 'fill-amber-400' : ''}`} />
@@ -273,7 +275,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
           {isApproved && (
             <div
               title="Approved clips are locked and cannot be changed"
-              className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              className="status-tint status-approved p-1.5 rounded-lg border"
             >
               <Lock className="w-3.5 h-3.5" />
             </div>
@@ -281,7 +283,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
 
           {/* Unread Message Badge */}
           {(clip.unreadCount || 0) > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white font-bold text-[10px] flex items-center gap-1 shadow-sm animate-pulse">
+            <span className="px-2 py-0.5 rounded-full bg-ui-ink text-white font-bold text-[11px] flex items-center gap-1 shadow-sm motion-safe:animate-pulse">
               <MessageSquare className="w-3 h-3" />
               <span>{clip.unreadCount}</span>
             </span>
@@ -306,17 +308,32 @@ export const ClipCard: React.FC<ClipCardProps> = ({
             />
           )
         ) : (
-          <Film className="w-10 h-10 text-slate-600" />
+          <Film className="w-10 h-10 text-ui-muted" />
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
-
-        {/* Play Icon Overlay */}
-        <div className="absolute inset-0 flex items-center justify-center group-hover:scale-110 transition-transform">
-          <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-lg">
-            <Play className="w-5 h-5 fill-white ml-0.5" />
+        {/* Play overlay: a real button so the clip (player + discussion) opens from the keyboard too.
+            The whole card stays clickable with the mouse, as before. */}
+        {onSelect ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect();
+            }}
+            aria-label={`Open ${clip.title}`}
+            className="absolute inset-0 flex items-center justify-center focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-white focus-visible:-outline-offset-4 rounded-xl"
+          >
+            <span className="w-11 h-11 rounded-full bg-white border border-ui-line flex items-center justify-center text-ui-ink shadow-lg motion-safe:group-hover:scale-110 transition-transform" aria-hidden="true">
+              <Play className="w-5 h-5 fill-current ml-0.5" />
+            </span>
+          </button>
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
+            <span className="w-11 h-11 rounded-full bg-white border border-ui-line flex items-center justify-center text-ui-ink shadow-lg">
+              <Play className="w-5 h-5 fill-current ml-0.5" />
+            </span>
           </div>
-        </div>
+        )}
 
         {/* Badges on Thumbnail */}
         <div className="absolute top-2 left-2 flex items-center gap-1.5">
@@ -330,10 +347,10 @@ export const ClipCard: React.FC<ClipCardProps> = ({
 
           {/* 9:16 aspect ratio pill badge */}
           <span
-            className={`px-2 py-0.5 rounded font-bold uppercase tracking-wider backdrop-blur-sm ${
+            className={`px-2 py-0.5 rounded font-bold ${
               clip.orientationOk
-                ? 'bg-emerald-500/80 text-emerald-100'
-                : 'bg-amber-500/80 text-amber-100'
+                ? 'status-tint status-approved'
+                : 'status-tint status-waiting'
             }`}
           >
             {clip.orientationOk ? '9:16 ✓' : 'Not 9:16'}
@@ -345,20 +362,21 @@ export const ClipCard: React.FC<ClipCardProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
         {/* Shot Checklist Link Dropdown */}
         <div className="flex items-center gap-1.5 flex-1 min-w-[140px]">
-          <span className="text-[11px] text-slate-400 font-medium">Shot:</span>
+          <span className="text-[11px] text-ui-muted font-medium">Shot:</span>
           <select
             value={clip.shotRef || ''}
             disabled={isLocked}
             onChange={(e) => handleShotChange(e.target.value)}
-            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+            aria-label={`Shot for ${clip.title}`}
+            className="ui-select flex-1"
           >
-            <option value="" className="bg-slate-900 text-slate-400">
+            <option value="">
               -- Unlinked --
             </option>
             {availableShots.map((shot, idx) => {
               const refVal = shot.shotRef || String(shot.sceneNumber ?? idx + 1);
               return (
-                <option key={idx} value={refVal} className="bg-slate-900">
+                <option key={idx} value={refVal}>
                   {refVal}: {shot.visual.substring(0, 24)}...
                 </option>
               );
@@ -367,22 +385,22 @@ export const ClipCard: React.FC<ClipCardProps> = ({
         </div>
 
         {/* Take Counter Badge */}
-        <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg px-2 py-0.5">
-          <span className="text-[11px] text-slate-400">Take:</span>
-          <span className="font-bold text-slate-200">{clip.take || 1}</span>
+        <div className="flex items-center gap-1 bg-white/60 border border-ui-line rounded-lg px-2 py-0.5">
+          <span className="text-[11px] text-ui-muted">Take:</span>
+          <span className="font-bold text-ui-ink">{clip.take || 1}</span>
           {!isLocked && (
             <div className="flex items-center ml-1">
               <button
                 type="button"
                 onClick={(e) => handleTakeChange(-1, e)}
-                className="px-1 text-slate-400 hover:text-white"
+                className="px-1 text-ui-muted hover:text-ui-ink"
               >
                 -
               </button>
               <button
                 type="button"
                 onClick={(e) => handleTakeChange(1, e)}
-                className="px-1 text-slate-400 hover:text-white"
+                className="px-1 text-ui-muted hover:text-ui-ink"
               >
                 +
               </button>
@@ -401,10 +419,10 @@ export const ClipCard: React.FC<ClipCardProps> = ({
               type="button"
               disabled={isLocked}
               onClick={(e) => toggleTag(tag, e)}
-              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all ${
+              className={`px-2 py-0.5 rounded-full text-[11px] font-semibold transition-all ${
                 isTagged
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                  ? 'bg-ui-ink text-white shadow-sm'
+                  : 'bg-white/60 text-ui-muted hover:bg-white hover:text-ui-ink'
               } disabled:cursor-default`}
             >
               {tag}
@@ -420,7 +438,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
             e.stopPropagation();
             if (!isLocked) setShowNotes(true);
           }}
-          className="text-[11px] text-slate-400 italic line-clamp-1 cursor-pointer hover:text-slate-300"
+          className="text-[11px] text-ui-muted italic line-clamp-1 cursor-pointer hover:text-ui-text"
         >
           Notes: {clip.notes}
         </p>
@@ -433,20 +451,20 @@ export const ClipCard: React.FC<ClipCardProps> = ({
             value={notesInput}
             onChange={(e) => setNotesInput(e.target.value)}
             placeholder="Add notes for editor or reviewer..."
-            className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+            className="ui-input ui-textarea w-full"
           />
           <div className="flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => setShowNotes(false)}
-              className="text-[11px] text-slate-400 hover:text-white"
+              className="text-[11px] text-ui-muted hover:text-ui-ink"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleNotesSubmit}
-              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-medium rounded-lg"
+              className="px-3 py-1 bg-ui-ink hover:bg-black text-white text-[11px] font-medium rounded-lg"
             >
               Save Notes
             </button>
@@ -456,16 +474,16 @@ export const ClipCard: React.FC<ClipCardProps> = ({
 
       {/* Card Actions Bottom Row */}
       {!isLocked && (
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10 text-xs">
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-ui-line text-xs">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               replaceInputRef.current?.click();
             }}
-            className="min-h-[38px] px-3 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors font-medium"
+            className="min-h-[38px] px-3 rounded-lg hover:bg-white text-ui-text hover:text-ui-ink flex items-center gap-1.5 transition-colors font-medium"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+            <RefreshCw className="w-3.5 h-3.5 text-ui-ink" />
             <span>Replace file</span>
           </button>
 
@@ -476,7 +494,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
                 e.stopPropagation();
                 if (confirm(`Delete clip "${clip.title}"?`)) onDelete();
               }}
-              className="min-h-[38px] px-2.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
+              className="min-h-[38px] px-2.5 rounded-lg hover:bg-rose-500/20 text-ui-muted hover:text-rose-800 flex items-center gap-1 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -486,14 +504,14 @@ export const ClipCard: React.FC<ClipCardProps> = ({
 
       {/* Share to Chat button for approved clips */}
       {canShare && (
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10 text-xs">
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-ui-line text-xs">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               setShowShareModal(true);
             }}
-            className="min-h-[38px] px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 transition-colors font-medium"
+            className="status-tint status-approved min-h-[38px] px-3 rounded-lg flex items-center gap-1.5 transition-colors font-medium"
             title="Share approved clip to chat"
             data-testid="share-clip-to-chat-btn"
           >

@@ -327,23 +327,23 @@ export const MediaWorkspacePage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen bg-slate-950 flex items-center justify-center text-white">
-        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="h-screen w-screen bg-ui-canvas flex items-center justify-center text-ui-ink">
+        <div className="w-8 h-8 border-4 border-ui-ink border-t-transparent rounded-full motion-safe:animate-spin" />
       </div>
     );
   }
 
   if (error || !workItem) {
     return (
-      <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center text-slate-800 font-sans">
-        <AlertCircle className="w-12 h-12 text-rose-500 mb-3" />
-        <h2 className="text-lg font-bold text-slate-900">Workspace Unavailable</h2>
-        <p className="text-sm text-slate-600 max-w-md mt-1 mb-6">
+      <div className="h-screen w-screen bg-white/60 flex flex-col items-center justify-center p-6 text-center text-ui-ink font-sans">
+        <AlertCircle className="w-12 h-12 text-rose-800 mb-3" />
+        <h2 className="text-lg font-bold text-ui-ink">Workspace Unavailable</h2>
+        <p className="text-sm text-ui-muted max-w-md mt-1 mb-6">
           {error || 'Work item could not be loaded.'}
         </p>
         <button
           onClick={() => navigate('/my-work')}
-          className="px-5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
+          className="px-5 py-2.5 rounded-full bg-white/60 hover:bg-white text-ui-ink text-xs font-semibold shadow-xs"
         >
           Return to My Work
         </button>
@@ -354,34 +354,36 @@ export const MediaWorkspacePage: React.FC = () => {
   // Locked mode
   if (modeInfo.mode === 'none') {
     return (
-      <div className="flex flex-col h-screen w-screen bg-slate-50 text-slate-800 font-sans">
-        <header className="h-14 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 flex items-center justify-between z-30 flex-shrink-0 shadow-2xs">
+      <div className="flex flex-col h-screen w-screen bg-white/60 text-ui-ink font-sans">
+        <header className="h-14 bg-white/80 border-b border-ui-line px-4 flex items-center justify-between z-30 flex-shrink-0 shadow-2xs">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => navigate(-1)}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
+              aria-label="Back"
+              className="ui-icon-btn shrink-0"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-4 h-4" aria-hidden="true" />
             </button>
-            <span className="font-bold text-sm text-slate-900">{workItem.title}</span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold border border-slate-200/60">
+            <span className="font-bold text-sm text-ui-ink">{workItem.title}</span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/60 text-ui-muted font-semibold border border-ui-line">
               Locked
             </span>
           </div>
         </header>
 
         <div className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-md w-full p-8 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/80 shadow-xl text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto text-amber-600">
+          <div className="max-w-md w-full p-8 rounded-3xl bg-white/80 border border-ui-line text-center space-y-4">
+            <div className="status-tint status-waiting w-12 h-12 rounded-2xl border flex items-center justify-center mx-auto">
               <Lock className="w-6 h-6" />
             </div>
-            <h2 className="text-lg font-bold text-slate-900">Workspace Locked</h2>
-            <p className="text-sm text-slate-600">
+            <h2 className="text-lg font-bold text-ui-ink">Workspace Locked</h2>
+            <p className="text-sm text-ui-muted">
               {modeInfo.reason || 'You do not currently have access to edit or view this workspace.'}
             </p>
             <button
               onClick={() => navigate(-1)}
-              className="px-5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition"
+              className="px-5 py-2.5 rounded-full bg-white/60 hover:bg-white text-ui-ink text-xs font-semibold shadow-xs transition"
             >
               Go Back
             </button>
@@ -395,7 +397,7 @@ export const MediaWorkspacePage: React.FC = () => {
   if (modeInfo.mode === 'read') {
     if (workItem.stageKey === 'Shoot') {
       return (
-        <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
+        <div className="flex flex-col h-screen w-screen bg-ui-canvas text-ui-ink overflow-hidden font-sans">
           <ShootReviewView
             stageItemId={workItem._id || workItem.id}
             workItemTitle={workItem.title}
@@ -409,21 +411,21 @@ export const MediaWorkspacePage: React.FC = () => {
 
     if (workItem.stageKey === 'Edit') {
       return (
-        <div className="h-screen w-screen bg-slate-950 flex flex-col overflow-hidden font-sans">
-          <div className="h-12 bg-slate-900/90 backdrop-blur-md border-b border-white/10 px-4 flex items-center justify-between flex-shrink-0">
+        <div className="h-screen w-screen bg-ui-canvas flex flex-col overflow-hidden font-sans">
+          <div className="h-12 bg-white/60 border-b border-ui-line px-4 flex items-center justify-between flex-shrink-0">
             <button
               onClick={() => navigate(`/work/${workItem._id || workItem.id}`)}
-              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs text-ui-muted hover:text-ui-ink transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Exit Workspace to Task Details</span>
             </button>
             <div className="flex items-center gap-2">
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-white/10 font-mono text-[11px]">
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/70 text-ui-text border border-ui-line font-mono text-[11px]">
                 {getStepStatusLabel(workItem.status)}
               </span>
-              <span className="text-xs font-mono text-slate-400">
-                Owner: <span className="text-slate-200 font-semibold">{workItem.ownerId?.name || user?.name}</span>
+              <span className="text-xs font-mono text-ui-muted">
+                Owner: <span className="text-ui-ink font-semibold">{workItem.ownerId?.name || user?.name}</span>
               </span>
             </div>
           </div>
@@ -454,41 +456,43 @@ export const MediaWorkspacePage: React.FC = () => {
     }
 
     return (
-      <div className="flex flex-col h-screen w-screen bg-slate-50 text-slate-800 overflow-hidden font-sans">
-        <header className="h-14 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 flex items-center justify-between z-30 flex-shrink-0 shadow-2xs">
+      <div className="flex flex-col h-screen w-screen bg-white/60 text-ui-ink overflow-hidden font-sans">
+        <header className="h-14 bg-white/80 border-b border-ui-line px-4 flex items-center justify-between z-30 flex-shrink-0 shadow-2xs">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => navigate(-1)}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
+              aria-label="Back"
+              className="ui-icon-btn shrink-0"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-4 h-4" aria-hidden="true" />
             </button>
-            <span className="font-bold text-sm text-slate-900">{workItem.title}</span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold border border-slate-200/60">
+            <span className="font-bold text-sm text-ui-ink">{workItem.title}</span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/60 text-ui-muted font-semibold border border-ui-line">
               Read-Only View
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-white text-ui-ink font-bold border border-ui-ink">
               {workItem.stageKey} Stage
             </span>
-            <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-medium">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-white/60 text-ui-muted font-medium">
               {getStepStatusLabel(workItem.status)}
             </span>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6">
-          <div className="p-5 rounded-3xl bg-white/80 backdrop-blur-md border border-slate-200/80 shadow-xs flex items-start gap-3.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center flex-shrink-0 text-indigo-600">
+          <div className="p-5 rounded-3xl bg-white/80 border border-ui-line shadow-xs flex items-start gap-3.5">
+            <div className="w-9 h-9 rounded-xl bg-white border border-ui-ink flex items-center justify-center flex-shrink-0 text-ui-ink">
               <ShieldAlert className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-sm text-slate-900 block">
+              <span className="font-bold text-sm text-ui-ink block">
                 {modeInfo.isOwner ? "Deliverable in Review / Approved" : "Viewing Teammate's Deliverable"}
               </span>
-              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+              <p className="text-xs text-ui-muted mt-1 leading-relaxed">
                 {modeInfo.isOwner
                   ? `Your deliverable is currently in status "${getStepStatusLabel(workItem.status)}". All outputs and assets are displayed in read-only mode.`
                   : `${workItem.ownerId?.name || 'The step owner'} is currently responsible for this ${workItem.stageKey || 'work'} stage (${modeInfo.reason || 'Read only'}). All outputs and assets are displayed in read-only mode.`}
@@ -505,19 +509,19 @@ export const MediaWorkspacePage: React.FC = () => {
   const stageKey = workItem.stageKey || '';
 
   return (
-    <div className="h-screen w-screen bg-slate-950 flex flex-col overflow-hidden font-sans">
+    <div className="h-screen w-screen bg-ui-canvas flex flex-col overflow-hidden font-sans">
       {/* Top Bar with back button */}
-      <div className="h-12 bg-slate-900/90 backdrop-blur-md border-b border-white/10 px-4 flex items-center justify-between flex-shrink-0">
+      <div className="h-12 bg-white/60 border-b border-ui-line px-4 flex items-center justify-between flex-shrink-0">
         <button
           onClick={() => navigate(`/work/${workItem._id || workItem.id}`)}
-          className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-ui-muted hover:text-ui-ink transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Exit Workspace to Task Details</span>
         </button>
 
-        <span className="text-xs font-mono text-slate-400">
-          Owner: <span className="text-slate-200 font-semibold">{user?.name}</span>
+        <span className="text-xs font-mono text-ui-muted">
+          Owner: <span className="text-ui-ink font-semibold">{user?.name}</span>
         </span>
       </div>
 
@@ -587,6 +591,7 @@ export const MediaWorkspacePage: React.FC = () => {
             }}
             brief={contentPiece?.brief}
             approvedCopy={approvedCopy}
+            revisionComments={revisionComments}
             onSubmit={handleSubmission}
             isSubmitting={isSubmitting}
           />
@@ -614,7 +619,7 @@ export const MediaWorkspacePage: React.FC = () => {
         )}
 
         {!['Shoot', 'Edit', 'Design', 'Post'].includes(stageKey) && (
-          <div className="p-8 text-center text-slate-400">
+          <div className="p-8 text-center text-ui-muted">
             <p>Standard task workspace. Stage: {stageKey}</p>
           </div>
         )}

@@ -16,10 +16,12 @@ import {
   Layers,
   FileIcon,
   Share2,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { ShareToChatModal } from '../../chat/ShareToChatModal';
 import { ResumableUploadTask } from '../../../lib/uploadManager';
+import type { RevisionComment } from './EditWorkspace';
 
 interface SlideItem {
   id: string;
@@ -54,6 +56,8 @@ interface DesignWorkspaceProps {
     callToAction?: string;
     rawText?: string;
   };
+  /** Submission comments for this step (same data the Edit workspace receives). */
+  revisionComments?: RevisionComment[];
   onSubmit: (data: {
     fileUrl: string;
     contentUrl?: string;
@@ -67,6 +71,7 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
   workItem,
   brief,
   approvedCopy: propApprovedCopy,
+  revisionComments = [],
   onSubmit,
   isSubmitting = false,
 }) => {
@@ -101,6 +106,11 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const deliverableType = workItem.workType || 'Static Post';
+
+  // Creative Head / Admin revision feedback (read-only here; comments without a role are kept).
+  const reviewerFeedback = revisionComments.filter(
+    (c) => !c.authorRole || c.authorRole === 'creative_head' || c.authorRole === 'admin'
+  );
 
   const copyToClipboard = (key: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -219,20 +229,20 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
   const activeSlide = slides[activeSlideIndex];
 
   return (
-    <div className="flex flex-col h-full w-full bg-slate-950 text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-ui-canvas text-ui-ink overflow-hidden">
       {/* Workspace Header */}
-      <div className="p-4 bg-slate-900/80 backdrop-blur-md border-b border-white/10 flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
+      <div className="p-4 bg-white/60 border-b border-ui-line flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base sm:text-lg font-bold text-white">{workItem.title}</h2>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 font-medium">
+            <h2 className="text-base sm:text-lg font-bold text-ui-ink">{workItem.title}</h2>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-white text-ui-ink border border-ui-ink font-medium">
               Design Workspace
             </span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-slate-300">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-white/60 text-ui-text">
               {deliverableType}
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-ui-muted mt-0.5">
             Render visual creative beside approved copy with size verification & carousel sequencing.
           </p>
         </div>
@@ -241,7 +251,7 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
           <button
             type="button"
             onClick={() => setShowShareModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors shadow-sm"
+            className="ui-btn ui-btn-primary h-11 gap-1.5"
             title="Share approved design to chat"
             data-testid="design-share-to-chat-btn"
           >
@@ -254,142 +264,163 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
       {/* Main Split Body: Left approved copy, Right upload & preview canvas */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* LEFT PANEL: Approved Copy beside canvas */}
-        <div className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-white/10 bg-slate-900/60 p-4 overflow-y-auto space-y-4 flex-shrink-0">
+        <div className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-ui-line bg-white/60 p-4 overflow-y-auto space-y-4 flex-shrink-0">
+          {/* Revision feedback from the Creative Head (same comment data as the Edit workspace) */}
+          {reviewerFeedback.length > 0 && (
+            <section aria-labelledby="design-revision-feedback" className="status-tint status-waiting p-4 rounded-2xl border space-y-2.5">
+              <h3 id="design-revision-feedback" className="text-xs font-bold flex items-center gap-1.5">
+                <MessageSquare className="w-4 h-4" aria-hidden="true" />
+                Revision feedback ({reviewerFeedback.length})
+              </h3>
+              <ul className="space-y-2">
+                {reviewerFeedback.map((c) => (
+                  <li key={c.id} className="p-2.5 rounded-xl bg-white/70 border border-ui-line text-xs text-ui-ink space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-ui-muted">
+                      <span className="font-semibold text-ui-text">{c.authorName || 'Creative Head'}</span>
+                      {c.createdAt && <span>{new Date(c.createdAt).toLocaleDateString()}</span>}
+                    </div>
+                    <p className="whitespace-pre-wrap break-words">{c.content}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-pink-400" />
+            <h3 className="text-xs font-bold text-ui-ink flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-ui-ink" />
               Approved Copy
             </h3>
-            <span className="text-[10px] text-slate-400">Click to copy</span>
+            <span className="text-[11px] text-ui-muted">Click to copy</span>
           </div>
 
           {approvedCopy ? (
             <div className="space-y-3">
               {approvedCopy.headline && (
-                <div className="p-3 rounded-xl bg-slate-950/70 border border-white/10 space-y-1 relative group">
+                <div className="p-3 rounded-xl bg-white/60 border border-ui-line space-y-1 relative group">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-pink-400 uppercase">Headline</span>
+                    <span className="text-[11px] font-bold text-ui-ink">Headline</span>
                     <button
                       onClick={() => copyToClipboard('headline', approvedCopy.headline!)}
-                      className="p-1 rounded bg-white/10 hover:bg-white/20 text-slate-300"
+                      className="p-1 rounded bg-white/60 hover:bg-white text-ui-text"
                       title="Copy Headline"
                     >
                       {copiedKey === 'headline' ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-3 h-3 text-emerald-800" />
                       ) : (
                         <Copy className="w-3 h-3" />
                       )}
                     </button>
                   </div>
-                  <p className="text-xs font-semibold text-white">{approvedCopy.headline}</p>
+                  <p className="text-xs font-semibold text-ui-ink">{approvedCopy.headline}</p>
                 </div>
               )}
 
               {approvedCopy.subhead && (
-                <div className="p-3 rounded-xl bg-slate-950/70 border border-white/10 space-y-1 relative group">
+                <div className="p-3 rounded-xl bg-white/60 border border-ui-line space-y-1 relative group">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-pink-400 uppercase">Subhead</span>
+                    <span className="text-[11px] font-bold text-ui-ink">Subhead</span>
                     <button
                       onClick={() => copyToClipboard('subhead', approvedCopy.subhead!)}
-                      className="p-1 rounded bg-white/10 hover:bg-white/20 text-slate-300"
+                      className="p-1 rounded bg-white/60 hover:bg-white text-ui-text"
                       title="Copy Subhead"
                     >
                       {copiedKey === 'subhead' ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-3 h-3 text-emerald-800" />
                       ) : (
                         <Copy className="w-3 h-3" />
                       )}
                     </button>
                   </div>
-                  <p className="text-xs text-slate-200">{approvedCopy.subhead}</p>
+                  <p className="text-xs text-ui-ink">{approvedCopy.subhead}</p>
                 </div>
               )}
 
               {approvedCopy.bodyCopy && (
-                <div className="p-3 rounded-xl bg-slate-950/70 border border-white/10 space-y-1 relative group">
+                <div className="p-3 rounded-xl bg-white/60 border border-ui-line space-y-1 relative group">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-pink-400 uppercase">Body Copy</span>
+                    <span className="text-[11px] font-bold text-ui-ink">Body Copy</span>
                     <button
                       onClick={() => copyToClipboard('body', approvedCopy.bodyCopy!)}
-                      className="p-1 rounded bg-white/10 hover:bg-white/20 text-slate-300"
+                      className="p-1 rounded bg-white/60 hover:bg-white text-ui-text"
                       title="Copy Body"
                     >
                       {copiedKey === 'body' ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-3 h-3 text-emerald-800" />
                       ) : (
                         <Copy className="w-3 h-3" />
                       )}
                     </button>
                   </div>
-                  <p className="text-xs text-slate-300 whitespace-pre-wrap">{approvedCopy.bodyCopy}</p>
+                  <p className="text-xs text-ui-text whitespace-pre-wrap">{approvedCopy.bodyCopy}</p>
                 </div>
               )}
 
               {approvedCopy.callToAction && (
-                <div className="p-3 rounded-xl bg-slate-950/70 border border-white/10 space-y-1 relative group">
+                <div className="p-3 rounded-xl bg-white/60 border border-ui-line space-y-1 relative group">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-pink-400 uppercase">Call to Action</span>
+                    <span className="text-[11px] font-bold text-ui-ink">Call to Action</span>
                     <button
                       onClick={() => copyToClipboard('cta', approvedCopy.callToAction!)}
-                      className="p-1 rounded bg-white/10 hover:bg-white/20 text-slate-300"
+                      className="p-1 rounded bg-white/60 hover:bg-white text-ui-text"
                       title="Copy CTA"
                     >
                       {copiedKey === 'cta' ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-3 h-3 text-emerald-800" />
                       ) : (
                         <Copy className="w-3 h-3" />
                       )}
                     </button>
                   </div>
-                  <p className="text-xs font-semibold text-emerald-300">{approvedCopy.callToAction}</p>
+                  <p className="text-xs font-semibold text-emerald-800">{approvedCopy.callToAction}</p>
                 </div>
               )}
 
               {approvedCopy.rawText && !approvedCopy.headline && !approvedCopy.bodyCopy && (
-                <div className="p-3 rounded-xl bg-slate-950/70 border border-white/10 space-y-1 relative group">
+                <div className="p-3 rounded-xl bg-white/60 border border-ui-line space-y-1 relative group">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-pink-400 uppercase">Content Text</span>
+                    <span className="text-[11px] font-bold text-ui-ink">Content Text</span>
                     <button
                       onClick={() => copyToClipboard('raw', approvedCopy.rawText!)}
-                      className="p-1 rounded bg-white/10 hover:bg-white/20 text-slate-300"
+                      className="p-1 rounded bg-white/60 hover:bg-white text-ui-text"
                       title="Copy Text"
                     >
                       {copiedKey === 'raw' ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-3 h-3 text-emerald-800" />
                       ) : (
                         <Copy className="w-3 h-3" />
                       )}
                     </button>
                   </div>
-                  <p className="text-xs text-slate-300 whitespace-pre-wrap">{approvedCopy.rawText}</p>
+                  <p className="text-xs text-ui-text whitespace-pre-wrap">{approvedCopy.rawText}</p>
                 </div>
               )}
             </div>
           ) : (
-            <p className="text-xs text-slate-500">No approved copy attached.</p>
+            <p className="text-xs text-ui-muted">No approved copy attached.</p>
           )}
 
           {/* Size Guides Reference */}
-          <div className="pt-3 border-t border-white/10 space-y-1.5">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+          <div className="pt-3 border-t border-ui-line space-y-1.5">
+            <span className="text-[11px] font-bold text-ui-muted block">
               Size Guides
             </span>
             <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-              <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-slate-300">
-                <span className="block font-semibold text-white">Feed Square</span>
-                <span className="text-[10px] text-slate-400 font-mono">1:1 (1080x1080)</span>
+              <div className="p-2 rounded-lg bg-white/60 border border-ui-line text-ui-text">
+                <span className="block font-semibold text-ui-ink">Feed Square</span>
+                <span className="text-[11px] text-ui-muted font-mono">1:1 (1080x1080)</span>
               </div>
-              <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-slate-300">
-                <span className="block font-semibold text-white">Story / Reel</span>
-                <span className="text-[10px] text-slate-400 font-mono">9:16 (1080x1920)</span>
+              <div className="p-2 rounded-lg bg-white/60 border border-ui-line text-ui-text">
+                <span className="block font-semibold text-ui-ink">Story / Reel</span>
+                <span className="text-[11px] text-ui-muted font-mono">9:16 (1080x1920)</span>
               </div>
             </div>
           </div>
 
           {/* Inspiration references */}
           {brief?.references && brief.references.length > 0 && (
-            <div className="pt-2 border-t border-white/10">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+            <div className="pt-2 border-t border-ui-line">
+              <span className="text-[11px] font-bold text-ui-muted block mb-1">
                 Visual References
               </span>
               <ul className="space-y-1">
@@ -399,7 +430,7 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
                       href={r}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-indigo-400 hover:underline flex items-center gap-1 truncate"
+                      className="text-xs text-ui-ink hover:underline flex items-center gap-1 truncate"
                     >
                       <ExternalLink className="w-3 h-3 flex-shrink-0" />
                       {r}
@@ -414,20 +445,20 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
         {/* RIGHT PANEL: Canvas & Upload Area */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
+            <div className="status-tint status-changes p-3 rounded-xl border text-xs">
               {errorMsg}
             </div>
           )}
 
           {/* Non-blocking size guide warnings */}
           {warnings.length > 0 && (
-            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-1">
-              <div className="font-bold flex items-center gap-1.5 text-amber-300">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <div className="status-tint status-waiting p-3.5 rounded-xl border text-xs space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                <AlertTriangle className="w-4 h-4 text-amber-800" />
                 Dimension Guide Check (Non-Blocking)
               </div>
               {warnings.map((w, idx) => (
-                <p key={idx} className="pl-5 text-amber-200/90">
+                <p key={idx} className="pl-5 text-amber-800">
                   &bull; {w}
                 </p>
               ))}
@@ -436,32 +467,32 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
 
           {/* Main Visual Preview Area */}
           {activeSlide ? (
-            <div className="rounded-2xl bg-slate-900/80 border border-white/10 overflow-hidden flex flex-col items-center">
+            <div className="rounded-2xl bg-white/60 border border-ui-line overflow-hidden flex flex-col items-center">
               {/* Zoom Controls */}
-              <div className="w-full px-4 py-2 bg-slate-950/60 border-b border-white/10 flex items-center justify-between text-xs">
-                <span className="text-slate-400 font-mono">
+              <div className="w-full px-4 py-2 bg-white/60 border-b border-ui-line flex items-center justify-between text-xs">
+                <span className="text-ui-muted font-mono">
                   Slide {activeSlideIndex + 1} of {slides.length} |{' '}
                   {activeSlide.width ? `${activeSlide.width}x${activeSlide.height} px` : activeSlide.name}
                 </span>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setZoomLevel((z) => Math.max(0.5, z - 0.25))}
-                    className="p-1 rounded hover:bg-white/10 text-slate-300"
+                    className="p-1 rounded hover:bg-white text-ui-text"
                     title="Zoom Out"
                   >
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
-                  <span className="font-mono text-slate-300 px-1">{Math.round(zoomLevel * 100)}%</span>
+                  <span className="font-mono text-ui-text px-1">{Math.round(zoomLevel * 100)}%</span>
                   <button
                     onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.25))}
-                    className="p-1 rounded hover:bg-white/10 text-slate-300"
+                    className="p-1 rounded hover:bg-white text-ui-text"
                     title="Zoom In"
                   >
                     <ZoomIn className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => setZoomLevel(1)}
-                    className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-white/10 text-slate-300 hover:bg-white/20"
+                    className="ml-1 px-1.5 py-0.5 rounded text-[11px] bg-white/60 text-ui-text hover:bg-white"
                   >
                     Fit
                   </button>
@@ -471,15 +502,15 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
               {/* Image / PDF Display */}
               <div className="p-4 flex items-center justify-center max-h-[50vh] overflow-hidden">
                 {activeSlide.url.toLowerCase().endsWith('.pdf') ? (
-                  <div className="p-8 text-center text-slate-400 flex flex-col items-center">
-                    <FileIcon className="w-12 h-12 text-pink-400 mb-2" />
-                    <p className="text-sm font-semibold text-white">{activeSlide.name}</p>
-                    <p className="text-xs text-slate-500 mt-1">Multi-page PDF Document</p>
+                  <div className="p-8 text-center text-ui-muted flex flex-col items-center">
+                    <FileIcon className="w-12 h-12 text-ui-ink mb-2" />
+                    <p className="text-sm font-semibold text-ui-ink">{activeSlide.name}</p>
+                    <p className="text-xs text-ui-muted mt-1">Multi-page PDF Document</p>
                     <a
                       href={activeSlide.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ui-ink hover:bg-black text-white text-xs font-semibold"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                       Open Full PDF
@@ -490,7 +521,7 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
                     src={activeSlide.url}
                     alt={activeSlide.name}
                     style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
-                    className="max-h-[46vh] max-w-full object-contain rounded-lg shadow-xl transition-transform duration-75"
+                    className="max-h-[46vh] max-w-full object-contain rounded-lg transition-transform duration-75"
                   />
                 )}
               </div>
@@ -498,13 +529,13 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
           ) : (
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="p-8 border-2 border-dashed border-white/20 hover:border-pink-500/60 rounded-2xl bg-white/5 hover:bg-white/[0.08] transition-all flex flex-col items-center justify-center text-center cursor-pointer group"
+              className="p-8 border-2 border-dashed border-ui-line hover:border-ui-ink rounded-2xl bg-white/60 hover:bg-white/[0.08] transition-all flex flex-col items-center justify-center text-center cursor-pointer group"
             >
-              <div className="w-14 h-14 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <div className="w-14 h-14 rounded-2xl bg-white border border-ui-ink text-ui-ink flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                 <UploadCloud className="w-7 h-7" />
               </div>
-              <h3 className="text-sm font-semibold text-white">Upload Design Visuals or PDF</h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm">
+              <h3 className="text-sm font-semibold text-ui-ink">Upload Design Visuals or PDF</h3>
+              <p className="text-xs text-ui-muted mt-1 max-w-sm">
                 PNG, JPG, WebP up to 20 MB or PDF up to 50 MB. Multi-file upload for Carousels.
               </p>
             </div>
@@ -514,14 +545,14 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
           {slides.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-pink-400" />
+                <h4 className="text-xs font-bold text-ui-text flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-ui-ink" />
                   Slide Sequence & Ordering ({slides.length} slides)
                 </h4>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="text-xs text-pink-400 hover:text-pink-300 font-medium"
+                  className="text-xs text-ui-ink hover:text-ui-ink font-medium"
                 >
                   + Add more slides
                 </button>
@@ -534,23 +565,23 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
                     onClick={() => setActiveSlideIndex(idx)}
                     className={`p-2 rounded-xl border flex flex-col gap-2 transition-all cursor-pointer ${
                       activeSlideIndex === idx
-                        ? 'bg-pink-950/40 border-pink-500 ring-2 ring-pink-500/30'
-                        : 'bg-slate-900/80 border-white/10 hover:border-white/20'
+                        ? 'bg-white border-ui-ink ring-2 ring-ui-ink'
+                        : 'bg-white/60 border-ui-line hover:border-ui-line'
                     }`}
                   >
-                    <div className="relative h-24 rounded-lg overflow-hidden bg-slate-950 flex items-center justify-center">
+                    <div className="relative h-24 rounded-lg overflow-hidden bg-ui-canvas flex items-center justify-center">
                       {s.url.toLowerCase().endsWith('.pdf') ? (
-                        <FileIcon className="w-8 h-8 text-pink-400" />
+                        <FileIcon className="w-8 h-8 text-ui-ink" />
                       ) : (
                         <img src={s.url} alt={s.name} className="w-full h-full object-cover" />
                       )}
-                      <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-950/80 text-white">
+                      <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[11px] font-bold font-mono bg-white text-ui-ink">
                         #{idx + 1}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-xs">
-                      <span className="truncate text-[11px] text-slate-300 max-w-[80px]">
+                      <span className="truncate text-[11px] text-ui-text max-w-[80px]">
                         {s.name}
                       </span>
                       <div className="flex items-center gap-0.5">
@@ -561,7 +592,7 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
                             e.stopPropagation();
                             moveSlide(idx, 'up');
                           }}
-                          className="p-1 rounded hover:bg-white/10 text-slate-400 disabled:opacity-20"
+                          className="p-1 rounded hover:bg-white text-ui-muted disabled:opacity-20"
                           title="Move Left/Up"
                         >
                           <ArrowUp className="w-3 h-3" />
@@ -573,7 +604,7 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
                             e.stopPropagation();
                             moveSlide(idx, 'down');
                           }}
-                          className="p-1 rounded hover:bg-white/10 text-slate-400 disabled:opacity-20"
+                          className="p-1 rounded hover:bg-white text-ui-muted disabled:opacity-20"
                           title="Move Right/Down"
                         >
                           <ArrowDown className="w-3 h-3" />
@@ -584,7 +615,7 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
                             e.stopPropagation();
                             removeSlide(idx);
                           }}
-                          className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-rose-400"
+                          className="p-1 rounded hover:bg-white text-ui-muted hover:text-rose-800"
                           title="Delete"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -608,15 +639,16 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
 
           {/* Designer Notes */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">
+            <label htmlFor="design-notes" className="text-xs font-semibold text-ui-text">
               Designer Notes (Typography, Color palette, Stock licenses)
             </label>
             <textarea
+              id="design-notes"
               value={designNotes}
               onChange={(e) => setDesignNotes(e.target.value)}
               rows={2}
               placeholder="e.g. Malayalam font is Manjari. Slide 4 contains licensed icon."
-              className="w-full text-xs p-3 rounded-xl bg-slate-900/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+              className="ui-input ui-textarea w-full"
             />
           </div>
 
@@ -625,21 +657,22 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
             <button
               type="button"
               onClick={() => setShowLinkFallback(!showLinkFallback)}
-              className="text-xs text-pink-400 hover:text-pink-300 flex items-center gap-1"
+              className="text-xs text-ui-ink hover:text-ui-ink flex items-center gap-1"
             >
               <LinkIcon className="w-3.5 h-3.5" />
               {showLinkFallback ? 'Hide Backup Figma / Canva Link' : '+ Add Backup Figma / Canva Link'}
             </button>
 
             {showLinkFallback && (
-              <div className="mt-2 p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
-                <label className="text-xs text-slate-400">External Design Canvas URL:</label>
+              <div className="mt-2 p-3 rounded-xl bg-white/60 border border-ui-line space-y-2">
+                <label htmlFor="design-field-1" className="text-xs text-ui-muted">External Design Canvas URL:</label>
                 <input
+                  id="design-field-1"
                   type="url"
                   value={fallbackUrl}
                   onChange={(e) => setFallbackUrl(e.target.value)}
                   placeholder="https://www.figma.com/file/..."
-                  className="w-full text-xs p-2.5 rounded-lg bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-pink-500 font-mono"
+                  className="ui-input w-full font-mono"
                 />
               </div>
             )}
@@ -651,7 +684,7 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
               type="button"
               disabled={isSubmitting || isUploading}
               onClick={handleSubmit}
-              className="min-h-[44px] px-6 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 disabled:opacity-40 text-white font-semibold text-sm transition-all shadow-lg hover:shadow-pink-500/25 flex items-center gap-2 cursor-pointer"
+              className="min-h-[44px] px-6 py-2.5 rounded-xl bg-ui-ink hover:bg-black disabled:opacity-40 text-white font-semibold text-sm transition-all shadow-lg flex items-center gap-2 cursor-pointer"
             >
               <Send className="w-4 h-4" />
               {isSubmitting ? 'Submitting Design...' : 'Submit for Approval'}
