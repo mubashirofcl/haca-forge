@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
+import { planGridHref } from '../calendar/PlanGridPage';
 import {
   CheckCircle2,
   Clock,
   Sparkles,
   ChevronDown,
   ChevronUp,
+  FileSpreadsheet,
 } from 'lucide-react';
-import type { CalendarPlanStatus, RowStatus } from '@mmp/shared';
+import { planMonthKey, type CalendarPlanStatus, type RowStatus } from '@mmp/shared';
 
 interface PlanRow {
   _id: string;
@@ -27,6 +31,7 @@ interface CalendarPlanWaiting {
   code: string;
   title: string;
   kind: string;
+  calendar?: string;
   periodStart: string;
   periodEnd: string;
   status: CalendarPlanStatus;
@@ -40,6 +45,12 @@ interface CalendarPlanWaiting {
 }
 
 export const PlansApprovalTab: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  // Plan row review is the Creative Head's alone (PG-3); others see the queue read-only.
+  const canReview = user?.role === 'creative_head';
+  // Review controls on this page are for individual plans; monthly plans are reviewed in the plan grid.
+  const canReviewHere = (plan: { kind: string }) => canReview && plan.kind !== 'monthly';
   const [plans, setPlans] = useState<CalendarPlanWaiting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
@@ -156,7 +167,7 @@ export const PlansApprovalTab: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-xs text-slate-500">
+      <div className="glass-card p-8 text-center text-xs text-ui-muted">
         Loading plans waiting for Creative Head approval...
       </div>
     );
@@ -164,12 +175,12 @@ export const PlansApprovalTab: React.FC = () => {
 
   if (plans.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-3">
-        <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600">
-          <CheckCircle2 className="w-6 h-6" />
+      <div className="glass-card p-12 text-center space-y-3">
+        <div className="w-12 h-12 status-tint status-approved rounded-full flex items-center justify-center mx-auto">
+          <CheckCircle2 className="w-6 h-6" aria-hidden="true" />
         </div>
-        <h3 className="text-base font-bold text-slate-900">All Plans Approved!</h3>
-        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+        <h3 className="text-base font-bold text-ui-ink">All Plans Approved!</h3>
+        <p className="text-xs text-ui-muted max-w-sm mx-auto">
           There are currently no submitted monthly or project calendar plans waiting for Creative Head review.
         </p>
       </div>
@@ -179,14 +190,14 @@ export const PlansApprovalTab: React.FC = () => {
   return (
     <div className="space-y-4">
       {feedbackSuccess && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+        <div role="status" className="p-3 status-tint status-approved rounded-xl text-xs font-semibold flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
           {feedbackSuccess}
         </div>
       )}
 
       <div className="flex items-center justify-between">
-        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <div className="text-[13px] font-medium text-ui-muted">
           Plans Waiting for Approval ({plans.length}) • Sorted Oldest First
         </div>
       </div>
@@ -200,94 +211,120 @@ export const PlansApprovalTab: React.FC = () => {
           return (
             <div
               key={plan._id}
-              className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden transition-all"
+              className="glass-card overflow-hidden"
             >
               {/* Plan Card Header */}
-              <div
+              <button
+                type="button"
+                aria-expanded={isExpanded}
                 onClick={() => handleToggleExpand(plan._id)}
-                className="p-4 cursor-pointer hover:bg-slate-50/70 flex items-center justify-between gap-4"
+                className="w-full text-left p-4 hover:bg-ui-card-hover flex items-center justify-between gap-4 rounded-ui-card"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">
+                <span className="flex items-center gap-3 min-w-0">
+                  <span className="w-8 h-8 rounded-xl bg-white/70 text-ui-ink flex items-center justify-center font-semibold text-xs shrink-0">
                     #{index + 1}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                  </span>
+                  <span className="block min-w-0">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs font-semibold text-ui-ink bg-white/70 px-2 py-0.5 rounded">
                         {plan.code}
                       </span>
-                      <h3 className="text-sm font-bold text-slate-900">{plan.title}</h3>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                      <span className="text-sm font-semibold text-ui-ink">{plan.title}</span>
+                      <span className="status-chip status-waiting text-[11px] font-semibold px-2 py-0.5">
                         {plan.status}
                       </span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                    </span>
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-ui-muted">
                       <span>Submitted by {plan.createdById?.name || 'SM Manager'}</span>
                       <span>•</span>
-                      <span className="flex items-center gap-1 text-amber-700 font-semibold">
-                        <Clock className="w-3.5 h-3.5" />
+                      <span className="flex items-center gap-1 text-ui-text font-semibold">
+                        <Clock className="w-3.5 h-3.5" aria-hidden="true" />
                         Waiting since {submittedDate.toLocaleDateString()} {submittedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                       <span>•</span>
-                      <span className="font-semibold text-slate-700">
+                      <span className="font-semibold text-ui-text">
                         {plan.submittedRowCount || submittedRows.length} rows awaiting review
                       </span>
-                    </div>
-                  </div>
-                </div>
+                    </span>
+                  </span>
+                </span>
 
-                <div className="flex items-center gap-2">
-                  <button className="p-1 rounded-lg text-slate-400 hover:text-slate-700">
-                    {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                  </button>
-                </div>
-              </div>
+                <span className="text-ui-muted shrink-0" aria-hidden="true">
+                  {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                </span>
+              </button>
 
               {/* Expanded Review Section */}
               {isExpanded && (
-                <div className="border-t border-slate-100 p-4 bg-slate-50/40 space-y-4">
+                <div className="border-t border-ui-line p-4 space-y-4">
                   {/* Creative Head Action Bar */}
-                  <div className="flex items-center justify-between flex-wrap gap-2 p-3 bg-white rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between flex-wrap gap-2 p-3 bg-white/60 rounded-xl">
                     <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-purple-600" />
-                      <span className="text-xs font-bold text-slate-800">Creative Head Review Actions:</span>
+                      <Sparkles className="w-4 h-4 text-ui-ink" aria-hidden="true" />
+                      <span className="text-xs font-semibold text-ui-ink">Creative Head Review Actions:</span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {plan.kind === 'monthly' && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(planGridHref({ calendar: plan.calendar || 'sm', month: planMonthKey(plan.periodStart), planId: plan._id }))
+                          }
+                          className="ui-btn ui-btn-secondary h-11"
+                        >
+                          <FileSpreadsheet className="w-4 h-4" aria-hidden="true" />
+                          {canReview ? 'Review in plan grid' : 'View in plan grid'}
+                        </button>
+                      )}
+                      {!canReview && plan.kind !== 'monthly' && (
+                        <p className="text-xs text-ui-muted">Only the Creative Head can approve or return plan rows.</p>
+                      )}
+                      {plan.kind === 'monthly' && (
+                        <p className="text-xs text-ui-muted">Monthly plans are reviewed row by row in the plan grid.</p>
+                      )}
+                      {/* Individual plans are not in the grid, so their review stays here. */}
+                      {canReview && plan.kind !== 'monthly' && (<>
                       <button
+                        type="button"
                         onClick={() => handleReview(plan._id, 'approve_all')}
                         disabled={isSubmittingReview}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50"
+                        className="ui-btn ui-btn-primary h-11"
                       >
                         Approve All Rows
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => handleReview(plan._id, 'approve_selected')}
                         disabled={isSubmittingReview || selectedRowIds.length === 0}
-                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50"
+                        className="ui-btn ui-btn-secondary h-11"
                       >
                         Approve Selected ({selectedRowIds.length})
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => handleReview(plan._id, 'request_changes')}
                         disabled={isSubmittingReview}
-                        className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50"
+                        className="ui-btn ui-btn-secondary h-11"
                       >
                         Request Changes with Comments
                       </button>
+                      </>)}
                     </div>
                   </div>
 
                   {/* Rows Table */}
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                  <div className="overflow-x-auto rounded-xl bg-white">
                     <table className="ui-table w-full text-left text-xs">
-                      <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
+                      <thead className="text-ui-muted font-medium border-b border-ui-line">
                         <tr>
-                          <th className="p-3 w-8">
+                          {canReviewHere(plan) && <th className="p-1 w-11">
+                            <label className="inline-flex items-center justify-center w-11 h-11 cursor-pointer">
                             <input
                               type="checkbox"
+                              aria-label="Select all submitted rows"
                               checked={
                                 submittedRows.length > 0 &&
                                 selectedRowIds.length === submittedRows.length
@@ -299,9 +336,10 @@ export const PlansApprovalTab: React.FC = () => {
                                   setSelectedRowIds([]);
                                 }
                               }}
-                              className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                              className="w-4 h-4 accent-ui-ink"
                             />
-                          </th>
+                            </label>
+                          </th>}
                           <th className="p-3">#</th>
                           <th className="p-3">Posting Date</th>
                           <th className="p-3">Topic</th>
@@ -311,7 +349,7 @@ export const PlansApprovalTab: React.FC = () => {
                           <th className="p-3 min-w-[200px]">Revision Comment</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-ui-line">
                         {(plan.rows || []).map((row, rIdx) => {
                           const isSubmitted = row.rowStatus === 'submitted';
                           const isRowChecked = selectedRowIds.includes(row._id);
@@ -319,14 +357,16 @@ export const PlansApprovalTab: React.FC = () => {
                           return (
                             <tr
                               key={row._id}
-                              className={`hover:bg-slate-50 transition-colors ${
-                                isRowChecked ? 'bg-purple-50/30' : ''
+                              className={`hover:bg-ui-card-hover transition-colors ${
+                                isRowChecked ? 'bg-ui-blue-soft/40' : ''
                               }`}
                             >
-                              <td className="p-3">
+                              {canReviewHere(plan) && <td className="p-1">
                                 {isSubmitted && (
+                                  <label className="inline-flex items-center justify-center w-11 h-11 cursor-pointer">
                                   <input
                                     type="checkbox"
+                                    aria-label={`Select row ${rIdx + 1}`}
                                     checked={isRowChecked}
                                     onChange={(e) => {
                                       if (e.target.checked) {
@@ -335,51 +375,52 @@ export const PlansApprovalTab: React.FC = () => {
                                         setSelectedRowIds(selectedRowIds.filter((id) => id !== row._id));
                                       }
                                     }}
-                                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                                    className="w-4 h-4 accent-ui-ink"
                                   />
+                                  </label>
                                 )}
-                              </td>
-                              <td className="p-3 font-mono text-slate-400">{rIdx + 1}</td>
-                              <td className="p-3 font-semibold text-slate-800 whitespace-nowrap">
+                              </td>}
+                              <td className="p-3 font-mono text-ui-muted">{rIdx + 1}</td>
+                              <td className="p-3 font-semibold text-ui-text whitespace-nowrap">
                                 {new Date(row.postingDate).toLocaleDateString()}
                               </td>
-                              <td className="p-3 font-medium text-slate-900 max-w-[200px] truncate" title={row.topic}>
+                              <td className="p-3 font-medium text-ui-ink max-w-[200px] truncate" title={row.topic}>
                                 {row.topic}
                               </td>
-                              <td className="p-3 font-bold text-purple-700 whitespace-nowrap">
+                              <td className="p-3 font-semibold text-ui-text whitespace-nowrap">
                                 {row.contentType}
                               </td>
-                              <td className="p-3 text-[11px] text-slate-500 whitespace-nowrap">
+                              <td className="p-3 text-[11px] text-ui-muted whitespace-nowrap">
                                 {row.contentType.toLowerCase().includes('reel') ? (
                                   <div className="flex items-center gap-1">
                                     {row.needsScript && (
-                                      <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">Script</span>
+                                      <span className="px-1.5 py-0.5 rounded bg-white/70 text-ui-text border border-ui-line">Script</span>
                                     )}
                                     {row.needsShoot && (
-                                      <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">Shoot</span>
+                                      <span className="px-1.5 py-0.5 rounded bg-white/70 text-ui-text border border-ui-line">Shoot</span>
                                     )}
                                   </div>
                                 ) : (
-                                  <span className="text-slate-400">—</span>
+                                  <span className="text-ui-muted">—</span>
                                 )}
                               </td>
                               <td className="p-3 whitespace-nowrap">
                                 <span
-                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  className={`status-chip text-[11px] font-semibold px-2 py-0.5 ${
                                     row.rowStatus === 'approved'
-                                      ? 'bg-emerald-100 text-emerald-800'
+                                      ? 'status-approved'
                                       : row.rowStatus === 'submitted'
-                                      ? 'bg-amber-100 text-amber-800'
+                                      ? 'status-waiting'
                                       : row.rowStatus === 'changes_requested'
-                                      ? 'bg-rose-100 text-rose-800'
-                                      : 'bg-slate-100 text-slate-700'
+                                      ? 'status-changes'
+                                      : 'status-not-started'
                                   }`}
                                 >
                                   {row.rowStatus}
                                 </span>
                               </td>
                               <td className="p-3">
-                                {isSubmitted ? (
+                                {isSubmitted && canReviewHere(plan) ? (
                                   <input
                                     type="text"
                                     placeholder="Enter revision note for this row..."
@@ -390,12 +431,13 @@ export const PlansApprovalTab: React.FC = () => {
                                         [row._id]: e.target.value,
                                       })
                                     }
-                                    className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                                    aria-label={`Revision note for row ${rIdx + 1}`}
+                                    className="ui-input w-full"
                                   />
                                 ) : row.reviewComment ? (
-                                  <span className="text-[11px] text-rose-700 italic">{row.reviewComment}</span>
+                                  <span className="text-[11px] text-ui-text italic">{row.reviewComment}</span>
                                 ) : (
-                                  <span className="text-slate-300">—</span>
+                                  <span className="text-ui-muted">—</span>
                                 )}
                               </td>
                             </tr>

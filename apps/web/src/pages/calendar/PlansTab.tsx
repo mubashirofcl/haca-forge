@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { planGridHref } from './PlanGridPage';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { statusClass, type StatusTone } from '../../lib/statusTone';
 import {
   FileSpreadsheet,
   Upload,
-  Download,
   Plus,
   CheckCircle2,
   AlertCircle,
@@ -27,8 +29,21 @@ import {
   formatPlanRowCounts,
   isPostableWorkType,
   normalizeWorkType,
+  planMonthKey,
 } from '@mmp/shared';
 import { Avatar } from '../../components/Avatar';
+import {
+  type StepLineState,
+  calculateDueDateString,
+  getExpectedStepDefs,
+  buildDefaultSteps,
+  applyAutofill,
+  applyPostingDateChange,
+  applyTypeChange,
+  setStepDueDate,
+  setStepOwner,
+  validateRowSteps,
+} from './planRowSteps';
 
 export interface StagePlanPreviewItem {
   stageKey: 'Content' | 'Script' | 'Design' | 'Shoot' | 'Edit' | 'Post';
@@ -42,16 +57,7 @@ export interface StagePlanPreviewItem {
   isSuggestedDueDate?: boolean;
 }
 
-export interface StepLineState {
-  stageKey: 'Content' | 'Script' | 'Design' | 'Shoot' | 'Edit' | 'Post';
-  ownerId: string | null;
-  ownerName?: string;
-  ownerSource: 'suggested' | 'manual';
-  ownerReason?: string;
-  dueDate: string; // YYYY-MM-DD
-  dueDateSource: 'auto' | 'manual';
-  offsetDays: number;
-}
+export type { StepLineState } from './planRowSteps';
 
 export interface TeamMemberOption {
   _id: string;
@@ -60,40 +66,6 @@ export interface TeamMemberOption {
   role: string;
   workPreferences?: string[];
   avatarUrl?: string;
-}
-
-function calculateDueDateString(baseDateStr: string, offsetDays: number): string {
-  if (!baseDateStr) return '';
-  const d = new Date(baseDateStr.includes('T') ? baseDateStr : baseDateStr + 'T00:00:00');
-  if (isNaN(d.getTime())) return '';
-  d.setDate(d.getDate() - offsetDays);
-  return d.toISOString().slice(0, 10);
-}
-
-function getExpectedStepDefs(
-  type: string,
-  needsScript: boolean,
-  needsShoot: boolean
-): { stageKey: 'Content' | 'Script' | 'Design' | 'Shoot' | 'Edit' | 'Post'; offset: number }[] {
-  const norm = normalizeWorkType(type || 'Reel A');
-  const postable = isPostableWorkType(norm);
-  if (norm.toLowerCase() === 'reel') {
-    const list: { stageKey: 'Script' | 'Shoot' | 'Edit' | 'Post'; offset: number }[] = [];
-    if (needsScript) list.push({ stageKey: 'Script', offset: 8 });
-    if (needsShoot) list.push({ stageKey: 'Shoot', offset: 5 });
-    list.push({ stageKey: 'Edit', offset: 2 });
-    list.push({ stageKey: 'Post', offset: 0 });
-    return list;
-  } else {
-    const list: { stageKey: 'Content' | 'Design' | 'Post'; offset: number }[] = [
-      { stageKey: 'Content', offset: 5 },
-      { stageKey: 'Design', offset: 2 },
-    ];
-    if (postable) {
-      list.push({ stageKey: 'Post', offset: 0 });
-    }
-    return list;
-  }
 }
 
 interface PlanRow {
@@ -168,19 +140,20 @@ interface ValidationPreviewResponse {
   previewRows: ValidationPreviewRow[];
 }
 
-const STATUS_BADGES: Record<CalendarPlanStatus, { bg: string; text: string; border: string; label: string }> = {
-  Draft: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', label: 'Draft' },
-  Submitted: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', label: 'Submitted for Review' },
-  'Changes requested': { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', label: 'Changes Requested' },
-  Approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', label: 'Approved' },
-  'Approved with pending rows': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', label: 'Approved (Pending Rows)' },
+// Plan and row statuses reuse the shared status tones (colours live in index.css).
+const STATUS_BADGES: Record<CalendarPlanStatus, { tone: StatusTone; label: string }> = {
+  Draft: { tone: 'not-started', label: 'Draft' },
+  Submitted: { tone: 'waiting', label: 'Submitted for Review' },
+  'Changes requested': { tone: 'changes', label: 'Changes Requested' },
+  Approved: { tone: 'approved', label: 'Approved' },
+  'Approved with pending rows': { tone: 'in-progress', label: 'Approved (Pending Rows)' },
 };
 
-const ROW_STATUS_BADGES: Record<RowStatus, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-100 text-slate-700', text: 'text-slate-700', label: 'Draft' },
-  submitted: { bg: 'bg-amber-100 text-amber-800', text: 'text-amber-800', label: 'Submitted' },
-  changes_requested: { bg: 'bg-rose-100 text-rose-800', text: 'text-rose-800', label: 'Changes Requested' },
-  approved: { bg: 'bg-emerald-100 text-emerald-800', text: 'text-emerald-800', label: 'Approved' },
+const ROW_STATUS_BADGES: Record<RowStatus, { tone: StatusTone; label: string }> = {
+  draft: { tone: 'not-started', label: 'Draft' },
+  submitted: { tone: 'waiting', label: 'Submitted' },
+  changes_requested: { tone: 'changes', label: 'Changes Requested' },
+  approved: { tone: 'approved', label: 'Approved' },
 };
 
 interface PlansTabProps {
@@ -196,7 +169,8 @@ export const PlansTab: React.FC<PlansTabProps> = ({
 }) => {
   const { user } = useAuth();
   const isExecutive = user?.role === 'executive';
-  const isCreativeHead = user?.role === 'creative_head' || user?.role === 'admin';
+  // Plan row review is the Creative Head's alone (PG-3); admin keeps planning and every other permission.
+  const isCreativeHead = user?.role === 'creative_head';
   const isSMManager = user?.role === 'sm_manager' || user?.role === 'admin';
   const isAdmin = user?.role === 'admin';
 
@@ -204,6 +178,34 @@ export const PlansTab: React.FC<PlansTabProps> = ({
   const [plans, setPlans] = useState<CalendarPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<CalendarPlan | null>(null);
+
+  // The plan grid is a full-screen route (/calendar/plan-grid). One entry point per role, below.
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const openGrid = (opts: { calendar?: string; month?: string; planId?: string } = {}) =>
+    navigate(planGridHref(opts));
+  // Older deep links (?tab=plans&grid=1&gridCalendar=&gridMonth=&gridPlan=) still work.
+  useEffect(() => {
+    if (searchParams.get('grid') === '1') {
+      navigate(
+        planGridHref({
+          calendar: searchParams.get('gridCalendar') || 'sm',
+          month: searchParams.get('gridMonth') || undefined,
+          planId: searchParams.get('gridPlan') || undefined,
+        }),
+        { replace: true }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /** The grid opens on the selected monthly plan's month, otherwise on the current calendar filter. */
+  const openGridForContext = () =>
+    selectedPlan && selectedPlan.kind === 'monthly'
+      ? openGrid({ calendar: selectedPlan.calendar || 'sm', month: planMonthKey(selectedPlan.periodStart), planId: selectedPlan._id })
+      : openGrid({ calendar: selectedCalendar && selectedCalendar !== 'all' ? selectedCalendar : 'sm' });
+  const gridLabel = isCreativeHead ? 'Review in plan grid' : isExecutive ? 'View plan grid' : 'Open plan grid';
+  const canOpenGrid = isSMManager || isCreativeHead || isExecutive;
+  const isMonthlyPlan = selectedPlan?.kind === 'monthly';
 
   // Create Plan Modal State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -283,22 +285,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
     needsScript: boolean,
     needsShoot: boolean,
     postDateStr: string
-  ): StepLineState[] => {
-    const defs = getExpectedStepDefs(type, needsScript, needsShoot);
-    return defs.map((d) => {
-      const best = activeMembers.find((m) => m.workPreferences?.includes(d.stageKey));
-      return {
-        stageKey: d.stageKey,
-        ownerId: best?._id || null,
-        ownerName: best?.name || '',
-        ownerSource: 'suggested',
-        ownerReason: best ? 'Matching work preference' : 'No available person with this role',
-        dueDate: d.stageKey === 'Post' ? postDateStr : calculateDueDateString(postDateStr, d.offset),
-        dueDateSource: 'auto',
-        offsetDays: d.offset,
-      };
-    });
-  };
+  ): StepLineState[] => buildDefaultSteps(type, needsScript, needsShoot, postDateStr, activeMembers);
 
   const triggerAutofill = async (
     type: string,
@@ -331,120 +318,28 @@ export const PlansTab: React.FC<PlansTabProps> = ({
       });
 
       if (res?.data?.stages) {
-        setRowSteps((prev) => {
-          return prev.map((step) => {
-            const autofillStage = res.data.stages.find((s) => s.stageKey === step.stageKey);
-            if (!autofillStage) return step;
-
-            const updated = { ...step };
-            if (step.ownerSource !== 'manual') {
-              updated.ownerId = autofillStage.ownerId;
-              updated.ownerName = autofillStage.ownerName || '';
-              updated.ownerReason = autofillStage.reason;
-              updated.ownerSource = 'suggested';
-            }
-            if (step.dueDateSource !== 'manual' && autofillStage.dueDate) {
-              updated.dueDate = autofillStage.dueDate.substring(0, 10);
-              updated.dueDateSource = 'auto';
-            }
-            return updated;
-          });
-        });
+        setRowSteps((prev) => applyAutofill(prev, res.data.stages));
       }
     } catch {}
   };
 
-  const stepValidation = useMemo(() => {
-    const errors: Record<string, string> = {};
-    const warnings: Record<string, string> = {};
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const postDate = rowPostingDate
-      ? new Date(rowPostingDate.includes('T') ? rowPostingDate : rowPostingDate + 'T00:00:00')
-      : null;
-
-    for (let i = 0; i < rowSteps.length; i++) {
-      const s = rowSteps[i];
-      if (!s.dueDate) {
-        errors[s.stageKey] = 'Deadline is required';
-        continue;
-      }
-      const d = new Date(s.dueDate.includes('T') ? s.dueDate : s.dueDate + 'T00:00:00');
-      if (d < today) {
-        errors[s.stageKey] = 'Deadline cannot be in the past';
-      } else if (postDate && d > postDate) {
-        errors[s.stageKey] = `Deadline cannot be after ${isPostable ? 'publish' : 'needed-by'} date`;
-      }
-
-      // Sequential order check
-      if (s.stageKey === 'Script') {
-        const shoot = rowSteps.find((st) => st.stageKey === 'Shoot');
-        if (shoot && shoot.dueDate && d >= new Date(shoot.dueDate.includes('T') ? shoot.dueDate : shoot.dueDate + 'T00:00:00')) {
-          errors[s.stageKey] = 'Script must be before Shoot deadline';
-        }
-      } else if (s.stageKey === 'Shoot') {
-        const edit = rowSteps.find((st) => st.stageKey === 'Edit');
-        if (edit && edit.dueDate && d >= new Date(edit.dueDate.includes('T') ? edit.dueDate : edit.dueDate + 'T00:00:00')) {
-          errors[s.stageKey] = 'Shoot must be before Edit deadline';
-        }
-      } else if (s.stageKey === 'Content') {
-        const design = rowSteps.find((st) => st.stageKey === 'Design');
-        if (design && design.dueDate && d >= new Date(design.dueDate.includes('T') ? design.dueDate : design.dueDate + 'T00:00:00')) {
-          errors[s.stageKey] = 'Content must be before Design deadline';
-        }
-      }
-
-      // Owner work preference check
-      if (s.ownerId) {
-        const member = activeMembers.find((m) => m._id === s.ownerId);
-        if (member && !member.workPreferences?.includes(s.stageKey)) {
-          errors[s.stageKey] = `${member.name} lacks "${s.stageKey}" in work preferences`;
-        }
-      }
-
-      // Tight buffer warning for last creation step
-      if (
-        postDate &&
-        (s.stageKey === 'Edit' ||
-          (s.stageKey === 'Design' && !rowSteps.some((st) => st.stageKey === 'Edit')))
-      ) {
-        const postMinus1 = new Date(postDate);
-        postMinus1.setDate(postMinus1.getDate() - 1);
-        if (d > postMinus1) {
-          warnings[s.stageKey] = 'Tight buffer: less than 24h before final date';
-        }
-      }
-    }
-
-    if (isReel && !rowNeedsShoot && !rowSourceVideoLink.trim()) {
-      errors['sourceVideoLink'] = 'Source video link is required when Reel does not need a shoot.';
-    }
-
-    return { errors, warnings };
-  }, [rowSteps, rowPostingDate, isPostable, isReel, rowNeedsShoot, rowSourceVideoLink, activeMembers]);
+  const stepValidation = useMemo(
+    () =>
+      validateRowSteps({
+        steps: rowSteps,
+        postingDate: rowPostingDate,
+        type: rowType,
+        needsShoot: rowNeedsShoot,
+        sourceVideoLink: rowSourceVideoLink,
+        members: activeMembers,
+      }),
+    [rowSteps, rowPostingDate, rowType, rowNeedsShoot, rowSourceVideoLink, activeMembers]
+  );
 
   const handlePostingDateChange = (newDate: string) => {
     setRowPostingDate(newDate);
     if (!newDate) return;
-    setRowSteps((prev) =>
-      prev.map((step) => {
-        if (step.stageKey === 'Post') {
-          return {
-            ...step,
-            dueDate: newDate,
-          };
-        }
-        if (step.dueDateSource === 'manual') {
-          return step;
-        }
-        return {
-          ...step,
-          dueDate: calculateDueDateString(newDate, step.offsetDays),
-        };
-      })
-    );
+    setRowSteps((prev) => applyPostingDateChange(prev, newDate));
   };
 
   const handleTypeOrTogglesChange = (
@@ -455,72 +350,16 @@ export const PlansTab: React.FC<PlansTabProps> = ({
     setRowType(newType);
     setRowNeedsScript(newNeedsScript);
     setRowNeedsShoot(newNeedsShoot);
-
-    const defs = getExpectedStepDefs(newType, newNeedsScript, newNeedsShoot);
-    setRowSteps((prev) => {
-      const prevMap = new Map(prev.map((s) => [s.stageKey, s]));
-      return defs.map((d) => {
-        const existing = prevMap.get(d.stageKey);
-        if (existing) {
-          return {
-            ...existing,
-            offsetDays: d.offset,
-            dueDate:
-              d.stageKey === 'Post'
-                ? rowPostingDate
-                : existing.dueDateSource === 'manual'
-                ? existing.dueDate
-                : calculateDueDateString(rowPostingDate, d.offset),
-          };
-        }
-        const best = activeMembers.find((m) => m.workPreferences?.includes(d.stageKey));
-        return {
-          stageKey: d.stageKey,
-          ownerId: best?._id || null,
-          ownerName: best?.name || '',
-          ownerSource: 'suggested',
-          ownerReason: best ? 'Matching work preference' : 'No available person with this role',
-          dueDate: d.stageKey === 'Post' ? rowPostingDate : calculateDueDateString(rowPostingDate, d.offset),
-          dueDateSource: 'auto',
-          offsetDays: d.offset,
-        };
-      });
-    });
-
+    setRowSteps((prev) => applyTypeChange(prev, newType, newNeedsScript, newNeedsShoot, rowPostingDate, activeMembers));
     triggerAutofill(newType, rowPostingDate, newNeedsScript, newNeedsShoot);
   };
 
   const handleStepDueDateChange = (stageKey: string, newDate: string) => {
-    setRowSteps((prev) =>
-      prev.map((s) => {
-        if (s.stageKey === stageKey) {
-          return {
-            ...s,
-            dueDate: newDate,
-            dueDateSource: 'manual',
-          };
-        }
-        return s;
-      })
-    );
+    setRowSteps((prev) => setStepDueDate(prev, stageKey, newDate));
   };
 
   const handleStepOwnerChange = (stageKey: string, newOwnerId: string) => {
-    setRowSteps((prev) =>
-      prev.map((s) => {
-        if (s.stageKey === stageKey) {
-          const m = activeMembers.find((mem) => mem._id === newOwnerId);
-          return {
-            ...s,
-            ownerId: newOwnerId || null,
-            ownerName: m?.name || '',
-            ownerSource: 'manual',
-            ownerReason: '',
-          };
-        }
-        return s;
-      })
-    );
+    setRowSteps((prev) => setStepOwner(prev, stageKey, newOwnerId, activeMembers));
   };
 
   const handleOpenEditModal = (row: PlanRow) => {
@@ -649,15 +488,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
     }
   }, [isIndividualCreateRequested]);
 
-  // Template Download
-  const handleDownloadTemplate = () => {
-    const link = document.createElement('a');
-    link.href = '/api/calendar-plans/template';
-    link.download = 'calendar_plan_template.xlsx';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+
 
   const openCreateModal = (kind: 'monthly' | 'individual' = 'monthly') => {
     setNewKind(kind);
@@ -732,6 +563,11 @@ export const PlansTab: React.FC<PlansTabProps> = ({
         periodEnd: newEnd,
         comment: newComment.trim(),
       };
+      if (newKind === 'monthly' && newEnd < newStart) {
+        setCreateError('Period end cannot be before period start.');
+        setIsSubmittingPlan(false);
+        return;
+      }
       if (newKind === 'individual') {
         const normIndivType = normalizeWorkType(indivType) || 'Static Post';
         const isReel = normIndivType === 'Reel';
@@ -1145,65 +981,24 @@ export const PlansTab: React.FC<PlansTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 glass-card p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 glass-panel rounded-ui-panel p-5 sm:p-6">
         <div>
           <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-purple-600" />
+            <FileSpreadsheet className="w-5 h-5 text-ui-ink" />
             Calendar Plans Management
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-ui-muted mt-0.5">
             Build the monthly content calendar, check your spreadsheet before upload, and follow the Creative Head's approval row by row.
           </p>
         </div>
 
-        {/* Action Controls (Hidden for Executive read-only) */}
-        {!isExecutive && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleDownloadTemplate}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
-              title="Download Excel template (Posting Date, Topic, Type, Needs Script, Needs Shoot, Content Link, Remarks)"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
-              Download Template
-            </button>
-
-            {isSMManager && (
-              <>
-                <button
-                  onClick={() => {
-                    setIsUploadOpen(true);
-                    setPreviewData(null);
-                    setSelectedFile(null);
-                    setImportError(null);
-                    setUploadPlanId(selectedPlan?._id || plans[0]?._id || '');
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  Upload & Preview
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => openCreateModal('individual')}
-                  className="px-3 py-1.5 rounded-lg border border-purple-300 bg-white hover:bg-purple-50 text-purple-700 text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add individual work
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => openCreateModal('monthly')}
-                  className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-purple-200 transition-all cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  New Plan
-                </button>
-              </>
-            )}
-          </div>
+        {/* One entry point into the plan grid for every role that may use it.
+            Download Template, Upload and Submit live in the grid; Add individual work is on the Calendar header. */}
+        {canOpenGrid && (
+          <button type="button" onClick={openGridForContext} className="ui-btn ui-btn-primary h-11 self-start sm:self-auto">
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            {gridLabel}
+          </button>
         )}
       </div>
 
@@ -1211,17 +1006,17 @@ export const PlansTab: React.FC<PlansTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Plans Table */}
         <div className={selectedPlan ? 'lg:col-span-5' : 'lg:col-span-12'}>
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+          <div className="glass-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-ui-line flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-ui-text">
                 All Plans ({plans.length})
               </span>
-              {isLoading && <span className="text-xs text-slate-400">Loading...</span>}
+              {isLoading && <span className="text-xs text-ui-muted">Loading...</span>}
             </div>
 
-            <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+            <div className="divide-y divide-ui-line max-h-[600px] overflow-y-auto">
               {plans.length === 0 && !isLoading ? (
-                <div className="p-8 text-center text-slate-400 text-xs">
+                <div className="p-8 text-center text-ui-muted text-xs">
                   No calendar plans created yet. Click "New Plan" or "Upload & Preview" to get started.
                 </div>
               ) : (
@@ -1231,41 +1026,41 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   const hasOverlap = p.submissionWarnings?.some((w) => w.code === 'OVERLAPPING_PERIOD');
                   const planCal = getCalendarDefinition(p.calendar);
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={p._id}
                       onClick={() => fetchPlanDetails(p._id)}
-                      className={`p-4 cursor-pointer transition-all hover:bg-slate-50 ${
-                        isSelected ? 'bg-purple-50/60 border-l-4 border-purple-600' : ''
+                      aria-pressed={isSelected}
+                      className={`block w-full text-left p-4 transition-colors hover:bg-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ui-ink ${
+                        isSelected ? 'bg-white shadow-[inset_3px_0_0_rgb(var(--ui-ink-rgb))]' : ''
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-sm font-bold text-slate-900 line-clamp-1">{p.title}</h3>
-                            <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-100/70 px-1.5 py-0.5 rounded">
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="block min-w-0">
+                          <span className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-ui-ink line-clamp-1">{p.title}</span>
+                            <span className="text-[10px] font-mono font-bold text-ui-ink bg-white/70 px-1.5 py-0.5 rounded">
                               {p.code}
                             </span>
-                            <span
-                              className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
-                              style={{ backgroundColor: planCal.bg, borderColor: planCal.border, color: planCal.text }}
-                            >
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/80 text-ui-text">
+                              <span className={`cal-dot cal-${planCal.key}`} />
                               {planCal.name}
                             </span>
-                          </div>
-                          <p className="text-xs text-slate-500 mt-1">
-                            {new Date(p.periodStart).toLocaleDateString()} – {new Date(p.periodEnd).toLocaleDateString()}
-                          </p>
-                        </div>
+                          </span>
+                          <span className="block text-xs text-ui-muted mt-1">
+                            {new Date(p.periodStart).toLocaleDateString(undefined, { timeZone: 'UTC' })} – {new Date(p.periodEnd).toLocaleDateString(undefined, { timeZone: 'UTC' })}
+                          </span>
+                        </span>
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${badge.bg} ${badge.text} ${badge.border}`}
+                          className={`status-chip ${statusClass(badge.tone)} text-[11px] font-semibold px-2 py-0.5 whitespace-nowrap`}
                         >
                           {badge.label}
                         </span>
-                      </div>
+                      </span>
 
-                      <div className="mt-2 text-[11px] text-slate-600 font-medium">
+                      <span className="block mt-2 text-xs text-ui-text font-medium">
                         {p.rowCount === 0 ? (
-                          <span className="italic text-slate-400">No rows yet</span>
+                          <span className="italic text-ui-muted">No rows yet</span>
                         ) : (
                           <span>
                             {formatPlanRowCounts({
@@ -1277,15 +1072,15 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                             })}
                           </span>
                         )}
-                      </div>
+                      </span>
 
                       {hasOverlap && (
-                        <div className="mt-2 flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 w-fit">
-                          <AlertCircle className="w-3 h-3 text-amber-600 shrink-0" />
+                        <span className="mt-2 flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit status-tint status-waiting">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
                           <span>Overlapping period</span>
-                        </div>
+                        </span>
                       )}
-                    </div>
+                    </button>
                   );
                 })
               )}
@@ -1296,21 +1091,17 @@ export const PlansTab: React.FC<PlansTabProps> = ({
         {/* Right Column: Plan Detail & Editable Rows Grid */}
         {selectedPlan && (
           <div className="lg:col-span-7 space-y-4">
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+            <div className="glass-panel rounded-ui-panel p-5 sm:p-6">
               {/* Plan Header */}
-              <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="flex items-start justify-between gap-4 pb-4 border-b border-ui-line">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-lg font-bold text-slate-900">{selectedPlan.title}</h2>
-                    <span className="text-xs font-mono font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono font-bold text-ui-ink bg-white/70 px-2 py-0.5 rounded">
                       {selectedPlan.code}
                     </span>
                     <span
-                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
-                        STATUS_BADGES[selectedPlan.status]?.bg
-                      } ${STATUS_BADGES[selectedPlan.status]?.text} ${
-                        STATUS_BADGES[selectedPlan.status]?.border
-                      }`}
+                      className={`status-chip ${statusClass(STATUS_BADGES[selectedPlan.status]?.tone || 'not-started')} text-[11px] font-bold px-2.5 py-0.5`}
                     >
                       {STATUS_BADGES[selectedPlan.status]?.label}
                     </span>
@@ -1326,7 +1117,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                               value={selectedPlan.calendar || 'sm'}
                               disabled={isMovingCalendar}
                               onChange={(e) => handleMoveCalendar(e.target.value as CalendarKey)}
-                              className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-400"
+                              className="ui-select cursor-pointer"
                               style={{
                                 backgroundColor: planCal.bg,
                                 borderColor: planCal.border,
@@ -1362,7 +1153,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                           setIsRenameOpen(true);
                         }}
                         title="Rename Plan"
-                        className="p-1 rounded text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                        className="p-1 rounded text-ui-muted hover:text-ui-ink hover:bg-white transition-colors"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
@@ -1373,22 +1164,24 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                         <button
                           onClick={() => handleDeletePlan(selectedPlan._id)}
                           title="Delete Draft Plan"
-                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          aria-label="Delete Draft Plan"
+                          className="ui-icon-btn hover:text-ui-ink"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Period: {new Date(selectedPlan.periodStart).toLocaleDateString()} –{' '}
-                    {new Date(selectedPlan.periodEnd).toLocaleDateString()} • Created by{' '}
+                  <p className="text-xs text-ui-muted mt-1">
+                    Period: {new Date(selectedPlan.periodStart).toLocaleDateString(undefined, { timeZone: 'UTC' })} –{' '}
+                    {new Date(selectedPlan.periodEnd).toLocaleDateString(undefined, { timeZone: 'UTC' })} • Created by{' '}
                     {selectedPlan.createdById?.name || 'SM Manager'}
                   </p>
                 </div>
 
                 <button
                   onClick={() => setSelectedPlan(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
+                  aria-label="Close plan"
+                  className="ui-icon-btn"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1454,7 +1247,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                     <button
                       onClick={() => handleSubmitPlan(selectedPlan._id)}
                       disabled={isSubmittingPlan || (selectedPlan.rows || []).length === 0}
-                      className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm flex-shrink-0 transition-all hover:shadow"
+                      className="ui-btn ui-btn-primary h-11"
                     >
                       <Send className="w-3.5 h-3.5" />
                       Resubmit for Approval
@@ -1463,21 +1256,30 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                 </div>
               )}
 
-              {/* Action Toolbar for SM Manager (Submit/Resubmit) & Creative Head (Review) */}
-              {!isExecutive && (
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
+              {/* Monthly plans: rows are added, edited, submitted and reviewed in the plan grid only. */}
+              {isMonthlyPlan && canOpenGrid && (
+                <p className="mt-4 pt-3 border-t border-ui-line text-sm text-ui-muted">
+                  {isExecutive
+                    ? `Use “${gridLabel}” above to see this plan's rows and progress.`
+                    : `Use “${gridLabel}” above to ${isCreativeHead ? 'review this plan row by row' : 'add, edit and submit rows for this plan'}.`}
+                </p>
+              )}
+
+              {/* Action Toolbar for individual plans: SM Manager (Submit/Resubmit) & Creative Head (Review) */}
+              {!isExecutive && !isMonthlyPlan && (
+                <div className="mt-4 pt-3 border-t border-ui-line flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2">
-                    {isSMManager && selectedPlan.status !== 'Approved' && (
+                    {isSMManager && !isMonthlyPlan && selectedPlan.status !== 'Approved' && (
                       <button
                         onClick={handleOpenAddRowModal}
-                        className="px-3 py-1.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold flex items-center gap-1.5"
+                        className="ui-btn ui-btn-secondary h-11"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Add Row
                       </button>
                     )}
 
-                    {isSMManager &&
+                    {isSMManager && !isMonthlyPlan &&
                       (selectedPlan.status === 'Draft' ||
                         selectedPlan.status === 'Changes requested' ||
                         selectedPlan.status === 'Approved with pending rows' ||
@@ -1495,7 +1297,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                 : selectedPlan.status === 'Changes requested' ||
                                   (selectedPlan.rows || []).some((r) => r.rowStatus === 'changes_requested')
                                 ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
-                                : 'bg-purple-600 hover:bg-purple-700 shadow-purple-200'
+                                : 'bg-ui-ink hover:bg-ui-ink/85'
                             }`}
                           >
                             <Send className="w-3.5 h-3.5" />
@@ -1505,7 +1307,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                               : 'Submit for Review'}
                           </button>
                           {(selectedPlan.rows || []).length === 0 && (
-                            <span className="text-[11px] text-slate-400 italic">
+                            <span className="text-[11px] text-ui-muted italic">
                               Add at least one row
                             </span>
                           )}
@@ -1514,7 +1316,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   </div>
 
                   {/* Creative Head Review Controls */}
-                  {isCreativeHead && (selectedPlan.status === 'Submitted' || (selectedPlan.rows || []).some(r => r.rowStatus === 'submitted')) && (
+                  {isCreativeHead && !isMonthlyPlan && (selectedPlan.status === 'Submitted' || (selectedPlan.rows || []).some(r => r.rowStatus === 'submitted')) && (
                     <div className="flex items-center gap-2 flex-wrap bg-amber-50/70 p-2 rounded-xl border border-amber-200/70">
                       <span className="text-[11px] font-bold text-amber-900 mr-1 flex items-center gap-1">
                         <Sparkles className="w-3 h-3 text-amber-600" />
@@ -1524,7 +1326,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                       <button
                         onClick={() => handleReviewPlan('approve_all')}
                         disabled={isReviewSubmitting}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all disabled:opacity-50"
+                        className="ui-btn ui-btn-primary h-11"
                       >
                         Approve All
                       </button>
@@ -1532,7 +1334,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                       <button
                         onClick={() => handleReviewPlan('approve_selected')}
                         disabled={isReviewSubmitting || selectedRowIds.length === 0}
-                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all disabled:opacity-50"
+                        className="ui-btn ui-btn-secondary h-11"
                       >
                         Approve Selected ({selectedRowIds.length})
                       </button>
@@ -1540,7 +1342,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                       <button
                         onClick={() => handleReviewPlan('request_changes')}
                         disabled={isReviewSubmitting}
-                        className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all disabled:opacity-50"
+                        className="ui-btn status-tint status-changes h-11"
                       >
                         Request Changes
                       </button>
@@ -1552,9 +1354,9 @@ export const PlansTab: React.FC<PlansTabProps> = ({
               {/* Rows Grid */}
               <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
                 <table className="ui-table w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
+                  <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
-                      {isCreativeHead && (
+                      {isCreativeHead && !isMonthlyPlan && (
                         <th className="p-3 w-8">
                           <input
                             type="checkbox"
@@ -1573,7 +1375,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                 setSelectedRowIds([]);
                               }
                             }}
-                            className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                            className="rounded border-slate-300 text-ui-ink focus:ring-ui-ink"
                           />
                         </th>
                       )}
@@ -1585,14 +1387,14 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                       <th className="p-3">Flags</th>
                       <th className="p-3">Status</th>
                       <th className="p-3">Review Feedback</th>
-                      {!isExecutive && <th className="p-3 text-right">Actions</th>}
+                      {!isExecutive && !isMonthlyPlan && <th className="p-3 text-right">Actions</th>}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-ui-line">
                     {(selectedPlan.rows || []).length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="p-6 text-center text-slate-400">
-                          No rows in this plan yet. Use "Add Row" or upload via Excel.
+                        <td colSpan={9} className="p-6 text-center text-ui-muted">
+                          {isMonthlyPlan ? `No rows in this plan yet. Use “${gridLabel}” above.` : 'No rows in this plan yet. Use "Add Row".'}
                         </td>
                       </tr>
                     ) : (
@@ -1605,13 +1407,13 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                             key={row._id}
                             className={`hover:bg-slate-50/80 transition-colors ${
                               isRowChecked
-                                ? 'bg-purple-50/30'
+                                ? 'bg-white/70'
                                 : row.rowStatus === 'changes_requested'
                                 ? 'bg-rose-50/40'
                                 : ''
                             }`}
                           >
-                            {isCreativeHead && (
+                            {isCreativeHead && !isMonthlyPlan && (
                               <td className="p-3">
                                 <input
                                   type="checkbox"
@@ -1623,18 +1425,18 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                       setSelectedRowIds(selectedRowIds.filter((id) => id !== row._id));
                                     }
                                   }}
-                                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                                  className="rounded border-slate-300 text-ui-ink focus:ring-ui-ink"
                                 />
                               </td>
                             )}
-                            <td className="p-3 font-mono text-slate-400">{idx + 1}</td>
+                            <td className="p-3 font-mono text-ui-muted">{idx + 1}</td>
                             <td className="p-3 font-semibold text-slate-800 whitespace-nowrap">
                               {new Date(row.postingDate).toLocaleDateString()}
                             </td>
                             <td className="p-3 font-medium text-slate-900 max-w-[180px] truncate" title={row.topic}>
                               {row.topic}
                             </td>
-                            <td className="p-3 font-semibold text-purple-700 whitespace-nowrap">
+                            <td className="p-3 font-semibold text-ui-ink whitespace-nowrap">
                               {row.contentType}
                             </td>
                             <td className="p-3">
@@ -1674,21 +1476,22 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                     <button
                                       key={sp.stageKey}
                                       type="button"
+                                      disabled={isMonthlyPlan || isExecutive}
                                       onClick={() => handleOpenEditModal(row)}
                                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[11px] font-medium transition-all hover:scale-105 shadow-2xs ${
                                         isTight
                                           ? 'bg-amber-50 border-amber-300 text-amber-900'
-                                          : 'bg-white border-slate-200 text-slate-700 hover:border-purple-300'
+                                          : 'bg-white border-slate-200 text-slate-700 hover:border-ui-ink/30'
                                       }`}
                                       title={`${sp.stageKey}: ${ownerName} - Due: ${dueStr}${
                                         isTight ? ' (Tight buffer: <24h before publish)' : ''
                                       }`}
                                     >
-                                      <span className="font-bold text-[10px] text-purple-700 uppercase tracking-wider">
+                                      <span className="font-bold text-[10px] text-ui-ink">
                                         {sp.stageKey}
                                       </span>
                                       <Avatar name={ownerName} url={ownerObj?.avatarUrl} size="xs" />
-                                      <span className="text-[10px] text-slate-500 font-mono">{dueStr}</span>
+                                      <span className="text-[10px] text-ui-muted font-mono">{dueStr}</span>
                                       {isTight && (
                                         <AlertCircle className="w-3 h-3 text-amber-600 flex-shrink-0" />
                                       )}
@@ -1697,23 +1500,23 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                 })}
                               </div>
                             </td>
-                            <td className="p-3 text-[11px] text-slate-500 whitespace-nowrap">
+                            <td className="p-3 text-[11px] text-ui-muted whitespace-nowrap">
                               {row.contentType.toLowerCase().includes('reel') ? (
                                 <div className="flex items-center gap-1">
                                   {row.needsScript && <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">Script</span>}
                                   {row.needsShoot && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">Shoot</span>}
                                 </div>
                               ) : (
-                                <span className="text-slate-400">—</span>
+                                <span className="text-ui-muted">—</span>
                               )}
                             </td>
                             <td className="p-3 whitespace-nowrap">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge.bg}`}>
+                              <span className={`status-chip ${statusClass(statusBadge.tone)} text-[11px] font-semibold px-2 py-0.5`}>
                                 {statusBadge.label}
                               </span>
                             </td>
                             <td className="p-3 max-w-[200px]">
-                              {isCreativeHead && row.rowStatus === 'submitted' ? (
+                              {isCreativeHead && !isMonthlyPlan && row.rowStatus === 'submitted' ? (
                                 <input
                                   type="text"
                                   placeholder="Comment for revision..."
@@ -1724,7 +1527,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                       [row._id]: e.target.value,
                                     })
                                   }
-                                  className="w-full text-xs px-2 py-1 border border-slate-200 rounded focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                                  className="ui-input w-full"
                                 />
                               ) : row.reviewComment ? (
                                 <div className="text-[11px] text-rose-700 bg-rose-50 p-1.5 rounded border border-rose-100 flex items-start gap-1">
@@ -1735,7 +1538,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                 <span className="text-slate-300">—</span>
                               )}
                             </td>
-                            {!isExecutive && (
+                            {!isExecutive && !isMonthlyPlan && (
                               <td className="p-3 text-right whitespace-nowrap">
                                 {(row.rowStatus === 'draft' || row.rowStatus === 'changes_requested') && (
                                   <div className="flex items-center justify-end gap-1.5">
@@ -1743,7 +1546,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                       <>
                                         <button
                                           onClick={() => handleOpenEditModal(row)}
-                                          className="px-2.5 py-1 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 text-[11px] font-bold flex items-center gap-1 shadow-2xs transition-all"
+                                          className="ui-btn status-tint status-changes h-11 px-3"
                                           title="Rework deliverable based on Creative Head feedback"
                                         >
                                           <Edit2 className="w-3 h-3" />
@@ -1751,7 +1554,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                         </button>
                                         <button
                                           onClick={() => handleQuickResubmitRow(row._id)}
-                                          className="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] font-bold flex items-center gap-1 shadow-2xs transition-all"
+                                          className="ui-btn ui-btn-secondary h-11 px-3"
                                           title="Resubmit this deliverable row for approval"
                                         >
                                           <Send className="w-3 h-3" />
@@ -1761,16 +1564,18 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                     ) : (
                                       <button
                                         onClick={() => handleOpenEditModal(row)}
-                                        className="p-1 rounded text-slate-400 hover:text-purple-600 hover:bg-purple-50"
+                                        className="ui-icon-btn"
                                         title="Edit row"
+                                        aria-label="Edit row"
                                       >
                                         <Edit2 className="w-3.5 h-3.5" />
                                       </button>
                                     )}
                                     <button
                                       onClick={() => handleDeleteRow(row._id)}
-                                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                      className="ui-icon-btn"
                                       title="Delete row"
+                                      aria-label="Delete row"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -1792,16 +1597,16 @@ export const PlansTab: React.FC<PlansTabProps> = ({
 
       {/* Upload & Validation Preview Modal */}
       {isUploadOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col animate-scaleUp">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 ui-scrim backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-modal max-w-3xl w-full p-6 max-h-[90vh] flex flex-col animate-scaleUp">
+            <div className="flex items-center justify-between pb-4 border-b border-ui-line">
               <div className="flex items-center gap-2">
-                <Upload className="w-5 h-5 text-purple-600" />
+                <Upload className="w-5 h-5 text-ui-ink" />
                 <h3 className="text-lg font-bold text-slate-900">Upload Plan & Validation Preview</h3>
               </div>
               <button
                 onClick={() => setIsUploadOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                aria-label="Close" className="ui-icon-btn"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1814,7 +1619,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                 <select
                   value={uploadPlanId}
                   onChange={(e) => setUploadPlanId(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  className="ui-select w-full"
                 >
                   <option value="">Select a plan...</option>
                   {plans.map((p) => (
@@ -1826,7 +1631,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
               </div>
 
               {/* File Dropzone */}
-              <div className="border-2 border-dashed border-purple-200 bg-purple-50/30 rounded-2xl p-6 text-center">
+              <div className="border-2 border-dashed border-ui-line bg-white/70 rounded-2xl p-6 text-center">
                 <input
                   type="file"
                   id="excel-file-input"
@@ -1841,11 +1646,11 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   htmlFor="excel-file-input"
                   className="cursor-pointer flex flex-col items-center justify-center gap-2"
                 >
-                  <FileSpreadsheet className="w-10 h-10 text-purple-500" />
-                  <span className="text-xs font-bold text-purple-700">
+                  <FileSpreadsheet className="w-10 h-10 text-ui-ink" />
+                  <span className="text-xs font-bold text-ui-ink">
                     {selectedFile ? selectedFile.name : 'Click to select Excel (.xlsx) or CSV file'}
                   </span>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-ui-muted">
                     Columns: Posting Date, Topic, Type, Needs Script, Needs Shoot, Content Link, Remarks
                   </span>
                 </label>
@@ -1861,7 +1666,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
 
               {/* Loading Indicator */}
               {isPreviewLoading && (
-                <div className="text-center py-6 text-xs text-purple-600 font-semibold">
+                <div className="text-center py-6 text-xs text-ui-ink font-semibold">
                   Validating rows against due date, types, and duplicate constraints...
                 </div>
               )}
@@ -1871,22 +1676,22 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                 <div className="space-y-3">
                   <div className="grid grid-cols-3 gap-3">
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
-                      <span className="text-[11px] font-bold text-slate-400 uppercase">Total Rows</span>
+                      <span className="text-[11px] font-bold text-ui-muted">Total Rows</span>
                       <p className="text-lg font-extrabold text-slate-800">{previewData.totalRows}</p>
                     </div>
                     <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
-                      <span className="text-[11px] font-bold text-emerald-700 uppercase">Valid Rows</span>
+                      <span className="text-[11px] font-bold text-emerald-700">Valid Rows</span>
                       <p className="text-lg font-extrabold text-emerald-700">{previewData.validRowsCount}</p>
                     </div>
                     <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-center">
-                      <span className="text-[11px] font-bold text-rose-700 uppercase">Invalid Rows</span>
+                      <span className="text-[11px] font-bold text-rose-700">Invalid Rows</span>
                       <p className="text-lg font-extrabold text-rose-700">{previewData.errorRowsCount}</p>
                     </div>
                   </div>
 
                   <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-60">
                     <table className="ui-table w-full text-left text-xs">
-                      <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider sticky top-0 border-b border-slate-200">
+                      <thead className="bg-slate-50 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
                         <tr>
                           <th className="p-2.5">#</th>
                           <th className="p-2.5">Date</th>
@@ -1896,13 +1701,13 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                           <th className="p-2.5">Validation Result</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-ui-line">
                         {((previewData.previewRows || (previewData as any).rows || []) as any[]).map((r, rIdx) => (
                           <tr key={r.rowIndex || r.rowNumber || rIdx} className={r.isValid ? 'bg-white' : 'bg-rose-50/50'}>
-                            <td className="p-2.5 font-mono text-slate-400">{r.rowIndex || r.rowNumber || rIdx + 1}</td>
+                            <td className="p-2.5 font-mono text-ui-muted">{r.rowIndex || r.rowNumber || rIdx + 1}</td>
                             <td className="p-2.5 whitespace-nowrap">{r.postingDate ? r.postingDate.substring(0, 10) : '—'}</td>
                             <td className="p-2.5 font-medium text-slate-800 max-w-[150px] truncate">{r.topic}</td>
-                            <td className="p-2.5 text-purple-700 font-semibold">{r.contentType}</td>
+                            <td className="p-2.5 text-ui-ink font-semibold">{r.contentType}</td>
                             <td className="p-2.5">
                               <div className="flex items-center gap-1 flex-wrap max-w-[260px]">
                                 {(r.stagePlan || []).map((sp: any) => (
@@ -1910,14 +1715,14 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                     key={sp.stageKey}
                                     className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 border border-slate-200 text-slate-700"
                                   >
-                                    <span className="font-bold text-purple-700">{sp.stageKey}</span>
+                                    <span className="font-bold text-ui-ink">{sp.stageKey}</span>
                                     <span>{sp.ownerName || 'Unassigned'}</span>
                                     {sp.isSuggestedOwner && (
-                                      <span className="text-[8px] bg-purple-100 text-purple-700 px-1 rounded font-bold">
+                                      <span className="text-[8px] bg-white/70 text-ui-ink px-1 rounded font-bold">
                                         suggested
                                       </span>
                                     )}
-                                    <span className="font-mono text-slate-500">
+                                    <span className="font-mono text-ui-muted">
                                       {sp.dueDate ? new Date(sp.dueDate.includes('T') ? sp.dueDate : sp.dueDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
                                     </span>
                                     {sp.isSuggestedDueDate && (
@@ -1957,10 +1762,10 @@ export const PlansTab: React.FC<PlansTabProps> = ({
             </div>
 
             {/* Modal Actions */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+            <div className="pt-4 border-t border-ui-line flex items-center justify-end gap-3">
               <button
                 onClick={() => setIsUploadOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                className="ui-btn ui-btn-secondary h-11"
               >
                 Cancel
               </button>
@@ -1969,7 +1774,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                 <button
                   onClick={handleCommitUpload}
                   disabled={isCommitting || !uploadPlanId}
-                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-200 disabled:opacity-50 flex items-center gap-1.5"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   <FileCheck className="w-4 h-4" />
                   {isCommitting ? 'Committing...' : `Commit ${previewData.validRowsCount} Valid Rows as Draft`}
@@ -1982,14 +1787,14 @@ export const PlansTab: React.FC<PlansTabProps> = ({
 
       {/* Create Plan Modal - 3-Step Wizard */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 animate-scaleUp">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 ui-scrim backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-modal max-w-lg w-full p-6 animate-scaleUp">
+            <div className="flex items-center justify-between pb-3 border-b border-ui-line">
               <div className="flex items-center gap-2">
                 {createStep > 1 && (
                   <button
-                    onClick={() => setCreateStep((s) => (s - 1) as any)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                    onClick={() => setCreateStep((s) => (s === 3 && newKind === 'individual' ? 1 : s - 1) as any)}
+                    aria-label="Previous step" className="ui-icon-btn"
                     title="Previous Step"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -2003,7 +1808,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
               </div>
               <button
                 onClick={() => setIsCreateOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                aria-label="Close" className="ui-icon-btn"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2018,7 +1823,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
             {/* STEP 1: CHOOSE CALENDAR */}
             {createStep === 1 && (
               <div className="py-4 space-y-3">
-                <p className="text-xs text-slate-500 font-medium">
+                <p className="text-xs text-ui-muted font-medium">
                   Select the creative calendar this plan will be associated with:
                 </p>
                 <div className="grid grid-cols-1 gap-2.5">
@@ -2037,10 +1842,10 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                           } else if (newKind === 'individual') {
                             setNewTitle(`${cal.name} Individual Work`);
                           }
-                          setCreateStep(2);
+                          setCreateStep(newKind === 'individual' ? 3 : 2);
                         }}
                         className={`p-3.5 rounded-xl border text-left transition-all flex items-center justify-between group hover:scale-[1.01] ${
-                          isSelected ? 'ring-2 ring-purple-500' : 'hover:border-slate-300'
+                          isSelected ? 'ring-2 ring-ui-ink' : 'hover:border-slate-300'
                         }`}
                         style={{
                           backgroundColor: cal.bg,
@@ -2056,12 +1861,12 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                             <span className="text-xs font-extrabold block" style={{ color: cal.text }}>
                               {cal.name}
                             </span>
-                            <span className="text-[11px] text-slate-500">
+                            <span className="text-[11px] text-ui-muted">
                               Creative calendar for {cal.name}
                             </span>
                           </div>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700" />
+                        <ChevronRight className="w-4 h-4 text-ui-muted group-hover:text-slate-700" />
                       </button>
                     );
                   })}
@@ -2073,7 +1878,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
             {createStep === 2 && (
               <div className="py-4 space-y-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs text-slate-500">Selected calendar:</span>
+                  <span className="text-xs text-ui-muted">Selected calendar:</span>
                   {(() => {
                     const cal = getCalendarDefinition(selectedCalendarForPlan);
                     return (
@@ -2090,32 +1895,6 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      setNewKind('monthly');
-                      const now = new Date();
-                      const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-                      const monthName = nextMonth.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
-                      setNewTitle(`${getCalendarDefinition(selectedCalendarForPlan).name} ${monthName} ${nextMonth.getUTCFullYear()}`);
-                      setNewStart(nextMonth.toISOString().slice(0, 10));
-                      const endMonth = new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1, 0));
-                      setNewEnd(endMonth.toISOString().slice(0, 10));
-                      setCreateStep(3);
-                    }}
-                    className={`p-4 rounded-xl border text-left transition-all group hover:scale-[1.01] ${
-                      newKind === 'monthly' ? 'border-purple-500 bg-purple-50/50' : 'border-slate-200 hover:border-purple-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-slate-900">Monthly Content Plan</span>
-                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-purple-600" />
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Scheduled monthly workflow with multiple deliverable rows, batch imports, and department assignment.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
                       setNewKind('individual');
                       const todayStr = new Date().toISOString().slice(0, 10);
                       setNewTitle(`${getCalendarDefinition(selectedCalendarForPlan).name} Individual Work`);
@@ -2124,14 +1903,14 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                       setCreateStep(3);
                     }}
                     className={`p-4 rounded-xl border text-left transition-all group hover:scale-[1.01] ${
-                      newKind === 'individual' ? 'border-purple-500 bg-purple-50/50' : 'border-slate-200 hover:border-purple-300'
+                      newKind === 'individual' ? 'border-ui-line bg-white/70' : 'border-slate-200 hover:border-ui-ink/30'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-bold text-slate-900">Individual Work</span>
-                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-purple-600" />
+                      <ChevronRight className="w-4 h-4 text-ui-muted group-hover:text-ui-ink" />
                     </div>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-ui-muted">
                       A single-deliverable plan for ad-hoc, quick-turnaround, or spontaneous tasks.
                     </p>
                   </button>
@@ -2161,7 +1940,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                     required
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    className="ui-input w-full"
                   />
                 </div>
 
@@ -2183,11 +1962,14 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                 const mName = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
                                 const calName = getCalendarDefinition(selectedCalendarForPlan).name;
                                 setNewTitle(`${calName} ${mName} ${d.getUTCFullYear()}`);
+                                // Keep the end in the same month; a stale end produced "1/1/2027 - 12/31/2026".
+                                const monthEnd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+                                setNewEnd(monthEnd.toISOString().slice(0, 10));
                               }
                             } catch {}
                           }
                         }}
-                        className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-ui-ink focus:outline-none"
                       />
                     </div>
                     <div>
@@ -2197,7 +1979,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                         required
                         value={newEnd}
                         onChange={(e) => setNewEnd(e.target.value)}
-                        className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        className="ui-input w-full"
                       />
                     </div>
                   </div>
@@ -2214,7 +1996,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                             setNewStart(e.target.value);
                             setNewEnd(e.target.value);
                           }}
-                          className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                          className="ui-input w-full"
                         />
                       </div>
                       <div>
@@ -2222,7 +2004,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                         <select
                           value={indivType}
                           onChange={(e) => setIndivType(e.target.value)}
-                          className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                          className="ui-select w-full"
                         >
                           <option value="Static Post">Static Post</option>
                           <option value="Reel">Reel</option>
@@ -2250,7 +2032,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                         placeholder="e.g. Product Announcement Banner"
                         value={indivTopic}
                         onChange={(e) => setIndivTopic(e.target.value)}
-                        className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        className="ui-input w-full"
                       />
                     </div>
 
@@ -2261,7 +2043,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                         placeholder="Key requirements, hooks or instructions..."
                         value={indivBrief}
                         onChange={(e) => setIndivBrief(e.target.value)}
-                        className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        className="ui-input ui-textarea w-full"
                       />
                     </div>
                   </>
@@ -2274,15 +2056,15 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                     placeholder="Content goals, theme or remarks..."
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    className="ui-input ui-textarea w-full"
                   />
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <div className="pt-3 border-t border-ui-line flex items-center justify-between gap-2">
                   <button
                     type="button"
-                    onClick={() => setCreateStep(2)}
-                    className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 flex items-center gap-1"
+                    onClick={() => setCreateStep(newKind === 'individual' ? 1 : 2)}
+                    className="ui-btn ui-btn-secondary h-11"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
                     Back
@@ -2291,14 +2073,14 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                     <button
                       type="button"
                       onClick={() => setIsCreateOpen(false)}
-                      className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                      className="ui-btn ui-btn-secondary h-11"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={isSubmittingPlan || (newKind === 'monthly' && !!duplicateMonthPlan && duplicateMonthPlan.periodStart.slice(0, 7) === newStart.slice(0, 7))}
-                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-200 disabled:opacity-50"
+                      className="ui-btn ui-btn-primary h-11"
                     >
                       {isSubmittingPlan ? 'Creating...' : 'Create Plan'}
                     </button>
@@ -2312,9 +2094,9 @@ export const PlansTab: React.FC<PlansTabProps> = ({
 
       {/* Add / Edit Row Modal */}
       {isAddRowOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-6 shadow-2xl border border-slate-100 animate-scaleUp">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 ui-scrim backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="glass-modal max-w-2xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-6 animate-scaleUp">
+            <div className="flex items-center justify-between pb-3 border-b border-ui-line">
               <h3 className="text-base font-bold text-slate-900">
                 {editingRowId
                   ? editingRowComment
@@ -2329,7 +2111,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   setEditingRowComment(null);
                   setRowSteps([]);
                 }}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                aria-label="Close" className="ui-icon-btn"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2354,7 +2136,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   placeholder="e.g. 5 Tech Tips for Startups"
                   value={rowTopic}
                   onChange={(e) => setRowTopic(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  className="ui-input w-full"
                 />
               </div>
 
@@ -2365,7 +2147,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   placeholder="Target audience, key message, and angle"
                   value={rowBrief}
                   onChange={(e) => setRowBrief(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
@@ -2379,7 +2161,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                     required
                     value={rowPostingDate}
                     onChange={(e) => handlePostingDateChange(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    className="ui-input w-full"
                   />
                 </div>
                 <div>
@@ -2390,7 +2172,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                     type="time"
                     value={rowPostingTime}
                     onChange={(e) => setRowPostingTime(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    className="ui-input w-full"
                   />
                 </div>
               </div>
@@ -2415,7 +2197,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                     }
                     handleTypeOrTogglesChange(val, s, sh);
                   }}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-ui-ink focus:outline-none"
                 >
                   <option value="Reel A">Reel (Variant A: Script + Shoot)</option>
                   <option value="Reel B">Reel (Variant B: Shoot only)</option>
@@ -2438,8 +2220,8 @@ export const PlansTab: React.FC<PlansTabProps> = ({
               </div>
 
               {isReel && (
-                <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 space-y-2.5">
-                  <span className="text-[11px] font-bold text-purple-900 block">Reel Pipeline Options</span>
+                <div className="p-3 bg-white/70 rounded-xl border border-ui-line space-y-2.5">
+                  <span className="text-[11px] font-bold text-ui-ink block">Reel Pipeline Options</span>
                   <div className="flex items-center gap-5">
                     <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
                       <input
@@ -2448,7 +2230,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                         onChange={(e) =>
                           handleTypeOrTogglesChange(rowType, e.target.checked, rowNeedsShoot)
                         }
-                        className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                        className="rounded border-slate-300 text-ui-ink focus:ring-ui-ink"
                       />
                       Needs Script
                     </label>
@@ -2459,14 +2241,14 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                         onChange={(e) =>
                           handleTypeOrTogglesChange(rowType, rowNeedsScript, e.target.checked)
                         }
-                        className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                        className="rounded border-slate-300 text-ui-ink focus:ring-ui-ink"
                       />
                       Needs Shoot
                     </label>
                   </div>
 
                   {!rowNeedsShoot && (
-                    <div className="pt-2 border-t border-purple-200/60">
+                    <div className="pt-2 border-t border-ui-line">
                       <label className="text-xs font-bold text-slate-700 block mb-1">
                         Source Video Link <span className="text-rose-500">*</span>
                       </label>
@@ -2476,7 +2258,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                         placeholder="https://drive.google.com/source-footage..."
                         value={rowSourceVideoLink}
                         onChange={(e) => setRowSourceVideoLink(e.target.value)}
-                        className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        className="ui-input w-full"
                       />
                       {stepValidation.errors['sourceVideoLink'] && (
                         <p className="text-[11px] text-rose-600 font-semibold flex items-center gap-1 mt-1">
@@ -2490,14 +2272,14 @@ export const PlansTab: React.FC<PlansTabProps> = ({
               )}
 
               {/* STEPS & DEADLINES SECTION */}
-              <div className="pt-3 border-t border-slate-100">
+              <div className="pt-3 border-t border-ui-line">
                 <div className="flex items-center justify-between mb-2.5">
                   <div>
                     <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                      <Sparkles className="w-3.5 h-3.5 text-ui-ink" />
                       Steps & Deadlines
                     </h4>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-ui-muted">
                       Each creative step has its own owner and deadline calculated from {mainDateLabel.toLowerCase()}.
                     </p>
                   </div>
@@ -2526,7 +2308,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                           {/* Step Label */}
                           <div className="sm:col-span-3 flex items-center gap-1.5">
-                            <span className="font-bold text-xs text-purple-800 bg-purple-100/80 px-2 py-0.5 rounded-md">
+                            <span className="font-bold text-xs text-ui-ink bg-white/70 px-2 py-0.5 rounded-md">
                               {step.stageKey}
                             </span>
                             {step.dueDateSource === 'manual' && (
@@ -2544,7 +2326,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                             <select
                               value={step.ownerId || ''}
                               onChange={(e) => handleStepOwnerChange(step.stageKey, e.target.value)}
-                              className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                              className="ui-select w-full"
                             >
                               <option value="">
                                 {qualifyingMembers.length === 0
@@ -2564,7 +2346,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                 </span>
                               ) : step.ownerReason ? (
                                 <span
-                                  className="text-[9px] text-purple-600 bg-purple-50 px-1 rounded truncate max-w-[200px]"
+                                  className="text-[9px] text-ui-ink bg-white/70 px-1 rounded truncate max-w-[200px]"
                                   title={step.ownerReason}
                                 >
                                   {step.ownerReason}
@@ -2578,7 +2360,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                             {isPostStep ? (
                               <div className="flex items-center justify-between text-xs px-2.5 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-700">
                                 <span className="font-mono">{rowPostingDate || '—'}</span>
-                                <span className="text-[10px] text-slate-500 font-medium">On publish date</span>
+                                <span className="text-[10px] text-ui-muted font-medium">On publish date</span>
                               </div>
                             ) : (
                               <div>
@@ -2587,10 +2369,10 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                                   required
                                   value={step.dueDate}
                                   onChange={(e) => handleStepDueDateChange(step.stageKey, e.target.value)}
-                                  className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                  className="ui-input w-full"
                                 />
                                 <div className="flex items-center justify-between mt-0.5">
-                                  <span className="text-[10px] text-slate-400">
+                                  <span className="text-[10px] text-ui-muted">
                                     {step.offsetDays > 0
                                       ? `${step.offsetDays} days before ${isPostable ? 'publish' : 'needed-by'}`
                                       : 'On publish date'}
@@ -2632,7 +2414,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   placeholder="https://drive.google.com/..."
                   value={rowContentLink}
                   onChange={(e) => setRowContentLink(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  className="ui-input w-full"
                 />
               </div>
 
@@ -2643,11 +2425,11 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   placeholder="Additional context or references"
                   value={rowRemarks}
                   onChange={(e) => setRowRemarks(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  className="ui-input w-full"
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div className="pt-3 border-t border-ui-line flex items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -2656,7 +2438,7 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                     setEditingRowComment(null);
                     setRowSteps([]);
                   }}
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
@@ -2692,13 +2474,13 @@ export const PlansTab: React.FC<PlansTabProps> = ({
 
       {/* Rename Plan Modal */}
       {isRenameOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-scaleUp">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 ui-scrim backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-modal max-w-sm w-full p-6 animate-scaleUp">
+            <div className="flex items-center justify-between pb-3 border-b border-ui-line">
               <h3 className="text-base font-bold text-slate-900">Rename Plan</h3>
               <button
                 onClick={() => setIsRenameOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                aria-label="Close" className="ui-icon-btn"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2713,23 +2495,23 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   placeholder="e.g. November 2026"
                   value={renameTitle}
                   onChange={(e) => setRenameTitle(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  className="ui-input w-full"
                   autoFocus
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+              <div className="pt-3 border-t border-ui-line flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsRenameOpen(false)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isRenaming || !renameTitle.trim()}
-                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-200 disabled:opacity-50"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {isRenaming ? 'Saving...' : 'Save Name'}
                 </button>

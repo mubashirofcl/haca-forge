@@ -40,6 +40,37 @@ vi.mock('../../lib/api', () => ({
         },
       });
     }
+    if (url.includes('/api/calendar-plans/plan-3')) {
+      return Promise.resolve({
+        data: {
+          _id: 'plan-3',
+          code: 'PLAN-2026-11-003',
+          title: 'Sales Individual Work',
+          kind: 'individual',
+          calendar: 'sales',
+          periodStart: '2026-11-20',
+          periodEnd: '2026-11-20',
+          status: 'Submitted',
+          rows: [
+            {
+              _id: 'row-3',
+              topic: 'Sales One-off Reel',
+              contentType: 'Reel',
+              postingDate: '2026-11-28',
+              rowStatus: 'submitted',
+              needsScript: true,
+              needsShoot: true,
+              stagePlan: [
+                { stageKey: 'Script', ownerId: 'user-1', dueDate: '2026-11-20' },
+                { stageKey: 'Shoot', ownerId: 'user-2', dueDate: '2026-11-23' },
+                { stageKey: 'Edit', ownerId: 'user-3', dueDate: '2026-11-26' },
+                { stageKey: 'Post', ownerId: 'user-4', dueDate: '2026-11-28' },
+              ],
+            },
+          ],
+        },
+      });
+    }
     if (url.includes('/api/calendar-plans/plan-1')) {
       return Promise.resolve({
         data: {
@@ -94,6 +125,21 @@ vi.mock('../../lib/api', () => ({
             submittedRowCount: 0,
             changesRequestedRowCount: 0,
             draftRowCount: 1,
+          },
+          {
+            _id: 'plan-3',
+            code: 'PLAN-2026-11-003',
+            title: 'Sales Individual Work',
+            kind: 'individual',
+            calendar: 'sales',
+            periodStart: '2026-11-20',
+            periodEnd: '2026-11-20',
+            status: 'Submitted',
+            rowCount: 1,
+            approvedRowCount: 0,
+            submittedRowCount: 1,
+            changesRequestedRowCount: 0,
+            draftRowCount: 0,
           },
         ],
       });
@@ -153,7 +199,7 @@ describe('CalendarPage 3 Tabs & Role-based Controls (Scope Reset R3)', () => {
     expect(screen.getByText(/Content Flow Tracker/i)).toBeDefined();
   });
 
-  it('displays SM Manager actions (Upload & Preview, New Plan) on Plans tab', async () => {
+  it('SM Manager: one entry point per action on the Plans tab (PG-4)', async () => {
     (authContext.useAuth as any).mockReturnValue({
       user: { role: 'sm_manager', name: 'Sam Manager' },
       hasPermission: () => true,
@@ -165,12 +211,16 @@ describe('CalendarPage 3 Tabs & Role-based Controls (Scope Reset R3)', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText(/Upload & Preview/i)).toBeDefined();
-    expect(screen.getByText(/New Plan/i)).toBeDefined();
-    expect(screen.getByText(/Download Template/i)).toBeDefined();
+    // Open plan grid: Plans tab header only. Add individual work: Calendar header only.
+    expect(await screen.findAllByRole('button', { name: /Open plan grid/i })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /Add individual work/i })).toHaveLength(1);
+    // Template, Upload and Submit live in the plan grid now.
+    expect(screen.queryByText(/Download Template/i)).toBeNull();
+    expect(screen.queryByText(/Upload & Preview/i)).toBeNull();
+    expect(screen.queryByText(/New Plan/i)).toBeNull();
   });
 
-  it('displays Creative Head review controls when a plan is selected', async () => {
+  it('Creative Head: monthly plans are reviewed in the grid; individual plans keep their review controls', async () => {
     (authContext.useAuth as any).mockReturnValue({
       user: { role: 'creative_head', name: 'Claire Head' },
       hasPermission: () => true,
@@ -182,10 +232,14 @@ describe('CalendarPage 3 Tabs & Role-based Controls (Scope Reset R3)', () => {
       </MemoryRouter>
     );
 
-    const planItem = await screen.findByText(/October Grid/i);
-    expect(planItem).toBeDefined();
-    fireEvent.click(planItem);
+    fireEvent.click(await screen.findByText(/October Grid/i));
+    expect(await screen.findByText(/to review this plan row by row/i)).toBeDefined();
+    expect(screen.queryByText(/Review Mode:/i)).toBeNull();
+    expect(screen.getAllByRole('button', { name: /Review in plan grid/i })).toHaveLength(1);
+    // Plan creation is SM/Admin only, so the Creative Head has no Add individual work button.
+    expect(screen.queryByRole('button', { name: /Add individual work/i })).toBeNull();
 
+    fireEvent.click(screen.getByText(/Sales Individual Work/i));
     expect(await screen.findByText(/Review Mode:/i)).toBeDefined();
     expect(screen.getByText(/Approve All/i)).toBeDefined();
     expect(screen.getByText(/Approve Selected/i)).toBeDefined();
@@ -207,6 +261,7 @@ describe('CalendarPage 3 Tabs & Role-based Controls (Scope Reset R3)', () => {
     // Executive should see the plans management table but not upload/new buttons
     expect(await screen.findByText(/Calendar Plans Management/i)).toBeDefined();
     expect(screen.queryByText(/Upload & Preview/i)).toBeNull();
+    expect(screen.queryByText(/Open plan grid/i)).toBeNull();
     expect(screen.queryByText(/New Plan/i)).toBeNull();
   });
 
@@ -226,7 +281,7 @@ describe('CalendarPage 3 Tabs & Role-based Controls (Scope Reset R3)', () => {
     expect(screen.getByText(/Go to My Work/i)).toBeDefined();
   });
 
-  it('displays Steps column and badges in the plan rows table for SM Manager', async () => {
+  it('monthly plan rows are edited in the grid; individual plans still open the Add Row form', async () => {
     (authContext.useAuth as any).mockReturnValue({
       user: { role: 'sm_manager', name: 'Sam Manager' },
       hasPermission: () => true,
@@ -238,21 +293,19 @@ describe('CalendarPage 3 Tabs & Role-based Controls (Scope Reset R3)', () => {
       </MemoryRouter>
     );
 
-    const planItem = await screen.findByText(/November Draft Plan/i);
-    fireEvent.click(planItem);
-
-    // Verify Steps column header exists
+    fireEvent.click(await screen.findByText(/November Draft Plan/i));
     expect(await screen.findByText('Steps')).toBeDefined();
-
-    // Verify row topic exists
     expect(await screen.findByText('Draft Reel')).toBeDefined();
+    // Monthly: no Add Row / Submit here, step chips do not open the form, a note points to the grid.
+    expect(screen.queryByRole('button', { name: /^Add Row$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Submit for Review/i })).toBeNull();
+    expect((await screen.findByRole('button', { name: /Script/i })).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText(/to add, edit and submit rows for this plan/i)).toBeDefined();
 
-    // Click step chip button to open modal
-    const scriptStepBtn = await screen.findByRole('button', { name: /Script/i });
-    expect(scriptStepBtn).toBeDefined();
-    fireEvent.click(scriptStepBtn);
-
-    // Verify row form displays Edit Plan Row modal with Publish date and Steps section
+    // Individual plan: the Add Row form (same Steps & Deadlines logic as the grid) is still here.
+    fireEvent.click(screen.getByText(/Sales Individual Work/i));
+    await screen.findByText('Sales One-off Reel');
+    fireEvent.click(screen.getByRole('button', { name: /Script/i }));
     expect(await screen.findByText('Edit Plan Row')).toBeDefined();
     expect(screen.getAllByText(/Publish date/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Steps & Deadlines/i)).toBeDefined();

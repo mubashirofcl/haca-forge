@@ -43,6 +43,9 @@ const MyWorkPage = React.lazy(() =>
 const CalendarPage = React.lazy(() =>
   import('./pages/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage }))
 );
+const PlanGridPage = React.lazy(() =>
+  import('./pages/calendar/PlanGridPage').then((m) => ({ default: m.PlanGridPage }))
+);
 const WorkListPage = React.lazy(() =>
   import('./pages/work/WorkListPage').then((m) => ({ default: m.WorkListPage }))
 );
@@ -170,6 +173,20 @@ export const App: React.FC = () => {
                     <ProtectedRoute>
                       <Layout>
                         <CalendarPage />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Full-screen plan grid: header kept, sidebar hidden. Team members get not-found (API 404s too). */}
+                <Route
+                  path="/calendar/plan-grid"
+                  element={
+                    <ProtectedRoute>
+                      <Layout focusMode>
+                        <RoleBoundary hiddenFor={TEAM_MEMBER_HIDDEN}>
+                          <PlanGridPage />
+                        </RoleBoundary>
                       </Layout>
                     </ProtectedRoute>
                   }
