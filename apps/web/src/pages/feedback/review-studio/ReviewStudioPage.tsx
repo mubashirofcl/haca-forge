@@ -15,6 +15,7 @@ import {
   CheckCircle,
   Share2,
 } from 'lucide-react';
+import { ROLE_LABELS, type UserRole } from '@mmp/shared';
 
 import { DocumentViewer, DocumentCommentAnchor } from './DocumentViewer';
 import { VideoPlayerViewer } from './VideoPlayerViewer';
@@ -681,44 +682,52 @@ export const ReviewStudioPage: React.FC = () => {
     'document';
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans select-none">
+    <div className="flex flex-col h-screen w-full bg-ui-canvas text-ui-ink overflow-hidden font-sans select-none">
       {/* Top Header & Queue Bar */}
-      <header className="h-14 bg-slate-900/90 backdrop-blur-md border-b border-white/10 px-4 flex items-center justify-between z-30 flex-shrink-0">
-        <div className="flex items-center gap-3">
+      <header className="min-h-[60px] bg-ui-card/90 backdrop-blur-md border-b border-ui-line px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 z-30 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
           <button
+            type="button"
             onClick={() => navigate(-1)}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-colors"
+            className="ui-icon-btn"
             title="Back"
+            aria-label="Back"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
           </button>
 
           <div className="flex items-center gap-2">
-            <span className="font-bold text-sm tracking-wide text-white">Review Studio</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-medium">
-              Creative Head
-            </span>
+            <h1 className="font-bold text-sm text-ui-ink">Review Studio</h1>
+            {user?.role && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-white/70 text-ui-text border border-ui-line font-medium">
+                {ROLE_LABELS[user.role as UserRole] ?? user.role}
+              </span>
+            )}
           </div>
 
           {/* Queue Navigation */}
           {queue.length > 0 && (
-            <div className="flex items-center gap-1.5 ml-4 px-2 py-1 rounded-lg bg-slate-950/60 border border-white/10">
+            <div className="flex items-center gap-1 sm:ml-2 px-1 rounded-ui-card bg-white/70 border border-ui-line">
               <button
+                type="button"
                 onClick={handlePrevItem}
-                className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white"
+                className="ui-icon-btn border-transparent bg-transparent"
                 title="Previous submission (shortcut: [)"
+                aria-label="Previous submission"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-4 h-4" aria-hidden="true" />
               </button>
-              <span className="text-xs font-mono text-slate-300 px-1">
+              <span className="text-xs font-mono text-ui-text px-1">
                 {queueIndex + 1} of {queue.length}
               </span>
               <button
+                type="button"
                 onClick={handleNextItem}
-                className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white"
+                className="ui-icon-btn border-transparent bg-transparent"
                 title="Next submission (shortcut: ])"
+                aria-label="Next submission"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           )}
@@ -727,19 +736,19 @@ export const ReviewStudioPage: React.FC = () => {
         {/* Current Deliverable Meta */}
         {currentQueueItem && (
           <div className="hidden md:flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <div className="flex items-center gap-1.5 text-ui-muted">
+              <Clock className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Waiting {currentQueueItem.waitingDays} day{currentQueueItem.waitingDays !== 1 ? 's' : ''}</span>
             </div>
-            <div className="text-slate-300 font-medium">
+            <div className="text-ui-muted font-medium">
               Step:{' '}
-              <span className="text-indigo-400">
+              <span className="text-ui-ink font-semibold">
                 {currentQueueItem.workItemId?.step || currentQueueItem.workItemId?.stageKey || 'Deliverable'}
               </span>
             </div>
-            <div className="text-slate-300">
+            <div className="text-ui-muted">
               Owner:{' '}
-              <span className="font-semibold text-white">
+              <span className="font-semibold text-ui-ink">
                 {currentQueueItem.workItemId?.ownerId?.name || 'Creator'}
               </span>
             </div>
@@ -748,39 +757,43 @@ export const ReviewStudioPage: React.FC = () => {
 
         {/* Viewer Switcher Tabs - only shown for general single-asset deliverables */}
         {!isShootStage && (
-          <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-white/10">
+          <div className="ui-tabs" role="group" aria-label="Viewer">
             <button
+              type="button"
+              aria-pressed={viewerType === 'document'}
+              aria-label="Document Viewer"
               onClick={() => setViewerType('document')}
-              className={`p-1.5 rounded transition-all ${
-                viewerType === 'document' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`ui-tab w-11 px-0 justify-center ${viewerType === 'document' ? 'is-active' : ''}`}
               title="Document Viewer"
             >
               <FileText className="w-4 h-4" />
             </button>
             <button
+              type="button"
+              aria-pressed={viewerType === 'video'}
+              aria-label="Video Player"
               onClick={() => setViewerType('video')}
-              className={`p-1.5 rounded transition-all ${
-                viewerType === 'video' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`ui-tab w-11 px-0 justify-center ${viewerType === 'video' ? 'is-active' : ''}`}
               title="Video Player"
             >
               <Video className="w-4 h-4" />
             </button>
             <button
+              type="button"
+              aria-pressed={viewerType === 'image'}
+              aria-label="Image / Carousel Viewer"
               onClick={() => setViewerType('image')}
-              className={`p-1.5 rounded transition-all ${
-                viewerType === 'image' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`ui-tab w-11 px-0 justify-center ${viewerType === 'image' ? 'is-active' : ''}`}
               title="Image / Carousel Viewer"
             >
               <ImageIcon className="w-4 h-4" />
             </button>
             <button
+              type="button"
+              aria-pressed={viewerType === 'link'}
+              aria-label="External Link Opener"
               onClick={() => setViewerType('link')}
-              className={`p-1.5 rounded transition-all ${
-                viewerType === 'link' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`ui-tab w-11 px-0 justify-center ${viewerType === 'link' ? 'is-active' : ''}`}
               title="External Link Opener"
             >
               <ExternalLink className="w-4 h-4" />
@@ -790,12 +803,13 @@ export const ReviewStudioPage: React.FC = () => {
 
         {canShare && (
           <button
+            type="button"
             onClick={() => setShowShareModal(true)}
             data-testid="review-share-to-chat-btn"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-200 border border-indigo-500/30 text-xs font-medium transition-all"
+            className="ui-btn ui-btn-secondary h-11 gap-1.5"
             title="Share approved output to chat"
           >
-            <Share2 className="w-3.5 h-3.5" />
+            <Share2 className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Share to chat</span>
           </button>
         )}
@@ -814,20 +828,21 @@ export const ReviewStudioPage: React.FC = () => {
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
-            <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-ui-ink border-t-transparent rounded-full motion-safe:animate-spin" role="status" aria-label="Loading" />
           </div>
         ) : !activeSubmission ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4">
-              <CheckCircle className="w-8 h-8" />
+            <div className="w-16 h-16 rounded-full status-tint status-approved flex items-center justify-center mb-4">
+              <CheckCircle className="w-8 h-8" aria-hidden="true" />
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">{errorMsg ? 'Notice' : 'All Caught Up!'}</h3>
-            <p className="text-sm text-slate-400 max-w-sm mb-6">
+            <h3 className="text-xl font-bold text-ui-ink mb-2">{errorMsg ? 'Notice' : 'All Caught Up!'}</h3>
+            <p className="text-sm text-ui-muted max-w-sm mb-6">
               {errorMsg || 'There are no submissions waiting for review in the approval queue.'}
             </p>
             <button
+              type="button"
               onClick={() => navigate('/feedback')}
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+              className="ui-btn ui-btn-primary h-11"
             >
               Back to Feedback Dashboard
             </button>

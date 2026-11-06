@@ -88,7 +88,7 @@ describe('Review Studio Components & Decision Rules', () => {
 
       expect(onRequestRevision).toHaveBeenCalledWith({
         note: 'Fix the color grading in the intro',
-        rootCause: 'quality',
+        rootCause: 'Brief unclear',
       });
     });
 
@@ -117,7 +117,7 @@ describe('Review Studio Components & Decision Rules', () => {
       fireEvent.click(submitRevBtn);
       expect(onRequestRevision).toHaveBeenCalledWith({
         note: '',
-        rootCause: 'quality',
+        rootCause: 'Brief unclear',
       });
     });
 

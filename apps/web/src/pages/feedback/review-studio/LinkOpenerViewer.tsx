@@ -45,7 +45,7 @@ export const LinkOpenerViewer: React.FC<LinkOpenerViewerProps> = ({
         />
       ) : (
         <div className="max-w-lg w-full bg-slate-900/90 backdrop-blur-md rounded-2xl border border-white/10 p-8 shadow-2xl text-center flex flex-col items-center">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-5 shadow-inner">
+          <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-200 mb-5">
             <Globe className="w-8 h-8" />
           </div>
 
@@ -66,7 +66,7 @@ export const LinkOpenerViewer: React.FC<LinkOpenerViewerProps> = ({
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all shadow-lg hover:shadow-indigo-500/25 cursor-pointer"
+              className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white hover:bg-neutral-200 text-neutral-950 font-semibold text-sm transition-colors cursor-pointer"
             >
               <ExternalLink className="w-4 h-4" />
               Open in New Tab

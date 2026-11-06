@@ -295,7 +295,7 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
         .set('Authorization', `Bearer ${headToken}`)
         .send({
           comment: 'Please refine the hook stat and resubmit.',
-          rootCause: 'Off brief',
+          rootCause: 'Brief unclear',
         });
 
       expect(revRes.status).toBe(200);

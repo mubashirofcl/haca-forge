@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Star, CheckCircle, AlertTriangle, MessageSquare } from 'lucide-react';
+import { CANONICAL_REVISION_ROOT_CAUSES, type CanonicalRevisionRootCause } from '@mmp/shared';
 
 export const QUALITY_TAGS = [
   'Sharp Hook',
@@ -10,15 +11,8 @@ export const QUALITY_TAGS = [
   'Stunning Visuals',
 ] as const;
 
-export const REVISION_ROOT_CAUSES = [
-  'quality',
-  'Creative Choice',
-  'Technical Flaw',
-  'Brief Ambiguity',
-  'Scope Change',
-] as const;
-
-export type RootCause = typeof REVISION_ROOT_CAUSES[number];
+// Revision requests use the 7 canonical root causes from @mmp/shared (no local list).
+export type RootCause = CanonicalRevisionRootCause;
 
 interface DecisionBarProps {
   hasComments: boolean;
@@ -51,7 +45,7 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
   const [feedback, setFeedback] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [shareToTeamChat, setShareToTeamChat] = useState<boolean>(false);
-  const [rootCause, setRootCause] = useState<RootCause>('quality');
+  const [rootCause, setRootCause] = useState<RootCause>(CANONICAL_REVISION_ROOT_CAUSES[0]);
   const [activeMode, setActiveMode] = useState<'idle' | 'approve' | 'revision'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -136,43 +130,44 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
   };
 
   return (
-    <div className="sticky bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-xl border-t border-white/10 shadow-2xl transition-all">
+    <div className="sticky bottom-0 left-0 right-0 z-40 bg-ui-card border-t border-ui-line shadow-ui-panel text-ui-text">
       {/* Expanded drawer for Approve / Revision details */}
       {activeMode !== 'idle' && (
-        <div className="max-w-4xl mx-auto p-4 border-b border-white/10 flex flex-col gap-3 animate-in slide-in-from-bottom duration-200">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+        <div className="max-w-4xl mx-auto p-4 border-b border-ui-line flex flex-col gap-3 max-h-[60vh] overflow-y-auto">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-ui-ink flex items-center gap-2">
               {activeMode === 'approve' ? (
                 <>
-                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                  <CheckCircle className="w-4 h-4" aria-hidden="true" />
                   Approve Deliverable
                 </>
               ) : (
                 <>
-                  <AlertTriangle className="w-4 h-4 text-rose-400" />
+                  <AlertTriangle className="w-4 h-4" aria-hidden="true" />
                   Request Revision ({commentCount} comments pinned)
                 </>
               )}
             </h4>
             <button
+              type="button"
               onClick={() => setActiveMode('idle')}
-              className="text-xs text-slate-400 hover:text-white"
+              className="ui-btn ui-btn-secondary h-11 shrink-0"
             >
               Cancel
             </button>
           </div>
 
           {errorMsg && (
-            <div className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-lg">
+            <div role="alert" className="text-xs status-tint status-changes px-3 py-2 rounded-lg">
               {errorMsg}
             </div>
           )}
 
           {activeMode === 'approve' && (
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-300 font-medium">Rating (Required):</span>
-                <div className="flex items-center gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span id="decision-rating-label" className="text-xs text-ui-text font-medium">Rating (Required):</span>
+                <div className="flex flex-wrap items-center gap-0.5" role="group" aria-labelledby="decision-rating-label">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
@@ -180,26 +175,28 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
                       onClick={() => setRating(star)}
                       onMouseEnter={() => setHoverRating(star)}
                       onMouseLeave={() => setHoverRating(0)}
-                      className="p-1 hover:scale-110 transition-transform"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-white"
                       aria-label={`${star} star`}
+                      aria-pressed={rating === star}
                     >
                       <Star
+                        aria-hidden="true"
                         className={`w-5 h-5 ${
                           (hoverRating || rating) >= star
-                            ? 'text-amber-400 fill-amber-400'
-                            : 'text-slate-600'
+                            ? 'text-amber-500 fill-amber-500'
+                            : 'text-ui-muted'
                         }`}
                       />
                     </button>
                   ))}
-                  <span className="text-xs text-amber-400 font-mono ml-2 font-bold">
+                  <span className="text-xs text-ui-ink font-mono ml-2 font-semibold">
                     {rating > 0 ? `${rating}/5` : 'Required'}
                   </span>
                 </div>
               </div>
 
               <div>
-                <span className="text-xs text-slate-400 block mb-1.5">Quality Tags (Optional):</span>
+                <span className="text-xs text-ui-muted block mb-1.5">Quality Tags (Optional):</span>
                 <div className="flex flex-wrap gap-1.5">
                   {QUALITY_TAGS.map((tag) => {
                     const isSelected = selectedTags.includes(tag);
@@ -208,10 +205,11 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
                         key={tag}
                         type="button"
                         onClick={() => toggleTag(tag)}
-                        className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                        aria-pressed={isSelected}
+                        className={`text-[13px] min-h-[44px] px-3 rounded-full border transition-colors ${
                           isSelected
-                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-medium'
-                            : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                            ? 'bg-ui-ink border-transparent text-white font-medium'
+                            : 'bg-white/70 border-ui-line text-ui-text hover:bg-white'
                         }`}
                       >
                         {tag}
@@ -226,18 +224,19 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                   placeholder="Optional encouraging notes or creative feedback..."
+                  aria-label="Approval feedback (optional)"
                   rows={2}
-                  className="w-full text-xs p-2.5 rounded-lg bg-slate-950/70 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-2 pt-1">
-                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <label className="flex items-center gap-2 min-h-[44px] text-xs text-ui-text cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={shareToTeamChat}
                     onChange={(e) => setShareToTeamChat(e.target.checked)}
-                    className="rounded border-white/20 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
+                    className="w-4 h-4 accent-ui-ink"
                   />
                   <span>Also share to Team chat</span>
                 </label>
@@ -246,9 +245,9 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
                   type="button"
                   disabled={isSubmitting || rating === 0}
                   onClick={handleApproveSubmit}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold text-xs transition-all shadow-lg hover:shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
+                  className="ui-btn ui-btn-primary h-11 gap-1.5"
                 >
-                  <CheckCircle className="w-4 h-4" />
+                  <CheckCircle className="w-4 h-4" aria-hidden="true" />
                   {isSubmitting ? 'Approving...' : 'Confirm Approval (A)'}
                 </button>
               </div>
@@ -257,14 +256,15 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
 
           {activeMode === 'revision' && (
             <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <label className="text-xs text-slate-300 font-medium">Root Cause (Required):</label>
+              <div className="flex flex-wrap items-center gap-3">
+                <label htmlFor="decision-root-cause" className="text-xs text-ui-text font-medium">Root Cause (Required):</label>
                 <select
+                  id="decision-root-cause"
                   value={rootCause}
                   onChange={(e) => setRootCause(e.target.value as RootCause)}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-slate-950/80 border border-white/10 text-slate-200 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                  className="ui-select"
                 >
-                  {REVISION_ROOT_CAUSES.map((rc) => (
+                  {CANONICAL_REVISION_ROOT_CAUSES.map((rc) => (
                     <option key={rc} value={rc}>
                       {rc}
                     </option>
@@ -277,19 +277,20 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                   placeholder="Describe required changes or revision notes..."
+                  aria-label="Revision notes"
                   rows={2}
-                  className="w-full text-xs p-2.5 rounded-lg bg-slate-950/70 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-xs text-slate-400">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <span className="text-xs text-ui-muted">
                   {commentCount > 0 ? (
-                    <span className="text-amber-400 font-medium">
+                    <span className="text-ui-ink font-medium">
                       ✓ {commentCount} anchored comment{commentCount > 1 ? 's' : ''} attached
                     </span>
                   ) : (
-                    <span className="text-slate-400">
+                    <span className="text-ui-muted">
                       No anchored comments yet. Written note above is required.
                     </span>
                   )}
@@ -298,9 +299,9 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
                   type="button"
                   disabled={isSubmitting || (!hasComments && !feedback.trim())}
                   onClick={handleRevisionSubmit}
-                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white font-semibold text-xs transition-all shadow-lg hover:shadow-rose-500/20 flex items-center gap-1.5 cursor-pointer"
+                  className="ui-btn ui-btn-primary h-11 gap-1.5"
                 >
-                  <AlertTriangle className="w-4 h-4" />
+                  <AlertTriangle className="w-4 h-4" aria-hidden="true" />
                   {isSubmitting ? 'Submitting...' : 'Send Revision Request'}
                 </button>
               </div>
@@ -313,34 +314,34 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
       <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
         {/* Left: Shortcuts & Info */}
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 font-mono">
-            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+          <div className="hidden lg:flex items-center gap-1.5 text-xs text-ui-muted font-mono">
+            <span className="px-1.5 py-0.5 rounded bg-white border border-ui-line text-ui-text">
               [A]
             </span>{' '}
             Approve
-            <span className="ml-2 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+            <span className="ml-2 px-1.5 py-0.5 rounded bg-white border border-ui-line text-ui-text">
               [R]
             </span>{' '}
             Revision
-            <span className="ml-2 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+            <span className="ml-2 px-1.5 py-0.5 rounded bg-white border border-ui-line text-ui-text">
               [1-5]
             </span>{' '}
             Rating
-            <span className="ml-2 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+            <span className="ml-2 px-1.5 py-0.5 rounded bg-white border border-ui-line text-ui-text">
               [C]
             </span>{' '}
             Comment
           </div>
 
-          <div className="flex items-center gap-1 text-xs text-slate-400">
-            <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+          <div className="flex items-center gap-1 text-xs text-ui-muted">
+            <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{commentCount} comments</span>
           </div>
         </div>
 
         {/* Center: Rating Stars (1-5 Required for Approval) */}
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950/60 border border-white/10">
-          <span className="text-xs text-slate-400 mr-1 font-medium hidden md:inline">Rating:</span>
+        <div className="flex items-center gap-0.5 px-2 rounded-ui-card bg-white/70 border border-ui-line" role="group" aria-label="Rating, required to approve">
+          <span className="text-xs text-ui-muted mr-1 font-medium hidden md:inline">Rating:</span>
           {[1, 2, 3, 4, 5].map((star) => (
             <button
               key={star}
@@ -351,40 +352,39 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
               }}
               onMouseEnter={() => setHoverRating(star)}
               onMouseLeave={() => setHoverRating(0)}
-              className="p-1 hover:scale-110 transition-transform"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-white"
               aria-label={`${star} star${star > 1 ? 's' : ''}`}
+              aria-pressed={rating === star}
             >
               <Star
+                aria-hidden="true"
                 className={`w-4 h-4 sm:w-5 sm:h-5 ${
                   (hoverRating || rating) >= star
-                    ? 'text-amber-400 fill-amber-400'
-                    : 'text-slate-600'
+                    ? 'text-amber-500 fill-amber-500'
+                    : 'text-ui-muted'
                 }`}
               />
             </button>
           ))}
           {rating > 0 ? (
-            <span className="text-xs text-amber-400 font-mono font-bold ml-1">{rating}/5</span>
+            <span className="text-xs text-ui-ink font-mono font-semibold ml-1 mr-1">{rating}/5</span>
           ) : (
-            <span className="text-[11px] text-slate-500 font-mono ml-1">Req</span>
+            <span className="text-[11px] text-ui-muted font-mono ml-1 mr-1">Req</span>
           )}
         </div>
 
         {/* Right: Quick action buttons */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
             onClick={() => {
               setActiveMode(activeMode === 'revision' ? 'idle' : 'revision');
               setErrorMsg(null);
             }}
-            className={`min-h-[44px] px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center gap-2 border cursor-pointer ${
-              activeMode === 'revision'
-                ? 'bg-rose-600 text-white border-rose-500 ring-2 ring-rose-500/30'
-                : 'bg-white/5 hover:bg-rose-500/20 text-rose-300 border-rose-500/30'
-            }`}
+            aria-expanded={activeMode === 'revision'}
+            className={`ui-btn h-11 gap-2 ${activeMode === 'revision' ? 'ui-btn-primary' : 'ui-btn-secondary'}`}
           >
-            <AlertTriangle className="w-4 h-4" />
+            <AlertTriangle className="w-4 h-4" aria-hidden="true" />
             Request Revision
           </button>
 
@@ -392,13 +392,9 @@ export const DecisionBar: React.FC<DecisionBarProps> = ({
             type="button"
             disabled={isSubmitting || rating === 0}
             onClick={handleApproveSubmit}
-            className={`min-h-[44px] px-5 py-2 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center gap-2 border cursor-pointer ${
-              rating === 0
-                ? 'opacity-40 bg-emerald-950/40 text-emerald-400 border-emerald-500/20 cursor-not-allowed'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 shadow-lg hover:shadow-emerald-500/20'
-            }`}
+            className="ui-btn ui-btn-primary h-11 gap-2"
           >
-            <CheckCircle className="w-4 h-4" />
+            <CheckCircle className="w-4 h-4" aria-hidden="true" />
             Approve
           </button>
         </div>

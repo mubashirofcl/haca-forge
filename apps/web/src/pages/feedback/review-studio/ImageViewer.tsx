@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight, Plus, MapPin } from 'lucide-react';
 
 export interface ImageCommentAnchor {
   x: number; // Percentage (0-100)
@@ -143,29 +143,31 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative flex flex-col h-full w-full bg-slate-950/80 rounded-xl overflow-hidden border border-white/10 select-none"
+      className="relative flex flex-col h-full w-full bg-neutral-950 rounded-xl overflow-hidden border border-white/10 select-none"
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
       {/* Floating Toolbar */}
-      <div className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/80 backdrop-blur-md border border-white/10 shadow-lg text-slate-300">
+      <div className="absolute top-3 left-3 right-3 sm:right-auto z-20 flex flex-wrap items-center gap-1 px-1.5 rounded-lg bg-neutral-900/90 border border-white/10 text-neutral-200">
         <button
           onClick={handleZoomOut}
           disabled={zoomLevel <= 0.5}
-          className="p-1.5 rounded hover:bg-white/10 disabled:opacity-40 transition-colors"
+          type="button"
+          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-40 transition-colors"
           title="Zoom out"
           aria-label="Zoom out"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-        <span className="text-xs font-mono font-medium px-1 text-slate-200">
+        <span className="text-xs font-mono font-medium px-1 text-neutral-100">
           {Math.round(zoomLevel * 100)}%
         </span>
         <button
           onClick={handleZoomIn}
           disabled={zoomLevel >= 3}
-          className="p-1.5 rounded hover:bg-white/10 disabled:opacity-40 transition-colors"
+          type="button"
+          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-40 transition-colors"
           title="Zoom in"
           aria-label="Zoom in"
         >
@@ -174,17 +176,35 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         <div className="w-[1px] h-4 bg-white/10 mx-1" />
         <button
           onClick={handleResetZoom}
-          className="p-1.5 rounded hover:bg-white/10 transition-colors"
+          type="button"
+          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
           title="Fit to Screen"
           aria-label="Fit to Screen"
         >
           <RotateCcw className="w-4 h-4" />
         </button>
 
+        {/* Keyboard path for pinning: the image itself is click-only, so this opens the
+            same pin form at the image centre (50%, 50%). */}
+        {currentImage && onAddPointComment && (
+          <button
+            type="button"
+            onClick={() => {
+              setPendingPin({ x: 50, y: 50 });
+              setCommentText('');
+            }}
+            className="min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-lg hover:bg-white/10 text-xs font-medium"
+            title="Add a pin comment at the centre of the image"
+          >
+            <MapPin className="w-4 h-4" aria-hidden="true" />
+            Add pin at centre
+          </button>
+        )}
+
         {images.length > 1 && (
           <>
             <div className="w-[1px] h-4 bg-white/10 mx-1" />
-            <span className="text-xs text-slate-400 font-medium">
+            <span className="text-xs text-neutral-300 font-medium px-1">
               Slide {currentIndex + 1} of {images.length}
             </span>
           </>
@@ -236,10 +256,14 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
                     left: `${coords.x}%`,
                     top: `${coords.y}%`,
                   }}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-full font-bold text-xs shadow-lg transition-transform hover:scale-125 z-10 ${
+                  type="button"
+                  aria-label={`Pin ${index + 1} at ${coords.x}%, ${coords.y}% by ${authorName}: ${commentText}`}
+                  aria-pressed={isActive}
+                  // 28px pin; the ::before layer extends the hit area to 44px without changing its look.
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-full font-bold text-xs shadow-lg transition-transform motion-safe:hover:scale-125 z-10 before:content-[''] before:absolute before:-inset-2 before:rounded-full ${
                     isActive
                       ? 'bg-amber-500 text-slate-950 ring-4 ring-amber-500/30'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                      : 'bg-white text-neutral-950 hover:bg-neutral-200'
                   }`}
                   title={`${authorName}: ${commentText.slice(0, 40)}`}
                 >
@@ -258,7 +282,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
                 className="absolute -translate-x-1/2 -translate-y-1/2 z-30"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center shadow-lg ring-4 ring-emerald-500/40 animate-pulse mb-2 mx-auto">
+                <div className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center shadow-lg ring-4 ring-emerald-500/40 motion-safe:animate-pulse mb-2 mx-auto">
                   <Plus className="w-3.5 h-3.5" />
                 </div>
                 <form
@@ -274,20 +298,21 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
                     placeholder="Leave point feedback..."
                     autoFocus
                     rows={2}
-                    className="w-full text-xs p-2 rounded-lg bg-slate-950/60 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    aria-label="Pin comment"
+                    className="w-full text-xs p-2 rounded-lg bg-slate-950/60 border border-white/10 text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-white/60"
                   />
                   <div className="flex justify-end gap-1.5">
                     <button
                       type="button"
                       onClick={() => setPendingPin(null)}
-                      className="px-2 py-1 text-xs text-slate-400 hover:text-white"
+                      className="min-h-[44px] px-3 text-xs text-slate-300 hover:text-white rounded-lg"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={!commentText.trim()}
-                      className="px-2.5 py-1 text-xs font-semibold rounded bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40"
+                      className="min-h-[44px] px-3 text-xs font-semibold rounded-lg bg-white hover:bg-neutral-200 text-neutral-950 disabled:opacity-40"
                     >
                       Add Pin
                     </button>
@@ -325,7 +350,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
                 onClick={() => handleSlideChange(idx)}
                 className={`relative h-14 w-14 rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${
                   currentIndex === idx
-                    ? 'border-indigo-500 ring-2 ring-indigo-500/40 scale-105'
+                    ? 'border-white ring-2 ring-white/40'
                     : 'border-white/10 opacity-60 hover:opacity-100'
                 }`}
               >

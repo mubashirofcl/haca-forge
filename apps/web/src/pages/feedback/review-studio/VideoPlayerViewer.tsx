@@ -145,16 +145,16 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
   return (
     <div
       ref={containerRef}
-      className="flex-1 flex flex-col h-full bg-slate-950 rounded-xl overflow-hidden border border-white/10 relative select-none"
+      className="flex-1 flex flex-col h-full bg-neutral-950 rounded-xl overflow-hidden border border-white/10 relative select-none"
     >
       {/* Top Header */}
       {title && (
-        <div className="px-4 py-2 bg-slate-900/80 backdrop-blur-md border-b border-white/10 flex items-center justify-between text-xs text-slate-300">
+        <div className="px-4 py-2 bg-neutral-900 border-b border-white/10 flex items-center justify-between gap-2 text-xs text-neutral-200">
           <span className="font-semibold flex items-center gap-1.5">
-            <Video className="w-3.5 h-3.5 text-indigo-400" />
+            <Video className="w-3.5 h-3.5" aria-hidden="true" />
             {title}
           </span>
-          <span className="font-mono text-slate-400">
+          <span className="font-mono text-neutral-300">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
         </div>
@@ -166,15 +166,25 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
           <video
             ref={videoRef}
             src={mediaSrc}
-            className="max-h-full max-w-full object-contain cursor-pointer"
+            className="max-h-full max-w-full object-contain cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
             onClick={togglePlay}
+            // Keyboard path for click-to-play: Enter or Space toggles playback.
+            role="button"
+            tabIndex={0}
+            aria-label={isPlaying ? 'Pause video' : 'Play video'}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                togglePlay();
+              }
+            }}
             onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
             onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)}
             onEnded={() => setIsPlaying(false)}
             playsInline
           />
         ) : (
-          <div className="text-center text-slate-500 text-xs p-6">
+          <div className="text-center text-neutral-300 text-xs p-6">
             <Video className="w-8 h-8 mx-auto mb-2 opacity-30" />
             <p>No video source attached.</p>
           </div>
@@ -182,7 +192,7 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
 
         {/* Quick Add Comment Overlay */}
         {isAddingComment && (
-          <div className="absolute z-30 p-3 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-white/20 shadow-2xl max-w-md w-full mx-4">
+          <div className="absolute z-30 p-3 rounded-2xl bg-neutral-900 border border-white/20 max-w-md w-full mx-4">
             <div className="flex items-center justify-between text-xs text-white mb-2 font-medium">
               <span className="flex items-center gap-1 text-amber-400 font-mono">
                 <Clock className="w-3.5 h-3.5" /> Stamp at {formatTime(currentTime)}
@@ -190,7 +200,8 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
               <button
                 type="button"
                 onClick={() => setIsAddingComment(false)}
-                className="text-slate-400 hover:text-white"
+                aria-label="Close"
+                className="min-w-[44px] min-h-[44px] -m-3 flex items-center justify-center text-neutral-300 hover:text-white rounded-full"
               >
                 &times;
               </button>
@@ -202,20 +213,21 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
                 value={newCommentText}
                 onChange={(e) => setNewCommentText(e.target.value)}
                 placeholder="What should be adjusted at this second?"
-                className="w-full text-xs p-2.5 rounded-lg bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                aria-label="Comment at this second"
+                className="w-full text-xs p-2.5 rounded-lg bg-neutral-950 border border-white/10 text-white placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-white/60"
               />
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsAddingComment(false)}
-                  className="px-2.5 py-1 text-xs text-slate-400 hover:text-white"
+                  className="min-h-[44px] px-3 text-xs text-neutral-300 hover:text-white rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!newCommentText.trim()}
-                  className="px-3 py-1 text-xs font-semibold rounded bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40"
+                  className="min-h-[44px] px-3 text-xs font-semibold rounded-lg bg-white hover:bg-neutral-200 text-neutral-950 disabled:opacity-40"
                 >
                   Pin Comment
                 </button>
@@ -226,9 +238,9 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
       </div>
 
       {/* Custom Bottom Player Controls */}
-      <div className="bg-slate-900/95 backdrop-blur-md border-t border-white/10 p-3 flex flex-col gap-2 z-20">
+      <div className="bg-neutral-900 border-t border-white/10 px-3 pb-2 flex flex-col gap-1 z-20">
         {/* Timeline Seek Bar with Comment Pins */}
-        <div className="relative w-full h-4 flex items-center group/timeline cursor-pointer">
+        <div className="relative w-full h-11 flex items-center group/timeline">
           <input
             type="range"
             min={0}
@@ -236,7 +248,9 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
             step={0.1}
             value={currentTime}
             onChange={(e) => seek(parseFloat(e.target.value))}
-            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:h-2 transition-all"
+            aria-label="Seek"
+            aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
+            className="ui-media-range w-full h-11 bg-transparent cursor-pointer"
           />
 
           {/* Comment Timeline Pins */}
@@ -248,7 +262,10 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
             const isActive = activeCommentId === c.id;
             return (
               <button
+                type="button"
                 key={c.id}
+                aria-label={`Comment by ${c.author} at ${formatTime(c.sec)}: ${c.text}`}
+                aria-pressed={isActive}
                 onClick={(e) => {
                   e.stopPropagation();
                   seek(c.sec);
@@ -256,72 +273,88 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
                 }}
                 style={{ left: `${leftPercent}%` }}
                 title={`${c.author} at ${c.sec}s: ${c.text}`}
-                className={`absolute -translate-x-1/2 w-2.5 h-2.5 rounded-full shadow-md transition-transform hover:scale-150 z-10 ${
-                  isActive
-                    ? 'bg-amber-400 ring-2 ring-amber-400/50 scale-125'
-                    : 'bg-indigo-400 hover:bg-amber-300'
-                }`}
-              />
+                // 24px hit area (WCAG minimum) around the unchanged 10px marker; 44px would overlap the
+                // seek bar and neighbouring markers. The "Timecoded comments" list below is the 44px path.
+                className="absolute -translate-x-1/2 w-6 h-6 flex items-center justify-center rounded-full z-10 group/marker"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`w-2.5 h-2.5 rounded-full shadow-md transition-transform motion-safe:group-hover/marker:scale-150 ${
+                    isActive
+                      ? 'bg-amber-400 ring-2 ring-amber-400/50 scale-125'
+                      : 'bg-white group-hover/marker:bg-amber-300'
+                  }`}
+                />
+              </button>
             );
           })}
         </div>
 
         {/* Control Buttons */}
-        <div className="flex items-center justify-between text-slate-300 text-xs">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-1 text-neutral-200 text-xs">
+          <div className="flex items-center gap-1">
             <button
+              type="button"
               onClick={togglePlay}
-              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white transition-colors"
+              className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
               title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
             </button>
 
             <button
+              type="button"
               onClick={() => seek(currentTime - 5)}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white"
+              className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-white/10 text-neutral-200 hover:text-white"
               title="Seek -5s (J)"
+              aria-label="Back 5 seconds"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
 
             <button
+              type="button"
               onClick={() => seek(currentTime + 5)}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white"
+              className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-white/10 text-neutral-200 hover:text-white"
               title="Seek +5s (L)"
+              aria-label="Forward 5 seconds"
             >
               <RotateCw className="w-3.5 h-3.5" />
             </button>
 
-            <span className="font-mono text-[11px] text-slate-400 ml-1">
+            <span className="font-mono text-[11px] text-neutral-300 ml-1">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Stamp comment at second */}
+          <div className="flex flex-wrap items-center gap-1">
+            {/* Stamp comment at second. Only offered to someone who can post a comment. */}
             {(onAddVideoComment || onAddCommentAtSecond) && (
               <button
+                type="button"
                 onClick={() => {
                   videoRef.current?.pause();
                   setIsPlaying(false);
                   setIsAddingComment(true);
                 }}
-                className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white font-medium text-[11px] flex items-center gap-1 transition-colors"
+                className="min-h-[44px] px-3 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs flex items-center gap-1 transition-colors"
               >
-                <Clock className="w-3 h-3" />
+                <Clock className="w-3 h-3" aria-hidden="true" />
                 Comment @ {formatTime(currentTime)}
               </button>
             )}
 
             {/* Playback speed selector */}
-            <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-white/10">
+            <div className="flex items-center bg-neutral-950 rounded-lg border border-white/10" role="group" aria-label="Playback speed">
               {[0.5, 1, 1.25, 1.5, 2].map((rate) => (
                 <button
                   key={rate}
+                  type="button"
+                  aria-pressed={playbackRate === rate}
                   onClick={() => changeSpeed(rate)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-all ${
-                    playbackRate === rate ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+                  className={`min-h-[44px] min-w-[44px] px-1 rounded-lg text-[11px] font-mono transition-colors ${
+                    playbackRate === rate ? 'bg-white text-neutral-950 font-bold' : 'text-neutral-200 hover:text-white'
                   }`}
                 >
                   {rate}x
@@ -331,23 +364,55 @@ export const VideoPlayerViewer: React.FC<VideoPlayerViewerProps> = ({
 
             {/* Audio Toggle */}
             <button
+              type="button"
               onClick={toggleMute}
-              className="p-1.5 rounded hover:bg-white/10 text-slate-400 hover:text-white"
+              className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-white/10 text-neutral-200 hover:text-white"
               title={isMuted ? 'Unmute' : 'Mute'}
+              aria-label={isMuted ? 'Unmute' : 'Mute'}
             >
               {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
             </button>
 
             {/* Fullscreen */}
             <button
+              type="button"
               onClick={toggleFullscreen}
-              className="p-1.5 rounded hover:bg-white/10 text-slate-400 hover:text-white"
+              className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-white/10 text-neutral-200 hover:text-white"
               title="Fullscreen"
+              aria-label="Fullscreen"
             >
               <Maximize2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
+
+        {/* Keyboard / 44px equivalent for the small timeline markers */}
+        {commentMarkers.length > 0 && (
+          <details className="text-xs text-neutral-200">
+            <summary className="min-h-[44px] flex items-center px-1 cursor-pointer rounded-lg hover:text-white">
+              Timecoded comments ({commentMarkers.length})
+            </summary>
+            <ul className="flex flex-wrap gap-1 pb-1">
+              {commentMarkers.map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      seek(c.sec);
+                      onSelectComment?.(c.id);
+                    }}
+                    aria-pressed={activeCommentId === c.id}
+                    className={`min-h-[44px] px-3 rounded-lg font-mono text-[11px] border transition-colors ${
+                      activeCommentId === c.id ? 'bg-white text-neutral-950 border-white' : 'border-white/20 hover:bg-white/10'
+                    }`}
+                  >
+                    {formatTime(c.sec)} · {c.author}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
     </div>
   );

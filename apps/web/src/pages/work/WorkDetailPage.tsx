@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
+import { OverdueChip } from '../../components/OverdueChip';
 import { statusClass, statusTone } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -8,6 +10,8 @@ import {
   PRIORITIES,
   BLOCKER_REASONS,
   RATING_TAGS,
+  CANONICAL_REVISION_ROOT_CAUSES,
+  type CanonicalRevisionRootCause,
   getAvailableActions,
   getStepStatusLabel,
   calculateIndividualWorkMeasures,
@@ -72,6 +76,10 @@ interface WorkItemDetail {
   reviewRequired?: boolean;
   unlockedAt?: string | null;
   startedAt?: string | null;
+  submittedAt?: string | null;
+  resubmittedAt?: string | null;
+  approvedAt?: string | null;
+  postedAt?: string | null;
   isSkipped?: boolean;
   isLocked?: boolean;
   contentLink?: string;
@@ -181,7 +189,7 @@ export const WorkDetailPage: React.FC = () => {
   // Revision / Rework Modal
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState('');
-  const [revisionRootCause, setRevisionRootCause] = useState<string>('Brief mismatch');
+  const [revisionRootCause, setRevisionRootCause] = useState<CanonicalRevisionRootCause>(CANONICAL_REVISION_ROOT_CAUSES[0]);
 
   // Delete Confirm Modal
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
@@ -212,6 +220,22 @@ export const WorkDetailPage: React.FC = () => {
   const [editRatingReason, setEditRatingReason] = useState<string>('');
   const [isSubmittingRatingEdit, setIsSubmittingRatingEdit] = useState(false);
   const [ratingActionError, setRatingActionError] = useState<string | null>(null);
+
+  // Modal keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
+  const submitDialogRef = useRef<HTMLDivElement>(null);
+  const revisionDialogRef = useRef<HTMLDivElement>(null);
+  const approveDialogRef = useRef<HTMLDivElement>(null);
+  const blockerDialogRef = useRef<HTMLDivElement>(null);
+  const deleteDialogRef = useRef<HTMLDivElement>(null);
+  const editDialogRef = useRef<HTMLDivElement>(null);
+  const editRatingDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(submitDialogRef, showSubmitModal, () => setShowSubmitModal(false));
+  useDialogFocus(revisionDialogRef, showRevisionModal, () => setShowRevisionModal(false));
+  useDialogFocus(approveDialogRef, showApproveModal, () => setShowApproveModal(false));
+  useDialogFocus(blockerDialogRef, showBlockerModal, () => setShowBlockerModal(false));
+  useDialogFocus(deleteDialogRef, showDeleteConfirmModal, () => setShowDeleteConfirmModal(false));
+  useDialogFocus(editDialogRef, showEditModal, () => setShowEditModal(false));
+  useDialogFocus(editRatingDialogRef, showEditRatingModal, () => setShowEditRatingModal(false));
 
   const handleMarkRatingSeen = async () => {
     if (!item?.rating?._id) return;
@@ -434,7 +458,7 @@ export const WorkDetailPage: React.FC = () => {
           body: JSON.stringify({
             comment: revisionNotes.trim(),
             feedback: revisionNotes.trim(),
-            rootCause: revisionRootCause || 'Brief mismatch',
+            rootCause: revisionRootCause,
           }),
         });
       } else if (item.reviewRequired) {
@@ -532,8 +556,8 @@ export const WorkDetailPage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="p-8 max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[60vh]">
-        <div className="w-10 h-10 border-4 border-[#7a6af6] border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm font-semibold text-slate-500">Loading work item details...</p>
+        <div className="w-10 h-10 border-4 border-ui-ink border-t-transparent rounded-full motion-safe:animate-spin mb-4" />
+        <p className="text-sm font-semibold text-ui-muted">Loading work item details...</p>
       </div>
     );
   }
@@ -541,13 +565,14 @@ export const WorkDetailPage: React.FC = () => {
   if (error || !item) {
     return (
       <div className="p-8 max-w-7xl mx-auto">
-        <div className="glass-card p-12 text-center rounded-3xl border border-rose-200">
-          <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto mb-3" />
-          <h2 className="text-lg font-bold text-slate-900">Work Item Not Found</h2>
-          <p className="text-xs text-slate-500 mt-1">{error || 'Unable to display item.'}</p>
+        <div className="glass-card p-12 text-center">
+          <AlertTriangle className="w-12 h-12 text-ui-coral mx-auto mb-3" aria-hidden="true" />
+          <h2 className="text-lg font-bold text-ui-ink">Work Item Not Found</h2>
+          <p className="text-xs text-ui-muted mt-1">{error || 'Unable to display item.'}</p>
           <button
+            type="button"
             onClick={() => navigate('/my-work')}
-            className="mt-6 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all inline-flex items-center gap-2"
+            className="ui-btn ui-btn-primary h-11 mt-6 gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to My Work
@@ -581,6 +606,11 @@ export const WorkDetailPage: React.FC = () => {
             title: item.title,
             deadline: item.deadline,
             revisions: item.revisions,
+            startedAt: item.startedAt,
+            submittedAt: item.submittedAt,
+            resubmittedAt: item.resubmittedAt,
+            approvedAt: item.approvedAt,
+            postedAt: item.postedAt,
           },
         ];
 
@@ -612,22 +642,23 @@ export const WorkDetailPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <button
+            type="button"
             onClick={() => navigate(-1)}
-            className="text-xs font-bold text-slate-500 hover:text-[#7a6af6] transition-colors flex items-center gap-1.5 mb-2 group cursor-pointer"
+            className="inline-flex items-center gap-1.5 min-h-[44px] -mt-2 text-[13px] font-semibold text-ui-muted hover:text-ui-ink transition-colors rounded-full"
           >
-            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
+            <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
             Back
           </button>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-violet-100 text-[#7a6af6]">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/70 text-ui-text">
               {item.workType}
             </span>
             <span
-              className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+              className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                 item.priority === 'Urgent'
-                  ? 'bg-rose-100 text-rose-700'
-                  : 'bg-slate-100 text-slate-600'
+                  ? 'status-chip status-changes'
+                  : 'bg-white/70 text-ui-text'
               }`}
             >
               {item.priority} Priority
@@ -638,7 +669,7 @@ export const WorkDetailPage: React.FC = () => {
                 isUnderReview ? 'waiting' : isReworkRequested ? 'changes' : statusTone(item.status)
               )} text-xs font-bold px-3 py-1`}
             >
-              {isUnderReview && <span className="w-2 h-2 rounded-full status-dot animate-pulse" />}
+              {isUnderReview && <span className="w-2 h-2 rounded-full status-dot motion-safe:animate-pulse" />}
               {isReworkRequested && <RotateCcw className="w-3.5 h-3.5" />}
               {!isUnderReview && !isReworkRequested && item.status === 'In Progress' && <CheckCircle2 className="w-3.5 h-3.5" />}
               {!isUnderReview && !isReworkRequested && item.status === 'Blocked' && <AlertTriangle className="w-3.5 h-3.5" />}
@@ -646,13 +677,11 @@ export const WorkDetailPage: React.FC = () => {
             </span>
 
             {isOverdue && (
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white animate-pulse">
-                Overdue
-              </span>
+              <OverdueChip deadline={item.deadline} className="px-2.5 py-0.5" />
             )}
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2 tracking-tight">
+          <h1 className="text-[26px] sm:text-[32px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink mt-2 break-words">
             {item.title}
           </h1>
         </div>
@@ -661,8 +690,9 @@ export const WorkDetailPage: React.FC = () => {
         <div className="flex items-center gap-2 self-start sm:self-auto">
           {actions.includes('edit_details') && (
             <button
+              type="button"
               onClick={() => setShowEditModal(true)}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 hover:border-[#7a6af6] hover:text-[#7a6af6] transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              className="ui-btn ui-btn-secondary h-11 gap-1.5"
             >
               <Edit3 className="w-3.5 h-3.5" />
               Edit details
@@ -671,18 +701,20 @@ export const WorkDetailPage: React.FC = () => {
 
           {actions.includes('delete') && (
             <button
+              type="button"
               onClick={() => setShowDeleteConfirmModal(true)}
-              className="p-2.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-600 hover:bg-rose-100 transition-all shadow-xs cursor-pointer"
+              className="ui-icon-btn"
               title="Delete step"
+              aria-label="Delete step"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
         </div>
       </div>
 
       {/* 2. Steps PipelineStepper & Action Triggers */}
-      <div className="glass-card p-6 rounded-3xl border border-white/80 shadow-glass space-y-4">
+      <div className="glass-card p-5 sm:p-6 space-y-4">
         <PipelineStepper
           stages={stepperStages}
           currentStageId={item._id}
@@ -692,12 +724,12 @@ export const WorkDetailPage: React.FC = () => {
         />
 
         {/* Action Triggers Bar (Driven strictly by getAvailableActions) */}
-        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        <div className="pt-3 border-t border-ui-line flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             {(item.stageKey === 'Content' || item.stageKey === 'Script') && (
               <button
                 onClick={() => navigate(`/work/${item._id}/writing-studio`)}
-                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-secondary h-11 gap-1.5"
               >
                 <FileText className="w-3.5 h-3.5" />
                 Open Writing Studio
@@ -707,7 +739,7 @@ export const WorkDetailPage: React.FC = () => {
             {item.stageKey === 'Shoot' && (
               <button
                 onClick={() => navigate(`/work/${item._id}/workspace`)}
-                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-secondary h-11 gap-1.5"
               >
                 <Video className="w-3.5 h-3.5" />
                 Open Shoot Workspace
@@ -717,7 +749,7 @@ export const WorkDetailPage: React.FC = () => {
             {item.stageKey === 'Edit' && (
               <button
                 onClick={() => navigate(`/work/${item._id}/workspace`)}
-                className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-secondary h-11 gap-1.5"
               >
                 <Film className="w-3.5 h-3.5" />
                 Open Edit Workspace
@@ -727,7 +759,7 @@ export const WorkDetailPage: React.FC = () => {
             {item.stageKey === 'Design' && (
               <button
                 onClick={() => navigate(`/work/${item._id}/workspace`)}
-                className="px-4 py-2 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-secondary h-11 gap-1.5"
               >
                 <Palette className="w-3.5 h-3.5" />
                 Open Design Workspace
@@ -737,7 +769,7 @@ export const WorkDetailPage: React.FC = () => {
             {item.stageKey === 'Post' && (
               <button
                 onClick={() => navigate(`/work/${item._id}/workspace`)}
-                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-secondary h-11 gap-1.5"
               >
                 <Share2 className="w-3.5 h-3.5" />
                 Open Posting Workspace
@@ -749,21 +781,21 @@ export const WorkDetailPage: React.FC = () => {
               <>
                 <button
                   onClick={() => setShowApproveModal(true)}
-                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  className="ui-btn ui-btn-primary h-11 gap-1.5"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Approve Deliverable
                 </button>
                 <button
                   onClick={() => setShowRevisionModal(true)}
-                  className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-bold border border-amber-200 flex items-center gap-1.5 cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11 gap-1.5"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Request Rework
                 </button>
                 <button
                   onClick={() => navigate(`/work/${item._id}/review`)}
-                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11 gap-1.5"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   Open in Review Studio
@@ -775,7 +807,7 @@ export const WorkDetailPage: React.FC = () => {
             {actions.includes('start') && (
               <button
                 onClick={() => handleTransition('In Progress')}
-                className="px-4 py-2 bg-[#7a6af6] hover:bg-[#6857f5] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-primary h-11 gap-1.5"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 Start
@@ -786,12 +818,9 @@ export const WorkDetailPage: React.FC = () => {
             {isOwner && (
               <>
                 {isUnderReview ? (
-                  <div className="flex items-center gap-2 px-3.5 py-2 bg-indigo-50 border border-indigo-200/80 rounded-xl">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
-                    </span>
-                    <span className="text-xs font-bold text-indigo-900">
+                  <div className="status-chip status-waiting min-h-[44px] px-3.5 gap-2 text-xs font-semibold">
+                    <span className="w-2 h-2 rounded-full status-dot motion-safe:animate-pulse" aria-hidden="true" />
+                    <span>
                       Under Review by Creative Head {item.latestSubmission?.version ? `(v${item.latestSubmission.version})` : ''}
                     </span>
                   </div>
@@ -806,7 +835,7 @@ export const WorkDetailPage: React.FC = () => {
                       setSubmitUrl(item.deliverableUrl || item.latestSubmission?.fileUrl || item.latestSubmission?.linkUrl || '');
                       setShowSubmitModal(true);
                     }}
-                    className="px-4 py-2 bg-gradient-to-r from-amber-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    className="ui-btn ui-btn-primary h-11 gap-1.5"
                   >
                     <Send className="w-3.5 h-3.5" />
                     Resubmit for approval {item.latestSubmission?.version ? `(v${item.latestSubmission.version + 1})` : ''}
@@ -824,7 +853,7 @@ export const WorkDetailPage: React.FC = () => {
                         setSubmitUrl(item.deliverableUrl || '');
                         setShowSubmitModal(true);
                       }}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      className="ui-btn ui-btn-primary h-11 gap-1.5"
                     >
                       <Send className="w-3.5 h-3.5" />
                       Submit for approval
@@ -841,7 +870,7 @@ export const WorkDetailPage: React.FC = () => {
                   setSubmitUrl(item.publishedUrl || item.deliverableUrl || '');
                   setShowSubmitModal(true);
                 }}
-                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-primary h-11 gap-1.5"
               >
                 <Globe className="w-3.5 h-3.5" />
                 Mark as posted
@@ -855,7 +884,7 @@ export const WorkDetailPage: React.FC = () => {
                   setDependencyOwnerId(prevOwner?._id || '');
                   setShowBlockerModal(true);
                 }}
-                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition-all border border-rose-200 flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-secondary h-11 gap-1.5"
               >
                 <Ban className="w-3.5 h-3.5" />
                 Mark blocked
@@ -868,7 +897,7 @@ export const WorkDetailPage: React.FC = () => {
                   const msg = prompt('Enter your question or help request for the team:');
                   if (msg) alert('Help request broadcast to team: ' + msg);
                 }}
-                className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-xs font-bold transition-all border border-purple-200 flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-secondary h-11 gap-1.5"
               >
                 <HelpCircle className="w-3.5 h-3.5" />
                 Request help
@@ -878,7 +907,7 @@ export const WorkDetailPage: React.FC = () => {
             {actions.includes('resolve_blocker') && (
               <button
                 onClick={() => handleTransition('In Progress')}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-primary h-11 gap-1.5"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 Resolve blocker
@@ -888,7 +917,7 @@ export const WorkDetailPage: React.FC = () => {
             {actions.includes('skip_step') && (
               <button
                 onClick={handleSkipStep}
-                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200 flex items-center gap-1.5 cursor-pointer"
+                className="ui-btn ui-btn-secondary h-11 gap-1.5"
               >
                 <SkipForward className="w-3.5 h-3.5" />
                 Skip step
@@ -897,8 +926,8 @@ export const WorkDetailPage: React.FC = () => {
 
             {/* One-line reason shown when viewer has no action on this step */}
             {reason && !isUnderReview && (
-              <div className="text-xs font-semibold text-slate-500 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 flex items-center gap-2">
-                <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <div className="text-xs font-medium text-ui-muted bg-white/60 px-3.5 min-h-[44px] rounded-ui-control flex items-center gap-2">
+                <Info className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 <span>{reason}</span>
               </div>
             )}
@@ -908,30 +937,30 @@ export const WorkDetailPage: React.FC = () => {
 
       {/* 2a. Submitted Deliverable & Review Cockpit Card */}
       {(item.latestSubmission || hasOutput || isReworkRequested || (item.revisions || 0) > 0 || isUnderReview) && (
-        <div className="glass-card p-6 rounded-3xl border border-white/80 shadow-glass space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+        <div className="glass-card p-5 sm:p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ui-line pb-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-black">
+              <div className="w-8 h-8 rounded-xl bg-white/70 text-ui-ink flex items-center justify-center" aria-hidden="true">
                 <FileCheck className="w-4 h-4" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">
+                  <h3 className="text-sm font-bold text-ui-ink tracking-tight">
                     Deliverable & Review Studio
                   </h3>
                   {item.latestSubmission?.version && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/70 text-ui-text">
                       v{item.latestSubmission.version}
                     </span>
                   )}
                   {(item.revisions || 0) > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                    <span className="status-chip status-changes px-2 py-0.5 text-[11px] font-semibold gap-1">
                       <RotateCcw className="w-2.5 h-2.5" />
                       {item.revisions} stage rework{(item.revisions || 0) === 1 ? '' : 's'}
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-ui-muted">
                   {item.latestSubmission?.submittedAt
                     ? `Submitted on ${new Date(item.latestSubmission.submittedAt).toLocaleDateString()} at ${new Date(item.latestSubmission.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                     : 'Current deliverable for this stage'}
@@ -941,19 +970,19 @@ export const WorkDetailPage: React.FC = () => {
 
             <div className="flex items-center gap-2">
               {isUnderReview && (
-                <span className="px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span className="status-chip status-waiting px-2.5 py-1 text-xs font-semibold gap-1.5">
+                  <span className="w-2 h-2 rounded-full status-dot motion-safe:animate-pulse" aria-hidden="true" />
                   Awaiting Review
                 </span>
               )}
               {isReworkRequested && (
-                <span className="px-2.5 py-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1.5">
+                <span className="status-chip status-changes px-2.5 py-1 text-xs font-semibold gap-1.5">
                   <RotateCcw className="w-3 h-3" />
                   Rework Requested
                 </span>
               )}
               {item.status === 'Approved' && (
-                <span className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold flex items-center gap-1.5">
+                <span className="status-chip status-approved px-2.5 py-1 text-xs font-semibold gap-1.5">
                   <CheckCircle2 className="w-3 h-3" />
                   Approved
                 </span>
@@ -963,24 +992,24 @@ export const WorkDetailPage: React.FC = () => {
 
           {/* Rework Feedback Alert Banner if changes requested */}
           {isReworkRequested && (item.latestSubmission?.feedback || item.blockerReason) && (
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-950 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
+            <div className="p-4 rounded-ui-card status-tint status-changes space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" aria-hidden="true" />
+                  <span className="text-[13px] font-semibold">
                     Rework Feedback
                   </span>
                   {item.latestSubmission?.rootCause && (
-                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-200/60 text-amber-900 border border-amber-300">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/70 text-ui-ink">
                       Cause: {item.latestSubmission.rootCause}
                     </span>
                   )}
                 </div>
-                <span className="text-[11px] font-semibold text-amber-700">
+                <span className="text-[11px] font-semibold">
                   Revision #{item.revisions || 1}
                 </span>
               </div>
-              <p className="text-xs text-amber-900 leading-relaxed font-medium bg-white/70 p-3 rounded-xl border border-amber-200/60">
+              <p className="text-xs text-ui-text leading-relaxed font-medium bg-white/70 p-3 rounded-xl">
                 {item.latestSubmission?.feedback || 'Please review the requested changes and resubmit.'}
               </p>
             </div>
@@ -989,17 +1018,17 @@ export const WorkDetailPage: React.FC = () => {
           {/* Deliverable Content & Links */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Output link or file */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <div className="p-4 rounded-ui-card bg-white/60 space-y-2 min-w-0">
+              <span className="text-[13px] font-medium text-ui-muted">
                 Deliverable Link / Asset
               </span>
               {item.deliverableUrl || item.latestSubmission?.fileUrl || item.latestSubmission?.linkUrl ? (
-                <div className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between gap-2 bg-white pl-3 pr-1 py-1 rounded-xl min-w-0">
                   <a
                     href={item.deliverableUrl || item.latestSubmission?.fileUrl || item.latestSubmission?.linkUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline truncate flex items-center gap-1.5"
+                    className="text-xs font-semibold text-ui-ink hover:underline underline-offset-4 truncate flex items-center gap-1.5 min-h-[44px] min-w-0"
                   >
                     <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">
@@ -1017,28 +1046,30 @@ export const WorkDetailPage: React.FC = () => {
                       setCopiedDeliverableLink(true);
                       setTimeout(() => setCopiedDeliverableLink(false), 2000);
                     }}
-                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-all cursor-pointer"
+                    type="button"
+                    className="ui-icon-btn shrink-0 border-transparent"
                     title="Copy link"
+                    aria-label={copiedDeliverableLink ? 'Link copied' : 'Copy link'}
                   >
                     {copiedDeliverableLink ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <Check className="w-3.5 h-3.5" />
                     ) : (
                       <Copy className="w-3.5 h-3.5" />
                     )}
                   </button>
                 </div>
               ) : (
-                <p className="text-xs text-slate-400 italic">No deliverable link uploaded yet.</p>
+                <p className="text-xs text-ui-muted italic">No deliverable link uploaded yet.</p>
               )}
             </div>
 
             {/* Stage-specific Summary or Script snippet */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <div className="p-4 rounded-ui-card bg-white/60 space-y-2 min-w-0">
+              <span className="text-[13px] font-medium text-ui-muted">
                 Stage Details & Artifacts
               </span>
-              <div className="text-xs text-slate-700 bg-white p-2.5 rounded-xl border border-slate-200 min-h-[42px] flex items-center justify-between">
-                <span>
+              <div className="text-xs text-ui-text bg-white pl-3 pr-1 py-1 rounded-xl min-h-[44px] flex items-center justify-between gap-2 min-w-0">
+                <span className="min-w-0 break-words">
                   {item.stageKey === 'Shoot'
                     ? `${item.approvedClips?.length || 0} clips recorded / uploaded`
                     : item.stageKey === 'Content' || item.stageKey === 'Script'
@@ -1052,7 +1083,8 @@ export const WorkDetailPage: React.FC = () => {
                 {(item.stageKey === 'Content' || item.stageKey === 'Script') && (
                   <button
                     onClick={() => navigate(`/work/${item._id}/writing-studio`)}
-                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                    type="button"
+                    className="shrink-0 min-h-[44px] px-2 text-[13px] font-semibold text-ui-ink hover:underline underline-offset-4 rounded-full"
                   >
                     View Studio →
                   </button>
@@ -1060,7 +1092,8 @@ export const WorkDetailPage: React.FC = () => {
                 {item.stageKey === 'Shoot' && (
                   <button
                     onClick={() => navigate(`/work/${item._id}/workspace`)}
-                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                    type="button"
+                    className="shrink-0 min-h-[44px] px-2 text-[13px] font-semibold text-ui-ink hover:underline underline-offset-4 rounded-full"
                   >
                     View Clips →
                   </button>
@@ -1071,22 +1104,22 @@ export const WorkDetailPage: React.FC = () => {
 
           {/* Reviewer Action Bar inside Cockpit */}
           {isReviewer && !isOwner && (isUnderReview || item.status === 'Pending' || (item.status === 'Feedback' && item.latestSubmission?.status === 'submitted')) && (
-            <div className="p-3 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="p-3 bg-white/60 rounded-ui-card flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-indigo-950">Reviewer Decision:</span>
-                <span className="text-xs text-slate-500">Evaluate deliverable against brief</span>
+                <span className="text-xs font-semibold text-ui-ink">Reviewer Decision:</span>
+                <span className="text-xs text-ui-muted">Evaluate deliverable against brief</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setShowRevisionModal(true)}
-                  className="px-3.5 py-1.5 bg-white border border-amber-300 hover:bg-amber-50 text-amber-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11 gap-1.5"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Request Rework
                 </button>
                 <button
                   onClick={() => setShowApproveModal(true)}
-                  className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  className="ui-btn ui-btn-primary h-11 gap-1.5"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Approve Deliverable
@@ -1099,33 +1132,34 @@ export const WorkDetailPage: React.FC = () => {
 
       {/* 2b. Quality Rating & Creative Feedback Section (WS4) */}
       {item.rating && (
-        <div className="glass-card p-6 rounded-3xl border border-amber-300/80 bg-gradient-to-br from-amber-500/10 via-slate-900 to-indigo-950/90 text-white shadow-glass space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+        <div className="glass-card p-5 sm:p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ui-line pb-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-md">
+              <div className="w-8 h-8 rounded-xl bg-white/70 text-amber-500 flex items-center justify-center" aria-hidden="true">
                 <Star className="w-4 h-4 fill-current" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-extrabold text-white tracking-tight">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-bold text-ui-ink tracking-tight">
                     Step Quality Rating & Feedback
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                  <span className="status-chip status-waiting px-2 py-0.5 text-[11px] font-semibold">
                     {item.rating.score} ★ &bull; {item.rating.score === 5 ? 'Excellent' : item.rating.score === 4 ? 'Very Good' : item.rating.score === 3 ? 'Good' : item.rating.score === 2 ? 'Below Standard' : 'Needs Work'}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-ui-muted">
                   Reviewed by {item.rating.raterId?.name || 'Creative Head'} on {new Date(item.rating.createdAt).toLocaleDateString()}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Worker Mark as Seen */}
               {(item.ownerId?._id === (user?._id || user?.id || user?.userId)) && !item.rating.seenAt && (
                 <button
                   onClick={handleMarkRatingSeen}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  type="button"
+                  className="ui-btn ui-btn-primary h-11 gap-1.5"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Mark as seen
@@ -1133,7 +1167,7 @@ export const WorkDetailPage: React.FC = () => {
               )}
 
               {item.rating.seenAt && (
-                <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1">
+                <span className="status-chip status-approved px-2.5 py-1 text-[11px] font-semibold gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Acknowledged
                 </span>
@@ -1143,7 +1177,8 @@ export const WorkDetailPage: React.FC = () => {
               {(user?.role === 'creative_head' || user?.role === 'admin') && (
                 <button
                   onClick={openEditRatingModal}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 border border-white/10 cursor-pointer"
+                  type="button"
+                  className="ui-btn ui-btn-secondary h-11 gap-1.5"
                   title="Edit rating score and feedback (Audit log will be preserved)"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
@@ -1154,14 +1189,15 @@ export const WorkDetailPage: React.FC = () => {
           </div>
 
           {/* Stars visual display */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" role="img" aria-label={`${item.rating.score} out of 5 stars`}>
             {[1, 2, 3, 4, 5].map((star) => (
               <Star
                 key={star}
+                aria-hidden="true"
                 className={`w-5 h-5 ${
                   (item.rating?.score || 0) >= star
-                    ? 'text-amber-400 fill-current'
-                    : 'text-slate-700'
+                    ? 'text-amber-500 fill-current'
+                    : 'text-ui-muted/40'
                 }`}
               />
             ))}
@@ -1169,7 +1205,7 @@ export const WorkDetailPage: React.FC = () => {
 
           {/* Qualitative Feedback Text */}
           {item.rating.feedback && (
-            <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/10 text-xs text-slate-200 leading-relaxed font-sans">
+            <div className="p-3.5 rounded-ui-card bg-white/60 text-xs text-ui-text leading-relaxed">
               "{item.rating.feedback}"
             </div>
           )}
@@ -1180,7 +1216,7 @@ export const WorkDetailPage: React.FC = () => {
               {item.rating.tags.map((tag, idx) => (
                 <span
                   key={idx}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                  className="px-2.5 py-1 rounded-full text-xs font-medium bg-white/70 text-ui-text"
                 >
                   +{tag}
                 </span>
@@ -1190,8 +1226,8 @@ export const WorkDetailPage: React.FC = () => {
 
           {/* Audit History Log */}
           {item.rating.editedLog && item.rating.editedLog.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-white/10 text-xs text-slate-400 space-y-1.5">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+            <div className="mt-3 pt-3 border-t border-ui-line text-xs text-ui-muted space-y-1.5">
+              <span className="text-[13px] font-medium text-ui-muted block">
                 Rating Edit History ({item.rating.editedLog.length})
               </span>
               {item.rating.editedLog.map((log, idx) => {
@@ -1200,13 +1236,13 @@ export const WorkDetailPage: React.FC = () => {
                     ? log.editedBy.name
                     : 'Reviewer';
                 return (
-                  <div key={idx} className="p-2.5 rounded-xl bg-slate-950/40 border border-white/5 text-[11px] flex flex-wrap items-center justify-between gap-2">
+                  <div key={idx} className="p-2.5 rounded-xl bg-white/60 text-[11px] flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <span className="text-slate-300 font-bold">{editorName}</span>
-                      <span className="text-slate-400"> adjusted score to {log.newScore}★: </span>
-                      <span className="text-amber-300 italic">"{log.reason}"</span>
+                      <span className="text-ui-ink font-semibold">{editorName}</span>
+                      <span className="text-ui-muted"> adjusted score to {log.newScore}★: </span>
+                      <span className="text-ui-text italic">"{log.reason}"</span>
                     </div>
-                    <span className="text-slate-400 font-mono text-[10px]">
+                    <span className="text-ui-muted font-mono text-[11px]">
                       {new Date(log.editedAt).toLocaleString()}
                     </span>
                   </div>
@@ -1221,30 +1257,30 @@ export const WorkDetailPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2-Cols: Tabs & Content */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="glass-pill-container p-1.5 flex items-center gap-1 max-w-md">
+          <div className="ui-tabs max-w-full overflow-x-auto">
             <button
+              type="button"
+              aria-pressed={activeTab === 'brief'}
               onClick={() => setActiveTab('brief')}
-              className={`flex-1 py-2 px-4 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === 'brief' ? 'pill-active' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`ui-tab gap-1.5 shrink-0 ${activeTab === 'brief' ? 'is-active' : ''}`}
             >
               <FileText className="w-3.5 h-3.5" />
               Details
             </button>
             <button
+              type="button"
+              aria-pressed={activeTab === 'deliverable'}
               onClick={() => setActiveTab('deliverable')}
-              className={`flex-1 py-2 px-4 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === 'deliverable' ? 'pill-active' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`ui-tab gap-1.5 shrink-0 ${activeTab === 'deliverable' ? 'is-active' : ''}`}
             >
               <ExternalLink className="w-3.5 h-3.5" />
               Links and files
             </button>
             <button
+              type="button"
+              aria-pressed={activeTab === 'activity'}
               onClick={() => setActiveTab('activity')}
-              className={`flex-1 py-2 px-4 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === 'activity' ? 'pill-active' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`ui-tab gap-1.5 shrink-0 ${activeTab === 'activity' ? 'is-active' : ''}`}
             >
               <Activity className="w-3.5 h-3.5" />
               History
@@ -1253,16 +1289,16 @@ export const WorkDetailPage: React.FC = () => {
 
           {/* Tab 1: Details */}
           {activeTab === 'brief' && (
-            <div className="glass-card p-6 rounded-3xl border border-white/80 shadow-glass space-y-6">
+            <div className="glass-card p-5 sm:p-6 space-y-6">
               {item.stageKey && (
-                <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex flex-wrap items-center justify-between gap-3">
+                <div className="p-4 rounded-ui-card bg-white/60 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-indigo-600" />
-                    <span className="text-xs font-extrabold text-indigo-900">
+                    <Layers className="w-4 h-4 text-ui-ink" aria-hidden="true" />
+                    <span className="text-xs font-semibold text-ui-ink">
                       Stage {item.stageOrder}: {item.stageKey}
                     </span>
                   </div>
-                  <span className="text-[11px] font-bold text-indigo-700 bg-white px-2.5 py-1 rounded-lg border border-indigo-200">
+                  <span className="text-[11px] font-semibold text-ui-text bg-white px-2.5 py-1 rounded-full">
                     {item.reviewRequired ? 'Approval Required' : 'Auto-Advances'}
                   </span>
                 </div>
@@ -1270,18 +1306,18 @@ export const WorkDetailPage: React.FC = () => {
 
               {/* Writing Studio Launch Card for Content and Script stages */}
               {(item.stageKey === 'Content' || item.stageKey === 'Script') && (
-                <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 text-white shadow-lg border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="p-5 rounded-ui-card bg-white/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-yellow-400" />
-                      <span className="text-[11px] font-black uppercase tracking-wider text-indigo-300">
+                      <Sparkles className="w-4 h-4 text-ui-ink" aria-hidden="true" />
+                      <span className="text-[13px] font-semibold text-ui-muted">
                         Writing Studio
                       </span>
                     </div>
-                    <h3 className="text-sm sm:text-base font-extrabold text-white">
+                    <h3 className="text-sm sm:text-base font-bold text-ui-ink">
                       Draft your {item.stageKey} document in the studio
                     </h3>
-                    <p className="text-xs text-slate-300 max-w-md">
+                    <p className="text-xs text-ui-muted max-w-md">
                       Word-style rich text canvas with duration estimation, hook check, scene tables, Malayalam font, and docked brief.
                     </p>
                   </div>
@@ -1289,7 +1325,8 @@ export const WorkDetailPage: React.FC = () => {
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => navigate(`/work/${item._id}/writing-studio`)}
-                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center gap-2 transition-all cursor-pointer"
+                      type="button"
+                      className="ui-btn ui-btn-primary h-11 gap-2"
                     >
                       <FileText className="w-4 h-4" />
                       Open Writing Studio
@@ -1300,18 +1337,18 @@ export const WorkDetailPage: React.FC = () => {
 
               {/* Shoot Workspace Launch Card */}
               {item.stageKey === 'Shoot' && (
-                <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 text-white shadow-lg border border-blue-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="p-5 rounded-ui-card bg-white/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Video className="w-4 h-4 text-blue-400" />
-                      <span className="text-[11px] font-black uppercase tracking-wider text-blue-300">
+                      <Video className="w-4 h-4 text-ui-ink" aria-hidden="true" />
+                      <span className="text-[13px] font-semibold text-ui-muted">
                         Shoot Workspace
                       </span>
                     </div>
-                    <h3 className="text-sm sm:text-base font-extrabold text-white">
+                    <h3 className="text-sm sm:text-base font-bold text-ui-ink">
                       Capture & Upload Raw Footage
                     </h3>
-                    <p className="text-xs text-slate-300 max-w-md">
+                    <p className="text-xs text-ui-muted max-w-md">
                       Read-only script & shot list, upload 1–10 clips up to 500 MB with pause/resume and phone support, shoot notes.
                     </p>
                   </div>
@@ -1319,7 +1356,8 @@ export const WorkDetailPage: React.FC = () => {
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => navigate(`/work/${item._id}/workspace`)}
-                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center gap-2 transition-all cursor-pointer"
+                      type="button"
+                      className="ui-btn ui-btn-primary h-11 gap-2"
                     >
                       <Video className="w-4 h-4" />
                       Open Shoot Workspace
@@ -1330,18 +1368,18 @@ export const WorkDetailPage: React.FC = () => {
 
               {/* Edit Workspace Launch Card */}
               {item.stageKey === 'Edit' && (
-                <div className="p-5 rounded-2xl bg-gradient-to-r from-violet-950 via-slate-900 to-purple-950 text-white shadow-lg border border-violet-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="p-5 rounded-ui-card bg-white/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Film className="w-4 h-4 text-violet-400" />
-                      <span className="text-[11px] font-black uppercase tracking-wider text-violet-300">
+                      <Film className="w-4 h-4 text-ui-ink" aria-hidden="true" />
+                      <span className="text-[13px] font-semibold text-ui-muted">
                         Edit Workspace
                       </span>
                     </div>
-                    <h3 className="text-sm sm:text-base font-extrabold text-white">
+                    <h3 className="text-sm sm:text-base font-bold text-ui-ink">
                       Assemble Master Cut & Verify Pacing
                     </h3>
-                    <p className="text-xs text-slate-300 max-w-md">
+                    <p className="text-xs text-ui-muted max-w-md">
                       Read-only footage clips & script, 9:16 aspect ratio & &le;90s duration pre-flight checks, revision checklist.
                     </p>
                   </div>
@@ -1349,7 +1387,8 @@ export const WorkDetailPage: React.FC = () => {
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => navigate(`/work/${item._id}/workspace`)}
-                      className="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center gap-2 transition-all cursor-pointer"
+                      type="button"
+                      className="ui-btn ui-btn-primary h-11 gap-2"
                     >
                       <Film className="w-4 h-4" />
                       Open Edit Workspace
@@ -1360,18 +1399,18 @@ export const WorkDetailPage: React.FC = () => {
 
               {/* Design Workspace Launch Card */}
               {item.stageKey === 'Design' && (
-                <div className="p-5 rounded-2xl bg-gradient-to-r from-pink-950 via-slate-900 to-rose-950 text-white shadow-lg border border-pink-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="p-5 rounded-ui-card bg-white/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Palette className="w-4 h-4 text-pink-400" />
-                      <span className="text-[11px] font-black uppercase tracking-wider text-pink-300">
+                      <Palette className="w-4 h-4 text-ui-ink" aria-hidden="true" />
+                      <span className="text-[13px] font-semibold text-ui-muted">
                         Design Workspace
                       </span>
                     </div>
-                    <h3 className="text-sm sm:text-base font-extrabold text-white">
+                    <h3 className="text-sm sm:text-base font-bold text-ui-ink">
                       Create Visuals Beside Approved Copy
                     </h3>
-                    <p className="text-xs text-slate-300 max-w-md">
+                    <p className="text-xs text-ui-muted max-w-md">
                       Approved copy with 1-click copy buttons, image/PDF upload with size guides, zoom preview, carousel ordering.
                     </p>
                   </div>
@@ -1379,7 +1418,8 @@ export const WorkDetailPage: React.FC = () => {
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => navigate(`/work/${item._id}/workspace`)}
-                      className="px-4 py-2.5 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center gap-2 transition-all cursor-pointer"
+                      type="button"
+                      className="ui-btn ui-btn-primary h-11 gap-2"
                     >
                       <Palette className="w-4 h-4" />
                       Open Design Workspace
@@ -1390,18 +1430,18 @@ export const WorkDetailPage: React.FC = () => {
 
               {/* Post Workspace Launch Card */}
               {item.stageKey === 'Post' && (
-                <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 text-white shadow-lg border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="p-5 rounded-ui-card bg-white/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Share2 className="w-4 h-4 text-emerald-400" />
-                      <span className="text-[11px] font-black uppercase tracking-wider text-emerald-300">
+                      <Share2 className="w-4 h-4 text-ui-ink" aria-hidden="true" />
+                      <span className="text-[13px] font-semibold text-ui-muted">
                         Posting Workspace
                       </span>
                     </div>
-                    <h3 className="text-sm sm:text-base font-extrabold text-white">
+                    <h3 className="text-sm sm:text-base font-bold text-ui-ink">
                       Publish to Live Social Channels
                     </h3>
-                    <p className="text-xs text-slate-300 max-w-md">
+                    <p className="text-xs text-ui-muted max-w-md">
                       Download approved master, copy caption & hashtags, platform pre-publish checklist, mark as posted.
                     </p>
                   </div>
@@ -1409,7 +1449,8 @@ export const WorkDetailPage: React.FC = () => {
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => navigate(`/work/${item._id}/workspace`)}
-                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center gap-2 transition-all cursor-pointer"
+                      type="button"
+                      className="ui-btn ui-btn-primary h-11 gap-2"
                     >
                       <Share2 className="w-4 h-4" />
                       Open Posting Workspace
@@ -1420,15 +1461,15 @@ export const WorkDetailPage: React.FC = () => {
 
               {/* Shot List for Videographer & Shooter (WS2 Acceptance Criteria) */}
               {(item.stageKey === 'Shoot' || item.stageKey === 'Edit') && item.scriptShotList && item.scriptShotList.length > 0 && (
-                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="p-5 rounded-ui-card bg-white/60 space-y-3">
+                  <div className="flex items-center justify-between border-b border-ui-line pb-2">
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                      <CheckCircle2 className="w-4 h-4 text-ui-ink" aria-hidden="true" />
+                      <span className="text-[13px] font-semibold text-ui-ink">
                         Extracted Shot List (from Approved Script)
                       </span>
                     </div>
-                    <span className="text-xs font-bold text-slate-400">
+                    <span className="text-xs font-bold text-ui-muted">
                       {item.scriptShotList.length} shots to capture
                     </span>
                   </div>
@@ -1437,15 +1478,15 @@ export const WorkDetailPage: React.FC = () => {
                     {item.scriptShotList.map((shot: any, idx: number) => (
                       <div
                         key={idx}
-                        className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs flex items-start gap-2.5"
+                        className="p-3 bg-white/60 border border-ui-line rounded-xl text-xs flex items-start gap-2.5"
                       >
-                        <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black shrink-0 text-[11px]">
+                        <span className="min-w-6 h-6 px-1 rounded-lg bg-white text-ui-ink flex items-center justify-center font-semibold shrink-0 text-[11px]">
                           #{shot.sceneNumber}
                         </span>
                         <div className="flex-1">
-                          <p className="font-bold text-slate-800">{shot.visual}</p>
+                          <p className="font-bold text-ui-text">{shot.visual}</p>
                           {shot.audio && (
-                            <p className="text-[11px] text-slate-500 italic mt-0.5">Audio: "{shot.audio}"</p>
+                            <p className="text-[11px] text-ui-muted italic mt-0.5">Audio: "{shot.audio}"</p>
                           )}
                         </div>
                       </div>
@@ -1456,17 +1497,17 @@ export const WorkDetailPage: React.FC = () => {
 
               {/* Previous Stage Context Banner */}
               {item.previousStage && (
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-2">
+                <div className="p-4 rounded-ui-card bg-white/60 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    <span className="text-[13px] font-medium text-ui-muted">
                       Previous Dependency &bull; {item.previousStage.stageKey} Stage
                     </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                    <span className={`status-chip ${statusClass(statusTone(item.previousStage.status))} text-[11px] font-semibold px-2 py-0.5`}>
                       {item.previousStage.status}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-600 font-semibold">
+                    <span className="text-ui-text font-semibold">
                       Owner: {item.previousStage.owner?.name || 'Unassigned'}
                     </span>
                     {item.previousStage.deliverableUrl && (
@@ -1474,7 +1515,7 @@ export const WorkDetailPage: React.FC = () => {
                         href={item.previousStage.deliverableUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-purple-600 hover:underline flex items-center gap-1 font-bold text-xs"
+                        className="text-ui-ink hover:underline underline-offset-4 flex items-center gap-1 font-semibold text-xs min-h-[44px]"
                       >
                         <span>View Completed Output</span>
                         <ExternalLink className="w-3 h-3" />
@@ -1485,26 +1526,26 @@ export const WorkDetailPage: React.FC = () => {
               )}
 
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                <span className="text-[13px] font-medium text-ui-muted block mb-2">
                   Description
                 </span>
-                <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-100 text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                <div className="p-4 rounded-ui-card bg-white/60 text-xs text-ui-text leading-relaxed whitespace-pre-wrap">
                   {item.description || item.brief?.description || 'No specific description provided.'}
                 </div>
               </div>
 
               {/* Zoho / Google Content Link */}
               <div className="space-y-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                <span className="text-[13px] font-medium text-ui-muted block">
                   Reference & Brief Content Link
                 </span>
                 {item.contentLink || item.brief?.contentLink ? (
-                  <div className="flex items-center justify-between p-3 rounded-2xl bg-purple-50/50 border border-purple-100">
+                  <div className="flex items-center justify-between gap-2 pl-3 pr-1 py-1 rounded-ui-card bg-white/60 min-w-0">
                     <a
                       href={item.contentLink || item.brief?.contentLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs font-bold text-purple-700 hover:underline truncate max-w-sm flex items-center gap-1.5"
+                      className="text-xs font-semibold text-ui-ink hover:underline underline-offset-4 truncate max-w-sm flex items-center gap-1.5 min-h-[44px] min-w-0"
                     >
                       <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                       <span className="truncate">{item.contentLink || item.brief?.contentLink}</span>
@@ -1516,14 +1557,15 @@ export const WorkDetailPage: React.FC = () => {
                         setCopiedContentLink(true);
                         setTimeout(() => setCopiedContentLink(false), 2000);
                       }}
-                      className="p-1.5 rounded-lg text-purple-600 hover:bg-purple-100 transition-colors"
+                      className="ui-icon-btn shrink-0 border-transparent"
                       title="Copy link"
+                      aria-label={copiedContentLink ? 'Link copied' : 'Copy link'}
                     >
-                      {copiedContentLink ? <CheckCheck className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                      {copiedContentLink ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-400 italic p-3 rounded-2xl bg-slate-50/50 border border-slate-100">
+                  <div className="text-xs text-ui-muted italic p-3 rounded-ui-card bg-white/60">
                     No reference link provided.
                   </div>
                 )}
@@ -1531,16 +1573,16 @@ export const WorkDetailPage: React.FC = () => {
 
               {/* Drive Assets Link */}
               <div className="space-y-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                <span className="text-[13px] font-medium text-ui-muted block">
                   Production Assets Drive Link
                 </span>
                 {item.assetsLink || item.brief?.assetsLink ? (
-                  <div className="flex items-center justify-between p-3 rounded-2xl bg-indigo-50/50 border border-indigo-100">
+                  <div className="flex items-center justify-between gap-2 pl-3 pr-1 py-1 rounded-ui-card bg-white/60 min-w-0">
                     <a
                       href={item.assetsLink || item.brief?.assetsLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs font-bold text-indigo-700 hover:underline truncate max-w-sm flex items-center gap-1.5"
+                      className="text-xs font-semibold text-ui-ink hover:underline underline-offset-4 truncate max-w-sm flex items-center gap-1.5 min-h-[44px] min-w-0"
                     >
                       <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                       <span className="truncate">{item.assetsLink || item.brief?.assetsLink}</span>
@@ -1552,14 +1594,15 @@ export const WorkDetailPage: React.FC = () => {
                         setCopiedAssetsLink(true);
                         setTimeout(() => setCopiedAssetsLink(false), 2000);
                       }}
-                      className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-100 transition-colors"
+                      className="ui-icon-btn shrink-0 border-transparent"
                       title="Copy link"
+                      aria-label={copiedAssetsLink ? 'Link copied' : 'Copy link'}
                     >
-                      {copiedAssetsLink ? <CheckCheck className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                      {copiedAssetsLink ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-400 italic p-3 rounded-2xl bg-slate-50/50 border border-slate-100">
+                  <div className="text-xs text-ui-muted italic p-3 rounded-ui-card bg-white/60">
                     No assets link provided.
                   </div>
                 )}
@@ -1569,9 +1612,9 @@ export const WorkDetailPage: React.FC = () => {
 
           {/* Tab 2: Links and files */}
           {activeTab === 'deliverable' && (
-            <div className="glass-card p-6 rounded-3xl border border-white/80 shadow-glass space-y-6">
+            <div className="glass-card p-5 sm:p-6 space-y-6">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                <span className="text-[13px] font-medium text-ui-muted block mb-1">
                   Worker Output Link
                 </span>
                 {item.deliverableUrl ? (
@@ -1579,20 +1622,20 @@ export const WorkDetailPage: React.FC = () => {
                     href={item.deliverableUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs text-[#7a6af6] font-extrabold hover:underline group"
+                    className="p-4 rounded-ui-card bg-white/60 flex items-center justify-between gap-2 text-xs text-ui-ink font-semibold hover:underline underline-offset-4 min-w-0"
                   >
                     <span className="truncate max-w-md">{item.deliverableUrl}</span>
-                    <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-[#7a6af6]" />
+                    <ExternalLink className="w-4 h-4 shrink-0 text-ui-muted" aria-hidden="true" />
                   </a>
                 ) : (
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-400 italic">
+                  <div className="p-4 rounded-ui-card bg-white/60 text-xs text-ui-muted italic">
                     No output link submitted yet.
                   </div>
                 )}
               </div>
 
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                <span className="text-[13px] font-medium text-ui-muted block mb-1">
                   Published Live URL
                 </span>
                 {item.publishedUrl ? (
@@ -1600,13 +1643,13 @@ export const WorkDetailPage: React.FC = () => {
                     href={item.publishedUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between text-xs text-emerald-700 font-extrabold hover:underline group"
+                    className="p-4 rounded-ui-card status-tint status-approved flex items-center justify-between gap-2 text-xs font-semibold hover:underline underline-offset-4 min-w-0"
                   >
                     <span className="truncate max-w-md">{item.publishedUrl}</span>
-                    <ExternalLink className="w-4 h-4 text-emerald-500 group-hover:text-emerald-700" />
+                    <ExternalLink className="w-4 h-4 shrink-0" aria-hidden="true" />
                   </a>
                 ) : (
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-400 italic">
+                  <div className="p-4 rounded-ui-card bg-white/60 text-xs text-ui-muted italic">
                     Not published to live channels yet.
                   </div>
                 )}
@@ -1616,21 +1659,21 @@ export const WorkDetailPage: React.FC = () => {
 
           {/* Tab 3: History */}
           {activeTab === 'activity' && (
-            <div className="glass-card p-6 rounded-3xl border border-white/80 shadow-glass">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-4">
+            <div className="glass-card p-5 sm:p-6">
+              <span className="text-[13px] font-medium text-ui-muted block mb-4">
                 Audit Timeline
               </span>
               {activities.length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-4">No logged history yet.</p>
+                <p className="text-xs text-ui-muted italic py-4">No logged history yet.</p>
               ) : (
                 <div className="space-y-4">
                   {activities.map((act) => (
-                    <div key={act._id} className="flex items-start gap-3 border-l-2 border-indigo-200 pl-4 py-1">
+                    <div key={act._id} className="flex items-start gap-3 border-l-2 border-ui-line pl-4 py-1">
                       <div>
-                        <div className="text-xs font-bold text-slate-800">
+                        <div className="text-xs font-bold text-ui-text">
                           {act.action.replace('work_item.', '').replace('_', ' ')}
                         </div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="text-[11px] text-ui-muted">
                           {act.actorId?.name || 'System'} &bull; {new Date(act.timestamp).toLocaleString()}
                         </div>
                       </div>
@@ -1645,18 +1688,18 @@ export const WorkDetailPage: React.FC = () => {
         {/* Right 1-Col Sidebar: Owner & Schedule */}
         <div className="space-y-6">
           {/* Owner Card */}
-          <div className="glass-card p-6 rounded-3xl border border-white/80 shadow-glass">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assignee</span>
-            <h3 className="text-sm font-extrabold text-slate-900 mb-3">Owner</h3>
+          <div className="glass-card p-5 sm:p-6">
+            <span className="text-[13px] font-medium text-ui-muted">Assignee</span>
+            <h3 className="text-sm font-bold text-ui-ink mb-3">Owner</h3>
 
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#7a6af6] to-indigo-500 text-white flex items-center justify-center font-black text-base shadow-md shadow-[#7a6af6]/20">
+              <div className="w-12 h-12 rounded-2xl bg-ui-ink text-white flex items-center justify-center font-bold text-base shrink-0" aria-hidden="true">
                 {item.ownerId?.name ? item.ownerId.name[0].toUpperCase() : 'U'}
               </div>
               <div>
-                <div className="text-sm font-extrabold text-slate-900">{item.ownerId?.name || 'Unassigned'}</div>
-                <div className="text-xs text-slate-500">{item.ownerId?.email}</div>
-                <div className="text-[10px] font-bold text-[#7a6af6] uppercase mt-0.5">
+                <div className="text-sm font-bold text-ui-ink">{item.ownerId?.name || 'Unassigned'}</div>
+                <div className="text-xs text-ui-muted break-all">{item.ownerId?.email}</div>
+                <div className="text-[11px] font-semibold text-ui-muted mt-0.5">
                   {item.ownerId?.jobRole || item.ownerId?.role || 'Creative Staff'}
                 </div>
               </div>
@@ -1664,21 +1707,21 @@ export const WorkDetailPage: React.FC = () => {
           </div>
 
           {/* Schedule & Timing */}
-          <div className="glass-card p-6 rounded-3xl border border-white/80 shadow-glass space-y-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Timetable</span>
-            <h3 className="text-sm font-extrabold text-slate-900 mb-2">Schedule & Cadence</h3>
+          <div className="glass-card p-5 sm:p-6 space-y-3">
+            <span className="text-[13px] font-medium text-ui-muted">Timetable</span>
+            <h3 className="text-sm font-bold text-ui-ink mb-2">Schedule & Cadence</h3>
 
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500">Target Deadline</span>
-              <span className={`font-bold ${isOverdue ? 'text-rose-600' : 'text-slate-900'}`}>
+              <span className="text-ui-muted">Target Deadline</span>
+              <span className={`font-semibold ${isOverdue ? 'status-chip status-changes px-2 py-0.5' : 'text-ui-ink'}`}>
                 {new Date(item.deadline).toLocaleDateString()}
               </span>
             </div>
 
             {measures.workTimeFormatted !== '—' && (
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500">Work Time</span>
-                <span className="font-bold text-slate-900">
+                <span className="text-ui-muted">Work Time</span>
+                <span className="font-bold text-ui-ink">
                   {item.status === 'In Progress' ? `Working for ${measures.workTimeFormatted}` : measures.workTimeFormatted}
                 </span>
               </div>
@@ -1686,19 +1729,19 @@ export const WorkDetailPage: React.FC = () => {
 
             {measures.approvalWaitFormatted !== '—' && (
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500">Approval Wait</span>
-                <span className="font-bold text-slate-900">{measures.approvalWaitFormatted}</span>
+                <span className="text-ui-muted">Approval Wait</span>
+                <span className="font-bold text-ui-ink">{measures.approvalWaitFormatted}</span>
               </div>
             )}
 
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500">Estimated Effort</span>
-              <span className="font-bold text-slate-900">{item.estimatedEffortHrs || 4} Hours</span>
+              <span className="text-ui-muted">Estimated Effort</span>
+              <span className="font-bold text-ui-ink">{item.estimatedEffortHrs || 4} Hours</span>
             </div>
 
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500">Revisions</span>
-              <span className="font-bold text-slate-900">{item.revisions || 0}</span>
+              <span className="text-ui-muted">Revisions</span>
+              <span className="font-bold text-ui-ink">{item.revisions || 0}</span>
             </div>
           </div>
         </div>
@@ -1706,17 +1749,25 @@ export const WorkDetailPage: React.FC = () => {
 
       {/* Submit / Done / Post Modal */}
       {showSubmitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal w-full max-w-lg p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-extrabold text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim">
+          <div
+            ref={submitDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wd-submit-title"
+            className="glass-modal w-full max-w-lg max-h-[92vh] overflow-y-auto p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-ui-line pb-3">
+              <h3 id="wd-submit-title" className="text-base font-bold text-ui-ink">
                 {submitAction === 'submit_for_approval'
                   ? 'Submit for approval'
                   : 'Mark as posted'}
               </h3>
               <button
                 onClick={() => setShowSubmitModal(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer"
+                type="button"
+              aria-label="Close"
+              className="ui-icon-btn shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1724,16 +1775,16 @@ export const WorkDetailPage: React.FC = () => {
 
             {/* Workspace recommendation for media stages */}
             {['Shoot', 'Edit', 'Design', 'Post', 'Script', 'Content'].includes(item.stageKey || '') && (
-              <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-900">
+              <div className="p-4 rounded-ui-card bg-white/60 flex flex-col gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-ui-ink">
                     Recommended: {item.stageKey} Workspace
                   </span>
-                  <span className="text-[10px] bg-indigo-200/60 text-indigo-800 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="text-[11px] bg-white text-ui-text px-2 py-0.5 rounded-full font-semibold">
                     Direct Upload & Verification
                   </span>
                 </div>
-                <p className="text-xs text-indigo-700">
+                <p className="text-xs text-ui-muted">
                   Upload raw files, verify checks, and submit directly within your specialized workspace.
                 </p>
                 <button
@@ -1746,7 +1797,7 @@ export const WorkDetailPage: React.FC = () => {
                       navigate(`/work/${item._id}/workspace`);
                     }
                   }}
-                  className="mt-1 py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11 mt-1 gap-1.5"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   Launch {item.stageKey} Workspace
@@ -1757,13 +1808,13 @@ export const WorkDetailPage: React.FC = () => {
             <form onSubmit={handleOutputSubmit} className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
+                  <label className="block text-[13px] font-medium text-ui-muted">
                     {submitAction === 'mark_as_posted'
                       ? 'Live Published Post URL *'
                       : 'Output URL (Fallback Cloud Link) *'}
                   </label>
                   {['Shoot', 'Edit', 'Design', 'Post', 'Script', 'Content'].includes(item.stageKey || '') && (
-                    <span className="text-[10px] text-slate-400">Link Fallback</span>
+                    <span className="text-[11px] text-ui-muted">Link Fallback</span>
                   )}
                 </div>
                 <input
@@ -1776,33 +1827,34 @@ export const WorkDetailPage: React.FC = () => {
                   }
                   value={submitUrl}
                   onChange={(e) => setSubmitUrl(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                  className="ui-input w-full"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Notes / Comments</label>
+                <label htmlFor="wd-field-1" className="block text-[13px] font-medium text-ui-muted mb-1.5">Notes / Comments</label>
                 <textarea
+                  id="wd-field-1"
                   rows={2}
                   placeholder="Optional notes..."
                   value={submitComment}
                   onChange={(e) => setSubmitComment(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowSubmitModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {isSubmitting ? 'Submitting...' : 'Confirm'}
                 </button>
@@ -1814,16 +1866,24 @@ export const WorkDetailPage: React.FC = () => {
 
       {/* Revision / Rework Request Modal */}
       {showRevisionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal w-full max-w-lg p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-amber-600">
-                <RotateCcw className="w-5 h-5" />
-                <h3 className="text-base font-extrabold text-slate-900">Request Rework</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim">
+          <div
+            ref={revisionDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wd-revision-title"
+            className="glass-modal w-full max-w-lg max-h-[92vh] overflow-y-auto p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-ui-line pb-3">
+              <div className="flex items-center gap-2 text-ui-ink">
+                <RotateCcw className="w-5 h-5" aria-hidden="true" />
+                <h3 id="wd-revision-title" className="text-base font-bold text-ui-ink">Request Rework</h3>
               </div>
               <button
                 onClick={() => setShowRevisionModal(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer"
+                type="button"
+              aria-label="Close"
+              className="ui-icon-btn shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1831,45 +1891,46 @@ export const WorkDetailPage: React.FC = () => {
 
             <form onSubmit={handleRevisionSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Root Cause *</label>
+                <label htmlFor="wd-field-2" className="block text-[13px] font-medium text-ui-muted mb-1.5">Root Cause *</label>
                 <select
+                  id="wd-field-2"
                   value={revisionRootCause}
-                  onChange={(e) => setRevisionRootCause(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  onChange={(e) => setRevisionRootCause(e.target.value as CanonicalRevisionRootCause)}
+                  className="ui-select w-full"
                 >
-                  <option value="Brief mismatch">Brief mismatch</option>
-                  <option value="Audio/visual defect">Audio/visual defect</option>
-                  <option value="Tone/copy">Tone / Copy</option>
-                  <option value="Formatting/layout">Formatting / Layout</option>
-                  <option value="Missing information">Missing information</option>
-                  <option value="Other">Other</option>
+                  {CANONICAL_REVISION_ROOT_CAUSES.map((cause) => (
+                    <option key={cause} value={cause}>
+                      {cause}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Feedback & Revisions Needed *</label>
+                <label htmlFor="wd-field-3" className="block text-[13px] font-medium text-ui-muted mb-1.5">Feedback & Revisions Needed *</label>
                 <textarea
+                  id="wd-field-3"
                   rows={4}
                   required
                   placeholder="Detail exactly what must be fixed or re-recorded before resubmission..."
                   value={revisionNotes}
                   onChange={(e) => setRevisionNotes(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowRevisionModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting || !revisionNotes.trim()}
-                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-600/20 disabled:opacity-50 cursor-pointer"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {isSubmitting ? 'Requesting...' : 'Request Rework'}
                 </button>
@@ -1881,16 +1942,24 @@ export const WorkDetailPage: React.FC = () => {
 
       {/* Approve Deliverable Modal (Creative Head / Admin) */}
       {showApproveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-slate-900 border border-white/20 rounded-3xl p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim">
+          <div
+            ref={approveDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wd-approve-title"
+            className="glass-modal w-full max-w-md max-h-[92vh] overflow-y-auto p-6 space-y-5"
+          >
+            <div className="flex items-center justify-between border-b border-ui-line pb-3">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-extrabold text-white">Approve Deliverable</h3>
+                <CheckCircle2 className="w-4 h-4 text-ui-ink" aria-hidden="true" />
+                <h3 id="wd-approve-title" className="text-base font-bold text-ui-ink">Approve Deliverable</h3>
               </div>
               <button
                 onClick={() => setShowApproveModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
+                type="button"
+              aria-label="Close"
+              className="ui-icon-btn shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1898,30 +1967,32 @@ export const WorkDetailPage: React.FC = () => {
 
             <form onSubmit={handleApproveSubmit} className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                <label className="text-[13px] font-medium text-ui-muted block mb-1.5">
                   Quality Rating (1 to 5 Stars) *
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quality rating, 1 to 5 stars">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
                       type="button"
                       onClick={() => setApproveRatingScore(star)}
-                      className={`p-2 rounded-xl border text-sm font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                      aria-label={`${star} star${star === 1 ? '' : 's'}`}
+                      aria-pressed={approveRatingScore === star}
+                      className={`min-h-[44px] min-w-[44px] px-2.5 rounded-xl border text-sm font-semibold flex items-center justify-center gap-1 transition-colors ${
                         approveRatingScore >= star
-                          ? 'bg-amber-400/20 border-amber-400 text-amber-300'
-                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                          ? 'bg-amber-50 border-amber-400 text-amber-900'
+                          : 'bg-white/70 border-ui-line text-ui-muted hover:text-ui-ink'
                       }`}
                     >
-                      <Star className="w-4 h-4 fill-current" />
-                      <span>{star}</span>
+                      <Star className="w-4 h-4 fill-current" aria-hidden="true" />
+                      <span aria-hidden="true">{star}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                <label className="text-[13px] font-medium text-ui-muted block mb-1.5">
                   Creative Feedback (Optional)
                 </label>
                 <textarea
@@ -1929,12 +2000,12 @@ export const WorkDetailPage: React.FC = () => {
                   onChange={(e) => setApproveFeedback(e.target.value)}
                   placeholder="Notes on execution, tone, visual polish..."
                   rows={2}
-                  className="w-full text-xs p-3 rounded-xl bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                <label className="text-[13px] font-medium text-ui-muted block mb-1.5">
                   Quality Tags
                 </label>
                 <div className="flex flex-wrap gap-1.5">
@@ -1945,10 +2016,11 @@ export const WorkDetailPage: React.FC = () => {
                         key={tag}
                         type="button"
                         onClick={() => toggleApproveTag(tag)}
-                        className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all cursor-pointer ${
+                        aria-pressed={isSelected}
+                        className={`min-h-[44px] px-3 rounded-full border text-[13px] font-medium transition-colors ${
                           isSelected
-                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
-                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                            ? 'bg-ui-ink text-white border-transparent'
+                            : 'bg-white/70 text-ui-text border-ui-line hover:bg-white'
                         }`}
                       >
                         +{tag}
@@ -1958,18 +2030,18 @@ export const WorkDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2">
+              <div className="pt-2 flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowApproveModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isApproving}
-                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 text-xs font-extrabold transition-all cursor-pointer shadow-md shadow-emerald-500/20"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {isApproving ? 'Approving...' : 'Approve & Advance Stage'}
                 </button>
@@ -1981,16 +2053,24 @@ export const WorkDetailPage: React.FC = () => {
 
       {/* Blocker Modal */}
       {showBlockerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal w-full max-w-lg p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-rose-600">
-                <Ban className="w-5 h-5" />
-                <h3 className="text-base font-extrabold text-slate-900">Mark blocked</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim">
+          <div
+            ref={blockerDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wd-blocker-title"
+            className="glass-modal w-full max-w-lg max-h-[92vh] overflow-y-auto p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-ui-line pb-3">
+              <div className="flex items-center gap-2 text-ui-ink">
+                <Ban className="w-5 h-5" aria-hidden="true" />
+                <h3 id="wd-blocker-title" className="text-base font-bold text-ui-ink">Mark blocked</h3>
               </div>
               <button
                 onClick={() => setShowBlockerModal(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer"
+                type="button"
+              aria-label="Close"
+              className="ui-icon-btn shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1998,12 +2078,13 @@ export const WorkDetailPage: React.FC = () => {
 
             <form onSubmit={submitBlocker} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Reason for Blocker *</label>
+                <label htmlFor="wd-field-4" className="block text-[13px] font-medium text-ui-muted mb-1.5">Reason for Blocker *</label>
                 <select
+                  id="wd-field-4"
                   required
                   value={blockerReason}
                   onChange={(e) => setBlockerReason(e.target.value as BlockerReason)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className="ui-select w-full"
                 >
                   {BLOCKER_REASONS.map((r) => (
                     <option key={r} value={r}>
@@ -2014,28 +2095,29 @@ export const WorkDetailPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Details / Blocker Note</label>
+                <label htmlFor="wd-field-5" className="block text-[13px] font-medium text-ui-muted mb-1.5">Details / Blocker Note</label>
                 <textarea
+                  id="wd-field-5"
                   rows={3}
                   value={blockerNote}
                   onChange={(e) => setBlockerNote(e.target.value)}
                   placeholder="Explain what is blocking progress..."
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowBlockerModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isBlocking}
-                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 cursor-pointer"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {isBlocking ? 'Updating...' : 'Mark blocked'}
                 </button>
@@ -2047,20 +2129,26 @@ export const WorkDetailPage: React.FC = () => {
 
       {/* Delete Step Confirmation Modal */}
       {showDeleteConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal w-full max-w-md p-6 space-y-4">
-            <div className="flex items-center gap-3 text-rose-600">
-              <AlertTriangle className="w-6 h-6 shrink-0" />
-              <h3 className="text-base font-extrabold text-slate-900">Confirm Deletion</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim">
+          <div
+            ref={deleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wd-delete-title"
+            className="glass-modal w-full max-w-md p-6 space-y-4"
+          >
+            <div className="flex items-center gap-3 text-ui-ink">
+              <AlertTriangle className="w-6 h-6 shrink-0 text-ui-coral" aria-hidden="true" />
+              <h3 id="wd-delete-title" className="text-base font-bold text-ui-ink">Confirm Deletion</h3>
             </div>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p className="text-xs text-ui-text leading-relaxed">
               Are you sure you want to delete step <strong>&quot;{item.title}&quot;</strong>? This task has not started and will be permanently removed. This action is logged.
             </p>
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setShowDeleteConfirmModal(false)}
-                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                className="ui-btn ui-btn-secondary h-11"
               >
                 Cancel
               </button>
@@ -2068,7 +2156,7 @@ export const WorkDetailPage: React.FC = () => {
                 type="button"
                 disabled={isDeleting}
                 onClick={confirmDelete}
-                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 cursor-pointer"
+                className="ui-btn ui-btn-primary h-11"
               >
                 {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
@@ -2079,13 +2167,21 @@ export const WorkDetailPage: React.FC = () => {
 
       {/* Edit Details Modal */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal w-full max-w-xl max-h-[90vh] overflow-y-auto p-6 sm:p-7 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-extrabold text-slate-900">Edit details</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim">
+          <div
+            ref={editDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wd-edit-title"
+            className="glass-modal w-full max-w-xl max-h-[92vh] overflow-y-auto p-6 sm:p-7 space-y-5"
+          >
+            <div className="flex items-center justify-between border-b border-ui-line pb-3">
+              <h3 id="wd-edit-title" className="text-base font-bold text-ui-ink">Edit details</h3>
               <button
                 onClick={() => setShowEditModal(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer"
+                type="button"
+              aria-label="Close"
+              className="ui-icon-btn shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2093,23 +2189,25 @@ export const WorkDetailPage: React.FC = () => {
 
             <form onSubmit={handleUpdate} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Title *</label>
+                <label htmlFor="wd-field-6" className="block text-[13px] font-medium text-ui-muted mb-1.5">Title *</label>
                 <input
+                  id="wd-field-6"
                   type="text"
                   required
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                  className="ui-input w-full"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Work Type</label>
+                  <label htmlFor="wd-field-7" className="block text-[13px] font-medium text-ui-muted mb-1.5">Work Type</label>
                   <select
+                    id="wd-field-7"
                     value={editWorkType}
                     onChange={(e) => setEditWorkType(e.target.value as WorkType)}
-                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                    className="ui-select w-full"
                   >
                     {WORK_TYPES.map((t) => (
                       <option key={t} value={t}>
@@ -2120,11 +2218,12 @@ export const WorkDetailPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Priority</label>
+                  <label htmlFor="wd-field-8" className="block text-[13px] font-medium text-ui-muted mb-1.5">Priority</label>
                   <select
+                    id="wd-field-8"
                     value={editPriority}
                     onChange={(e) => setEditPriority(e.target.value as Priority)}
-                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                    className="ui-select w-full"
                   >
                     {PRIORITIES.map((p) => (
                       <option key={p} value={p}>
@@ -2135,99 +2234,106 @@ export const WorkDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Deadline *</label>
+                  <label htmlFor="wd-field-9" className="block text-[13px] font-medium text-ui-muted mb-1.5">Deadline *</label>
                   <input
+                    id="wd-field-9"
                     type="date"
                     required
                     value={editDeadline}
                     onChange={(e) => setEditDeadline(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                    className="ui-input w-full"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Estimated Effort (Hrs)</label>
+                  <label htmlFor="wd-field-10" className="block text-[13px] font-medium text-ui-muted mb-1.5">Estimated Effort (Hrs)</label>
                   <input
+                    id="wd-field-10"
                     type="number"
                     min="0.5"
                     max="100"
                     step="0.5"
                     value={editEffort}
                     onChange={(e) => setEditEffort(Number(e.target.value))}
-                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                    className="ui-input w-full"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Content Doc Link (Zoho / Google)</label>
+                  <label htmlFor="wd-field-11" className="block text-[13px] font-medium text-ui-muted mb-1.5">Content Doc Link (Zoho / Google)</label>
                   <input
+                    id="wd-field-11"
                     type="url"
                     placeholder="https://writer.zoho.com/..."
                     value={editContentLink}
                     onChange={(e) => setEditContentLink(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                    className="ui-input w-full"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Creative Assets Link (Drive)</label>
+                  <label htmlFor="wd-field-12" className="block text-[13px] font-medium text-ui-muted mb-1.5">Creative Assets Link (Drive)</label>
                   <input
+                    id="wd-field-12"
                     type="url"
                     placeholder="https://drive.google.com/..."
                     value={editAssetsLink}
                     onChange={(e) => setEditAssetsLink(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                    className="ui-input w-full"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Output Link / URL</label>
+                <label htmlFor="wd-field-13" className="block text-[13px] font-medium text-ui-muted mb-1.5">Output Link / URL</label>
                 <input
+                  id="wd-field-13"
                   type="url"
                   placeholder="https://..."
                   value={editDeliverableUrl}
                   onChange={(e) => setEditDeliverableUrl(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                  className="ui-input w-full"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Live Published URL</label>
+                <label htmlFor="wd-field-14" className="block text-[13px] font-medium text-ui-muted mb-1.5">Live Published URL</label>
                 <input
+                  id="wd-field-14"
                   type="url"
                   placeholder="https://..."
                   value={editPublishedUrl}
                   onChange={(e) => setEditPublishedUrl(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                  className="ui-input w-full"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Description / Brief</label>
+                <label htmlFor="wd-field-15" className="block text-[13px] font-medium text-ui-muted mb-1.5">Description / Brief</label>
                 <textarea
+                  id="wd-field-15"
                   rows={3}
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isUpdating}
-                  className="px-5 py-2 bg-[#7a6af6] hover:bg-[#6857f5] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#7a6af6]/20 disabled:opacity-50 cursor-pointer"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {isUpdating ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -2239,23 +2345,31 @@ export const WorkDetailPage: React.FC = () => {
 
       {/* Edit Rating Modal (WS4: Creative Head & Admin Corrections) */}
       {showEditRatingModal && item?.rating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-slate-900 border border-white/20 rounded-3xl p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim">
+          <div
+            ref={editRatingDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wd-edit-rating-title"
+            className="glass-modal w-full max-w-md max-h-[92vh] overflow-y-auto p-6 space-y-5"
+          >
+            <div className="flex items-center justify-between border-b border-ui-line pb-3">
               <div className="flex items-center gap-2">
-                <Star className="w-4 h-4 text-amber-400 fill-current" />
-                <h3 className="text-sm font-extrabold text-white">Edit Quality Rating</h3>
+                <Star className="w-4 h-4 text-amber-500 fill-current" aria-hidden="true" />
+                <h3 id="wd-edit-rating-title" className="text-base font-bold text-ui-ink">Edit Quality Rating</h3>
               </div>
               <button
                 onClick={() => setShowEditRatingModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
+                type="button"
+              aria-label="Close"
+              className="ui-icon-btn shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {ratingActionError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+              <div role="alert" className="p-3 rounded-xl status-tint status-changes text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{ratingActionError}</span>
               </div>
@@ -2263,30 +2377,32 @@ export const WorkDetailPage: React.FC = () => {
 
             <form onSubmit={handleSubmitRatingEdit} className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                <label className="text-[13px] font-medium text-ui-muted block mb-1.5">
                   Rating (1 to 5 Stars) *
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quality rating, 1 to 5 stars">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
                       type="button"
                       onClick={() => setEditRatingScore(star)}
-                      className={`p-2 rounded-xl border text-sm font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                      aria-label={`${star} star${star === 1 ? '' : 's'}`}
+                      aria-pressed={editRatingScore === star}
+                      className={`min-h-[44px] min-w-[44px] px-2.5 rounded-xl border text-sm font-semibold flex items-center justify-center gap-1 transition-colors ${
                         editRatingScore >= star
-                          ? 'bg-amber-400/20 border-amber-400 text-amber-300'
-                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                          ? 'bg-amber-50 border-amber-400 text-amber-900'
+                          : 'bg-white/70 border-ui-line text-ui-muted hover:text-ui-ink'
                       }`}
                     >
-                      <Star className="w-4 h-4 fill-current" />
-                      <span>{star}</span>
+                      <Star className="w-4 h-4 fill-current" aria-hidden="true" />
+                      <span aria-hidden="true">{star}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                <label className="text-[13px] font-medium text-ui-muted block mb-1.5">
                   Written Feedback
                 </label>
                 <textarea
@@ -2294,12 +2410,12 @@ export const WorkDetailPage: React.FC = () => {
                   onChange={(e) => setEditRatingFeedback(e.target.value)}
                   placeholder="Qualitative creative notes..."
                   rows={2}
-                  className="w-full text-xs p-3 rounded-xl bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                <label className="text-[13px] font-medium text-ui-muted block mb-1.5">
                   Quality Tags
                 </label>
                 <div className="flex flex-wrap gap-1.5">
@@ -2310,10 +2426,11 @@ export const WorkDetailPage: React.FC = () => {
                         key={tag}
                         type="button"
                         onClick={() => toggleEditRatingTag(tag)}
-                        className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all cursor-pointer ${
+                        aria-pressed={isSelected}
+                        className={`min-h-[44px] px-3 rounded-full border text-[13px] font-medium transition-colors ${
                           isSelected
-                            ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
-                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                            ? 'bg-ui-ink text-white border-transparent'
+                            : 'bg-white/70 text-ui-text border-ui-line hover:bg-white'
                         }`}
                       >
                         +{tag}
@@ -2324,7 +2441,7 @@ export const WorkDetailPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-rose-300 block mb-1.5">
+                <label className="text-[13px] font-medium text-ui-muted block mb-1.5">
                   Reason for Correction (Required for Audit Log) *
                 </label>
                 <input
@@ -2333,22 +2450,22 @@ export const WorkDetailPage: React.FC = () => {
                   onChange={(e) => setEditRatingReason(e.target.value)}
                   placeholder="e.g., Re-evaluated pacing in final cut"
                   required
-                  className="w-full text-xs p-3 rounded-xl bg-slate-950/80 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2">
+              <div className="pt-2 flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowEditRatingModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingRatingEdit || !editRatingReason.trim()}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-extrabold transition-all cursor-pointer"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {isSubmittingRatingEdit ? 'Saving...' : 'Save & Log Correction'}
                 </button>

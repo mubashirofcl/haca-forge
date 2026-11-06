@@ -1,10 +1,12 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogFocus } from '../../lib/useDialogFocus';
+import { statusClass, statusTone } from '../../lib/statusTone';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import {
-  REVISION_ROOT_CAUSES,
-  type RevisionRootCause,
+  CANONICAL_REVISION_ROOT_CAUSES,
+  type CanonicalRevisionRootCause,
 } from '@mmp/shared';
 import {
   AlertTriangle,
@@ -123,9 +125,12 @@ export const FeedbackPage: React.FC = () => {
 
   // Root Cause Classification Modal
   const [isClassifyModalOpen, setIsClassifyModalOpen] = useState(false);
-  const [selectedRootCause, setSelectedRootCause] = useState<RevisionRootCause>('Brief unclear');
+  const [selectedRootCause, setSelectedRootCause] = useState<CanonicalRevisionRootCause>(CANONICAL_REVISION_ROOT_CAUSES[0]);
   const [rootCauseNotes, setRootCauseNotes] = useState('');
   const [isClassifying, setIsClassifying] = useState(false);
+  // Classify modal keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
+  const classifyDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(classifyDialogRef, isClassifyModalOpen, () => setIsClassifyModalOpen(false));
 
   // Fetch all feedback threads
   const fetchThreads = async () => {
@@ -304,37 +309,36 @@ export const FeedbackPage: React.FC = () => {
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
       {/* Scope Reset R3 Top Tab Navigation for Creative Head */}
-      <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="ui-tabs flex-wrap max-w-full rounded-ui-card">
         <button
+          type="button"
+          aria-pressed={mainTab === 'plans'}
           onClick={() => handleMainTabChange('plans')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-            mainTab === 'plans'
-              ? 'bg-purple-600 text-white shadow-md shadow-purple-200'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
+          className={`ui-tab gap-2 ${mainTab === 'plans' ? 'is-active' : ''}`}
         >
-          <FileSpreadsheet className="w-4 h-4" />
+          <FileSpreadsheet className="w-4 h-4" aria-hidden="true" />
           Plans waiting for approval
         </button>
 
         <button
+          type="button"
+          aria-pressed={mainTab === 'stages'}
           onClick={() => handleMainTabChange('stages')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-            mainTab === 'stages'
-              ? 'bg-purple-600 text-white shadow-md shadow-purple-200'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
+          className={`ui-tab gap-2 ${mainTab === 'stages' ? 'is-active' : ''}`}
         >
           <CheckCircle2 className="w-4 h-4" />
           Stages waiting for approval
         </button>
+        </div>
 
         {isReviewerOrAdmin && (
           <button
+            type="button"
             onClick={() => navigate('/feedback/review-studio')}
-            className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+            className="ui-btn ui-btn-primary h-11 gap-2 sm:ml-auto"
           >
-            <Sparkles className="w-4 h-4" />
+            <Sparkles className="w-4 h-4" aria-hidden="true" />
             Open Review Studio
           </button>
         )}
@@ -345,79 +349,84 @@ export const FeedbackPage: React.FC = () => {
       {mainTab === 'stages' && (
         <>
           {/* Top Cockpit Header */}
-      <div className="bg-gradient-to-r from-purple-900/90 via-indigo-900/80 to-slate-900/90 text-white p-6 rounded-3xl shadow-xl border border-white/10 backdrop-blur-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="space-y-5">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-purple-500/30 text-purple-200 border border-purple-400/30">
-                Screen 8 • Review Hub
+            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/70 text-ui-text">
+                Review Hub
               </span>
-              <span className="text-xs text-purple-200/80 font-medium">Two-Entry Review Rounds</span>
+              <span className="text-xs text-ui-muted font-medium">Two-Entry Review Rounds</span>
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-              <MessageSquare className="w-6 h-6 text-purple-400" />
+            <h1 className="text-[28px] sm:text-[32px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink flex items-center gap-2">
+              <MessageSquare className="w-6 h-6 shrink-0" aria-hidden="true" />
               Feedback & Revision History
             </h1>
-            <p className="text-sm text-purple-200/70 mt-1 max-w-2xl">
+            <p className="text-[15px] text-ui-muted mt-1.5 max-w-[70ch]">
               Structured round-based review threads with reviewer decisions, owner responses, automatic 4th round ceiling flags, and 7-cause root cause analysis.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
               onClick={() => navigate('/issues')}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all flex items-center gap-2 shadow-sm"
+              className="ui-btn ui-btn-secondary h-11 gap-2"
             >
-              <ShieldAlert className="w-4 h-4 text-amber-400" />
+              <ShieldAlert className="w-4 h-4" aria-hidden="true" />
               <span>Issues & Blockers</span>
             </button>
             <button
+              type="button"
               onClick={() => navigate('/work')}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-900/30 transition-all flex items-center gap-2"
+              className="ui-btn ui-btn-secondary h-11 gap-2"
             >
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-4 h-4" aria-hidden="true" />
               <span>All Work Items</span>
             </button>
           </div>
         </div>
 
         {/* Metric Cards Strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6 pt-6 border-t border-white/10">
-          <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-purple-300 block mb-0.5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="glass-card p-4">
+            <span className="text-[13px] font-medium text-ui-muted flex items-center gap-1.5 mb-1">
+              <span className="w-2 h-2 rounded-full status-dot status-in-progress" aria-hidden="true" />
               In Feedback
             </span>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-white">{metrics.totalActive}</span>
-              <span className="text-xs text-purple-300/80">Deliverables</span>
+              <span className="text-2xl font-bold text-ui-ink tabular-nums">{metrics.totalActive}</span>
+              <span className="text-xs text-ui-muted">Deliverables</span>
             </div>
           </div>
-          <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 block mb-0.5">
+          <div className="glass-card p-4">
+            <span className="text-[13px] font-medium text-ui-muted flex items-center gap-1.5 mb-1">
+              <span className="w-2 h-2 rounded-full status-dot status-waiting" aria-hidden="true" />
               Revision Flags
             </span>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-amber-400">{metrics.totalFlagged}</span>
-              <span className="text-xs text-amber-300/80">&ge; 4 revs</span>
+              <span className="text-2xl font-bold text-ui-ink tabular-nums">{metrics.totalFlagged}</span>
+              <span className="text-xs text-ui-muted">&ge; 4 revs</span>
             </div>
           </div>
-          <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 block mb-0.5">
+          <div className="glass-card p-4">
+            <span className="text-[13px] font-medium text-ui-muted flex items-center gap-1.5 mb-1">
+              <span className="w-2 h-2 rounded-full status-dot status-changes" aria-hidden="true" />
               Escalated (&gt;48h)
             </span>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-rose-400">{metrics.totalEscalated}</span>
-              <span className="text-xs text-rose-300/80">To Head</span>
+              <span className="text-2xl font-bold text-ui-ink tabular-nums">{metrics.totalEscalated}</span>
+              <span className="text-xs text-ui-muted">To Head</span>
             </div>
           </div>
-          <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 block mb-0.5">
+          <div className="glass-card p-4">
+            <span className="text-[13px] font-medium text-ui-muted flex items-center gap-1.5 mb-1">
+              <span className="w-2 h-2 rounded-full status-dot status-approved" aria-hidden="true" />
               Approved
             </span>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-emerald-400">{metrics.totalApproved}</span>
-              <span className="text-xs text-emerald-300/80">Ready to Publish</span>
+              <span className="text-2xl font-bold text-ui-ink tabular-nums">{metrics.totalApproved}</span>
+              <span className="text-xs text-ui-muted">Ready to Publish</span>
             </div>
           </div>
         </div>
@@ -428,42 +437,43 @@ export const FeedbackPage: React.FC = () => {
         {/* Left Column: Thread List (5 cols) */}
         <div className="lg:col-span-5 space-y-4">
           {/* Filter Tabs & Search */}
-          <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm space-y-3">
-            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 text-xs font-bold text-slate-600">
+          <div className="glass-card p-4 space-y-3">
+            <div className="ui-tabs w-full grid grid-cols-3">
               <button
+                type="button"
+                aria-pressed={activeTab === 'all'}
                 onClick={() => setActiveTab('all')}
-                className={`flex-1 py-1.5 rounded-lg transition-all ${
-                  activeTab === 'all' ? 'bg-white text-purple-700 shadow-sm' : 'hover:text-slate-900'
-                }`}
+                className={`ui-tab justify-center px-2 ${activeTab === 'all' ? 'is-active' : ''}`}
               >
                 All ({threads.length})
               </button>
               <button
+                type="button"
+                aria-pressed={activeTab === 'feedback'}
                 onClick={() => setActiveTab('feedback')}
-                className={`flex-1 py-1.5 rounded-lg transition-all ${
-                  activeTab === 'feedback' ? 'bg-white text-purple-700 shadow-sm' : 'hover:text-slate-900'
-                }`}
+                className={`ui-tab justify-center px-2 ${activeTab === 'feedback' ? 'is-active' : ''}`}
               >
                 In Review ({metrics.totalActive})
               </button>
               <button
+                type="button"
+                aria-pressed={activeTab === 'flagged'}
                 onClick={() => setActiveTab('flagged')}
-                className={`flex-1 py-1.5 rounded-lg transition-all ${
-                  activeTab === 'flagged' ? 'bg-white text-amber-700 shadow-sm' : 'hover:text-slate-900'
-                }`}
+                className={`ui-tab justify-center px-2 ${activeTab === 'flagged' ? 'is-active' : ''}`}
               >
                 Flagged ({metrics.totalFlagged})
               </button>
             </div>
 
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-ui-muted absolute left-4 top-1/2 -translate-y-1/2" aria-hidden="true" />
               <input
                 type="text"
                 placeholder="Search title or owner..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                aria-label="Search title or owner"
+                className="ui-input w-full pl-10 pr-3"
               />
             </div>
           </div>
@@ -471,11 +481,11 @@ export const FeedbackPage: React.FC = () => {
           {/* List of Deliverables */}
           <div className="space-y-2.5 max-h-[750px] overflow-y-auto pr-1">
             {isLoading ? (
-              <div className="p-8 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
+              <div className="glass-card p-8 text-center text-xs text-ui-muted">
                 Loading feedback threads...
               </div>
             ) : filteredThreads.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
+              <div className="glass-card p-8 text-center text-xs text-ui-muted">
                 No feedback threads matching filters.
               </div>
             ) : (
@@ -485,64 +495,60 @@ export const FeedbackPage: React.FC = () => {
                 const isEscalated = Boolean(item.flag?.isEscalated || item.flag?.isOver48HoursUnclassified);
 
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={item.workItem._id}
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedWorkItemId(item.workItem._id)}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-purple-50/80 border-purple-300 ring-2 ring-purple-500/20 shadow-sm'
-                        : 'bg-white border-slate-200/80 hover:border-purple-200 hover:bg-slate-50/60'
+                    className={`glass-card block w-full text-left p-4 ${
+                      isSelected ? 'outline outline-2 outline-ui-ink' : 'hover:bg-ui-card-hover'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-1.5">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/70 text-ui-text">
                           {item.workItem.workType}
                         </span>
                       </div>
 
                       {hasFlag && (
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border ${
-                            isEscalated
-                              ? 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse'
-                              : 'bg-amber-100 text-amber-800 border-amber-300'
+                          className={`status-chip text-[11px] font-semibold px-2 py-0.5 gap-1 ${
+                            isEscalated ? 'status-changes' : 'status-waiting'
                           }`}
                         >
-                          <Flag className="w-2.5 h-2.5" />
+                          <Flag className="w-2.5 h-2.5" aria-hidden="true" />
                           {isEscalated ? 'Escalated' : 'Flagged'}
                         </span>
                       )}
                     </div>
 
-                    <h3 className="text-xs font-bold text-slate-900 line-clamp-1 mb-1">
+                    <span className="block text-[13px] font-semibold text-ui-ink line-clamp-1 mb-1">
                       {item.workItem.title}
-                    </h3>
+                    </span>
 
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[10px] flex items-center justify-center">
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-ui-muted mt-2 pt-2 border-t border-ui-line">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="w-5 h-5 rounded-full bg-ui-ink text-white font-semibold text-[10px] flex items-center justify-center shrink-0" aria-hidden="true">
                           {item.workItem.ownerId?.name?.charAt(0) || 'U'}
                         </div>
-                        <span className="font-medium text-slate-700">
+                        <span className="font-medium text-ui-text truncate">
                           {item.workItem.ownerId?.name || 'Unassigned'}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <span
-                          className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
-                            item.revisions >= 4
-                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                              : 'bg-slate-100 text-slate-600'
+                          className={`px-2 py-0.5 rounded-full font-semibold text-[11px] ${
+                            item.revisions >= 4 ? 'status-chip status-changes' : 'bg-white/70 text-ui-text'
                           }`}
                         >
                           {item.revisions} {item.revisions === 1 ? 'rev' : 'revs'}
                         </span>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                        <ChevronRight className="w-3.5 h-3.5 text-ui-muted" aria-hidden="true" />
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })
             )}
@@ -552,56 +558,57 @@ export const FeedbackPage: React.FC = () => {
         {/* Right Column: Structured Thread View (7 cols) */}
         <div className="lg:col-span-7 space-y-4">
           {isLoadingDetail ? (
-            <div className="p-12 text-center text-xs text-slate-400 bg-white rounded-3xl border border-slate-200/80 shadow-sm">
+            <div className="glass-card p-12 text-center text-xs text-ui-muted">
               Loading review thread details...
             </div>
           ) : !activeThread ? (
-            <div className="p-12 text-center text-xs text-slate-400 bg-white rounded-3xl border border-slate-200/80 shadow-sm">
+            <div className="glass-card p-12 text-center text-xs text-ui-muted">
               Select a deliverable on the left to inspect its structured feedback thread.
             </div>
           ) : (
             <div className="space-y-4 animate-fadeIn">
               {/* Deliverable Header Card */}
-              <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3">
-                <div className="flex items-start justify-between gap-3">
+              <div className="glass-card p-5 space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/70 text-ui-text">
                         {activeThread.workItem.workType}
                       </span>
                     </div>
-                    <h2 className="text-base font-black text-slate-900">
+                    <h2 className="text-base font-bold text-ui-ink">
                       {activeThread.workItem.title}
                     </h2>
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => navigate(`/work/${activeThread.workItem._id}`)}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 flex items-center gap-1.5 transition-all shadow-sm shrink-0"
+                    className="ui-btn ui-btn-secondary h-11 gap-1.5 shrink-0"
                   >
                     <span>Open Work Detail</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
+                    <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-ui-line text-xs">
                   <div>
-                    <span className="text-[10px] text-slate-400 font-semibold block">Assigned Owner</span>
-                    <strong className="text-slate-800">{activeThread.workItem.ownerId?.name || 'Unassigned'}</strong>
+                    <span className="text-[11px] text-ui-muted font-medium block">Assigned Owner</span>
+                    <strong className="text-ui-ink">{activeThread.workItem.ownerId?.name || 'Unassigned'}</strong>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-semibold block">Total Revisions</span>
+                    <span className="text-[11px] text-ui-muted font-medium block">Total Revisions</span>
                     <strong
-                      className={`font-black ${
-                        activeThread.workItem.revisions >= 4 ? 'text-rose-600' : 'text-slate-800'
+                      className={`font-semibold ${
+                        activeThread.workItem.revisions >= 4 ? 'status-chip status-changes px-2 py-0.5' : 'text-ui-ink'
                       }`}
                     >
                       {activeThread.workItem.revisions} cycles
                     </strong>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-semibold block">Status</span>
-                    <span className="inline-block px-2 py-0.5 rounded font-bold text-[10px] bg-purple-100 text-purple-800">
+                    <span className="text-[11px] text-ui-muted font-medium block">Status</span>
+                    <span className={`status-chip ${statusClass(statusTone(activeThread.workItem.status))} px-2 py-0.5 font-semibold text-[11px]`}>
                       {activeThread.workItem.status}
                     </span>
                   </div>
@@ -611,23 +618,23 @@ export const FeedbackPage: React.FC = () => {
               {/* Revision Flag Banner (if flagged) */}
               {activeThread.flag && (
                 <div
-                  className={`p-4 rounded-2xl border transition-all ${
+                  className={`p-4 rounded-ui-card status-tint ${
                     activeThread.flag.isEscalated || activeThread.flag.isOver48HoursUnclassified
-                      ? 'bg-rose-50 border-rose-300 text-rose-950'
-                      : 'bg-amber-50 border-amber-300 text-amber-950'
+                      ? 'status-changes'
+                      : 'status-waiting'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-2.5">
-                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200/70 text-amber-900">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/70 text-ui-ink">
                             Automatic Revision Flag Triggered
                           </span>
                           {(activeThread.flag.isEscalated ||
                             activeThread.flag.isOver48HoursUnclassified) && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-600 text-white animate-pulse">
+                            <span className="status-chip status-blocked text-[11px] font-semibold px-2 py-0.5">
                               Escalated to Marketing Head (&gt;48h unclassified)
                             </span>
                           )}
@@ -637,19 +644,19 @@ export const FeedbackPage: React.FC = () => {
                           {activeThread.flag.baselineAvg}).
                         </p>
                         {activeThread.flag.rootCause ? (
-                          <div className="mt-2 text-xs text-slate-700 bg-white/80 p-2.5 rounded-xl border border-amber-200">
-                            <span className="text-[10px] font-bold uppercase text-amber-800 block">
+                          <div className="mt-2 text-xs text-ui-text bg-white/80 p-2.5 rounded-xl">
+                            <span className="text-[11px] font-medium text-ui-muted block">
                               Classified Root Cause:
                             </span>
                             <strong>{activeThread.flag.rootCause}</strong>
                             {activeThread.flag.rootCauseNotes && (
-                              <p className="text-slate-600 text-[11px] mt-0.5">
+                              <p className="text-ui-text text-[11px] mt-0.5">
                                 Notes: {activeThread.flag.rootCauseNotes}
                               </p>
                             )}
                           </div>
                         ) : (
-                          <p className="text-[11px] text-amber-800/80 mt-1">
+                          <p className="text-[11px] mt-1">
                             Awaiting root cause classification by SM Manager or Creative Head.
                           </p>
                         )}
@@ -658,10 +665,11 @@ export const FeedbackPage: React.FC = () => {
 
                     {!activeThread.flag.rootCause && isReviewerOrAdmin && (
                       <button
+                        type="button"
                         onClick={() => setIsClassifyModalOpen(true)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm shrink-0 flex items-center gap-1.5 transition-all"
+                        className="ui-btn ui-btn-primary h-11 gap-1.5 shrink-0"
                       >
-                        <Flag className="w-3.5 h-3.5" />
+                        <Flag className="w-3.5 h-3.5" aria-hidden="true" />
                         <span>Classify Root Cause</span>
                       </button>
                     )}
@@ -672,25 +680,23 @@ export const FeedbackPage: React.FC = () => {
               {/* Rounds List */}
               <div className="space-y-4">
                 {activeThread.rounds.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-400 bg-white rounded-2xl border border-slate-200">
+                  <div className="glass-card p-8 text-center text-xs text-ui-muted">
                     No review rounds logged yet. Be the first to submit a review!
                   </div>
                 ) : (
                   activeThread.rounds.map((round) => (
                     <div
                       key={round.roundNumber}
-                      className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3"
+                      className="glass-card p-5 space-y-3"
                     >
                       {/* Round Header */}
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                        <span className="text-xs font-black text-slate-900 tracking-wide">
-                          ROUND {round.roundNumber}
+                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-ui-line">
+                        <span className="text-[13px] font-semibold text-ui-ink">
+                          Round {round.roundNumber}
                         </span>
                         <span
-                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                            round.status === 'Approved'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          className={`status-chip text-[11px] font-semibold px-2.5 py-0.5 ${
+                            round.status === 'Approved' ? 'status-approved' : 'status-waiting'
                           }`}
                         >
                           {round.status}
@@ -699,16 +705,16 @@ export const FeedbackPage: React.FC = () => {
 
                       {/* Entry 1: Reviewer Feedback */}
                       {round.reviewerFeedback && (
-                        <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/70 text-xs space-y-1.5">
-                          <div className="flex items-center justify-between text-[11px] text-slate-500">
-                            <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-purple-600" />
+                        <div className="p-3.5 rounded-ui-card bg-white/60 text-xs space-y-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-ui-muted">
+                            <span className="font-semibold text-ui-ink flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-ui-ink" aria-hidden="true" />
                               Reviewer: {round.reviewerFeedback.fromPersonId?.name || 'Reviewer'} (
                               {round.reviewerFeedback.fromPersonId?.role})
                             </span>
                             <span>{new Date(round.reviewerFeedback.createdAt).toLocaleDateString()}</span>
                           </div>
-                          <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          <p className="text-ui-text whitespace-pre-wrap leading-relaxed break-words">
                             {round.reviewerFeedback.text}
                           </p>
                         </div>
@@ -716,23 +722,23 @@ export const FeedbackPage: React.FC = () => {
 
                       {/* Entry 2: Owner Response */}
                       {round.ownerResponse ? (
-                        <div className="p-3.5 rounded-2xl bg-purple-50/60 border border-purple-200 text-xs space-y-1.5 ml-4">
-                          <div className="flex items-center justify-between text-[11px] text-purple-700 font-bold">
+                        <div className="p-3.5 rounded-ui-card bg-white border border-ui-line text-xs space-y-1.5 ml-4">
+                          <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-ui-ink font-semibold">
                             <span className="flex items-center gap-1.5">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />
+                              <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
                               Owner Response: {round.ownerResponse.fromPersonId?.name}
                             </span>
-                            <span className="text-slate-400 font-normal">
+                            <span className="text-ui-muted font-normal">
                               {new Date(round.ownerResponse.createdAt).toLocaleDateString()}
                             </span>
                           </div>
-                          <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          <p className="text-ui-text whitespace-pre-wrap leading-relaxed break-words">
                             {round.ownerResponse.text}
                           </p>
                         </div>
                       ) : (
                         round.status !== 'Approved' && (
-                          <div className="p-3 rounded-xl bg-slate-50 border border-dashed border-slate-300 text-[11px] text-slate-400 italic text-center ml-4">
+                          <div className="p-3 rounded-xl bg-white/40 border border-dashed border-ui-line text-[11px] text-ui-muted italic text-center ml-4">
                             Awaiting owner response for Round {round.roundNumber}...
                           </div>
                         )
@@ -743,20 +749,20 @@ export const FeedbackPage: React.FC = () => {
               </div>
 
               {/* Action Forms Accordion: Reviewer or Owner */}
-              <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-2">
-                  <Send className="w-4 h-4 text-purple-600" />
+              <div className="glass-card p-5 space-y-4">
+                <h3 className="text-[13px] font-semibold text-ui-ink flex items-center gap-2">
+                  <Send className="w-4 h-4" aria-hidden="true" />
                   <span>Submit Thread Update</span>
                 </h3>
 
                 {/* Reviewer Action Form (Creative Head or Admin) */}
                 {canRequestRevision && (
-                  <form onSubmit={handleSubmitReview} className="space-y-3 pt-2 border-t border-slate-100">
+                  <form onSubmit={handleSubmitReview} className="space-y-3 pt-2 border-t border-ui-line">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span id="fb-review-label" className="text-xs font-bold text-slate-800">
+                      <span id="fb-review-label" className="text-xs font-semibold text-ui-ink">
                         Request a revision (new round)
                       </span>
-                      <span className="text-xs text-slate-500">To approve, use Review Studio, where a rating is required.</span>
+                      <span className="text-xs text-ui-muted">To approve, use Review Studio, where a rating is required.</span>
                     </div>
 
                     <textarea
@@ -765,14 +771,15 @@ export const FeedbackPage: React.FC = () => {
                       placeholder="Write structured feedback with the specific changes needed..."
                       value={reviewText}
                       onChange={(e) => setReviewText(e.target.value)}
-                      className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      aria-labelledby="fb-review-label"
+                      className="ui-input ui-textarea w-full"
                     />
 
                     <div className="flex justify-end">
                       <button
                         type="submit"
                         disabled={isSubmittingReview || !reviewText.trim()}
-                        className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-md transition-all disabled:opacity-50"
+                        className="ui-btn ui-btn-primary h-11"
                       >
                         {isSubmittingReview ? 'Requesting Revision...' : 'Request Revision'}
                       </button>
@@ -782,8 +789,8 @@ export const FeedbackPage: React.FC = () => {
 
                 {/* Owner Response Form (Assigned Owner or Creative Head/Admin) */}
                 {(isAssignedOwner || isReviewerOrAdmin) && (
-                  <form onSubmit={handleSubmitResponse} className="space-y-3 pt-3 border-t border-slate-100">
-                    <span className="text-xs font-bold text-slate-800 block">
+                  <form onSubmit={handleSubmitResponse} className="space-y-3 pt-3 border-t border-ui-line">
+                    <span id="fb-response-label" className="text-xs font-semibold text-ui-ink block">
                       Respond to Latest Reviewer Feedback
                     </span>
                     <textarea
@@ -792,13 +799,14 @@ export const FeedbackPage: React.FC = () => {
                       placeholder="Describe changes made, updated deliverable details, or request clarification..."
                       value={responseText}
                       onChange={(e) => setResponseText(e.target.value)}
-                      className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      aria-labelledby="fb-response-label"
+                      className="ui-input ui-textarea w-full"
                     />
                     <div className="flex justify-end">
                       <button
                         type="submit"
                         disabled={isSubmittingResponse || !responseText.trim()}
-                        className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all disabled:opacity-50"
+                        className="ui-btn ui-btn-primary h-11"
                       >
                         {isSubmittingResponse ? 'Submitting Response...' : 'Send Owner Response'}
                       </button>
@@ -815,18 +823,26 @@ export const FeedbackPage: React.FC = () => {
 
       {/* Root Cause Classification Modal */}
       {isClassifyModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-scaleUp">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 ui-scrim flex items-center justify-center p-4">
+          <div
+            ref={classifyDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fb-classify-title"
+            className="glass-modal max-w-lg w-full max-h-[92vh] overflow-y-auto p-6"
+          >
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-ui-line">
               <div className="flex items-center gap-2">
-                <Flag className="w-5 h-5 text-amber-600" />
-                <h3 className="text-sm font-black text-slate-900">
+                <Flag className="w-5 h-5 text-ui-ink" aria-hidden="true" />
+                <h3 id="fb-classify-title" className="text-base font-bold text-ui-ink">
                   Classify Revision Root Cause
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setIsClassifyModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500"
+                aria-label="Close"
+                className="ui-icon-btn shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -834,50 +850,52 @@ export const FeedbackPage: React.FC = () => {
 
             <form onSubmit={handleClassifyRootCause} className="space-y-4 mt-4">
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                <label htmlFor="fb-root-cause" className="text-[13px] font-medium text-ui-muted block mb-1.5">
                   Select 1 of 7 Canonical Root Causes *
                 </label>
                 <select
+                  id="fb-root-cause"
                   value={selectedRootCause}
-                  onChange={(e) => setSelectedRootCause(e.target.value as RevisionRootCause)}
-                  className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                  onChange={(e) => setSelectedRootCause(e.target.value as CanonicalRevisionRootCause)}
+                  className="ui-select w-full"
                 >
-                  {REVISION_ROOT_CAUSES.map((cause) => (
+                  {CANONICAL_REVISION_ROOT_CAUSES.map((cause) => (
                     <option key={cause} value={cause}>
                       {cause}
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-[11px] text-ui-muted mt-1">
                   Fixed root causes power operational analytics to reduce repetitive rework cycles.
                 </p>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                <label htmlFor="fb-root-cause-notes" className="text-[13px] font-medium text-ui-muted block mb-1.5">
                   Actionable Context & Root Cause Notes
                 </label>
                 <textarea
+                  id="fb-root-cause-notes"
                   rows={3}
                   placeholder="e.g. Brief omitted secondary CTA requirement, leading to 2 rounds of rework..."
                   value={rootCauseNotes}
                   onChange={(e) => setRootCauseNotes(e.target.value)}
-                  className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-ui-line">
                 <button
                   type="button"
                   onClick={() => setIsClassifyModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isClassifying}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-md disabled:opacity-50"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {isClassifying ? 'Classifying...' : 'Save Classification'}
                 </button>

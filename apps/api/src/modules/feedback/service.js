@@ -5,7 +5,7 @@ import { logActivity } from '../activity/service.js';
 import { createNotification } from '../notifications/service.js';
 import { calculateMemberWorkloadMetrics } from '../assignment/service.js';
 import { resolveScope } from '../../lib/scope.js';
-import { REVISION_ROOT_CAUSES, normalizeRole } from '@mmp/shared';
+import { CANONICAL_REVISION_ROOT_CAUSES, normalizeRole } from '@mmp/shared';
 import { isTeamMember, requireParticipant } from '../workItems/access.js';
 import {
   assertDecisionAllowed,
@@ -363,9 +363,10 @@ export async function classifyRevisionFlag(flagId, { rootCause, rootCauseNotes }
     throw error;
   }
 
-  if (!REVISION_ROOT_CAUSES.includes(rootCause)) {
+  // New classifications accept the 7 canonical causes only; legacy values on saved flags stay readable.
+  if (!CANONICAL_REVISION_ROOT_CAUSES.includes(rootCause)) {
     const error = new Error(
-      `Invalid root cause: "${rootCause}". Must be one of: ${REVISION_ROOT_CAUSES.join(', ')}`
+      `Invalid root cause: "${rootCause}". Must be one of: ${CANONICAL_REVISION_ROOT_CAUSES.join(', ')}`
     );
     error.statusCode = 400;
     throw error;

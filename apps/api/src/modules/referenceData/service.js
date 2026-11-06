@@ -10,7 +10,7 @@ import {
   PRIORITIES,
   BLOCKER_REASONS,
   BLOCKER_DEPENDENCY_REASONS,
-  REVISION_ROOT_CAUSES,
+  CANONICAL_REVISION_ROOT_CAUSES,
   WORK_ITEM_STATUSES,
   WORKLOAD_BANDS,
 } from '@mmp/shared';
@@ -37,7 +37,7 @@ export async function getAllReferenceData() {
     priorities: PRIORITIES,
     blockerReasons: BLOCKER_REASONS,
     blockerDependencyReasons: BLOCKER_DEPENDENCY_REASONS,
-    revisionRootCauses: REVISION_ROOT_CAUSES,
+    revisionRootCauses: CANONICAL_REVISION_ROOT_CAUSES,
     workItemStatuses: WORK_ITEM_STATUSES,
     workloadBands: WORKLOAD_BANDS,
   };

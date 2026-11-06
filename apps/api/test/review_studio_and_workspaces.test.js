@@ -283,7 +283,7 @@ describe('Review Studio & Workspaces API Tests (WS3)', () => {
       .set('Authorization', `Bearer ${headToken}`)
       .send({
         comment: 'Pacing slows down in middle section. Trim 5s.',
-        rootCause: 'Creative Choice',
+        rootCause: 'Creative direction unclear',
       })
       .expect(200);
 

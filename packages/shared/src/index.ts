@@ -528,6 +528,15 @@ export const REVISION_ROOT_CAUSES = [
   "TL approval delay",
 ] as const;
 export type RevisionRootCause = (typeof REVISION_ROOT_CAUSES)[number];
+/** The only values accepted for new revision classifications and revision requests. */
+export type CanonicalRevisionRootCause = (typeof CANONICAL_REVISION_ROOT_CAUSES)[number];
+/** Older values that may exist in saved records. Readable, never offered or accepted for new writes. */
+export const LEGACY_REVISION_ROOT_CAUSES = REVISION_ROOT_CAUSES.filter(
+  (c) => !(CANONICAL_REVISION_ROOT_CAUSES as readonly string[]).includes(c),
+);
+export function isCanonicalRevisionRootCause(value: unknown): value is CanonicalRevisionRootCause {
+  return typeof value === "string" && (CANONICAL_REVISION_ROOT_CAUSES as readonly string[]).includes(value);
+}
 
 export const WORK_ITEM_STATUSES = [
   "Not Started",
@@ -1056,7 +1065,8 @@ export type FeedbackEntryCreateInput = z.infer<
 >;
 
 export const revisionClassifySchema = z.object({
-  rootCause: z.enum(REVISION_ROOT_CAUSES),
+  // New classifications: canonical values only (legacy values stay readable on saved flags).
+  rootCause: z.enum(CANONICAL_REVISION_ROOT_CAUSES),
   rootCauseNotes: z.string().optional(),
 });
 export type RevisionClassifyInput = z.infer<typeof revisionClassifySchema>;
@@ -1827,7 +1837,8 @@ export type SubmissionReviewApproveInput = z.infer<typeof submissionReviewApprov
 
 export const submissionReviewRevisionSchema = z.object({
   comment: z.string().trim().min(1, "Revision comment or note is required"),
-  rootCause: z.string().optional(),
+  // New revision requests: canonical values only.
+  rootCause: z.enum(CANONICAL_REVISION_ROOT_CAUSES).optional(),
 });
 export type SubmissionReviewRevisionInput = z.infer<typeof submissionReviewRevisionSchema>;
 
