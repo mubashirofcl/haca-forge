@@ -48,6 +48,9 @@ import {
 } from 'lucide-react';
 import { PipelineStepper, type PipelineStageItem } from '../../components/PipelineStepper';
 
+const NO_SUBMISSION_TO_REVIEW =
+  'This step has no submission to review yet. It can be approved or sent back once the owner submits their work.';
+
 interface WorkItemDetail {
   _id: string;
   title: string;
@@ -163,7 +166,7 @@ export const WorkDetailPage: React.FC = () => {
 
   // Submit / Done / Post Modal
   const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [submitAction, setSubmitAction] = useState<'submit_for_approval' | 'done_and_forward' | 'mark_as_posted'>('submit_for_approval');
+  const [submitAction, setSubmitAction] = useState<'submit_for_approval' | 'mark_as_posted'>('submit_for_approval');
   const [submitUrl, setSubmitUrl] = useState('');
   const [submitComment, setSubmitComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -352,9 +355,7 @@ export const WorkDetailPage: React.FC = () => {
       let deliverableUrl: string | undefined = submitUrl.trim();
       let publishedUrl: string | undefined;
 
-      if (submitAction === 'done_and_forward') {
-        toStatus = 'Approved';
-      } else if (submitAction === 'mark_as_posted') {
+      if (submitAction === 'mark_as_posted') {
         toStatus = 'Published';
         publishedUrl = submitUrl.trim();
         deliverableUrl = undefined;
@@ -395,6 +396,11 @@ export const WorkDetailPage: React.FC = () => {
             tags: approveTags,
           }),
         });
+      } else if (item.reviewRequired) {
+        // A review step can only be approved on a submission, with a rating.
+        setShowApproveModal(false);
+        alert(NO_SUBMISSION_TO_REVIEW);
+        return;
       } else {
         await apiFetch(`/api/work/${item._id}/transition`, {
           method: 'POST',
@@ -407,6 +413,10 @@ export const WorkDetailPage: React.FC = () => {
       await fetchItemData();
     } catch (err: any) {
       alert(err.message || 'Approval failed');
+      if (err?.statusCode === 409) {
+        setShowApproveModal(false);
+        await fetchItemData();
+      }
     } finally {
       setIsApproving(false);
     }
@@ -427,6 +437,10 @@ export const WorkDetailPage: React.FC = () => {
             rootCause: revisionRootCause || 'Brief mismatch',
           }),
         });
+      } else if (item.reviewRequired) {
+        setShowRevisionModal(false);
+        alert(NO_SUBMISSION_TO_REVIEW);
+        return;
       } else {
         await apiFetch(`/api/work/${item._id}/transition`, {
           method: 'POST',
@@ -441,6 +455,10 @@ export const WorkDetailPage: React.FC = () => {
       await fetchItemData();
     } catch (err: any) {
       alert(err.message || 'Revision request failed');
+      if (err?.statusCode === 409) {
+        setShowRevisionModal(false);
+        await fetchItemData();
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -780,6 +798,10 @@ export const WorkDetailPage: React.FC = () => {
                 ) : isReworkRequested ? (
                   <button
                     onClick={() => {
+                      if (item.stageKey === 'Shoot') {
+                        navigate(`/work/${item._id}/shoot`);
+                        return;
+                      }
                       setSubmitAction('submit_for_approval');
                       setSubmitUrl(item.deliverableUrl || item.latestSubmission?.fileUrl || item.latestSubmission?.linkUrl || '');
                       setShowSubmitModal(true);
@@ -793,6 +815,11 @@ export const WorkDetailPage: React.FC = () => {
                   actions.includes('submit_for_approval') && (
                     <button
                       onClick={() => {
+                        // Shoot is submitted as clips, from its workspace, so it can go through clip review.
+                        if (item.stageKey === 'Shoot') {
+                          navigate(`/work/${item._id}/shoot`);
+                          return;
+                        }
                         setSubmitAction('submit_for_approval');
                         setSubmitUrl(item.deliverableUrl || '');
                         setShowSubmitModal(true);
@@ -805,20 +832,6 @@ export const WorkDetailPage: React.FC = () => {
                   )
                 )}
               </>
-            )}
-
-            {actions.includes('done_and_forward') && (
-              <button
-                onClick={() => {
-                  setSubmitAction('done_and_forward');
-                  setSubmitUrl(item.deliverableUrl || '');
-                  setShowSubmitModal(true);
-                }}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <Check className="w-3.5 h-3.5" />
-                Done and forward
-              </button>
             )}
 
             {actions.includes('mark_as_posted') && (
@@ -1699,8 +1712,6 @@ export const WorkDetailPage: React.FC = () => {
               <h3 className="text-base font-extrabold text-slate-900">
                 {submitAction === 'submit_for_approval'
                   ? 'Submit for approval'
-                  : submitAction === 'done_and_forward'
-                  ? 'Done and forward'
                   : 'Mark as posted'}
               </h3>
               <button

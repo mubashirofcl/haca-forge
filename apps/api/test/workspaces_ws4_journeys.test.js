@@ -7,6 +7,7 @@ import { env } from '../src/config/env.js';
 import { connectDB } from '../src/config/db.js';
 import { Person } from '../src/modules/people/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
+import { MediaItem } from '../src/modules/media/model.js';
 import { Submission, SubmissionComment, Rating } from '../src/modules/submissions/model.js';
 
 describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () => {
@@ -388,7 +389,8 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
       expect([200, 201]).toContain(shootRes.status);
       shootSubId = shootRes.body.data._id;
 
-      // 2. Creative Head approves Shoot
+      // 2. Creative Head approves the clips, then the Shoot step
+      await MediaItem.create({ stageItemId: shootRes.body.data.workItemId, url: 'https://storage.local/footage/scene1_take1.mp4', title: 'WS4 Journey clip', status: 'approved' });
       const approveRes = await request(app)
         .post(`/api/submissions/${shootSubId}/approve`)
         .set('Authorization', `Bearer ${headToken}`)

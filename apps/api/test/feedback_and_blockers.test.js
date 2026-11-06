@@ -5,6 +5,7 @@ import { app } from '../src/server.js';
 import { Person } from '../src/modules/people/model.js';
 import { Department } from '../src/modules/departments/model.js';
 import { Profile } from '../src/modules/referenceData/profile.model.js';
+import { Submission } from '../src/modules/submissions/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { FeedbackEntry, RevisionFlag } from '../src/modules/feedback/model.js';
 import { Blocker } from '../src/modules/blockers/model.js';
@@ -119,6 +120,7 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
   });
 
   afterAll(async () => {
+    await Submission.deleteMany({ workItemId: testWorkItem._id });
     await FeedbackEntry.deleteMany({});
     await RevisionFlag.deleteMany({});
     await Blocker.deleteMany({});
@@ -128,8 +130,25 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
     await Profile.deleteMany({ code: 'test_feedback_profile' });
   });
 
+  // A reviewer's revision decides the latest submitted version, so each round needs one.
+  let nextVersion = 1;
+  const submitNewVersion = async () => {
+    await WorkItem.findByIdAndUpdate(testWorkItem._id, { status: 'Feedback' });
+    await Submission.create({
+      workItemId: testWorkItem._id,
+      kind: 'image',
+      version: nextVersion++,
+      status: 'submitted',
+      submittedById: memberUser._id,
+      submittedAt: new Date(Date.now() + 5),
+      linkUrl: 'https://example.test/carousel',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  };
+
   describe('Part A: Structured Two-Entry Feedback Rounds', () => {
     it('allows reviewer to submit Round 1 feedback with "Revision Required"', async () => {
+      await submitNewVersion();
       const res = await request(app)
         .post(`/api/feedback/work-item/${testWorkItem._id}`)
         .set('Authorization', `Bearer ${leadToken}`)
@@ -194,7 +213,7 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
       expect(res.body.data.rounds[0].ownerResponse).not.toBeNull();
     });
 
-    it('prevents team member from approving deliverables without lead/admin role', async () => {
+    it('the feedback route cannot approve, for anyone', async () => {
       const res = await request(app)
         .post(`/api/feedback/work-item/${testWorkItem._id}`)
         .set('Authorization', `Bearer ${memberToken}`)
@@ -205,23 +224,27 @@ describe('Phase 5: Feedback Loops, Revision Flags & Blockers', () => {
           isResponse: false,
         });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(409);
+      expect((await WorkItem.findById(testWorkItem._id)).status).not.toBe('Approved');
     });
   });
 
   describe('Part B: Automatic Revision Flagging Engine', () => {
     it('automatically flags RevisionFlag when revisions reach 4', async () => {
       // Simulate rounds 2, 3, 4 with "Revision Required"
+      await submitNewVersion();
       await request(app)
         .post(`/api/feedback/work-item/${testWorkItem._id}`)
         .set('Authorization', `Bearer ${leadToken}`)
         .send({ round: 2, roundStatus: 'Revision Required', text: 'Second round revisions needed', isResponse: false });
 
+      await submitNewVersion();
       await request(app)
         .post(`/api/feedback/work-item/${testWorkItem._id}`)
         .set('Authorization', `Bearer ${leadToken}`)
         .send({ round: 3, roundStatus: 'Revision Required', text: 'Third round revisions needed', isResponse: false });
 
+      await submitNewVersion();
       const resRound4 = await request(app)
         .post(`/api/feedback/work-item/${testWorkItem._id}`)
         .set('Authorization', `Bearer ${leadToken}`)

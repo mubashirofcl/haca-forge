@@ -831,12 +831,15 @@ export async function submitClipsForApproval(stageItemId, user) {
  * A step cannot be approved while a clip is waiting_review or reshoot_needed.
  */
 export async function finishShootStepReview(stageItemId, reviewData, user) {
-  if (user.role !== 'creative_head' && user.role !== 'admin') {
-    const error = new Error('Only Creative Head or Admin can finish step review');
-    error.statusCode = 403;
-    error.code = 'FORBIDDEN_ACTION';
-    throw error;
-  }
+  const {
+    assertDecisionAllowed,
+    assertReviewer,
+    assertValidRating,
+    approveSubmission,
+    claimSubmission,
+    releaseSubmission,
+    getRequiredClips,
+  } = await import('../submissions/reviewDecision.js');
 
   const workItem = await WorkItem.findById(stageItemId);
   if (!workItem) {
@@ -845,16 +848,16 @@ export async function finishShootStepReview(stageItemId, reviewData, user) {
     throw error;
   }
 
-  const allClips = await MediaItem.find({ stageItemId });
-  if (allClips.length === 0) {
+  assertReviewer(user, workItem);
+
+  const { required, flagged: flaggedClips, undecided: undecidedClips } = await getRequiredClips(stageItemId);
+  if (required.length === 0) {
     const error = new Error('No clips found for this step');
     error.statusCode = 400;
     throw error;
   }
 
-  // Check if any clip is waiting_review
-  const waitingClips = allClips.filter((c) => c.status === 'waiting_review');
-  if (waitingClips.length > 0) {
+  if (undecidedClips.length > 0) {
     const error = new Error('All clips must be reviewed before completing step review');
     error.statusCode = 400;
     error.code = 'CLIPS_WAITING_REVIEW';
@@ -862,22 +865,41 @@ export async function finishShootStepReview(stageItemId, reviewData, user) {
   }
 
   const { transitionWorkItem } = await import('../workItems/transition.service.js');
-  const flaggedClips = allClips.filter((c) => c.status === 'reshoot_needed');
 
   // Outcome 1: If any clip is reshoot_needed -> Changes requested (Feedback)
   if (flaggedClips.length > 0) {
-    const updatedWorkItem = await transitionWorkItem(
-      workItem._id,
-      {
-        toStatus: 'Feedback',
-        rootCause: 'Technical issue',
-        notes:
-          reviewData.note ||
-          reviewData.feedback ||
-          `${flaggedClips.length} clip(s) flagged for reshoot`,
-      },
-      user
-    );
+    const submission = await assertDecisionAllowed({ user, workItem, decision: 'revision' });
+    await claimSubmission(submission, 'changes_requested', user);
+
+    let updatedWorkItem;
+    try {
+      const alreadyFeedback = workItem.status === 'Feedback';
+      updatedWorkItem = await transitionWorkItem(
+        workItem._id,
+        {
+          toStatus: 'Feedback',
+          rootCause: 'Technical issue',
+          notes:
+            reviewData.note ||
+            reviewData.feedback ||
+            `${flaggedClips.length} clip(s) flagged for reshoot`,
+        },
+        user,
+        { reviewDecision: true }
+      );
+      if (alreadyFeedback) {
+        // Same status, so /transition changed nothing. The revision still has to count.
+        const decidedAt = new Date();
+        updatedWorkItem = await WorkItem.findByIdAndUpdate(
+          workItem._id,
+          { $inc: { revisions: 1 }, $set: { changesRequestedAt: decidedAt, decisionAt: decidedAt } },
+          { new: true }
+        );
+      }
+    } catch (error) {
+      await releaseSubmission(submission);
+      throw error;
+    }
 
     return {
       outcome: 'changes_requested',
@@ -886,64 +908,19 @@ export async function finishShootStepReview(stageItemId, reviewData, user) {
     };
   }
 
-  // Outcome 2: All clips are approved -> Approve step with rating
+  // Outcome 2: All required clips are approved -> Approve step with rating
+  const submission = await assertDecisionAllowed({ user, workItem, decision: 'approve' });
   const score = Number(reviewData.score);
-  if (!score || score < 1 || score > 5) {
-    const error = new Error('A quality rating between 1 and 5 is required to approve the step');
-    error.statusCode = 400;
-    error.code = 'RATING_REQUIRED';
-    throw error;
-  }
+  assertValidRating(score);
 
-  const { Rating, Submission } = await import('../submissions/model.js');
-  const userIdStr = (user.userId || user._id || user.id)?.toString();
-
-  // Find or ensure a submission exists for Rating linkage
-  let submission = await Submission.findOne({ workItemId: workItem._id }).sort({ version: -1 });
-  if (!submission) {
-    const clipFiles = allClips.map((c) => ({
-      name: c.title,
-      url: c.url,
-      sizeBytes: c.sizeBytes || 0,
-      mimeType: c.kind === 'video' ? 'video/mp4' : 'image/png',
-      width: c.width || 0,
-      height: c.height || 0,
-      durationSeconds: c.durationSeconds || 0,
-    }));
-    submission = await Submission.create({
-      workItemId: workItem._id,
-      contentPieceId: workItem.contentPieceId,
-      authorId: workItem.ownerId || userIdStr,
-      kind: 'video',
-      deliverableType: 'video',
-      version: 1,
-      status: 'submitted',
-      submittedAt: new Date(),
-      files: clipFiles,
-      fileUrl: clipFiles[0]?.url,
-    });
-  }
-
-  await Rating.create({
-    submissionId: submission._id,
-    workItemId: workItem._id,
-    contentPieceId: workItem.contentPieceId,
-    stageKey: workItem.stageKey || 'Shoot',
-    workerId: workItem.ownerId || userIdStr,
-    raterId: userIdStr,
+  const { workItem: updatedWorkItem } = await approveSubmission({
+    submission,
+    workItem,
     score,
     feedback: reviewData.feedback || '',
     tags: Array.isArray(reviewData.tags) ? reviewData.tags : [],
+    user,
   });
-
-  const updatedWorkItem = await transitionWorkItem(
-    workItem._id,
-    {
-      toStatus: 'Approved',
-      notes: reviewData.feedback || 'All clips approved',
-    },
-    user
-  );
 
   return {
     outcome: 'approved',

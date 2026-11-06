@@ -8,6 +8,15 @@ import { sanitizeDocumentPayload } from './sanitizer.js';
 import { logActivity } from '../activity/service.js';
 import { createNotification, getSocketIO } from '../notifications/service.js';
 import {
+  assertDecisionAllowed,
+  assertValidRating,
+  approveSubmission,
+  claimSubmission,
+  releaseSubmission,
+  afterDecision,
+  isAwaitingDecision,
+} from './reviewDecision.js';
+import {
   STAGE_PRIMARY_OUTPUT_KIND,
   STAGE_FALLBACK_OUTPUT_KIND,
   normalizeRole,
@@ -572,15 +581,6 @@ export async function resolveComment(commentId, user) {
 // ==========================================
 
 export async function approveWithRating(submissionId, { score, feedback = '', tags = [], alsoShareToTeamChat = false }, user) {
-  const role = normalizeRole(user.role);
-  // Guard: Creative Head or Admin only
-  if (role !== 'creative_head' && role !== 'admin') {
-    const err = new Error('Only Creative Head or Admin can approve deliverables');
-    err.statusCode = 403;
-    err.code = 'FORBIDDEN_APPROVAL';
-    throw err;
-  }
-
   const submission = await Submission.findById(submissionId);
   if (!submission) {
     const err = new Error('Submission not found');
@@ -595,91 +595,11 @@ export async function approveWithRating(submissionId, { score, feedback = '', ta
     throw err;
   }
 
-  const userId = (user._id || user.id || user.userId)?.toString();
-  const ownerId = (workItem.ownerId?._id || workItem.ownerId)?.toString();
+  // Everything is checked before the first write.
+  await assertDecisionAllowed({ user, workItem, submissionId: submission._id, decision: 'approve' });
+  assertValidRating(score);
 
-  // Guard: Reviewer cannot approve their own work
-  if (ownerId === userId) {
-    const err = new Error('The owner can never approve their own stage');
-    err.statusCode = 403;
-    err.code = 'FORBIDDEN_SELF_APPROVAL';
-    throw err;
-  }
-
-  // Mandatory rating check
-  if (!score || score < 1 || score > 5) {
-    const err = new Error('A quality rating score between 1 and 5 is strictly required on approval');
-    err.statusCode = 400;
-    err.code = 'RATING_REQUIRED';
-    throw err;
-  }
-
-  const now = new Date();
-
-  // 1. Mark Submission approved
-  submission.status = 'approved';
-  submission.reviewedById = userId;
-  submission.reviewedAt = now;
-  await submission.save();
-
-  // 2. Create Rating record
-  const rating = await Rating.create({
-    submissionId: submission._id,
-    workItemId: workItem._id,
-    contentPieceId: workItem.contentPieceId || null,
-    stageKey: workItem.stageKey,
-    workerId: ownerId,
-    raterId: userId,
-    score,
-    feedback: (feedback || '').trim(),
-    tags: tags || [],
-  });
-
-  // 3. Advance WorkItem to Approved
-  const { transitionWorkItem } = await import('../workItems/transition.service.js');
-  await transitionWorkItem(
-    workItem._id,
-    {
-      toStatus: 'Approved',
-      rating: { score, feedback, tags },
-    },
-    user
-  );
-
-  // 4. Log Activities
-  await logActivity({
-    entityType: 'submission',
-    entityId: submission._id,
-    actor: user,
-    action: 'submission.approved',
-    toStatus: 'approved',
-    metadata: { workItemId: workItem._id, version: submission.version, score },
-  });
-
-  await logActivity({
-    entityType: 'rating',
-    entityId: rating._id,
-    actor: user,
-    action: 'rating.given',
-    metadata: {
-      submissionId: submission._id,
-      workerId: ownerId,
-      score,
-      tags,
-    },
-  });
-
-  // 5. Notify Worker
-  if (ownerId) {
-    await createNotification({
-      recipient: ownerId,
-      type: 'submission_approved',
-      title: 'Stage Approved with Rating',
-      message: `Your ${workItem.stageKey} for "${workItem.title}" was approved with a ${score}★ rating.`,
-      link: `/my-work?id=${workItem._id}`,
-      metadata: { workItemId: workItem._id, ratingId: rating._id, score },
-    });
-  }
+  const { submission: approved, rating } = await approveSubmission({ submission, workItem, score, feedback, tags, user });
 
   // 6. Optional auto-share to Team Chat
   let sharedMessage = null;
@@ -704,7 +624,7 @@ export async function approveWithRating(submissionId, { score, feedback = '', ta
     }
   }
 
-  return { submission, rating, sharedMessage };
+  return { submission: approved, rating, sharedMessage };
 }
 
 // ==========================================
@@ -712,14 +632,6 @@ export async function approveWithRating(submissionId, { score, feedback = '', ta
 // ==========================================
 
 export async function requestRevision(submissionId, { comment, rootCause }, user) {
-  const role = normalizeRole(user.role);
-  if (role !== 'creative_head' && role !== 'admin') {
-    const err = new Error('Only Creative Head or Admin can request revisions');
-    err.statusCode = 403;
-    err.code = 'FORBIDDEN_ACTION';
-    throw err;
-  }
-
   const submission = await Submission.findById(submissionId);
   if (!submission) {
     const err = new Error('Submission not found');
@@ -733,6 +645,9 @@ export async function requestRevision(submissionId, { comment, rootCause }, user
     err.statusCode = 404;
     throw err;
   }
+
+  // Everything is checked before the first write.
+  await assertDecisionAllowed({ user, workItem, submissionId: submission._id, decision: 'revision' });
 
   const userId = (user._id || user.id || user.userId)?.toString();
   const ownerId = (workItem.ownerId?._id || workItem.ownerId)?.toString();
@@ -749,108 +664,125 @@ export async function requestRevision(submissionId, { comment, rootCause }, user
 
   const now = new Date();
 
-  // 1. Mark submission changes_requested
-  submission.status = 'changes_requested';
-  submission.reviewedById = userId;
-  submission.reviewedAt = now;
-  await submission.save();
+  // 1. Claim the submission: only one decision can win
+  const decided = await claimSubmission(submission, 'changes_requested', user);
 
-  // Create a comment record for the revision request note so it appears in the editor's live chat discussion
-  if (trimmedComment) {
-    const commentRecord = await SubmissionComment.create({
-      submissionId: submission._id,
-      workItemId: workItem._id,
-      authorId: userId,
-      anchor: null,
-      text: trimmedComment,
-      parentId: null,
-    });
-    const populatedComment = await SubmissionComment.findById(commentRecord._id)
-      .populate('authorId', 'name email role jobRole');
-    const io = getSocketIO();
-    if (io) {
-      if (ownerId) io.to(`user:${ownerId}`).emit('comment:new', populatedComment);
-      io.to('role:creative_head').emit('comment:new', populatedComment);
-      io.to('role:admin').emit('comment:new', populatedComment);
+  let commentRecord = null;
+  try {
+    // A comment record for the revision note, so it appears in the editor's live chat discussion
+    if (trimmedComment) {
+      commentRecord = await SubmissionComment.create({
+        submissionId: submission._id,
+        workItemId: workItem._id,
+        authorId: userId,
+        anchor: null,
+        text: trimmedComment,
+        parentId: null,
+      });
     }
+
+    // 2. Return workItem to In Progress & increment revisions and track round decision
+    workItem.status = 'In Progress';
+    workItem.revisions = (workItem.revisions || 0) + 1;
+    workItem.changesRequestedAt = now;
+    workItem.decisionAt = now;
+
+    if (workItem.rounds && workItem.rounds.length > 0) {
+      const curRound = workItem.rounds[workItem.rounds.length - 1];
+      curRound.decisionAt = now;
+      curRound.decision = 'changes_requested';
+    }
+    if (!workItem.rounds) workItem.rounds = [];
+    workItem.rounds.push({
+      roundNumber: workItem.rounds.length + 1,
+      startedAt: now,
+      intervals: [],
+    });
+    await workItem.save();
+  } catch (error) {
+    if (commentRecord) await SubmissionComment.deleteOne({ _id: commentRecord._id });
+    await releaseSubmission(submission);
+    throw error;
   }
 
-  // 2. Return workItem to In Progress & increment revisions and track round decision
-  workItem.status = 'In Progress';
-  workItem.revisions = (workItem.revisions || 0) + 1;
-  workItem.changesRequestedAt = now;
-  workItem.decisionAt = now;
-
-  if (workItem.rounds && workItem.rounds.length > 0) {
-    const curRound = workItem.rounds[workItem.rounds.length - 1];
-    curRound.decisionAt = now;
-    curRound.decision = 'changes_requested';
+  // The decision is saved. What follows must not fail it.
+  if (commentRecord) {
+    await afterDecision('the live comment', async () => {
+      const populatedComment = await SubmissionComment.findById(commentRecord._id)
+        .populate('authorId', 'name email role jobRole');
+      const io = getSocketIO();
+      if (io) {
+        if (ownerId) io.to(`user:${ownerId}`).emit('comment:new', populatedComment);
+        io.to('role:creative_head').emit('comment:new', populatedComment);
+        io.to('role:admin').emit('comment:new', populatedComment);
+      }
+    });
   }
-  if (!workItem.rounds) workItem.rounds = [];
-  workItem.rounds.push({
-    roundNumber: workItem.rounds.length + 1,
-    startedAt: now,
-    intervals: [],
-  });
-  await workItem.save();
 
   // 3. Prefill next draft from this reviewed version so the worker can iterate directly
-  let draft = await Submission.findOne({ workItemId: workItem._id, version: 0 });
-  const newToken = crypto.randomUUID();
+  let draft = null;
+  await afterDecision('the next draft', async () => {
+    draft = await Submission.findOne({ workItemId: workItem._id, version: 0 });
+    const newToken = crypto.randomUUID();
 
-  if (!draft) {
-    draft = new Submission({
-      workItemId: workItem._id,
-      contentPieceId: workItem.contentPieceId || null,
-      stageKey: workItem.stageKey,
-      version: 0,
-      kind: submission.kind,
-      document: submission.document,
-      files: submission.files,
-      linkUrl: submission.linkUrl,
-      notes: submission.notes,
-      status: 'draft',
-      versionToken: newToken,
-    });
-  } else {
-    draft.kind = submission.kind;
-    draft.document = submission.document;
-    draft.files = submission.files;
-    draft.linkUrl = submission.linkUrl;
-    draft.notes = submission.notes;
-    draft.versionToken = newToken;
-  }
-  await draft.save();
+    if (!draft) {
+      draft = new Submission({
+        workItemId: workItem._id,
+        contentPieceId: workItem.contentPieceId || null,
+        stageKey: workItem.stageKey,
+        version: 0,
+        kind: submission.kind,
+        document: submission.document,
+        files: submission.files,
+        linkUrl: submission.linkUrl,
+        notes: submission.notes,
+        status: 'draft',
+        versionToken: newToken,
+      });
+    } else {
+      draft.kind = submission.kind;
+      draft.document = submission.document;
+      draft.files = submission.files;
+      draft.linkUrl = submission.linkUrl;
+      draft.notes = submission.notes;
+      draft.versionToken = newToken;
+    }
+    await draft.save();
+  });
 
   // 4. Log Activity
-  await logActivity({
-    entityType: 'submission',
-    entityId: submission._id,
-    actor: user,
-    action: 'submission.revision_requested',
-    toStatus: 'changes_requested',
-    metadata: {
-      workItemId: workItem._id,
-      version: submission.version,
-      revisions: workItem.revisions,
-      comment: trimmedComment,
-      rootCause,
-    },
-  });
+  await afterDecision('the revision event', () =>
+    logActivity({
+      entityType: 'submission',
+      entityId: submission._id,
+      actor: user,
+      action: 'submission.revision_requested',
+      toStatus: 'changes_requested',
+      metadata: {
+        workItemId: workItem._id,
+        version: submission.version,
+        revisions: workItem.revisions,
+        comment: trimmedComment,
+        rootCause,
+      },
+    })
+  );
 
   // 5. Notify Worker
   if (ownerId) {
-    await createNotification({
-      recipient: ownerId,
-      type: 'revision_requested',
-      title: 'Revision Requested on Stage Deliverable',
-      message: `Creative Head requested a revision on ${workItem.title}. Note: ${trimmedComment || 'Please review comments and resubmit.'}`,
-      link: `/my-work?id=${workItem._id}`,
-      metadata: { workItemId: workItem._id, submissionId: submission._id, comment: trimmedComment },
-    });
+    await afterDecision('the revision notification', () =>
+      createNotification({
+        recipient: ownerId,
+        type: 'revision_requested',
+        title: 'Revision Requested on Stage Deliverable',
+        message: `Creative Head requested a revision on ${workItem.title}. Note: ${trimmedComment || 'Please review comments and resubmit.'}`,
+        link: `/my-work?id=${workItem._id}`,
+        metadata: { workItemId: workItem._id, submissionId: submission._id, comment: trimmedComment },
+      })
+    );
   }
 
-  return { submission, draft, revisions: workItem.revisions };
+  return { submission: decided, draft, revisions: workItem.revisions };
 }
 
 // ==========================================
@@ -949,13 +881,14 @@ export async function getReviewQueue(user) {
     throw err;
   }
 
-  // Fetch submitted deliverables waiting for review
-  let submissions = await Submission.find({ status: 'submitted' })
+  // Read-only. A version is listed only while it is the latest real version on a step
+  // awaiting review. Older versions and finished steps stay in the database, unlisted.
+  const submitted = await Submission.find({ status: 'submitted', version: { $gt: 0 } })
     .sort({ submittedAt: 1 }) // FIFO oldest first
     .populate('submittedById', 'name email role jobRole')
     .populate({
       path: 'workItemId',
-      select: 'title stageKey status priority deadline ownerId blockerReason blockerNote',
+      select: 'title stageKey status priority deadline ownerId blockerReason blockerNote decisionAt approvedAt changesRequestedAt',
       populate: [
         { path: 'ownerId', select: 'name email role jobRole' },
       ],
@@ -965,64 +898,18 @@ export async function getReviewQueue(user) {
       select: 'title workType targetDate liveUrl',
     });
 
-  // Ensure any work items in Pending or Feedback that require review are represented
-  const pendingWorkItems = await WorkItem.find({
-    status: { $in: ['Pending', 'Feedback'] },
-    reviewRequired: true,
-  });
+  const latestVersions = await Submission.aggregate([
+    { $match: { workItemId: { $in: submitted.map((s) => s.workItemId?._id).filter(Boolean) }, version: { $gt: 0 } } },
+    { $group: { _id: '$workItemId', version: { $max: '$version' } } },
+  ]);
+  const latestVersionOf = new Map(latestVersions.map((row) => [String(row._id), row.version]));
 
-  const existingWorkItemIds = new Set(
-    submissions.map((s) => (s.workItemId?._id || s.workItemId)?.toString()).filter(Boolean)
+  const submissions = submitted.filter(
+    (sub) =>
+      sub.workItemId &&
+      latestVersionOf.get(String(sub.workItemId._id)) === sub.version &&
+      isAwaitingDecision(sub.workItemId, sub)
   );
-
-  let createdAny = false;
-  for (const pw of pendingWorkItems) {
-    if (!existingWorkItemIds.has(pw._id.toString())) {
-      try {
-        const latestSub = await Submission.findOne({
-          workItemId: pw._id,
-          version: { $gt: 0 },
-        }).sort({ version: -1 });
-        const nextVersion = (latestSub?.version || 0) + 1;
-        const kind = pw.stageKey === 'Shoot' || pw.stageKey === 'Edit' ? 'media' : 'document';
-        const url = pw.deliverableUrl || '';
-        await Submission.create({
-          workItemId: pw._id,
-          contentPieceId: pw.contentPieceId || null,
-          stageKey: pw.stageKey,
-          version: nextVersion,
-          kind,
-          linkUrl: url,
-          notes: pw.blockerNote || '',
-          files: url ? [{ name: 'deliverable', url }] : [],
-          submittedById: pw.ownerId,
-          submittedAt: pw.submittedAt || pw.updatedAt || new Date(),
-          status: 'submitted',
-          versionToken: crypto.randomUUID(),
-        });
-        createdAny = true;
-      } catch (e) {
-        // Non-blocking
-      }
-    }
-  }
-
-  if (createdAny) {
-    submissions = await Submission.find({ status: 'submitted' })
-      .sort({ submittedAt: 1 })
-      .populate('submittedById', 'name email role jobRole')
-      .populate({
-        path: 'workItemId',
-        select: 'title stageKey status priority deadline ownerId blockerReason blockerNote',
-        populate: [
-          { path: 'ownerId', select: 'name email role jobRole' },
-        ],
-      })
-      .populate({
-        path: 'contentPieceId',
-        select: 'title workType targetDate liveUrl',
-      });
-  }
 
   const now = Date.now();
 

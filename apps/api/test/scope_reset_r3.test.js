@@ -8,6 +8,7 @@ import { app } from '../src/server.js';
 import { Person } from '../src/modules/people/model.js';
 import { Profile } from '../src/modules/referenceData/profile.model.js';
 import { Department } from '../src/modules/departments/model.js';
+import { Submission } from '../src/modules/submissions/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { CalendarPlan } from '../src/modules/calendar/plan.model.js';
 import { ContentPiece } from '../src/modules/calendar/contentPiece.model.js';
@@ -654,27 +655,38 @@ describe('SCOPE RESET R3: Calendar Plans, Creative Head Approval and Assignment 
         transitionService.transitionWorkItem(s1Script._id, { toStatus: 'Approved' }, smUser)
       ).rejects.toThrow(/Review stages can be approved only by Creative Head and Admin/);
 
-      // 4. Creative Head approves Script stage
-      await transitionService.transitionWorkItem(s1Script._id, { toStatus: 'Approved' }, headUser);
+      // 4. Creative Head cannot approve a review stage through /transition
+      await expect(
+        transitionService.transitionWorkItem(s1Script._id, { toStatus: 'Approved' }, headUser)
+      ).rejects.toThrow(/Use the review flow/);
 
-      // 5. Stage 2 (Shoot) is now UNLOCKED
+      // 5. Creative Head approves Script stage through the review flow, with a rating
+      const { approveWithRating } = await import('../src/modules/submissions/service.js');
+      const latest = await Submission.findOne({ workItemId: s1Script._id, version: { $gt: 0 } }).sort({ version: -1 });
+      await approveWithRating(latest._id, { score: 4 }, headUser);
+
+      // 6. Stage 2 (Shoot) is now UNLOCKED
       const unlockedShoot = await WorkItem.findById(s2Shoot._id);
       expect(unlockedShoot.isLocked).toBe(false);
       expect(unlockedShoot.unlockedAt).toBeDefined();
     });
 
-    it('non-review stage (Shoot): Done and forward unlocks next stage', async () => {
+    it('non-review stage (Shoot): the owner cannot approve it; a Creative Head can, and the next stage unlocks', async () => {
       // Unlock Shoot stage directly
       s2Shoot.isLocked = false;
       s2Shoot.status = 'In Progress';
       await s2Shoot.save();
 
-      // Worker clicks "Done and forward"
-      await transitionService.transitionWorkItem(
-        s2Shoot._id,
-        { toStatus: 'Approved', deliverableUrl: 'https://drive.google.com/raw-footage' },
-        writerUser
-      );
+      // "Done and forward" is gone: the owner cannot approve their own step
+      await expect(
+        transitionService.transitionWorkItem(
+          s2Shoot._id,
+          { toStatus: 'Approved', deliverableUrl: 'https://drive.google.com/raw-footage' },
+          writerUser
+        )
+      ).rejects.toThrow(/The owner can never approve their own stage/);
+
+      await transitionService.transitionWorkItem(s2Shoot._id, { toStatus: 'Approved' }, headUser);
 
       // Stage 3 (Edit) unlocks immediately
       const unlockedEdit = await WorkItem.findById(s3Edit._id);

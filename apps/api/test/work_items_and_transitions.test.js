@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Person } from '../src/modules/people/model.js';
 import { Profile } from '../src/modules/referenceData/profile.model.js';
 import { Department } from '../src/modules/departments/model.js';
+import { Submission } from '../src/modules/submissions/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { ActivityEvent } from '../src/modules/activity/model.js';
 import * as workItemService from '../src/modules/workItems/service.js';
@@ -576,18 +577,33 @@ describe('Phase 3: Work Items, Traceability, Transitions & Dynamic Overdue', () 
         deadline: new Date(Date.now() + 86400000 * 2),
       });
 
-      // Creative Head approves Stage 1 via createFeedbackEntry
+      // The feedback route can no longer approve
       const { createFeedbackEntry } = await import('../src/modules/feedback/service.js');
-      await createFeedbackEntry(
-        {
-          workItemId: stage1._id,
-          round: 1,
-          roundStatus: 'Approved',
-          text: 'Script looks amazing, proceed to shoot!',
-          isResponse: false,
-        },
-        headUser
-      );
+      await expect(
+        createFeedbackEntry(
+          {
+            workItemId: stage1._id,
+            round: 1,
+            roundStatus: 'Approved',
+            text: 'Script looks amazing, proceed to shoot!',
+            isResponse: false,
+          },
+          headUser
+        )
+      ).rejects.toThrow(/review flow/);
+
+      // Creative Head approves Stage 1 through the review flow
+      const { approveWithRating } = await import('../src/modules/submissions/service.js');
+      const submission = await Submission.create({
+        workItemId: stage1._id,
+        kind: 'document',
+        version: 1,
+        status: 'submitted',
+        submittedById: memberUser._id,
+        submittedAt: new Date(),
+        linkUrl: 'https://example.test/script',
+      });
+      await approveWithRating(submission._id, { score: 5, feedback: 'Script looks amazing, proceed to shoot!' }, headUser);
 
       // Verify Stage 1 is Approved
       const updatedStage1 = await WorkItem.findById(stage1._id);

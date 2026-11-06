@@ -254,9 +254,8 @@ export const MyWorkPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const isShoot = selectedItemForSubmit.stageKey === 'Shoot';
       const isPost = selectedItemForSubmit.stageKey === 'Post';
-      const toStatus = isShoot ? 'Approved' : isPost ? 'Published' : 'Feedback';
+      const toStatus = isPost ? 'Published' : 'Feedback';
 
       if (isPost) {
         const linkToValidate = socialReferenceUrl.trim() || deliverableUrl.trim();
@@ -740,6 +739,11 @@ export const MyWorkPage: React.FC = () => {
                   {!isWaitingApproval && actions.includes('submit_for_approval') && (
                     <button
                       onClick={() => {
+                        // Shoot is submitted as clips, from its workspace, so it can go through clip review.
+                        if (item.stageKey === 'Shoot') {
+                          navigate(`/work/${item._id}/shoot`);
+                          return;
+                        }
                         setSelectedItemForSubmit(item);
                         setDeliverableUrl(item.deliverableUrl || '');
                       }}
@@ -747,19 +751,6 @@ export const MyWorkPage: React.FC = () => {
                     >
                       <Send className="w-3 h-3" />
                       {isFeedbackRework ? `Resubmit (Rev ${item.revisions + 1})` : 'Submit for approval'}
-                    </button>
-                  )}
-
-                  {actions.includes('done_and_forward') && (
-                    <button
-                      onClick={() => {
-                        setSelectedItemForSubmit(item);
-                        setDeliverableUrl(item.deliverableUrl || '');
-                      }}
-                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
-                    >
-                      <Check className="w-3 h-3" />
-                      Done and forward
                     </button>
                   )}
 
@@ -1254,9 +1245,7 @@ export const MyWorkPage: React.FC = () => {
                   <Send className="w-5 h-5 text-indigo-600" />
                 )}
                 <h3 className="text-base font-extrabold text-slate-900">
-                  {selectedItemForSubmit.stageKey === 'Shoot'
-                    ? 'Done and forward'
-                    : selectedItemForSubmit.stageKey === 'Post'
+                  {selectedItemForSubmit.stageKey === 'Post'
                     ? 'Mark as posted & add social link'
                     : 'Submit for approval'}
                 </h3>
@@ -1401,8 +1390,6 @@ export const MyWorkPage: React.FC = () => {
                 >
                   {isSubmitting
                     ? 'Submitting...'
-                    : selectedItemForSubmit.stageKey === 'Shoot'
-                    ? 'Done and forward'
                     : selectedItemForSubmit.stageKey === 'Post'
                     ? 'Mark as Posted'
                     : 'Submit to Creative Head'}

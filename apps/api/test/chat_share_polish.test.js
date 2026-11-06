@@ -542,6 +542,12 @@ describe('Share to Chat & Chat Polish Backend Specification Suite', () => {
         status: 'submitted',
       });
 
+      // A Shoot step needs its clips approved first.
+      await MediaItem.updateMany({ stageItemId: testWorkItem._id }, { status: 'approved' });
+      if (testWorkItem.stageKey === 'Shoot' && !(await MediaItem.exists({ stageItemId: testWorkItem._id }))) {
+        await MediaItem.create({ stageItemId: testWorkItem._id, url: 'https://example.test/clip.mp4', title: 'Approved clip', status: 'approved' });
+      }
+
       const res = await request(app)
         .post(`/api/submissions/${freshSub._id}/approve`)
         .set('Authorization', `Bearer ${headToken}`)

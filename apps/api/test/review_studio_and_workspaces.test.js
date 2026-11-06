@@ -7,6 +7,7 @@ import { env } from '../src/config/env.js';
 import { connectDB } from '../src/config/db.js';
 import { Person } from '../src/modules/people/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
+import { MediaItem } from '../src/modules/media/model.js';
 import { Submission, SubmissionComment } from '../src/modules/submissions/model.js';
 import * as submissionService from '../src/modules/submissions/service.js';
 
@@ -129,12 +130,16 @@ describe('Review Studio & Workspaces API Tests (WS3)', () => {
     await WorkItem.deleteMany({ title: { $regex: /WS3 Test/ } });
     if (shootWorkItem && editWorkItem) {
       await Submission.deleteMany({ workItemId: { $in: [shootWorkItem._id, editWorkItem._id] } });
+      await MediaItem.deleteMany({ stageItemId: shootWorkItem._id });
     }
   });
 
   it('1. FIFO Review Queue: orders oldest first with calculated waitingDays', async () => {
     const olderDate = new Date(Date.now() - 86400000 * 4); // 4 days ago
     const newerDate = new Date(Date.now() - 86400000 * 1); // 1 day ago
+
+    // The queue lists a version only while its step is awaiting review.
+    await WorkItem.updateMany({ _id: { $in: [shootWorkItem._id, editWorkItem._id] } }, { status: 'Pending' });
 
     const subOlder = await Submission.create({
       workItemId: shootWorkItem._id,
@@ -225,6 +230,8 @@ describe('Review Studio & Workspaces API Tests (WS3)', () => {
     // Transition shootWorkItem to Pending so approve action is available
     shootWorkItem.status = 'Pending';
     await shootWorkItem.save();
+    // A Shoot step needs its clips approved first.
+    await MediaItem.create({ stageItemId: shootWorkItem._id, url: 'https://example.test/clip.mp4', title: 'WS3 clip', status: 'approved' });
 
     const sub = await Submission.findOne({ workItemId: shootWorkItem._id });
 

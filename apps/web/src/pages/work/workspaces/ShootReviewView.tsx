@@ -19,6 +19,8 @@ interface ShootReviewViewProps {
   hideHeader?: boolean;
   readOnly?: boolean;
   onFinishReview?: () => void;
+  /** The step can no longer be decided (409): the parent explains why and refreshes. */
+  onStaleDecision?: (message: string) => void;
   onClose?: () => void;
 }
 
@@ -28,6 +30,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
   hideHeader = false,
   readOnly = false,
   onFinishReview,
+  onStaleDecision,
   onClose,
 }) => {
   const [clips, setClips] = useState<MediaItemType[]>([]);
@@ -91,11 +94,14 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
     }
   }, [stageItemId]);
 
-  const approvedCount = clips.filter((c) => c.status === 'approved').length;
-  const reshootCount = clips.filter((c) => c.status === 'reshoot_needed').length;
-  const waitingCount = clips.filter((c) => c.status === 'waiting_review' || c.status === 'uploaded').length;
+  // A clip replaced by a newer one no longer counts, the same rule the API applies.
+  const replacedIds = new Set(clips.map((c: any) => c.replacesId && String(c.replacesId)).filter(Boolean));
+  const requiredClips = clips.filter((c) => !replacedIds.has(String(c._id)));
+  const approvedCount = requiredClips.filter((c) => c.status === 'approved').length;
+  const reshootCount = requiredClips.filter((c) => c.status === 'reshoot_needed').length;
+  const waitingCount = requiredClips.filter((c) => c.status !== 'approved' && c.status !== 'reshoot_needed').length;
 
-  const canApproveStep = clips.length > 0 && waitingCount === 0 && reshootCount === 0;
+  const canApproveStep = requiredClips.length > 0 && waitingCount === 0 && reshootCount === 0;
   const canSendBack = reshootCount > 0 && waitingCount === 0;
 
   const handleApproveClip = async () => {
@@ -150,7 +156,12 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
       setApproveStepModalOpen(false);
       if (onFinishReview) onFinishReview();
     } catch (err: any) {
-      alert(err.message || 'Failed to approve step');
+      if (err?.statusCode === 409 && onStaleDecision) {
+        setApproveStepModalOpen(false);
+        onStaleDecision(err.message);
+      } else {
+        alert(err.message || 'Failed to approve step');
+      }
     } finally {
       setIsSubmittingReview(false);
     }
@@ -168,7 +179,12 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
       setSendBackModalOpen(false);
       if (onFinishReview) onFinishReview();
     } catch (err: any) {
-      alert(err.message || 'Failed to send back step');
+      if (err?.statusCode === 409 && onStaleDecision) {
+        setSendBackModalOpen(false);
+        onStaleDecision(err.message);
+      } else {
+        alert(err.message || 'Failed to send back step');
+      }
     } finally {
       setIsSubmittingReview(false);
     }

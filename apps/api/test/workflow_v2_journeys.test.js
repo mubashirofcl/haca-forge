@@ -9,6 +9,8 @@ import { Department } from '../src/modules/departments/model.js';
 import { AccessRequest } from '../src/modules/access/model.js';
 import { CalendarPlan } from '../src/modules/calendar/plan.model.js';
 import { ContentPiece } from '../src/modules/calendar/contentPiece.model.js';
+import { Submission } from '../src/modules/submissions/model.js';
+import { MediaItem } from '../src/modules/media/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { Blocker } from '../src/modules/blockers/model.js';
 import { Notification } from '../src/modules/notifications/model.js';
@@ -482,7 +484,16 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
   // edit; Creative Head approves each review stage; one revision loop; posting
   // owner publishes; the Tracker shows holder, late by days and the timeline.
   // =========================================================================
-  describe('Journey C: Stage Execution, Revision Loop, Done and Forward, Publication & Live Tracker', () => {
+  describe('Journey C: Stage Execution, Revision Loop, Shoot Review, Publication & Live Tracker', () => {
+    const latestVersion = (id) => Submission.findOne({ workItemId: id, version: { $gt: 0 } }).sort({ version: -1 });
+    const reviewApprove = async (id, body = { score: 4 }) => {
+      const latest = await latestVersion(id);
+      return request(app)
+        .post(`/api/submissions/${latest._id}/approve`)
+        .set('Authorization', `Bearer ${creativeHeadToken}`)
+        .send(body);
+    };
+
     it('Step 1: Content Writer stage with one revision loop', async () => {
       // Find Stage 1 (Content) of Postable Poster
       const contentStage = await WorkItem.findOne({
@@ -514,12 +525,12 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
         });
       expect(submitRes.status).toBe(200);
 
-      // Creative Head triggers Revision Loop: Feedback -> In Progress with comment
+      // Creative Head triggers Revision Loop through the review flow
+      const firstVersion = await latestVersion(contentStage._id);
       const revisionRes = await request(app)
-        .post(`/api/work/${contentStage._id}/transition`)
+        .post(`/api/submissions/${firstVersion._id}/request-revision`)
         .set('Authorization', `Bearer ${creativeHeadToken}`)
         .send({
-          toStatus: 'In Progress',
           comment: 'Tone is too casual for an admissions announcement. Please refine disclosures.',
         });
       expect(revisionRes.status).toBe(200);
@@ -538,13 +549,7 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
         });
 
       // Creative Head approves Content stage
-      const approveContentRes = await request(app)
-        .post(`/api/work/${contentStage._id}/transition`)
-        .set('Authorization', `Bearer ${creativeHeadToken}`)
-        .send({
-          toStatus: 'Approved',
-          comment: 'Excellent copy. Approved.',
-        });
+      const approveContentRes = await reviewApprove(contentStage._id, { score: 5, feedback: 'Excellent copy. Approved.' });
       expect(approveContentRes.status).toBe(200);
 
       // Verify Stage 2 (Design) is automatically unlocked
@@ -579,12 +584,7 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
         });
 
       // Creative Head approves Design stage
-      const approveDesignRes = await request(app)
-        .post(`/api/work/${designStage._id}/transition`)
-        .set('Authorization', `Bearer ${creativeHeadToken}`)
-        .send({
-          toStatus: 'Approved',
-        });
+      const approveDesignRes = await reviewApprove(designStage._id);
       expect(approveDesignRes.status).toBe(200);
 
       // Verify Stage 3 (Post) is unlocked
@@ -596,7 +596,7 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
       expect(postStage.unlockedAt).toBeDefined();
     });
 
-    it('Step 3: Reel A Shoot stage (Done and forward) unlocks Edit stage without creative review', async () => {
+    it('Step 3: Reel A Shoot stage cannot skip review; approval unlocks Edit stage', async () => {
       // Complete Script stage on Reel A
       const scriptStage = await WorkItem.findOne({
         contentPieceId: approvedRowReelA._id,
@@ -615,10 +615,7 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
         .set('Authorization', `Bearer ${writerToken}`)
         .send({ toStatus: 'Feedback', deliverableUrl: 'https://docs.google.com/reel-script' });
 
-      await request(app)
-        .post(`/api/work/${scriptStage._id}/transition`)
-        .set('Authorization', `Bearer ${creativeHeadToken}`)
-        .send({ toStatus: 'Approved' });
+      expect((await reviewApprove(scriptStage._id)).status).toBe(200);
 
       // Shoot stage is now unlocked
       const shootStage = await WorkItem.findOne({
@@ -630,8 +627,7 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
       shootStage.ownerId = videographerUser._id;
       await shootStage.save();
 
-      // Videographer executes shoot and clicks "Done and forward"
-      // Shoot is non-review: transitions directly with footage link and unlocks Edit
+      // Videographer executes the shoot
       const shootForwardRes = await request(app)
         .post(`/api/work/${shootStage._id}/transition`)
         .set('Authorization', `Bearer ${videographerToken}`)
@@ -641,14 +637,23 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
         });
       expect(shootForwardRes.status).toBe(200);
 
-      const doneShootRes = await request(app)
+      // "Done and forward" is gone: the videographer cannot approve their own step
+      const selfApproveRes = await request(app)
         .post(`/api/work/${shootStage._id}/transition`)
         .set('Authorization', `Bearer ${videographerToken}`)
         .send({
           toStatus: 'Approved',
           deliverableUrl: 'https://drive.google.com/drive/folders/raw-shoot-footage',
         });
-      expect(doneShootRes.status).toBe(200);
+      expect(selfApproveRes.status).toBe(403);
+
+      // It is submitted with an approved clip, then approved through review
+      await MediaItem.create({ stageItemId: shootStage._id, url: 'https://example.test/clip.mp4', title: 'Reel A clip', status: 'approved' });
+      await request(app)
+        .post(`/api/work/${shootStage._id}/transition`)
+        .set('Authorization', `Bearer ${videographerToken}`)
+        .send({ toStatus: 'Feedback', deliverableUrl: 'https://drive.google.com/drive/folders/raw-shoot-footage' });
+      expect((await reviewApprove(shootStage._id)).status).toBe(200);
 
       // Verify Edit stage auto-unlocked
       const editStage = await WorkItem.findOne({

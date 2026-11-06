@@ -6,6 +6,12 @@ import { createNotification } from '../notifications/service.js';
 import { calculateMemberWorkloadMetrics } from '../assignment/service.js';
 import { resolveScope } from '../../lib/scope.js';
 import { REVISION_ROOT_CAUSES, normalizeRole } from '@mmp/shared';
+import {
+  assertDecisionAllowed,
+  claimSubmission,
+  releaseSubmission,
+  afterDecision,
+} from '../submissions/reviewDecision.js';
 
 /**
  * Get full feedback thread and revision flag status for a work item
@@ -117,6 +123,7 @@ export async function createFeedbackEntry(data, user) {
 
   // Determine round if not explicitly supplied
   const existingEntries = await FeedbackEntry.find({ workItemId }).sort({ round: -1, createdAt: -1 });
+  let submissionToDecide = null;
   const latestRound = existingEntries.length > 0 ? existingEntries[0].round : 0;
 
   if (isResponse) {
@@ -144,29 +151,16 @@ export async function createFeedbackEntry(data, user) {
       throw error;
     }
   } else {
-    // Reviewer feedback logic
+    // Reviewer feedback logic. This route cannot approve: approval needs a rating, through the review flow.
     if (roundStatus === 'Approved') {
-      const fromPersonRole = normalizeRole(fromPerson.role || user.role);
-
-      // Task 4: The owner can NEVER approve their own stage
-      if (ownerIdStr === userId || ownerIdStr === fromPerson._id.toString()) {
-        const error = new Error('The owner can never approve their own stage');
-        error.statusCode = 403;
-        error.code = 'FORBIDDEN_SELF_APPROVAL';
-        throw error;
-      }
-
-      // Task 4: Review stages can be approved only by creative_head and admin. sm_manager and owner cannot approve.
-      const isAllowedRole = fromPersonRole === 'admin' || fromPersonRole === 'creative_head';
-      if (!isAllowedRole) {
-        const error = new Error(
-          'Review stages can be approved only by Creative Head and Admin. SM Manager and the owner cannot approve.'
-        );
-        error.statusCode = 403;
-        error.code = 'FORBIDDEN_APPROVAL';
-        throw error;
-      }
+      const error = new Error('Approve this step through the review flow, where a rating is required.');
+      error.statusCode = 409;
+      error.code = 'USE_REVIEW_FLOW';
+      throw error;
     }
+
+    // Everything is checked before the first write.
+    submissionToDecide = await assertDecisionAllowed({ user, workItem, decision: 'revision' });
 
     // Auto-advance round if latest round has already been reviewed
     if (!round) {
@@ -177,70 +171,81 @@ export async function createFeedbackEntry(data, user) {
     }
   }
 
-  // Create feedback entry
-  const entry = await FeedbackEntry.create({
-    workItemId,
-    round,
-    fromPersonId: fromPerson._id,
-    roundStatus,
-    text,
-    isResponse,
-    attachments,
-  });
+  // A reviewer's entry is a decision: claim the latest version first, so only one decision can win.
+  if (submissionToDecide) {
+    await claimSubmission(submissionToDecide, 'changes_requested', user);
+  }
 
-  // Update WorkItem state based on entry
+  // Create feedback entry
+  let entry;
   const fromStatus = workItem.status;
-  if (!isResponse) {
-    if (roundStatus === 'Revision Required') {
+  try {
+    entry = await FeedbackEntry.create({
+      workItemId,
+      round,
+      fromPersonId: fromPerson._id,
+      roundStatus,
+      text,
+      isResponse,
+      attachments,
+    });
+
+    // Update WorkItem state based on entry
+    if (!isResponse) {
+      const decidedAt = new Date();
       workItem.status = 'Feedback';
       workItem.revisions = (workItem.revisions || 0) + 1;
-    } else if (roundStatus === 'Approved') {
-      workItem.status = 'Approved';
-      workItem.approvedAt = new Date();
+      workItem.changesRequestedAt = decidedAt;
+      workItem.decisionAt = decidedAt;
+      if (workItem.rounds && workItem.rounds.length > 0) {
+        const curRound = workItem.rounds[workItem.rounds.length - 1];
+        curRound.decisionAt = decidedAt;
+        curRound.decision = 'changes_requested';
+      }
+      await workItem.save();
     }
-    await workItem.save();
+  } catch (error) {
+    if (entry) await FeedbackEntry.deleteOne({ _id: entry._id });
+    if (submissionToDecide) await releaseSubmission(submissionToDecide);
+    throw error;
+  }
 
-    if (roundStatus === 'Approved') {
-      const { unlockNextStage } = await import('../workItems/transition.service.js');
-      await unlockNextStage(workItem);
-    }
-
-    // Log ActivityEvent
-    await logActivity({
-      entityType: 'work_item',
-      entityId: workItem._id,
-      actor: user,
-      action: roundStatus === 'Approved' ? 'work_item.approved' : 'work_item.feedback_submitted',
-      fromStatus,
-      toStatus: workItem.status,
-      metadata: {
-        round,
-        roundStatus,
-        text,
-        revisions: workItem.revisions,
-      },
-    });
+  if (!isResponse) {
+    // The decision is saved. What follows must not fail it.
+    await afterDecision('the feedback event', () =>
+      logActivity({
+        entityType: 'work_item',
+        entityId: workItem._id,
+        actor: user,
+        action: 'work_item.feedback_submitted',
+        fromStatus,
+        toStatus: workItem.status,
+        metadata: {
+          round,
+          roundStatus,
+          text,
+          revisions: workItem.revisions,
+        },
+      })
+    );
 
     // Notify WorkItem Owner
     if (workItem.ownerId?._id && workItem.ownerId._id.toString() !== fromPerson._id.toString()) {
-      await createNotification({
-        recipient: workItem.ownerId._id,
-        type: roundStatus === 'Approved' ? 'work_item.approved' : 'work_item.feedback',
-        title:
-          roundStatus === 'Approved'
-            ? `Deliverable Approved: ${workItem.title}`
-            : `Feedback on Round ${round}: ${workItem.title}`,
-        message: `${fromPerson.name} marked "${workItem.title}" as ${roundStatus}.`,
-        link: `/work/${workItem._id}`,
-        metadata: { workItemId: workItem._id, round, roundStatus },
-      });
+      await afterDecision('the feedback notification', () =>
+        createNotification({
+          recipient: workItem.ownerId._id,
+          type: 'work_item.feedback',
+          title: `Feedback on Round ${round}: ${workItem.title}`,
+          message: `${fromPerson.name} marked "${workItem.title}" as ${roundStatus}.`,
+          link: `/work/${workItem._id}`,
+          metadata: { workItemId: workItem._id, round, roundStatus },
+        })
+      );
     }
 
     // CHECK REVISION FLAG INVARIANT:
     // Trigger automatically when revisions >= 4 OR revisions > (ownerBaselineAvg + 1)
-    if (roundStatus === 'Revision Required') {
-      await checkAndCreateRevisionFlag(workItem, user);
-    }
+    await afterDecision('the revision flag check', () => checkAndCreateRevisionFlag(workItem, user));
   } else {
     // Owner responded
     await logActivity({

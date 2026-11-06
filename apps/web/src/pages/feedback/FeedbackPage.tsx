@@ -5,7 +5,6 @@ import { useAuth } from '../../context/AuthContext';
 import {
   REVISION_ROOT_CAUSES,
   type RevisionRootCause,
-  type FeedbackRoundStatus,
 } from '@mmp/shared';
 import {
   AlertTriangle,
@@ -117,7 +116,6 @@ export const FeedbackPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Submit Review / Response State
-  const [reviewDecision, setReviewDecision] = useState<FeedbackRoundStatus>('Revision Required');
   const [reviewText, setReviewText] = useState('');
   const [responseText, setResponseText] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
@@ -188,7 +186,7 @@ export const FeedbackPage: React.FC = () => {
       await apiFetch(`/api/feedback/work-item/${selectedWorkItemId}`, {
         method: 'POST',
         body: JSON.stringify({
-          roundStatus: reviewDecision,
+          roundStatus: 'Revision Required',
           text: reviewText.trim(),
           isResponse: false,
         }),
@@ -297,7 +295,8 @@ export const FeedbackPage: React.FC = () => {
     activeThread?.workItem.ownerId?._id === user?._id ||
     activeThread?.workItem.ownerId?._id === (user as any)?.userId;
 
-  const canApprove =
+  // Same reviewer rule as the API: creative_head and admin, never on their own work.
+  const canRequestRevision =
     (user?.role === 'admin' || user?.role === 'creative_head') && !isAssignedOwner;
 
   const isReviewerOrAdmin = user?.role === 'admin' || user?.role === 'creative_head' || user?.role === 'sm_manager';
@@ -751,45 +750,19 @@ export const FeedbackPage: React.FC = () => {
                 </h3>
 
                 {/* Reviewer Action Form (Creative Head or Admin) */}
-                {isReviewerOrAdmin && (
+                {canRequestRevision && (
                   <form onSubmit={handleSubmitReview} className="space-y-3 pt-2 border-t border-slate-100">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800">
-                        Submit Review Decision (New Round)
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span id="fb-review-label" className="text-xs font-bold text-slate-800">
+                        Request a revision (new round)
                       </span>
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1 text-xs cursor-pointer">
-                          <input
-                            type="radio"
-                            name="decision"
-                            value="Revision Required"
-                            checked={reviewDecision === 'Revision Required'}
-                            onChange={() => setReviewDecision('Revision Required')}
-                            className="text-amber-600"
-                          />
-                          <span className="font-semibold text-amber-800">Revision Required</span>
-                        </label>
-                        <label className={`flex items-center gap-1 text-xs ${activeThread.workItem.reviewRequired && !canApprove ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                          <input
-                            type="radio"
-                            name="decision"
-                            value="Approved"
-                            disabled={Boolean(activeThread.workItem.reviewRequired && !canApprove)}
-                            checked={reviewDecision === 'Approved'}
-                            onChange={() => setReviewDecision('Approved')}
-                            className="text-emerald-600"
-                          />
-                          <span className="font-semibold text-emerald-800">
-                            Approved {activeThread.workItem.reviewRequired && !canApprove && '(Approver Role Required)'}
-                          </span>
-                        </label>
-                      </div>
+                      <span className="text-xs text-slate-500">To approve, use Review Studio, where a rating is required.</span>
                     </div>
 
                     <textarea
                       required
                       rows={3}
-                      placeholder="Write structured feedback with specific adjustments needed or approval signoff..."
+                      placeholder="Write structured feedback with the specific changes needed..."
                       value={reviewText}
                       onChange={(e) => setReviewText(e.target.value)}
                       className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20"
@@ -801,7 +774,7 @@ export const FeedbackPage: React.FC = () => {
                         disabled={isSubmittingReview || !reviewText.trim()}
                         className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-md transition-all disabled:opacity-50"
                       >
-                        {isSubmittingReview ? 'Submitting Review...' : 'Submit Review'}
+                        {isSubmittingReview ? 'Requesting Revision...' : 'Request Revision'}
                       </button>
                     </div>
                   </form>

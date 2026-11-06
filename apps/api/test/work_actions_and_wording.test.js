@@ -31,7 +31,7 @@ describe('Work Actions, Authorization, and Wording Suite', () => {
     it('verifies exact ACTION_LABELS dictionary contains no "Lead" and has strict wording', () => {
       expect(ACTION_LABELS.start).toBe('Start');
       expect(ACTION_LABELS.submit_for_approval).toBe('Submit for approval');
-      expect(ACTION_LABELS.done_and_forward).toBe('Done and forward');
+      expect(ACTION_LABELS.done_and_forward).toBeUndefined();
       expect(ACTION_LABELS.mark_as_posted).toBe('Mark as posted');
       expect(ACTION_LABELS.mark_blocked).toBe('Mark blocked');
       expect(ACTION_LABELS.request_help).toBe('Request help');
@@ -578,7 +578,6 @@ describe('Work Actions, Authorization, and Wording Suite', () => {
       const allowedActions = [
         'Start',
         'Submit for approval',
-        'Done and forward',
         'Mark as posted',
         'Mark blocked',
         'Request help',

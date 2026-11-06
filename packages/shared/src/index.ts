@@ -1499,7 +1499,6 @@ export type ContentPieceRescheduleInput = z.infer<
 export const WORK_ACTION_KEYS = [
   "start",
   "submit_for_approval",
-  "done_and_forward",
   "mark_as_posted",
   "mark_blocked",
   "request_help",
@@ -1518,7 +1517,6 @@ export type WorkActionKey = (typeof WORK_ACTION_KEYS)[number];
 export const ACTION_LABELS: Record<WorkActionKey, string> = {
   start: "Start",
   submit_for_approval: "Submit for approval",
-  done_and_forward: "Done and forward",
   mark_as_posted: "Mark as posted",
   mark_blocked: "Mark blocked",
   request_help: "Request help",

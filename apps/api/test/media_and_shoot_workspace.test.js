@@ -562,6 +562,20 @@ describe('Media & Shoot Workspace Backend Engine', () => {
     let clip1, clip2;
 
     beforeEach(async () => {
+      // Each case starts on a step awaiting review, with one submitted version.
+      await WorkItem.findByIdAndUpdate(shootStage._id, { status: 'Pending', revisions: 0, approvedAt: null, decisionAt: null, changesRequestedAt: null });
+      await Rating.deleteMany({ workItemId: shootStage._id });
+      await Submission.deleteMany({ workItemId: shootStage._id });
+      await Submission.create({
+        workItemId: shootStage._id,
+        kind: 'video',
+        version: 1,
+        status: 'submitted',
+        submittedById: shootStage.ownerId,
+        submittedAt: new Date(),
+        linkUrl: 'https://example.test/footage',
+      });
+
       clip1 = await MediaItem.create({
         stageItemId: shootStage._id,
         url: 'c1',

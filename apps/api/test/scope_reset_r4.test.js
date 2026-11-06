@@ -9,6 +9,7 @@ import { Department } from '../src/modules/departments/model.js';
 import { AccessRequest } from '../src/modules/access/model.js';
 import { CalendarPlan } from '../src/modules/calendar/plan.model.js';
 import { ContentPiece } from '../src/modules/calendar/contentPiece.model.js';
+import { Submission } from '../src/modules/submissions/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { Blocker } from '../src/modules/blockers/model.js';
 import { FeedbackEntry, RevisionFlag } from '../src/modules/feedback/model.js';
@@ -327,15 +328,14 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
     });
 
     it('Step 6: Creative Head reviews deliverable and approves it; unlocks next stage', async () => {
+      const latest = await Submission.findOne({ workItemId: stageScriptId, version: { $gt: 0 } }).sort({ version: -1 });
       const approveRes = await request(app)
-        .post(`/api/work/${stageScriptId}/transition`)
+        .post(`/api/submissions/${latest._id}/approve`)
         .set('Authorization', `Bearer ${headToken}`)
-        .send({
-          toStatus: 'Approved',
-        });
+        .send({ score: 4 });
 
       expect(approveRes.status).toBe(200);
-      expect(approveRes.body.data.status).toBe('Approved');
+      expect((await WorkItem.findById(stageScriptId)).status).toBe('Approved');
 
       // Verify that next stage (Shoot or Edit) is now unlocked
       const nextStage = await WorkItem.findOne({

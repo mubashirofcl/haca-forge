@@ -74,6 +74,8 @@ export const ReviewStudioPage: React.FC = () => {
   const [queueIndex, setQueueIndex] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Shown when a decision was refused because the version is stale or already decided.
+  const [staleNotice, setStaleNotice] = useState<string | null>(null);
 
   // Active submission details
   const [activeSubmission, setActiveSubmission] = useState<any | null>(null);
@@ -124,6 +126,7 @@ export const ReviewStudioPage: React.FC = () => {
         // Fallback: If not in review-queue (e.g. already approved or draft), fetch directly by workItemId
         fetchSubmissionByWorkItem(routeWorkItemId);
       } else {
+        setActiveSubmission(null);
         setLoading(false);
       }
     } catch (err: any) {
@@ -566,10 +569,17 @@ export const ReviewStudioPage: React.FC = () => {
         setActiveSubmission(null);
       }
     } catch (err: any) {
-      alert(err?.message || 'Approval failed');
+      if (err?.statusCode === 409) await handleStaleDecision(err.message);
+      else alert(err?.message || 'Approval failed');
     } finally {
       setIsSubmittingDecision(false);
     }
+  };
+
+  /** A 409 means this version can no longer be decided: say why, and reload the queue. */
+  const handleStaleDecision = (message: string) => {
+    setStaleNotice(`${message} The review queue has been refreshed.`);
+    return fetchReviewQueue();
   };
 
   const handleRequestRevision = async (data: { note: string; rootCause: RootCause }) => {
@@ -599,7 +609,8 @@ export const ReviewStudioPage: React.FC = () => {
         setActiveSubmission(null);
       }
     } catch (err: any) {
-      alert(err?.message || 'Request revision failed');
+      if (err?.statusCode === 409) await handleStaleDecision(err.message);
+      else alert(err?.message || 'Request revision failed');
     } finally {
       setIsSubmittingDecision(false);
     }
@@ -783,6 +794,15 @@ export const ReviewStudioPage: React.FC = () => {
         )}
       </header>
 
+      {staleNotice && (
+        <div role="alert" className="status-tint status-waiting px-4 py-2.5 flex items-center justify-between gap-3 text-[13px] flex-shrink-0">
+          <span>{staleNotice}</span>
+          <button type="button" onClick={() => setStaleNotice(null)} className="font-semibold underline underline-offset-2 shrink-0 min-h-[44px] px-2">
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Main Review Workspace Content */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         {loading ? (
@@ -815,6 +835,7 @@ export const ReviewStudioPage: React.FC = () => {
                 'Shoot Footage Review'
               }
               hideHeader={true}
+              onStaleDecision={handleStaleDecision}
               onFinishReview={async () => {
                 const subId = activeSubmission._id || activeSubmission.id;
                 const remaining = queue.filter((item) => (item.id || (item as any)._id) !== subId);

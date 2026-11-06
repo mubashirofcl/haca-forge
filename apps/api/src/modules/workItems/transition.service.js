@@ -3,6 +3,7 @@ import { logActivity } from '../activity/service.js';
 import { BLOCKER_REASONS, normalizeRole, getAvailableActions, getWorkspaceMode } from '@mmp/shared';
 import { resolveScope } from '../../lib/scope.js';
 import { Person } from '../people/model.js';
+import { logger } from '../../lib/logger.js';
 
 export const ALLOWED_TRANSITIONS = {
   'Not Started': ['In Progress', 'Blocked'],
@@ -14,7 +15,11 @@ export const ALLOWED_TRANSITIONS = {
   'Published': ['Feedback', 'In Progress'],
 };
 
-export async function transitionWorkItem(id, transitionData, user) {
+/**
+ * @param options.reviewDecision Set only by the review decision code (submissions/reviewDecision.js),
+ *   never from a request. It alone may apply a review decision to a step that requires review.
+ */
+export async function transitionWorkItem(id, transitionData, user, options = {}) {
   const { toStatus, blockerReason, blockerNote, deliverableUrl, publishedUrl, comment } =
     transitionData;
 
@@ -68,8 +73,6 @@ export async function transitionWorkItem(id, transitionData, user) {
     requiredAction = 'start';
   } else if (toStatus === 'Pending') {
     requiredAction = 'submit_for_approval';
-  } else if (fromStatus === 'In Progress' && toStatus === 'Approved' && workItem.stageKey === 'Shoot') {
-    requiredAction = 'done_and_forward';
   } else if (toStatus === 'Published') {
     requiredAction = 'mark_as_posted';
   } else if (toStatus === 'Blocked') {
@@ -85,7 +88,7 @@ export async function transitionWorkItem(id, transitionData, user) {
   }
 
   // Self-approval guard
-  if (toStatus === 'Approved' && workItem.stageKey !== 'Shoot') {
+  if (toStatus === 'Approved') {
     if (ownerIdStr === userId) {
       const error = new Error('The owner can never approve their own stage');
       error.statusCode = 403;
@@ -102,9 +105,53 @@ export async function transitionWorkItem(id, transitionData, user) {
     }
   }
 
+  const isFinishedStep = fromStatus === 'Approved' || fromStatus === 'Published';
+  const isReopen = isFinishedStep && (toStatus === 'Feedback' || toStatus === 'In Progress');
+  const isReviewerRevision = fromStatus === 'Pending' && toStatus === 'Feedback';
+
+  // Reopening a finished step: creative_head and admin only, and never your own work.
+  if (isReopen && ((userRole !== 'creative_head' && userRole !== 'admin') || ownerIdStr === userId)) {
+    const error = new Error('Only a Creative Head or Admin who does not own this step can reopen it');
+    error.statusCode = 403;
+    error.code = 'FORBIDDEN_REOPEN';
+    throw error;
+  }
+
+  // Requesting a revision follows the same reviewer rule as every other decision path.
+  if (isReviewerRevision && !options.reviewDecision) {
+    if (userRole !== 'creative_head' && userRole !== 'admin') {
+      const error = new Error('Only Creative Head or Admin can request revisions');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN_ACTION';
+      throw error;
+    }
+    if (ownerIdStr === userId) {
+      const error = new Error('You cannot review your own work');
+      error.statusCode = 403;
+      error.code = 'FORBIDDEN_SELF_APPROVAL';
+      throw error;
+    }
+  }
+
+  // A step that requires review is decided through the review flow, which needs a rating.
+  if (workItem.reviewRequired && !options.reviewDecision) {
+    let bypassesReview = toStatus === 'Approved' || isReviewerRevision;
+    if (fromStatus === 'Feedback' && toStatus === 'In Progress' && !isOwner) {
+      const { Submission } = await import('../submissions/model.js');
+      const latest = await Submission.findOne({ workItemId: workItem._id, version: { $gt: 0 } }).sort({ version: -1 });
+      bypassesReview = latest?.status === 'submitted';
+    }
+    if (bypassesReview) {
+      const error = new Error('This step requires review. Use the review flow to approve it or request changes.');
+      error.statusCode = 409;
+      error.code = 'USE_REVIEW_FLOW';
+      throw error;
+    }
+  }
+
   // Worker actions guard: A user never gets worker actions on a task they do not own
   // Note: On legacy standalone work items (no stageKey), sm_manager can publish and head can request rework.
-  let isWorkerAction = ['start', 'submit_for_approval', 'done_and_forward', 'mark_as_posted', 'mark_blocked'].includes(requiredAction);
+  let isWorkerAction = ['start', 'submit_for_approval', 'mark_as_posted', 'mark_blocked'].includes(requiredAction);
   if (fromStatus === 'Feedback' && toStatus === 'In Progress' && (userRole === 'creative_head' || userRole === 'admin')) {
     isWorkerAction = false;
   }
@@ -121,8 +168,8 @@ export async function transitionWorkItem(id, transitionData, user) {
     throw error;
   }
 
-  // Workspace mode guard: submit_for_approval and done_and_forward require edit mode
-  if ((requiredAction === 'submit_for_approval' || requiredAction === 'done_and_forward') && isOwner) {
+  // Workspace mode guard: submit_for_approval requires edit mode
+  if (requiredAction === 'submit_for_approval' && isOwner) {
     const mode = getWorkspaceMode(user, workItem);
     if (mode !== 'edit') {
       const error = new Error('Action not permitted: Workspace is not in edit mode.');
@@ -276,7 +323,14 @@ export async function transitionWorkItem(id, transitionData, user) {
   }
 
   // 9. Submissions, Approvals and Publishing
-  if (toStatus === 'Pending' || toStatus === 'Feedback') {
+  // A reviewer's decision or a reopen is not a submission, so it records no submit time.
+  const isNewSubmission = (toStatus === 'Pending' || toStatus === 'Feedback') && !isReopen && !isReviewerRevision;
+  if (isReopen && toStatus === 'Feedback') {
+    // The reopened work is a new round; the next submit must not overwrite the decided one.
+    if (!workItem.rounds) workItem.rounds = [];
+    workItem.rounds.push({ roundNumber: workItem.rounds.length + 1, startedAt: now, intervals: [] });
+  }
+  if (isNewSubmission) {
     if (!workItem.submittedAt) {
       workItem.submittedAt = now;
     } else {
@@ -335,6 +389,47 @@ export async function transitionWorkItem(id, transitionData, user) {
   workItem.status = toStatus;
   await workItem.save();
 
+  // The status is saved. For a review decision, nothing after this point can fail it:
+  // the decision stands, and a failure here is logged. A missed unlock is repaired by
+  // reconcileContentPieceStageLocks the next time the step is opened.
+  const afterStatusSaved = async () => {
+  // A worker's submission must end up with a real version for the reviewer to decide.
+  if (isNewSubmission && (workItem.contentPieceId || workItem.reviewRequired)) {
+    try {
+      const { Submission } = await import('../submissions/model.js');
+      const latestSub = await Submission.findOne({
+        workItemId: workItem._id,
+        version: { $gt: 0 },
+      }).sort({ version: -1 });
+      // A reopened step never reuses a version from before its last decision.
+      const lastDecision = Math.max(...[workItem.decisionAt, workItem.approvedAt, workItem.changesRequestedAt].filter(Boolean).map((d) => new Date(d).getTime()), 0);
+      const stillAwaiting =
+        latestSub?.status === 'submitted' && (!latestSub.submittedAt || new Date(latestSub.submittedAt).getTime() > lastDecision);
+      if (!stillAwaiting) {
+        const nextVersion = (latestSub?.version || 0) + 1;
+        const kind =
+          workItem.stageKey === 'Shoot' || workItem.stageKey === 'Edit' ? 'video' : 'document';
+        const url = deliverableUrl || workItem.deliverableUrl || '';
+        await Submission.create({
+          workItemId: workItem._id,
+          contentPieceId: workItem.contentPieceId || null,
+          stageKey: workItem.stageKey,
+          version: nextVersion,
+          kind,
+          linkUrl: url,
+          notes: comment || '',
+          files: url ? [{ name: 'deliverable', url }] : [],
+          submittedById: userId,
+          submittedAt: new Date(),
+          status: 'submitted',
+          versionToken: (await import('crypto')).randomUUID(),
+        });
+      }
+    } catch (subErr) {
+      // Non-blocking
+    }
+  }
+
   // 8. Scope Reset R3: Content Flow Hand-offs & Stage Unlocking
   if (workItem.contentPieceId) {
     const { ContentPiece } = await import('../calendar/contentPiece.model.js');
@@ -366,42 +461,8 @@ export async function transitionWorkItem(id, transitionData, user) {
       }
     }
 
-    // If review requested (moved to Feedback or Pending), notify Creative Heads & ensure Submission record exists
-    if (toStatus === 'Feedback' || toStatus === 'Pending') {
-      try {
-        const { Submission } = await import('../submissions/model.js');
-        const existingSubmitted = await Submission.findOne({
-          workItemId: workItem._id,
-          status: 'submitted',
-        });
-        if (!existingSubmitted) {
-          const latestSub = await Submission.findOne({
-            workItemId: workItem._id,
-            version: { $gt: 0 },
-          }).sort({ version: -1 });
-          const nextVersion = (latestSub?.version || 0) + 1;
-          const kind =
-            workItem.stageKey === 'Shoot' || workItem.stageKey === 'Edit' ? 'media' : 'document';
-          const url = deliverableUrl || workItem.deliverableUrl || '';
-          await Submission.create({
-            workItemId: workItem._id,
-            contentPieceId: workItem.contentPieceId || null,
-            stageKey: workItem.stageKey,
-            version: nextVersion,
-            kind,
-            linkUrl: url,
-            notes: comment || '',
-            files: url ? [{ name: 'deliverable', url }] : [],
-            submittedById: userId,
-            submittedAt: new Date(),
-            status: 'submitted',
-            versionToken: (await import('crypto')).randomUUID(),
-          });
-        }
-      } catch (subErr) {
-        // Non-blocking
-      }
-
+    // If review requested (moved to Feedback or Pending), notify Creative Heads
+    if (isNewSubmission) {
       const creativeHeads = await Person.find({ role: 'creative_head', status: 'active' });
       for (const ch of creativeHeads) {
         await createNotification({
@@ -434,6 +495,17 @@ export async function transitionWorkItem(id, transitionData, user) {
       comment,
     },
   });
+  };
+
+  if (options.reviewDecision) {
+    try {
+      await afterStatusSaved();
+    } catch (error) {
+      logger.error({ err: error?.message, workItemId: String(workItem._id) }, 'Review decision saved, but a follow-up step failed');
+    }
+  } else {
+    await afterStatusSaved();
+  }
 
   return WorkItem.findById(workItem._id)
     .populate('departmentId', 'name code')
