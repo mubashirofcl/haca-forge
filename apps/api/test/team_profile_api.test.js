@@ -195,11 +195,38 @@ describe('Team Directory and Worker Profile API Suite', () => {
       }
     });
 
-    it('team_member is denied access to /api/team with 403 Forbidden', async () => {
+    it('team_member is denied access to /api/team with 404 Not Found', async () => {
       const res = await request(app)
         .get('/api/team')
         .set('Authorization', `Bearer ${worker1Token}`);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+      expect(res.body.data).toBeUndefined();
+    });
+
+    it("team_member gets 404 for another member's changes log", async () => {
+      const res = await request(app)
+        .get(`/api/team/${worker2._id}/changes`)
+        .set('Authorization', `Bearer ${worker1Token}`);
+      expect(res.status).toBe(404);
+      expect(res.body.data).toBeUndefined();
+    });
+
+    it("team_member gets 404 for every read of another member's profile", async () => {
+      for (const sub of ['', '/overview', '/work', '/performance', '/ratings', '/activity']) {
+        const res = await request(app)
+          .get(`/api/team/${worker2._id}${sub}`)
+          .set('Authorization', `Bearer ${worker1Token}`);
+        expect(res.status, `GET /api/team/:id${sub}`).toBe(404);
+        expect(res.body.data).toBeUndefined();
+      }
+    });
+
+    it('creative_head still lists the directory (access unchanged)', async () => {
+      const res = await request(app)
+        .get('/api/team')
+        .set('Authorization', `Bearer ${headToken}`);
+      expect(res.status).toBe(200);
     });
 
     it('directory items include load percentage, band, active counts, and current step', async () => {

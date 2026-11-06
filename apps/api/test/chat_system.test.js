@@ -390,6 +390,26 @@ describe('Team Chat Comprehensive API Suite (Phase CH1)', () => {
 
       expect(res.status).toBe(403);
     });
+
+    it('ensures DMs are private: admin cannot open the details of a DM they are not a member of', async () => {
+      const res = await request(app)
+        .get(`/api/chat/channels/${dmChannelId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect([403, 404]).toContain(res.status);
+      expect(res.body.channel).toBeUndefined();
+      expect(res.body.messages).toBeUndefined();
+    });
+
+    it("ensures DMs are private: another pair's DM is not in admin's channel list", async () => {
+      const res = await request(app)
+        .get('/api/chat/channels')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      const ids = (res.body.channels || []).map((c) => (c._id || c.id).toString());
+      expect(ids).not.toContain(dmChannelId.toString());
+    });
   });
 
   // ==========================================

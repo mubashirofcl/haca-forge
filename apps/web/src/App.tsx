@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { GlobalFilterProvider } from './context/GlobalFilterContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { RoleBoundary } from './components/RoleBoundary';
+import type { UserRole } from '@mmp/shared';
 import { Layout } from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PageSkeleton } from './components/Skeleton';
@@ -11,6 +13,9 @@ import { PageSkeleton } from './components/Skeleton';
 import { LoginPage } from './pages/LoginPage';
 import { SetPasswordPage } from './pages/SetPasswordPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
+
+// Pages team members must not see. They get the not-found state, as on /team/:id.
+const TEAM_MEMBER_HIDDEN: UserRole[] = ['team_member'];
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -286,7 +291,9 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <FeedbackPage />
+                        <RoleBoundary hiddenFor={TEAM_MEMBER_HIDDEN}>
+                          <FeedbackPage />
+                        </RoleBoundary>
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -298,7 +305,9 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <TeamWorkloadPage />
+                        <RoleBoundary hiddenFor={TEAM_MEMBER_HIDDEN}>
+                          <TeamWorkloadPage />
+                        </RoleBoundary>
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -352,7 +361,9 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <IssuesBlockersPage />
+                        <RoleBoundary hiddenFor={TEAM_MEMBER_HIDDEN}>
+                          <IssuesBlockersPage />
+                        </RoleBoundary>
                       </Layout>
                     </ProtectedRoute>
                   }
@@ -364,7 +375,9 @@ export const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <Layout>
-                        <ReportsPage />
+                        <RoleBoundary hiddenFor={TEAM_MEMBER_HIDDEN}>
+                          <ReportsPage />
+                        </RoleBoundary>
                       </Layout>
                     </ProtectedRoute>
                   }

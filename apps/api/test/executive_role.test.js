@@ -402,6 +402,24 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
       expect(res.status).toBe(403);
     });
 
+    it('PATCH /api/blockers/:id/resolve -> 403', async () => {
+      const fakeId = new mongoose.Types.ObjectId();
+      const res = await request(app)
+        .patch(`/api/blockers/${fakeId}/resolve`)
+        .set('Authorization', `Bearer ${execToken}`)
+        .send({ resolutionNote: 'Forbidden executive resolve' });
+      expect(res.status).toBe(403);
+    });
+
+    it('POST /api/blockers/:id/notify -> 403', async () => {
+      const fakeId = new mongoose.Types.ObjectId();
+      const res = await request(app)
+        .post(`/api/blockers/${fakeId}/notify`)
+        .set('Authorization', `Bearer ${execToken}`)
+        .send({});
+      expect(res.status).toBe(403);
+    });
+
     it('POST /api/assignment/recommend -> 403', async () => {
       const res = await request(app)
         .post('/api/assignment/recommend')
