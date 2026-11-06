@@ -118,9 +118,9 @@ describe('STEP DEADLINES IN THE PLAN ROW FORM SUITE', () => {
   });
 
   describe('1. Import Template and Column Specifications', () => {
-    it('downloads Excel template containing all 23 expected workflow columns', async () => {
+    it('downloads the older 23-column template on request (?layout=legacy)', async () => {
       const res = await request(app)
-        .get('/api/calendar-plans/template')
+        .get('/api/calendar-plans/template?layout=legacy')
         .set('Authorization', `Bearer ${smToken}`)
         .buffer(true)
         .parse((response, callback) => {

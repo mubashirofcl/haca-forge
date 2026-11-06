@@ -9,6 +9,62 @@ import { Person } from '../people/model.js';
 import { WorkItem } from '../workItems/model.js';
 import { FeedbackEntry } from '../feedback/model.js';
 
+const OPEN_STATUSES = ['Not Started', 'In Progress', 'Feedback'];
+
+/**
+ * Load everything autofill reads from the database, once.
+ * Three queries in total, however many rows are being filled:
+ * active team members, their open work items, and 90-day revision entries.
+ *
+ * The rules are the same as the per-row version: open hours use
+ * `estimatedEffortHrs || 4`, revisions use `avgRevisions || 90-day entries || 0`.
+ */
+export async function buildAutofillContext() {
+  // Strictly team members (exclude admin, creative_head, sm_manager, executive)
+  const members = await Person.find({ role: 'team_member', status: 'active' }).lean();
+  const ids = members.map((m) => m._id);
+
+  const openItems = await WorkItem.find({ ownerId: { $in: ids }, status: { $in: OPEN_STATUSES } })
+    .select('ownerId estimatedEffortHrs')
+    .lean();
+  const openHours = new Map();
+  for (const it of openItems) {
+    const k = String(it.ownerId);
+    openHours.set(k, (openHours.get(k) || 0) + (it.estimatedEffortHrs || 4));
+  }
+
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000);
+  const revisions = new Map();
+  try {
+    const entries = await FeedbackEntry.find({
+      'attachments.fromPersonId': { $in: ids },
+      createdAt: { $gte: ninetyDaysAgo },
+    })
+      .select('attachments.fromPersonId')
+      .lean();
+    for (const e of entries) {
+      // Same as countDocuments per person: an entry counts once for each person it names.
+      const named = new Set((e.attachments || []).map((a) => String(a.fromPersonId)));
+      for (const k of named) revisions.set(k, (revisions.get(k) || 0) + 1);
+    }
+  } catch {
+    // Same fallback as before: no revision data counts as 0.
+  }
+
+  return {
+    candidates: members.map((member) => {
+      const k = String(member._id);
+      return {
+        member,
+        workPreferences: member.workPreferences || [],
+        capacity: member.weeklyCapacityHours || 40,
+        existingHours: openHours.get(k) || 0,
+        revisionsCount: member.avgRevisions || revisions.get(k) || 0,
+      };
+    }),
+  };
+}
+
 /**
  * Suggest stage owners and deadlines for a row before saving
  *
@@ -18,6 +74,7 @@ import { FeedbackEntry } from '../feedback/model.js';
  * @param {boolean} [input.needsScript=false]
  * @param {boolean} [input.needsShoot=false]
  * @param {Array} [input.currentPlanRows=[]] Other rows in the same plan to include in draft load
+ * @param {Object} [input.context] From buildAutofillContext(); pass it when filling many rows
  * @returns {Promise<{ pipeline: string, hasPostStage: boolean, stages: Array, suggestedPostingOwner: Object|null }>}
  */
 export async function autofillRowPlan({
@@ -26,7 +83,9 @@ export async function autofillRowPlan({
   needsScript = false,
   needsShoot = false,
   currentPlanRows = [],
+  context = null,
 }) {
+  const ctx = context || (await buildAutofillContext());
   const normType = normalizeWorkType(type || 'Static Post');
   const finalDate = postingDate ? new Date(postingDate) : new Date();
 
@@ -36,57 +95,31 @@ export async function autofillRowPlan({
     needsShoot: Boolean(needsShoot),
   });
 
-  // Calculate draft hours per person from other rows in current plan
+  // Calculate draft hours per person from other rows in current plan (in row order)
   const draftHoursPerPerson = new Map();
   for (const r of currentPlanRows) {
     const rStages = Array.isArray(r.stagePlan) ? r.stagePlan : [];
     for (const st of rStages) {
       if (st.ownerId) {
-        const idStr = String(st.ownerId);
+        const idStr = String(st.ownerId._id || st.ownerId);
         const hrs = DEFAULT_STAGE_HOURS[st.stageKey] || 4;
         draftHoursPerPerson.set(idStr, (draftHoursPerPerson.get(idStr) || 0) + hrs);
       }
     }
   }
 
-  // Fetch all active team_members (strictly exclude admin, creative_head, sm_manager, executive)
-  const activeMembers = await Person.find({
-    role: 'team_member',
-    status: 'active',
-  }).lean();
-
-  // Pre-calculate workload & 90-day revisions for each candidate
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000);
-  const candidatesData = [];
-
-  for (const member of activeMembers) {
-    const capacity = member.weeklyCapacityHours || 40;
-
-    // Open work items
-    const openItems = await WorkItem.find({
-      ownerId: member._id,
-      status: { $in: ['Not Started', 'In Progress', 'Feedback'] },
-    }).select('estimatedEffortHrs').lean();
-
-    const existingHours = openItems.reduce((acc, it) => acc + (it.estimatedEffortHrs || 4), 0);
-    const draftHours = draftHoursPerPerson.get(member._id.toString()) || 0;
-    const totalHours = existingHours + draftHours;
-    const workloadPct = capacity > 0 ? Math.round((totalHours / capacity) * 100) : 0;
-
-    // 90-day revisions
-    const revEntries = await FeedbackEntry.countDocuments({
-      'attachments.fromPersonId': member._id,
-      createdAt: { $gte: ninetyDaysAgo },
-    }).catch(() => 0);
-
-    candidatesData.push({
-      member,
-      workPreferences: member.workPreferences || [],
-      capacity,
-      workloadPct,
-      revisionsCount: member.avgRevisions || revEntries || 0,
-    });
-  }
+  // Fresh per-row copy: the within-row increment below must not leak to the next row.
+  const candidatesData = ctx.candidates.map((c) => {
+    const draftHours = draftHoursPerPerson.get(c.member._id.toString()) || 0;
+    const totalHours = c.existingHours + draftHours;
+    return {
+      member: c.member,
+      workPreferences: c.workPreferences,
+      capacity: c.capacity,
+      workloadPct: c.capacity > 0 ? Math.round((totalHours / c.capacity) * 100) : 0,
+      revisionsCount: c.revisionsCount,
+    };
+  });
 
   // Helper to pick best candidate for a stageKey
   function pickBestCandidate(stageKey) {

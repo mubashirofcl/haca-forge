@@ -1447,6 +1447,8 @@ export const calendarPlanCreateSchema = z.object({
   title: z.string().trim().optional(),
   calendar: z.enum(CALENDAR_KEYS).default("sm"),
   kind: z.enum(CALENDAR_PLAN_KINDS).default("monthly"),
+  /** Monthly plans: 'YYYY-MM'. When given, the period is that whole month. */
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
   periodStart: z.coerce.date(),
   periodEnd: z.coerce.date(),
   comment: z.string().optional().default(""),
@@ -2757,3 +2759,417 @@ export function calculateIndividualWorkMeasures(
   };
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Excel-style plan grid: month periods, column map and paste parsing.
+// Pure helpers shared by the API (validation) and the web grid (paste preview).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Business timezone for plan months (approved: Asia/Kolkata). */
+export const APP_TIME_ZONE = "Asia/Kolkata";
+
+const MONTH_KEY_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+export function isMonthKey(value: unknown): value is string {
+  return typeof value === "string" && MONTH_KEY_RE.test(value);
+}
+
+/** 'YYYY-MM' for a moment, read in the business timezone. */
+export function monthKeyInAppTz(date: Date | string | number = new Date()): string {
+  const d = new Date(date);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  return `${y}-${m}`;
+}
+
+/**
+ * Month a stored plan belongs to. Plan dates are stored date-only (UTC midnight),
+ * but some older rows were saved at local midnight (previous day 18:30Z); reading
+ * the date in the business timezone gives the intended calendar day for both.
+ */
+export function planMonthKey(periodStart: Date | string): string {
+  return monthKeyInAppTz(periodStart);
+}
+
+/** Full calendar month as stored date-only bounds: first day 00:00Z to last day 23:59:59.999Z. */
+export function monthPeriod(monthKey: string): { periodStart: Date; periodEnd: Date } {
+  const m = MONTH_KEY_RE.exec(monthKey);
+  if (!m) throw new Error(`Invalid month "${monthKey}". Use YYYY-MM.`);
+  const year = Number(m[1]);
+  const month = Number(m[2]) - 1;
+  return {
+    periodStart: new Date(Date.UTC(year, month, 1, 0, 0, 0, 0)),
+    periodEnd: new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999)),
+  };
+}
+
+export function nextMonthKey(monthKey: string): string {
+  const { periodStart } = monthPeriod(monthKey);
+  return new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 1))
+    .toISOString()
+    .slice(0, 7);
+}
+
+export const PLAN_GRID_GROUPS = [
+  "Plan",
+  "Script",
+  "Shoot",
+  "Edit",
+  "Approval",
+  "Publishing",
+  "Tracking",
+] as const;
+export type PlanGridGroup = (typeof PLAN_GRID_GROUPS)[number];
+
+export type PlanGridExcelColumnKey =
+  | "postingDate"
+  | "topic"
+  | "type"
+  | "scriptStatus"
+  | "scriptDoneDate"
+  | "scriptOwner"
+  | "shootStatus"
+  | "shootDoneDate"
+  | "shootOwner"
+  | "editStatus"
+  | "editDoneDate"
+  | "editOwner"
+  | "approvalStatus"
+  | "approvalDate"
+  | "publishedDate"
+  | "postingOwner"
+  | "turnaroundDays"
+  | "remarks";
+
+/** App-only optional columns (Static/Carousel and other design rows have Content and Design steps). */
+export type PlanGridExtraColumnKey = "contentOwner" | "designOwner";
+export type PlanGridColumnKey = PlanGridExcelColumnKey | PlanGridExtraColumnKey;
+
+export interface PlanGridColumn {
+  key: PlanGridColumnKey;
+  header: string;
+  group: PlanGridGroup;
+  /** SM can type/paste into it. Workflow columns are filled by the system. */
+  editable: boolean;
+  frozen?: boolean;
+  /** Stage whose owner this column sets, if any. */
+  ownerStage?: StageKey;
+  /** Optional app column, not one of the 18 Excel columns. */
+  optional?: boolean;
+  /** Short help shown as a tooltip on the header. */
+  help?: string;
+}
+
+export const TURNAROUND_HELP =
+  "Days from row approval to publishing. Counted once, when the post is published: from the time the Creative Head approved the row (its first step was created) to the publish time.";
+
+/** The 18 Excel columns, in Excel order. */
+export const PLAN_GRID_COLUMNS: PlanGridColumn[] = [
+  { key: "postingDate", header: "Posting Date", group: "Plan", editable: true, frozen: true },
+  { key: "topic", header: "Topic", group: "Plan", editable: true, frozen: true },
+  { key: "type", header: "Type", group: "Plan", editable: true, frozen: true },
+  { key: "scriptStatus", header: "Script Status", group: "Script", editable: false },
+  { key: "scriptDoneDate", header: "Script Done Date", group: "Script", editable: false },
+  { key: "scriptOwner", header: "Script Owner", group: "Script", editable: true, ownerStage: "Script" },
+  { key: "shootStatus", header: "Shoot Status", group: "Shoot", editable: false },
+  { key: "shootDoneDate", header: "Shoot Done Date", group: "Shoot", editable: false },
+  { key: "shootOwner", header: "Shoot Owner", group: "Shoot", editable: true, ownerStage: "Shoot" },
+  { key: "editStatus", header: "Edit Status", group: "Edit", editable: false },
+  { key: "editDoneDate", header: "Edit Done Date", group: "Edit", editable: false },
+  { key: "editOwner", header: "Edit Owner", group: "Edit", editable: true, ownerStage: "Edit" },
+  { key: "approvalStatus", header: "Approval Status", group: "Approval", editable: false },
+  { key: "approvalDate", header: "Approval Date", group: "Approval", editable: false },
+  { key: "publishedDate", header: "Published Date", group: "Publishing", editable: false },
+  { key: "postingOwner", header: "Posting Owner", group: "Publishing", editable: true, ownerStage: "Post" },
+  { key: "turnaroundDays", header: "Turnaround (Days)", group: "Tracking", editable: false, help: TURNAROUND_HELP },
+  { key: "remarks", header: "Remarks", group: "Tracking", editable: true },
+];
+
+/** Optional app columns. Content sits with the writing step (Script), Design with production (Edit). */
+export const PLAN_GRID_EXTRA_COLUMNS: (PlanGridColumn & { after: PlanGridExcelColumnKey })[] = [
+  { key: "contentOwner", header: "Content Owner", group: "Script", editable: true, ownerStage: "Content", optional: true, after: "scriptOwner" },
+  { key: "designOwner", header: "Design Owner", group: "Edit", editable: true, ownerStage: "Design", optional: true, after: "editOwner" },
+];
+
+/** Columns in on-screen order: the 18 Excel columns with the 2 optional ones placed after their anchors. */
+export const PLAN_GRID_DISPLAY_COLUMNS: PlanGridColumn[] = PLAN_GRID_COLUMNS.flatMap((c) => [
+  c,
+  ...PLAN_GRID_EXTRA_COLUMNS.filter((x) => x.after === c.key).map(({ after: _after, ...rest }) => rest),
+]);
+
+/** Template / upload headers: the 18 Excel columns, then the 2 optional owner columns. */
+export const PLAN_TEMPLATE_HEADERS: string[] = [
+  ...PLAN_GRID_COLUMNS.map((c) => c.header),
+  ...PLAN_GRID_EXTRA_COLUMNS.map((c) => c.header),
+];
+
+const normHeader = (h: string) => h.trim().toLowerCase().replace(/\s+/g, " ");
+const HEADER_TO_COLUMN = new Map<string, PlanGridColumnKey>(
+  [...PLAN_GRID_COLUMNS, ...PLAN_GRID_EXTRA_COLUMNS].map((c) => [normHeader(c.header), c.key])
+);
+HEADER_TO_COLUMN.set("turnaround", "turnaroundDays");
+HEADER_TO_COLUMN.set("turnaround days", "turnaroundDays");
+
+/** Column key for a grid/template header, or null if it is not one. */
+export function planGridColumnForHeader(header: string): PlanGridColumnKey | null {
+  return HEADER_TO_COLUMN.get(normHeader(String(header ?? ""))) ?? null;
+}
+
+/** Headers only the new 18-column layout has; their presence marks a new-layout file. */
+const NEW_LAYOUT_ONLY_HEADERS = new Set(
+  ["Script Status", "Script Done Date", "Shoot Status", "Shoot Done Date", "Edit Status", "Edit Done Date", "Approval Status", "Approval Date", "Published Date", "Turnaround (Days)", "Turnaround"].map(normHeader)
+);
+export function isNewPlanLayout(headers: string[]): boolean {
+  return headers.some((h) => NEW_LAYOUT_ONLY_HEADERS.has(normHeader(String(h ?? ""))));
+}
+
+/**
+ * Split clipboard text from Excel (tab-separated, CRLF or LF rows, quoted cells
+ * may contain tabs/newlines and doubled quotes). Trailing empty lines are dropped.
+ */
+export function parseClipboardTsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let i = 0;
+  let quoted = false;
+  const src = String(text ?? "");
+  while (i < src.length) {
+    const ch = src[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') {
+          cell += '"';
+          i += 2;
+          continue;
+        }
+        quoted = false;
+        i++;
+        continue;
+      }
+      cell += ch;
+      i++;
+      continue;
+    }
+    if (ch === '"' && cell === "") {
+      quoted = true;
+      i++;
+      continue;
+    }
+    if (ch === "\t") {
+      row.push(cell);
+      cell = "";
+      i++;
+      continue;
+    }
+    if (ch === "\r" || ch === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+      i += ch === "\r" && src[i + 1] === "\n" ? 2 : 1;
+      continue;
+    }
+    cell += ch;
+    i++;
+  }
+  if (cell !== "" || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  while (rows.length && rows[rows.length - 1].every((c) => c.trim() === "")) rows.pop();
+  return rows;
+}
+
+export type PlanGridCells = Partial<Record<PlanGridColumnKey, string>>;
+
+/**
+ * Turn pasted rows into cell maps. If the first row is a header row it places the
+ * columns; otherwise columns follow the 18 Excel columns from `startColumn` (the cell
+ * the paste landed on). A paste that starts on an optional column fills only that column.
+ */
+export function pastedRowsToCells(
+  rows: string[][],
+  startColumn: PlanGridColumnKey = "postingDate"
+): { cells: PlanGridCells[]; headerDetected: boolean; unknownHeaders: string[] } {
+  if (rows.length === 0) return { cells: [], headerDetected: false, unknownHeaders: [] };
+  const first = rows[0];
+  const headerHits = first.filter((h) => planGridColumnForHeader(h)).length;
+  const headerDetected = headerHits >= 2;
+  let keys: (PlanGridColumnKey | null)[];
+  const unknownHeaders: string[] = [];
+  let body = rows;
+  if (headerDetected) {
+    keys = first.map((h) => {
+      const k = planGridColumnForHeader(h);
+      if (!k && h.trim()) unknownHeaders.push(h.trim());
+      return k;
+    });
+    body = rows.slice(1);
+  } else if (PLAN_GRID_EXTRA_COLUMNS.some((c) => c.key === startColumn)) {
+    keys = [startColumn];
+  } else {
+    const startIdx = Math.max(0, PLAN_GRID_COLUMNS.findIndex((c) => c.key === startColumn));
+    keys = PLAN_GRID_COLUMNS.slice(startIdx).map((c) => c.key);
+  }
+  const cells = body
+    .filter((r) => r.some((c) => c.trim() !== ""))
+    .map((r) => {
+      const out: PlanGridCells = {};
+      r.forEach((value, idx) => {
+        const key = keys[idx];
+        if (key) out[key] = value.trim();
+      });
+      return out;
+    });
+  return { cells, headerDetected, unknownHeaders };
+}
+
+const MONTHS: Record<string, number> = {
+  jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4,
+  may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9,
+  september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
+};
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+export type GridDateResult =
+  | { ok: true; value: string; resolvedByMonth?: boolean }
+  | { ok: false; empty?: boolean; ambiguous?: boolean; error: string };
+
+const isRealDate = (y: number, m: number, d: number) => {
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+};
+const ymd = (y: number, m: number, d: number) =>
+  `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+/** '2026-11-02' -> '2 Nov 2026' */
+export function formatGridDate(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+  if (!m) return value || "";
+  return `${Number(m[3])} ${SHORT_MONTHS[Number(m[2]) - 1]} ${m[1]}`;
+}
+
+/**
+ * Parse a date cell into 'YYYY-MM-DD'. Accepts `2026-11-02`, `2 Nov, 2026`,
+ * `2 November 2026`, `Nov 2, 2026` and slashed dates (`/`, `-` or `.`).
+ *
+ * Slashed dates: an unambiguous day/month date (e.g. 16/11/2026) is accepted.
+ * When both DD/MM and MM/DD are real dates, or only MM/DD is, the grid month
+ * (`opts.month`, 'YYYY-MM') decides: the date is accepted only when exactly one
+ * reading falls in that month. Otherwise it is an error, never a guess.
+ */
+export function parseGridDate(raw: unknown, opts: { month?: string } = {}): GridDateResult {
+  const s = String(raw ?? "").trim();
+  if (!s) return { ok: false, empty: true, error: "Date is required." };
+
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (m) {
+    const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    return isRealDate(y, mo, d) ? { ok: true, value: ymd(y, mo, d) } : { ok: false, error: `"${s}" is not a real date.` };
+  }
+
+  m = /^(\d{1,2})\s+([A-Za-z]+)\.?,?\s+(\d{4})$/.exec(s);
+  if (m) {
+    const mo = MONTHS[m[2].toLowerCase()];
+    const [d, y] = [Number(m[1]), Number(m[3])];
+    if (mo && isRealDate(y, mo, d)) return { ok: true, value: ymd(y, mo, d) };
+    return { ok: false, error: `"${s}" is not a real date.` };
+  }
+
+  m = /^([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})$/.exec(s);
+  if (m) {
+    const mo = MONTHS[m[1].toLowerCase()];
+    const [d, y] = [Number(m[2]), Number(m[3])];
+    if (mo && isRealDate(y, mo, d)) return { ok: true, value: ymd(y, mo, d) };
+    return { ok: false, error: `"${s}" is not a real date.` };
+  }
+
+  m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(s);
+  if (m) {
+    const [a, b, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const dayFirst = isRealDate(y, b, a) ? ymd(y, b, a) : null;
+    const monthFirst = isRealDate(y, a, b) ? ymd(y, a, b) : null;
+    const readings = [...new Set([dayFirst, monthFirst].filter(Boolean) as string[])];
+    if (readings.length === 0) return { ok: false, error: `"${s}" is not a real date.` };
+    // Unambiguous day/month (the Excel sample's format).
+    if (readings.length === 1 && dayFirst) return { ok: true, value: dayFirst };
+    const month = opts.month && isMonthKey(opts.month) ? opts.month : null;
+    if (month) {
+      const inMonth = readings.filter((r) => r.slice(0, 7) === month);
+      if (inMonth.length === 1) return { ok: true, value: inMonth[0], resolvedByMonth: true };
+    }
+    const options = readings.map(formatGridDate).join(" or ");
+    return {
+      ok: false,
+      ambiguous: readings.length > 1,
+      error:
+        readings.length > 1
+          ? `"${s}" could be ${options}${month ? ", and the grid month does not settle it" : ""}. Write the month as a word, e.g. ${formatGridDate(readings[0]).replace(/ (\d{4})$/, ", $1")}.`
+          : `"${s}" reads as ${options} only month-first${month ? ", which is outside this grid month" : ""}. Use day/month/year.`,
+    };
+  }
+
+  return { ok: false, error: `"${s}" is not a recognised date. Use 2 Nov, 2026 or 16/11/2026.` };
+}
+
+/** Grid/Excel vocabulary that differs from the app's type names (typed or pasted text only). */
+export const PLAN_GRID_TYPE_ALIASES: Record<string, string> = {
+  poster: "Static Post",
+  carousal: "Carousel Post",
+  carousel: "Carousel Post",
+  "static post": "Static Post",
+  "carousel post": "Carousel Post",
+  reel: "Reel",
+  reels: "Reel",
+  story: "Story",
+};
+
+export type GridTypeResult = { ok: true; value: string } | { ok: false; empty?: boolean; error: string };
+
+/**
+ * Map a Type cell to an app deliverable type.
+ * - Typed/pasted text: grid aliases first (Poster -> Static Post, Carousal -> Carousel Post),
+ *   then an exact app type name. Nothing is guessed from partial text.
+ * - `exact: true` (picked from the type list): one of the 15 documented types as-is,
+ *   so the print "Poster" type stays selectable.
+ */
+export function parseGridType(raw: unknown, opts: { exact?: boolean } = {}): GridTypeResult {
+  const s = String(raw ?? "").trim();
+  if (!s) return { ok: false, empty: true, error: "Type is required." };
+  const lower = s.toLowerCase().replace(/\s+/g, " ");
+  if (opts.exact) {
+    const hit = DELIVERABLE_TYPE_KEYS.find((t) => t.toLowerCase() === lower);
+    return hit ? { ok: true, value: hit } : { ok: false, error: `Unknown type "${s}".` };
+  }
+  const alias = PLAN_GRID_TYPE_ALIASES[lower];
+  if (alias) return { ok: true, value: alias };
+  const exact = DELIVERABLE_TYPE_KEYS.find((t) => t.toLowerCase() === lower);
+  if (exact && exact !== "Poster") return { ok: true, value: exact };
+  return { ok: false, error: `Unknown type "${s}". Use Reel, Poster, Carousal, Static Post, Carousel Post, Story or pick from the list.` };
+}
+
+export interface GridOwnerCandidate {
+  _id: string;
+  name: string;
+}
+
+export type GridOwnerResult =
+  | { ok: true; empty: true }
+  | { ok: true; empty?: false; id: string; name: string }
+  | { ok: false; ambiguous?: boolean; error: string };
+
+/** Exact (trimmed, case-sensitive) name match only. Two people with the same name is ambiguous. */
+export function matchGridOwner(raw: unknown, people: GridOwnerCandidate[]): GridOwnerResult {
+  const s = String(raw ?? "").trim();
+  if (!s) return { ok: true, empty: true };
+  const hits = people.filter((p) => (p.name || "").trim() === s);
+  if (hits.length === 1) return { ok: true, id: String(hits[0]._id), name: hits[0].name };
+  if (hits.length > 1) return { ok: false, ambiguous: true, error: `More than one active person is named "${s}". Pick the owner from the list.` };
+  return { ok: false, error: `No active person is named exactly "${s}".` };
+}

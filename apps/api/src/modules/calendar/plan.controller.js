@@ -1,4 +1,45 @@
 import * as planService from './plan.service.js';
+import * as planGridService from './planGrid.service.js';
+
+export async function getGrid(req, res, next) {
+  try {
+    const data = await planGridService.loadGrid(
+      { calendar: req.query.calendar || 'sm', month: req.query.month, planId: req.query.planId },
+      req.user
+    );
+    res.json({ data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function uploadGridFile(req, res, next) {
+  try {
+    const data = await planGridService.uploadGridFile(
+      {
+        buffer: req.file?.buffer,
+        mimetype: req.file?.mimetype || '',
+        calendar: req.body.calendar || 'sm',
+        month: req.body.month,
+        planId: req.body.planId || undefined,
+        dryRun: req.body.dryRun === true || req.body.dryRun === 'true',
+      },
+      req.user
+    );
+    res.status(data.counts.saved > 0 ? 201 : 200).json({ data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function saveGridRows(req, res, next) {
+  try {
+    const data = await planGridService.saveGridRows(req.body || {}, req.user);
+    res.status(data.counts.saved > 0 ? 201 : 200).json({ data });
+  } catch (err) {
+    next(err);
+  }
+}
 import * as importService from './import.service.js';
 import { autofillRowPlan } from './autofill.service.js';
 import { validatePlanAndRows } from './validation.js';
@@ -125,7 +166,8 @@ export async function reviewPlan(req, res, next) {
 
 export async function downloadTemplate(req, res, next) {
   try {
-    const buffer = await importService.generateExcelTemplate();
+    const layout = req.query.layout === 'legacy' ? 'legacy' : 'grid';
+    const buffer = await importService.generateExcelTemplate({ layout });
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

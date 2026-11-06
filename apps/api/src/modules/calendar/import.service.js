@@ -7,6 +7,13 @@ import {
   DEFAULT_STAGE_HOURS,
   isPostableWorkType,
   STAGE_DUE_OFFSETS,
+  DELIVERABLE_TYPE_KEYS,
+  PLAN_GRID_COLUMNS,
+  PLAN_GRID_EXTRA_COLUMNS,
+  TURNAROUND_HELP,
+  isNewPlanLayout,
+  planGridColumnForHeader,
+  matchGridOwner,
 } from '@mmp/shared';
 import { Person } from '../people/model.js';
 import { WorkItem } from '../workItems/model.js';
@@ -38,9 +45,62 @@ export const TEMPLATE_COLUMNS = [
 ];
 
 /**
- * Generates an Excel template workbook buffer
+ * Plan template. Default: the 18 Excel columns plus the optional Content Owner and
+ * Design Owner columns, matched by exact name. `layout: 'legacy'` returns the older
+ * 23-column file (owners by email), which uploads still accept.
  */
-export async function generateExcelTemplate() {
+export async function generateExcelTemplate({ layout = 'grid' } = {}) {
+  if (layout === 'legacy') return generateLegacyExcelTemplate();
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'HACA Marketing OS';
+  workbook.created = new Date();
+  const sheet = workbook.addWorksheet('Calendar Plan', { views: [{ state: 'frozen', xSplit: 3, ySplit: 1 }] });
+  const allColumns = [...PLAN_GRID_COLUMNS, ...PLAN_GRID_EXTRA_COLUMNS];
+  sheet.columns = allColumns.map((c) => ({
+    header: c.header,
+    key: c.key,
+    width: c.key === 'topic' || c.key === 'remarks' ? 36 : c.key.endsWith('Owner') ? 24 : 16,
+  }));
+
+  const header = sheet.getRow(1);
+  header.height = 30;
+  header.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  allColumns.forEach((c, i) => {
+    const cell = header.getCell(i + 1);
+    cell.font = { bold: true, color: { argb: c.editable ? 'FFFFFFFF' : 'FF0B0B0D' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: c.editable ? 'FF0B0B0D' : 'FFDDE2EB' } };
+    if (!c.editable) cell.note = 'Filled by the app. Leave blank; anything typed here is ignored.';
+    else if (c.optional) cell.note = 'Optional. Only for rows with this step (e.g. Static Post, Carousel Post).';
+  });
+
+  // Type dropdown: the 15 documented types; Excel words (Poster, Carousal) are also accepted when typed.
+  const typeCol = allColumns.findIndex((c) => c.key === 'type') + 1;
+  for (let r = 2; r <= 300; r++) {
+    sheet.getCell(r, typeCol).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      showErrorMessage: false,
+      formulae: [`"${DELIVERABLE_TYPE_KEYS.join(',')}"`],
+    };
+  }
+
+  const help = workbook.addWorksheet('How to fill');
+  help.columns = [{ width: 110 }];
+  [
+    'One row per post. Black headers are yours to fill; grey headers are filled by the app and ignored on upload.',
+    'Posting Date: 2 Nov, 2026 or 16/11/2026 (day/month/year). A date like 02/11/2026 is accepted only when exactly one reading falls in the plan month.',
+    `Type: ${DELIVERABLE_TYPE_KEYS.join(', ')}. "Poster" typed by hand means Static Post; "Carousal" means Carousel Post.`,
+    'Owners: the person\'s exact name as it appears in the app. Leave blank to let the app suggest someone.',
+    'Script/Shoot owners apply to reels only; Content/Design owners apply to design rows (Static Post, Carousel Post and the other design types).',
+    TURNAROUND_HELP,
+  ].forEach((line) => help.addRow([line]));
+
+  return workbook.xlsx.writeBuffer();
+}
+
+/** Older 23-column template (owners by email). */
+async function generateLegacyExcelTemplate() {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'HACA Marketing OS';
   workbook.created = new Date();
@@ -130,15 +190,131 @@ function parseBoolean(val) {
 }
 
 /**
+ * An .xlsx file is a zip ("PK"); anything else is read as CSV. The old check
+ * ("a comma in the first 100 bytes") also matched zip bytes, so real Excel files were
+ * read as CSV and came back empty.
+ */
+export function looksLikeCsv(buffer, mimetype = '') {
+  const isZip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+  if (isZip) return false;
+  return (
+    mimetype.includes('csv') ||
+    mimetype.includes('text') ||
+    buffer.toString('utf8', 0, 100).includes(',') ||
+    buffer.toString('utf8', 0, 100).includes('Posting Date')
+  );
+}
+
+/** Plain text for an ExcelJS cell value. Excel dates (UTC midnight) become YYYY-MM-DD. */
+export function cellText(val) {
+  if (val === null || val === undefined) return '';
+  if (val instanceof Date) return isNaN(val.getTime()) ? '' : val.toISOString().slice(0, 10);
+  if (typeof val === 'object') {
+    if (Array.isArray(val.richText)) return val.richText.map((t) => t.text).join('');
+    if (val.text !== undefined) return cellText(val.text);
+    if (val.result !== undefined) return cellText(val.result);
+    if (val.hyperlink) return String(val.hyperlink);
+    return '';
+  }
+  return String(val);
+}
+
+async function loadFirstWorksheet(buffer, mimetype = '') {
+  const workbook = new ExcelJS.Workbook();
+  const isCsv = looksLikeCsv(buffer, mimetype);
+  if (isCsv) {
+    const stream = new (await import('stream')).Readable();
+    stream.push(buffer);
+    stream.push(null);
+    await workbook.csv.read(stream);
+  } else {
+    await workbook.xlsx.load(buffer);
+  }
+  return workbook.worksheets[0] || null;
+}
+
+const LEGACY_OWNER_FIELDS = ['postingOwner', 'contentOwner', 'scriptOwner', 'shootOwner', 'editOwner', 'designOwner'];
+const LEGACY_DEADLINE_STAGE = {
+  contentDeadline: 'Content',
+  scriptDeadline: 'Script',
+  shootDeadline: 'Shoot',
+  editDeadline: 'Edit',
+  designDeadline: 'Design',
+};
+
+/**
+ * Read an uploaded plan file into grid cell maps.
+ * - New layout (18 Excel columns + optional Content/Design Owner): owners by exact name.
+ * - Older 23-column layout: mapped onto the same cells; owner emails are kept in
+ *   `<field>Email` so the caller can resolve them, and step deadlines go to `deadlines`.
+ */
+export async function parseBufferToGridInput(buffer, mimetype = '') {
+  const sheet = await loadFirstWorksheet(buffer, mimetype);
+  if (!sheet) return { layout: 'empty', rows: [] };
+  const headers = [];
+  sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, col) => {
+    headers[col] = cellText(cell.value).trim();
+  });
+
+  if (isNewPlanLayout(headers.filter(Boolean))) {
+    const keyByCol = headers.map((h) => (h ? planGridColumnForHeader(h) : null));
+    const rows = [];
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const cells = {};
+      row.eachCell({ includeEmpty: false }, (cell, col) => {
+        const key = keyByCol[col];
+        const text = cellText(cell.value).trim();
+        if (key && text) cells[key] = text;
+      });
+      if (Object.keys(cells).length) rows.push({ rowIndex: rowNumber, cells });
+    });
+    return { layout: 'grid', rows };
+  }
+
+  const legacy = await parseBufferToRows(buffer, mimetype);
+  const rows = legacy.map((r) => {
+    const cells = {};
+    const set = (k, v) => {
+      const t = cellText(v).trim();
+      if (t) cells[k] = t;
+    };
+    set('postingDate', r.postingDate);
+    set('topic', r.topic);
+    set('type', r.contentType);
+    set('publishTime', r.postingTime);
+    set('programOrEvent', r.programOrEvent);
+    set('brief', r.brief);
+    set('referenceLink', r.referenceLink);
+    set('priority', r.priority);
+    set('sourceVideoLink', r.sourceVideoLink);
+    set('contentLink', r.contentLink);
+    set('remarks', r.remarks);
+    if (r.needsScript !== undefined && cellText(r.needsScript).trim()) cells.needsScript = cellText(r.needsScript).trim();
+    if (r.needsShoot !== undefined && cellText(r.needsShoot).trim()) cells.needsShoot = cellText(r.needsShoot).trim();
+    for (const f of LEGACY_OWNER_FIELDS) {
+      const v = cellText(r[f]).trim();
+      if (!v) continue;
+      if (v.includes('@')) cells[`${f}Email`] = v;
+      else cells[f] = v;
+    }
+    const deadlines = {};
+    for (const [f, stage] of Object.entries(LEGACY_DEADLINE_STAGE)) {
+      const v = cellText(r[f]).trim();
+      if (v) deadlines[stage] = v;
+    }
+    if (Object.keys(deadlines).length) cells.deadlines = deadlines;
+    return { rowIndex: r.rowIndex, cells };
+  });
+  return { layout: 'legacy', rows };
+}
+
+/**
  * Parses buffer (Excel or CSV) into raw row objects
  */
 export async function parseBufferToRows(buffer, mimetype = '') {
   const workbook = new ExcelJS.Workbook();
-  const isCsv =
-    mimetype.includes('csv') ||
-    mimetype.includes('text') ||
-    buffer.toString('utf8', 0, 100).includes(',') ||
-    buffer.toString('utf8', 0, 100).includes('Posting Date');
+  const isCsv = looksLikeCsv(buffer, mimetype);
 
   if (isCsv) {
     const stream = new (await import('stream')).Readable();
@@ -235,6 +411,15 @@ export async function validateImportRows(rawRows) {
   for (const m of activeMembers) {
     if (m.email) membersByEmail.set(m.email.toLowerCase().trim(), m);
     membersById.set(m._id.toString(), m);
+  }
+
+  /** Owner cell: an email (older files) or an exact name (new files, same rules as the grid). */
+  function findOwner(raw) {
+    const s = String(raw || '').trim();
+    if (s.includes('@')) return { member: membersByEmail.get(s.toLowerCase()) || null };
+    const r = matchGridOwner(s, activeMembers.map((m) => ({ _id: m._id.toString(), name: m.name })));
+    if (!r.ok) return { member: null, error: r.error };
+    return { member: r.empty ? null : membersById.get(r.id) };
   }
 
   // Pre-calculate workload per member
@@ -374,11 +559,14 @@ export async function validateImportRows(rawRows) {
         let dueDate = null;
         let dueDateSource = 'auto';
 
-        // Check owner
+        // Check owner (email in older files, exact name in new ones)
         if (input.owner && String(input.owner).trim()) {
           const email = String(input.owner).toLowerCase().trim();
-          const member = membersByEmail.get(email);
-          if (member) {
+          const found = findOwner(input.owner);
+          const member = found.member;
+          if (found.error) {
+            errors.push(`${stageKey} owner: ${found.error}`);
+          } else if (member) {
             if (stageKey !== 'Post') {
               const prefs = member.workPreferences || [];
               if (!prefs.includes(stageKey)) {
@@ -460,9 +648,11 @@ export async function validateImportRows(rawRows) {
       // Check posting owner for postable types
       if (isPostableWorkType(normalizedType)) {
         if (raw.postingOwner && String(raw.postingOwner).trim()) {
-          const email = String(raw.postingOwner).toLowerCase().trim();
-          const member = membersByEmail.get(email);
-          if (member) {
+          const found = findOwner(raw.postingOwner);
+          const member = found.member;
+          if (found.error) {
+            errors.push(`Posting owner: ${found.error}`);
+          } else if (member) {
             postingOwnerId = member._id.toString();
             postingOwnerName = member.name;
           } else {

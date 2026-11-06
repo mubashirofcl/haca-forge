@@ -20,6 +20,9 @@ import {
   normalizeWorkType,
   isPostableWorkType,
   WORK_TYPE_DEPARTMENT_MAP,
+  isMonthKey,
+  monthPeriod,
+  planMonthKey,
 } from '@mmp/shared';
 import { recommendAssignee } from '../assignment/service.js';
 import { validatePlanAndRows } from './validation.js';
@@ -88,6 +91,40 @@ export function computePlanRowStats(rows = [], plan = {}) {
       approved,
     },
   };
+}
+
+/**
+ * Resolve the stored period for a plan.
+ * - monthly + `month` ('YYYY-MM'): the whole month. The grid and the fixed wizard
+ *   send this, so a stale period end can no longer produce "1/1/2027 - 12/31/2026".
+ * - otherwise: dates as given (custom-range monthly plans stay allowed), but the end
+ *   may not be before the start.
+ */
+export function resolvePlanPeriod({ kind = 'monthly', month, periodStart, periodEnd }) {
+  if (kind === 'monthly' && month !== undefined && month !== null && month !== '') {
+    if (!isMonthKey(month)) {
+      const error = new Error('Month must be YYYY-MM.');
+      error.statusCode = 400;
+      error.code = 'INVALID_PERIOD';
+      throw error;
+    }
+    return { ...monthPeriod(month), month };
+  }
+  const start = new Date(periodStart);
+  const end = new Date(periodEnd);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    const error = new Error('Period start and end must be valid dates.');
+    error.statusCode = 400;
+    error.code = 'INVALID_PERIOD';
+    throw error;
+  }
+  if (end < start) {
+    const error = new Error('Period end cannot be before period start.');
+    error.statusCode = 400;
+    error.code = 'INVALID_PERIOD';
+    throw error;
+  }
+  return { periodStart: start, periodEnd: end, month: kind === 'monthly' ? planMonthKey(start) : null };
 }
 
 /**
@@ -306,26 +343,32 @@ export async function createPlan(data, user) {
   }
 
   const calendar = data.calendar || 'sm';
-  const startDate = new Date(data.periodStart);
+  const period = resolvePlanPeriod({
+    kind: data.kind || 'monthly',
+    month: data.month,
+    periodStart: data.periodStart,
+    periodEnd: data.periodEnd,
+  });
+  const startDate = period.periodStart;
   const defaultTitle = getDefaultPlanTitle(startDate, calendar);
   const title = (data.title && data.title.trim()) || defaultTitle;
 
   const { warnings } = await checkPlanPeriodConstraints({
     kind: data.kind || 'monthly',
     calendar,
-    periodStart: data.periodStart,
-    periodEnd: data.periodEnd,
+    periodStart: period.periodStart,
+    periodEnd: period.periodEnd,
   });
 
-  const code = data.code || (await generatePlanCode(new Date(data.periodStart)));
+  const code = data.code || (await generatePlanCode(period.periodStart));
 
   const plan = await CalendarPlan.create({
     code,
     title,
     calendar,
     kind: data.kind || 'monthly',
-    periodStart: new Date(data.periodStart),
-    periodEnd: new Date(data.periodEnd),
+    periodStart: period.periodStart,
+    periodEnd: period.periodEnd,
     createdById: user._id || user.userId,
     comment: data.comment || '',
     rejectionConcern: data.rejectionConcern || '',
@@ -413,13 +456,22 @@ export async function updatePlan(id, updates, user) {
     await WorkItem.updateMany({ calendarPlanId: id }, { $set: { calendar: updates.calendar } });
   }
 
-  if (updates.periodStart || updates.periodEnd || updates.kind) {
-    const newStart = allowedUpdates.periodStart || planObj.periodStart;
-    const newEnd = allowedUpdates.periodEnd || planObj.periodEnd;
+  if (updates.periodStart || updates.periodEnd || updates.kind || updates.month) {
     const newKind = allowedUpdates.kind || planObj.kind;
+    const period = resolvePlanPeriod({
+      kind: newKind,
+      month: updates.month,
+      periodStart: allowedUpdates.periodStart || planObj.periodStart,
+      periodEnd: allowedUpdates.periodEnd || planObj.periodEnd,
+    });
+    allowedUpdates.periodStart = period.periodStart;
+    allowedUpdates.periodEnd = period.periodEnd;
+    const newStart = period.periodStart;
+    const newEnd = period.periodEnd;
     const { warnings } = await checkPlanPeriodConstraints({
       planId: id,
       kind: newKind,
+      calendar: allowedUpdates.calendar || planObj.calendar || 'sm',
       periodStart: newStart,
       periodEnd: newEnd,
     });
@@ -1020,8 +1072,10 @@ export async function generateStagesForApprovedRow(piece, user) {
  */
 export async function reviewPlan(id, reviewData, user) {
   const userRole = normalizeRole(user.role);
-  if (userRole !== 'creative_head' && userRole !== 'admin') {
-    const error = new Error('Review stages and calendar plans can be approved only by Creative Head and Admin.');
+  // PG-3: plan row review (approve, request changes, reject) is the Creative Head's alone.
+  // Admin keeps every other permission; step reviews in transition.service are unchanged.
+  if (userRole !== 'creative_head') {
+    const error = new Error('Plan rows can be reviewed only by the Creative Head.');
     error.statusCode = 403;
     error.code = 'FORBIDDEN_APPROVAL';
     throw error;
