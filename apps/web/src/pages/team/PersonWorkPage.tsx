@@ -21,7 +21,7 @@ export const PersonWorkPage: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-purple-600 transition-colors mb-4 group cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-ui-ink transition-colors mb-4 group cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
           <span>Back</span>

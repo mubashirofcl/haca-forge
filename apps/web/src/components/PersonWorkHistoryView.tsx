@@ -76,7 +76,7 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-12 space-y-3">
-        <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-3 border-ui-ink border-t-transparent rounded-full animate-spin" />
         <p className="text-xs font-semibold text-slate-500">Loading individual work view...</p>
       </div>
     );
@@ -103,12 +103,12 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
     return (
       <div
         key={item._id}
-        className="p-4 rounded-2xl bg-white border border-slate-200/90 hover:border-purple-300 shadow-2xs hover:shadow-xs transition-all space-y-3"
+        className="p-4 rounded-2xl bg-white border border-slate-200/90 hover:border-ui-ink shadow-2xs hover:shadow-xs transition-all space-y-3"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-0.5 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100">
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-ui-card text-ui-ink border border-ui-line">
                 {item.stageKey || item.workType || 'Stage'}
               </span>
               <span
@@ -124,7 +124,7 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
             </div>
             <h4
               onClick={() => navigate(`/work/${item._id}`)}
-              className="text-xs font-bold text-slate-900 hover:text-purple-600 cursor-pointer transition-colors line-clamp-1"
+              className="text-xs font-bold text-slate-900 hover:text-ui-ink cursor-pointer transition-colors line-clamp-1"
               title={item.title}
             >
               {item.title}
@@ -139,7 +139,7 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
           <button
             type="button"
             onClick={() => setSelectedTimelineItem(item)}
-            className="p-1.5 rounded-xl bg-slate-50 hover:bg-purple-50 text-slate-500 hover:text-purple-600 border border-slate-200 transition-colors shrink-0"
+            className="p-1.5 rounded-xl bg-slate-50 hover:bg-ui-card text-slate-500 hover:text-ui-ink border border-slate-200 transition-colors shrink-0"
             title="View Step Timeline"
           >
             <History className="w-3.5 h-3.5" />
@@ -212,7 +212,7 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
           <button
             type="button"
             onClick={() => navigate(`/team/members/${person._id}/work`)}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+            className="px-3.5 py-2 rounded-xl text-xs font-bold text-ui-ink bg-ui-card hover:bg-ui-card-hover transition-colors flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
           >
             <span>Full Work View</span>
             <ExternalLink className="w-3.5 h-3.5" />
@@ -235,8 +235,8 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
         </div>
 
         <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
-          <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Avg Approval Wait</span>
-          <span className="text-xl font-extrabold text-indigo-700 mt-1 block">{summary.averageApprovalWaitFormatted}</span>
+          <span className="text-[10px] font-bold text-ui-ink uppercase tracking-wider block">Avg Approval Wait</span>
+          <span className="text-xl font-extrabold text-ui-ink mt-1 block">{summary.averageApprovalWaitFormatted}</span>
           <span className="text-[10px] text-slate-500">Decision turnaround</span>
         </div>
 
@@ -259,7 +259,7 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
                 key={stepKey}
                 className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-2"
               >
-                <span className="font-bold text-purple-700">{stepKey}:</span>
+                <span className="font-bold text-ui-ink">{stepKey}:</span>
                 <span>{item.formatted}</span>
                 <span className="text-[10px] text-slate-400">({item.count} items)</span>
               </div>
@@ -276,12 +276,12 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
             onClick={() => setActiveTab('now')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'now'
-                ? 'bg-purple-600 text-white shadow-xs'
+                ? 'bg-ui-ink text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             <span>Now (In Progress / Feedback / Blocked)</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'now' ? 'bg-purple-800 text-white' : 'bg-slate-200 text-slate-700'}`}>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'now' ? 'bg-white text-ui-ink' : 'bg-slate-200 text-slate-700'}`}>
               {now.length}
             </span>
           </button>
@@ -291,12 +291,12 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
             onClick={() => setActiveTab('next')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'next'
-                ? 'bg-purple-600 text-white shadow-xs'
+                ? 'bg-ui-ink text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             <span>Next (Queued / Locked)</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'next' ? 'bg-purple-800 text-white' : 'bg-slate-200 text-slate-700'}`}>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'next' ? 'bg-white text-ui-ink' : 'bg-slate-200 text-slate-700'}`}>
               {next.length}
             </span>
           </button>
@@ -306,12 +306,12 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
             onClick={() => setActiveTab('done')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'done'
-                ? 'bg-purple-600 text-white shadow-xs'
+                ? 'bg-ui-ink text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             <span>Done (Last 30 Completed)</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'done' ? 'bg-purple-800 text-white' : 'bg-slate-200 text-slate-700'}`}>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'done' ? 'bg-white text-ui-ink' : 'bg-slate-200 text-slate-700'}`}>
               {done.length}
             </span>
           </button>
@@ -361,7 +361,7 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-ui-ink block">
                   Step Timing & Rounds
                 </span>
                 <h3 className="text-sm font-extrabold text-slate-900">{selectedTimelineItem.title}</h3>
@@ -429,7 +429,7 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
                 selectedTimelineItem.rounds.map((r: any, idx: number) => (
                   <div key={idx} className="p-3 rounded-xl border border-slate-200 bg-white text-xs space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-purple-700">Round {r.roundNumber || idx + 1}</span>
+                      <span className="font-bold text-ui-ink">Round {r.roundNumber || idx + 1}</span>
                       <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 uppercase font-semibold">
                         {r.decision || 'in progress'}
                       </span>

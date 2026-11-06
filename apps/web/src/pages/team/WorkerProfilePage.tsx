@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -22,6 +23,7 @@ import {
 import {
   ResponsiveContainer,
   BarChart,
+  LabelList,
   Bar,
   XAxis,
   YAxis,
@@ -29,10 +31,11 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { apiFetch } from '../../lib/api';
-import { statusClass, statusTone, roleClass } from '../../lib/statusTone';
+import { statusClass, statusTone, roleClass, bandClass } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '../../components/Avatar';
 import { AvatarCropModal } from '../../components/AvatarCropModal';
+import { AdminAccountActions } from './AdminAccountActions';
 import {
   ROLE_LABELS,
   JOB_ROLES,
@@ -80,7 +83,17 @@ export const WorkerProfilePage: React.FC = () => {
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  // Modal keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
+  const reassignDialogRef = useRef<HTMLDivElement>(null);
+  const editOpsDialogRef = useRef<HTMLDivElement>(null);
+  const editProfileDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(reassignDialogRef, showReassignModal, () => setShowReassignModal(false));
+  useDialogFocus(editOpsDialogRef, showEditModal, () => setShowEditModal(false));
+  useDialogFocus(editProfileDialogRef, showEditProfileModal, () => setShowEditProfileModal(false));
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  // Result message from the admin account actions (change role, reset password, force logout).
+  const [accountNotice, setAccountNotice] = useState<string | null>(null);
+  useEffect(() => setAccountNotice(null), [targetId]);
   const [expandedWorkItemId, setExpandedWorkItemId] = useState<string | null>(null);
 
   // Edit Profile Form State
@@ -209,24 +222,24 @@ export const WorkerProfilePage: React.FC = () => {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-3">
-        <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs font-semibold text-slate-500">Loading worker profile...</p>
+        <div className="w-8 h-8 border-3 border-ui-line border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-semibold text-ui-muted">Loading worker profile...</p>
       </div>
     );
   }
 
   if (error || !profile) {
     return (
-      <div className="max-w-xl mx-auto my-16 p-8 text-center space-y-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
+      <div className="glass-card max-w-xl mx-auto my-16 p-8 text-center space-y-4">
         <AlertTriangle className="w-10 h-10 text-rose-500 mx-auto" />
         <h2 className="text-base font-bold text-slate-900">Profile Not Found</h2>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-ui-muted">
           The requested team member profile is not accessible or does not exist.
         </p>
         <button
           type="button"
           onClick={() => navigate('/team')}
-          className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs"
+          className="ui-btn ui-btn-primary h-11"
         >
           Return to Team Directory
         </button>
@@ -552,7 +565,7 @@ export const WorkerProfilePage: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate('/team')}
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
+          className="inline-flex items-center gap-1.5 min-h-[44px] -my-3 text-[13px] font-semibold text-ui-muted hover:text-ui-ink transition-colors rounded-full"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to Team Directory
@@ -561,8 +574,8 @@ export const WorkerProfilePage: React.FC = () => {
 
       {/* Transparency Notice for Worker Self-View */}
       {isSelf && isWorkerRole && (
-        <div className="p-3.5 rounded-2xl bg-indigo-50/80 border border-indigo-200 text-xs text-indigo-900 flex items-start gap-2.5 shadow-2xs">
-          <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+        <div className="p-4 rounded-ui-card bg-white/60 text-[13px] text-ui-text flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-ui-ink shrink-0 mt-0.5" />
           <p className="font-medium">
             Your work history, timings and ratings are visible to the Admin, Creative Head, SM
             Manager and Executive.
@@ -571,37 +584,36 @@ export const WorkerProfilePage: React.FC = () => {
       )}
 
       {/* Profile Header Glass Card */}
-      <div className="p-6 rounded-3xl bg-white/80 backdrop-blur-md border border-slate-200/90 shadow-2xs space-y-6">
+      <div className="glass-panel rounded-ui-panel p-5 sm:p-6 space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex items-start sm:items-center gap-4">
-            <div
-              className={`relative group ${isSelf || isAdmin ? 'cursor-pointer' : ''}`}
-              onClick={() => (isSelf || isAdmin) && setIsCropModalOpen(true)}
-              title={isSelf || isAdmin ? 'Click to change profile photo' : undefined}
-            >
-              <Avatar
-                url={profile.avatarUrl}
-                name={profile.name}
-                size="lg"
-                className="border-2 border-white shadow-xs"
-              />
-              {(isSelf || isAdmin) && (
-                <div className="absolute inset-0 rounded-full bg-slate-900/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-2xs">
-                  <Camera className="w-5 h-5 text-white" />
-                  <span className="text-[9px] font-bold text-white mt-0.5">Edit</span>
-                </div>
-              )}
-            </div>
+            {isSelf || isAdmin ? (
+              <button
+                type="button"
+                onClick={() => setIsCropModalOpen(true)}
+                title="Click to change profile photo"
+                aria-label="Change profile photo"
+                className="relative group shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink focus-visible:ring-offset-2"
+              >
+                <Avatar url={profile.avatarUrl} name={profile.name} size="lg" />
+                <span className="absolute inset-0 rounded-full ui-scrim flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
+                  <Camera className="w-5 h-5 text-white" aria-hidden="true" />
+                  <span className="text-[10px] font-semibold text-white mt-0.5">Edit</span>
+                </span>
+              </button>
+            ) : (
+              <div className="relative shrink-0">
+                <Avatar url={profile.avatarUrl} name={profile.name} size="lg" />
+              </div>
+            )}
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                <h1 className="text-[24px] sm:text-[28px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink">
                   {displayName}
                 </h1>
                 <span
-                  className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                    profile.status === 'active'
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      : 'bg-slate-100 text-slate-500 border border-slate-200'
+                  className={`status-chip text-[11px] font-semibold px-2 py-0.5 ${
+                    profile.status === 'active' ? 'status-approved' : 'status-not-started'
                   }`}
                 >
                   {profile.status}
@@ -613,18 +625,18 @@ export const WorkerProfilePage: React.FC = () => {
                   {roleLabel}
                 </span>
                 {profile.jobRole && (
-                  <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                  <span className="font-semibold text-ui-text bg-white/70 px-2 py-0.5 rounded-full">
                     {profile.jobRole}
                   </span>
                 )}
                 {profile.department?.name && (
-                  <span className="font-semibold text-slate-500">
+                  <span className="font-semibold text-ui-muted">
                     {profile.department.name}
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center gap-3 text-[11px] text-slate-400 font-medium pt-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ui-muted font-medium pt-1">
                 <span>
                   Member since{' '}
                   {profile.createdAt
@@ -642,7 +654,7 @@ export const WorkerProfilePage: React.FC = () => {
                     : 'Never'}
                 </span>
                 <span>•</span>
-                <span className="font-bold text-slate-700">
+                <span className="font-semibold text-ui-text">
                   Capacity: {profile.weeklyCapacityHours || 40}h / week
                 </span>
               </div>
@@ -656,7 +668,7 @@ export const WorkerProfilePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={openEditProfileModal}
-                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-200 transition-all min-h-[44px] flex items-center gap-1.5"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                   <span>Edit Profile</span>
@@ -667,7 +679,7 @@ export const WorkerProfilePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowReassignModal(true)}
-                  className="px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition-all min-h-[44px]"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Reassign Steps
                 </button>
@@ -677,7 +689,7 @@ export const WorkerProfilePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowEditModal(true)}
-                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-all min-h-[44px]"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Edit Operational Details
                 </button>
@@ -687,39 +699,59 @@ export const WorkerProfilePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleToggleStatus}
-                  className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-rose-600 font-bold text-xs transition-all min-h-[44px]"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   {profile.status === 'active' ? 'Suspend' : 'Reactivate'}
                 </button>
+              )}
+
+              {/* Admin-only account controls; never shown on the admin's own profile. */}
+              {isAdmin && !isSelf && (
+                <AdminAccountActions
+                  person={{ _id: targetId as string, name: profile.name, role: profile.role }}
+                  onDone={(message, action) => {
+                    setAccountNotice(message);
+                    if (action === 'role') fetchBaseProfile();
+                  }}
+                />
               )}
             </div>
           )}
         </div>
 
+        {/* Always mounted so screen readers announce the result; takes no space when empty. */}
+        <div role="status" aria-live="polite" className="!mt-0">
+          {accountNotice && (
+            <p className="mt-6 status-tint status-approved rounded-ui-card px-4 py-3 text-[13px] font-medium">
+              {accountNotice}
+            </p>
+          )}
+        </div>
+
           {/* Contact Details (Hidden for Executive) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-slate-100 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-ui-line text-xs">
             {profile.email ? (
-              <div className="flex items-center gap-2 text-slate-600 truncate">
-                <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <div className="flex items-center gap-2 text-ui-text truncate">
+                <Mail className="w-3.5 h-3.5 text-ui-muted shrink-0" />
                 <span className="truncate">{profile.email}</span>
                 <span
-                  className="text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0"
+                  className="text-[11px] font-semibold text-ui-text bg-white/70 px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0"
                   title="Official registered email (Admin managed)"
                 >
-                  <Lock className="w-2.5 h-2.5 text-slate-400" /> Official
+                  <Lock className="w-2.5 h-2.5 text-ui-muted" /> Official
                 </span>
               </div>
             ) : isExecutive ? (
-              <span className="text-slate-400 italic">Contact details restricted</span>
+              <span className="text-ui-muted italic">Contact details restricted</span>
             ) : null}
 
             {profile.phone && (
-              <div className="flex items-center gap-2 text-slate-600 truncate">
-                <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <div className="flex items-center gap-2 text-ui-text truncate">
+                <Phone className="w-3.5 h-3.5 text-ui-muted shrink-0" />
                 <span>{profile.phone}</span>
                 {(profile.phoneVerified || profile.phoneVerifiedAt) && (
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
-                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" /> Verified
+                  <span className="status-chip status-approved text-[11px] font-semibold px-1.5 py-0.5 shrink-0">
+                    <CheckCircle2 className="w-3 h-3" /> Verified
                   </span>
                 )}
               </div>
@@ -730,7 +762,7 @@ export const WorkerProfilePage: React.FC = () => {
                 href={`https://wa.me/${profile.whatsappNumber.replace(/[^0-9]/g, '')}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-emerald-600 font-bold hover:underline"
+                className="inline-flex items-center gap-1.5 min-h-[44px] -my-3 text-ui-ink font-semibold hover:underline underline-offset-4"
               >
                 <MessageCircle className="w-3.5 h-3.5 shrink-0" />
                 WhatsApp Message
@@ -739,33 +771,33 @@ export const WorkerProfilePage: React.FC = () => {
           </div>
 
         {/* Skills and Work Preferences Chips */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
-          <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-ui-line text-xs">
+          <span className="text-ui-muted font-medium text-xs">
             Work Preferences:
           </span>
           {profile.workPreferences?.length > 0 ? (
             profile.workPreferences.map((pref: string) => (
               <span
                 key={pref}
-                className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-bold text-[11px] border border-purple-100"
+                className="px-2 py-0.5 rounded-full bg-white/70 text-ui-text font-semibold text-[11px]"
               >
                 {pref}
               </span>
             ))
           ) : (
-            <span className="text-slate-400 italic">None specified</span>
+            <span className="text-ui-muted italic">None specified</span>
           )}
 
           {profile.skills?.length > 0 && (
             <>
-              <span className="text-slate-300 ml-2">|</span>
-              <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider ml-2">
+              <span className="text-ui-muted ml-2" aria-hidden="true">|</span>
+              <span className="text-ui-muted font-medium text-xs ml-2">
                 Skills:
               </span>
               {profile.skills.map((skill: string) => (
                 <span
                   key={skill}
-                  className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium text-[11px]"
+                  className="px-2 py-0.5 rounded-full bg-white/70 text-ui-text font-medium text-[11px]"
                 >
                   {skill}
                 </span>
@@ -776,120 +808,114 @@ export const WorkerProfilePage: React.FC = () => {
       </div>
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="glass-card overflow-hidden">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-ui-line">
         {/* Load & Band */}
-        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
-          <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">
+        <div className="p-4 sm:p-5 bg-ui-card space-y-1">
+          <span className="text-[13px] font-medium text-ui-muted block">
             Weekly Load
           </span>
           <div className="flex items-center gap-1.5">
-            <span className="text-lg font-black text-slate-900">
+            <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
               {profile.kpis?.loadPct || 0}%
             </span>
-            <span
-              className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded ${
-                profile.kpis?.capacityBand === 'Overloaded'
-                  ? 'bg-rose-50 text-rose-700'
-                  : profile.kpis?.capacityBand === 'High'
-                  ? 'bg-amber-50 text-amber-700'
-                  : 'bg-emerald-50 text-emerald-700'
-              }`}
-            >
+            <span className={`band-chip ${bandClass(profile.kpis?.capacityBand)} text-[11px] font-semibold px-1.5 py-0.5`}>
               {profile.kpis?.capacityBand || 'Healthy'}
             </span>
           </div>
         </div>
 
         {/* In Progress */}
-        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
-          <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">
+        <div className="p-4 sm:p-5 bg-ui-card space-y-1">
+          <span className="text-[13px] font-medium text-ui-muted block">
             In Progress
           </span>
-          <span className="text-lg font-black text-blue-600">
+          <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
             {profile.kpis?.inProgressCount || 0}
           </span>
         </div>
 
         {/* Waiting for Approval */}
-        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
-          <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">
+        <div className="p-4 sm:p-5 bg-ui-card space-y-1">
+          <span className="text-[13px] font-medium text-ui-muted block">
             Waiting Approval
           </span>
-          <span className="text-lg font-black text-amber-600">
+          <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
             {profile.kpis?.waitingApprovalCount || 0}
           </span>
         </div>
 
         {/* Late */}
-        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
-          <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">
+        <div className="p-4 sm:p-5 bg-ui-card space-y-1">
+          <span className="text-[13px] font-medium text-ui-muted block">
             Late Deliverables
           </span>
-          <span className="text-lg font-black text-rose-600">
+          <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
             {profile.kpis?.lateCount || 0}
           </span>
         </div>
 
         {/* On-Time Rate */}
-        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
-          <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">
+        <div className="p-4 sm:p-5 bg-ui-card space-y-1">
+          <span className="text-[13px] font-medium text-ui-muted block">
             On-Time Rate
           </span>
-          <span className="text-lg font-black text-emerald-600">
+          <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
             {profile.kpis?.onTimeRate || 100}%
           </span>
         </div>
 
         {/* Average Rating (Shown only if >= 3 ratings) */}
-        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
-          <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">
+        <div className="p-4 sm:p-5 bg-ui-card space-y-1">
+          <span className="text-[13px] font-medium text-ui-muted block">
             Avg Rating
           </span>
           {profile.kpis?.averageRating !== null && profile.kpis?.averageRating !== undefined ? (
-            <div className="flex items-center gap-1 text-amber-500">
-              <Star className="w-4 h-4 fill-current" />
-              <span className="text-lg font-black text-slate-900">
+            <div className="flex items-center gap-1 text-ui-ink">
+              <Star className="w-4 h-4 fill-current" aria-hidden="true" />
+              <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
                 {profile.kpis.averageRating}
               </span>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-ui-muted">
                 ({profile.kpis.ratingCount})
               </span>
             </div>
           ) : (
-            <span className="text-xs text-slate-400 italic block mt-1">
+            <span className="text-xs text-ui-muted italic block mt-1">
               &lt; 3 ratings
             </span>
           )}
         </div>
       </div>
+      </div>
 
       {/* Tabs Navigation and Global Date Range Control */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-2">
-        <div className="flex items-center gap-2 overflow-x-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="max-w-full overflow-x-auto no-scrollbar">
+        <div className="ui-tabs">
           {availableTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap min-h-[44px] ${
-                activeTab === tab.id
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-white/80 hover:bg-white text-slate-600 hover:text-slate-900 border border-slate-200/80'
-              }`}
+              aria-pressed={activeTab === tab.id}
+              className={`ui-tab ${activeTab === tab.id ? 'is-active' : ''}`}
             >
               {tab.label}
             </button>
           ))}
         </div>
+        </div>
 
         {/* Global Date Range selector (for Work, Performance, Ratings, Activity) */}
         {activeTab !== 'overview' && activeTab !== 'changes' && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500 font-semibold">Range:</span>
+            <label htmlFor="profile-range" className="text-[13px] text-ui-muted font-medium">Range:</label>
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none min-h-[38px]"
+              id="profile-range"
+              className="ui-select"
             >
               <option value="7d">Last 7 Days</option>
               <option value="30d">Last 30 Days</option>
@@ -906,21 +932,21 @@ export const WorkerProfilePage: React.FC = () => {
         <div className="space-y-6">
           {/* Operational summary for leadership roles */}
           {overviewData?.operationalSummary && (
-            <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200 space-y-2">
-              <h3 className="text-xs font-black uppercase text-indigo-900 tracking-wider">
+            <div className="p-4 rounded-2xl bg-white/70 border border-ui-line space-y-2">
+              <h3 className="text-xs font-black text-ui-ink">
                 Leadership Operational Summary
               </h3>
               {overviewData.operationalSummary.role === 'creative_head' && (
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div>
-                    <span className="text-indigo-600 font-semibold block">Pending Reviews Queue:</span>
-                    <span className="text-lg font-black text-slate-900">
+                    <span className="text-ui-ink font-semibold block">Pending Reviews Queue:</span>
+                    <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
                       {overviewData.operationalSummary.pendingReviewsCount}
                     </span>
                   </div>
                   <div>
-                    <span className="text-indigo-600 font-semibold block">Approved Past 30 Days:</span>
-                    <span className="text-lg font-black text-slate-900">
+                    <span className="text-ui-ink font-semibold block">Approved Past 30 Days:</span>
+                    <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
                       {overviewData.operationalSummary.approvedPast30Days}
                     </span>
                   </div>
@@ -929,14 +955,14 @@ export const WorkerProfilePage: React.FC = () => {
               {overviewData.operationalSummary.role === 'sm_manager' && (
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div>
-                    <span className="text-indigo-600 font-semibold block">Active Calendar Plans:</span>
-                    <span className="text-lg font-black text-slate-900">
+                    <span className="text-ui-ink font-semibold block">Active Calendar Plans:</span>
+                    <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
                       {overviewData.operationalSummary.activePlansCount}
                     </span>
                   </div>
                   <div>
-                    <span className="text-indigo-600 font-semibold block">Upcoming Postings:</span>
-                    <span className="text-lg font-black text-slate-900">
+                    <span className="text-ui-ink font-semibold block">Upcoming Postings:</span>
+                    <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
                       {overviewData.operationalSummary.upcomingPostingsCount}
                     </span>
                   </div>
@@ -947,9 +973,9 @@ export const WorkerProfilePage: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Right Now */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
+            <div className="glass-panel rounded-ui-panel p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+                <h3 className="text-xs font-black text-ui-muted">
                   Right Now ({overviewData?.rightNow?.length || 0})
                 </h3>
               </div>
@@ -958,10 +984,10 @@ export const WorkerProfilePage: React.FC = () => {
                   overviewData.rightNow.map((item: any) => (
                     <div
                       key={item._id}
-                      className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5"
+                      className="p-3 rounded-xl bg-white/60 space-y-1.5"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-white/70 text-ui-ink">
                           {item.stageKey}
                         </span>
                         <span className={`status-chip ${statusClass(statusTone(item.status))} text-[10px] font-bold px-2 py-0.5`}>
@@ -969,7 +995,7 @@ export const WorkerProfilePage: React.FC = () => {
                         </span>
                       </div>
                       <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{item.title}</h4>
-                      <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <div className="flex items-center justify-between text-[11px] text-ui-muted">
                         <span>Due: {item.deadline ? new Date(item.deadline).toLocaleDateString() : '—'}</span>
                         <span className="font-semibold text-slate-700">
                           {item.status === 'In Progress' && item.measures?.workTimeFormatted !== '—'
@@ -982,29 +1008,31 @@ export const WorkerProfilePage: React.FC = () => {
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-slate-400 italic">No steps currently active</p>
+                  <p className="text-xs text-ui-muted italic">No steps currently active</p>
                 )}
               </div>
             </div>
 
             {/* 8-Week Load History Trend Chart */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+            <div className="glass-panel rounded-ui-panel p-5 space-y-4">
+              <h3 className="text-xs font-black text-ui-muted">
                 8-Week Load History Trend
               </h3>
               <div className="h-56 w-full">
                 {overviewData?.loadTrend ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={overviewData.loadTrend}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="weekLabel" tick={{ fontSize: 10 }} />
-                      <YAxis unit="%" tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Bar dataKey="loadPct" fill="#4f46e5" radius={[4, 4, 0, 0]} name="Load %" />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--ui-line)" />
+                      <XAxis dataKey="weekLabel" tick={{ fontSize: 11, fill: 'var(--ui-muted)' }} axisLine={false} tickLine={false} />
+                      <YAxis unit="%" tick={{ fontSize: 11, fill: 'var(--ui-muted)' }} axisLine={false} tickLine={false} />
+                      <Tooltip cursor={{ fill: 'rgb(var(--ui-ink-rgb) / 0.04)' }} contentStyle={{ borderRadius: 16, border: '1px solid var(--ui-line)', fontSize: 12 }} />
+                      <Bar dataKey="loadPct" fill="var(--ui-blue)" radius={[6, 6, 0, 0]} name="Load %">
+                        <LabelList dataKey="loadPct" position="top" formatter={(v: any) => `${v}%`} style={{ fontSize: 11, fill: 'var(--ui-text)' }} />
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                  <div className="h-full flex items-center justify-center text-xs text-ui-muted">
                     Loading trend...
                   </div>
                 )}
@@ -1013,25 +1041,25 @@ export const WorkerProfilePage: React.FC = () => {
           </div>
 
           {/* Next Up Queue */}
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+          <div className="glass-panel rounded-ui-panel p-5 space-y-3">
+            <h3 className="text-xs font-black text-ui-muted">
               Next Up ({overviewData?.nextUp?.length || 0})
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {overviewData?.nextUp?.length > 0 ? (
                 overviewData.nextUp.map((item: any) => (
-                  <div key={item._id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                  <div key={item._id} className="p-3 rounded-xl bg-white/60 space-y-1">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-200 text-slate-700">
                       {item.stageKey}
                     </span>
                     <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{item.title}</h4>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-ui-muted">
                       Due: {item.deadline ? new Date(item.deadline).toLocaleDateString() : '—'}
                     </p>
                   </div>
                 ))
               ) : (
-                <p className="text-xs text-slate-400 italic">No upcoming queued deliverables</p>
+                <p className="text-xs text-ui-muted italic">No upcoming queued deliverables</p>
               )}
             </div>
           </div>
@@ -1041,8 +1069,8 @@ export const WorkerProfilePage: React.FC = () => {
       {/* TAB 2: WORK */}
       {activeTab === 'work' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-xs font-black text-ui-muted">
               Assigned Deliverables ({workData?.pagination?.total || 0})
             </h3>
             <div className="space-y-3">
@@ -1051,22 +1079,22 @@ export const WorkerProfilePage: React.FC = () => {
                 return (
                   <div
                     key={item._id}
-                    className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3"
+                    className="p-4 rounded-xl bg-white/60 space-y-3"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-white/70 text-ui-ink">
                             {item.stageKey}
                           </span>
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
                             {item.status}
                           </span>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-purple-50 text-purple-700">
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white/70 text-ui-ink">
                             Calendar: {item.calendar}
                           </span>
                           {item.measures?.isLate && (
-                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-rose-600 text-white uppercase">
+                            <span className="status-chip status-blocked text-[11px] font-semibold px-1.5 py-0.5">
                               Late by {item.measures.lateByFormatted}
                             </span>
                           )}
@@ -1085,34 +1113,34 @@ export const WorkerProfilePage: React.FC = () => {
                     </div>
 
                     {/* Compact Metrics Strip */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs pt-2 border-t border-slate-200/60">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs pt-2 border-t border-ui-line">
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Due Date</span>
+                        <span className="text-ui-muted block text-[10px] font-bold">Due Date</span>
                         <span className="font-semibold text-slate-800">
                           {item.deadline ? new Date(item.deadline).toLocaleDateString() : '—'}
                         </span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Net Work Time</span>
+                        <span className="text-ui-muted block text-[10px] font-bold">Net Work Time</span>
                         <span className="font-semibold text-slate-800">
                           {item.measures?.workTimeFormatted || '—'}
                         </span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Approval Wait</span>
+                        <span className="text-ui-muted block text-[10px] font-bold">Approval Wait</span>
                         <span className="font-semibold text-slate-800">
                           {item.measures?.approvalWaitFormatted || '—'}
                         </span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Revisions</span>
+                        <span className="text-ui-muted block text-[10px] font-bold">Revisions</span>
                         <span className="font-semibold text-slate-800">{item.revisions || 0}</span>
                       </div>
                     </div>
 
                     {/* Expanded Timeline Breakdown */}
                     {isExpanded && (
-                      <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs space-y-2">
+                      <div className="p-3 rounded-xl bg-white/60 text-xs space-y-2">
                         <h5 className="font-bold text-slate-800">Step Timeline & Revision Rounds</h5>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-600">
                           <div>Assigned: {item.assignedAt ? new Date(item.assignedAt).toLocaleString() : '—'}</div>
@@ -1125,9 +1153,9 @@ export const WorkerProfilePage: React.FC = () => {
 
                         {item.intervals?.length > 0 && (
                           <div className="pt-2">
-                            <span className="font-bold text-[11px] text-rose-700 block">Paused Intervals (Blocked / Pending):</span>
+                            <span className="font-semibold text-xs text-ui-ink block">Paused Intervals (Blocked / Pending):</span>
                             {item.intervals.map((iv: any, idx: number) => (
-                              <div key={idx} className="text-[10px] text-slate-500">
+                              <div key={idx} className="text-[10px] text-ui-muted">
                                 • {iv.kind.toUpperCase()}: {iv.reason || 'No reason'} ({formatDuration(new Date(iv.endedAt || Date.now()).getTime() - new Date(iv.startedAt).getTime())})
                               </div>
                             ))}
@@ -1148,73 +1176,75 @@ export const WorkerProfilePage: React.FC = () => {
         <div className="space-y-6">
           {/* Craft Metrics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+            <div className="glass-card p-4 space-y-1">
+              <span className="text-[10px] font-black text-ui-muted block">
                 First-Pass Approval Rate
               </span>
-              <span className="text-2xl font-black text-indigo-600">
+              <span className="text-2xl font-black text-ui-ink">
                 {performanceData?.current?.firstPassApprovalRate || 100}%
               </span>
-              <span className="text-[11px] text-slate-400 block">
+              <span className="text-[11px] text-ui-muted block">
                 Approved in Round 1
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+            <div className="glass-card p-4 space-y-1">
+              <span className="text-[10px] font-black text-ui-muted block">
                 Avg Work Time
               </span>
               <span className="text-2xl font-black text-slate-900">
                 {performanceData?.current?.avgWorkTimeFormatted || '—'}
               </span>
-              <span className="text-[11px] text-slate-400 block">
+              <span className="text-[11px] text-ui-muted block">
                 Net creative craftsmanship
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+            <div className="glass-card p-4 space-y-1">
+              <span className="text-[10px] font-black text-ui-muted block">
                 Avg Waiting to Start
               </span>
               <span className="text-2xl font-black text-slate-900">
                 {performanceData?.current?.avgWaitingToStartFormatted || '—'}
               </span>
-              <span className="text-[11px] text-slate-400 block">
+              <span className="text-[11px] text-ui-muted block">
                 Unlocked to started
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+            <div className="glass-card p-4 space-y-1">
+              <span className="text-[10px] font-black text-ui-muted block">
                 Avg Approval Wait
               </span>
               <span className="text-2xl font-black text-slate-900">
                 {performanceData?.current?.avgApprovalWaitFormatted || '—'}
               </span>
-              <span className="text-[11px] text-slate-400 block">
+              <span className="text-[11px] text-ui-muted block">
                 Submitted to review decision
               </span>
             </div>
           </div>
 
           {/* Monthly Output Trend Chart */}
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+          <div className="glass-panel rounded-ui-panel p-5 space-y-4">
+            <h3 className="text-xs font-black text-ui-muted">
               Trailing 6-Month Deliverables Output Trend
             </h3>
             <div className="h-64 w-full">
               {performanceData?.monthlyOutputTrend ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={performanceData.monthlyOutputTrend}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#4f46e5" radius={[4, 4, 0, 0]} name="Completed Pieces" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--ui-line)" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--ui-muted)' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: 'var(--ui-muted)' }} allowDecimals={false} axisLine={false} tickLine={false} />
+                    <Tooltip cursor={{ fill: 'rgb(var(--ui-ink-rgb) / 0.04)' }} contentStyle={{ borderRadius: 16, border: '1px solid var(--ui-line)', fontSize: 12 }} />
+                    <Bar dataKey="count" fill="var(--ui-blue)" radius={[6, 6, 0, 0]} name="Completed Pieces">
+                      <LabelList dataKey="count" position="top" style={{ fontSize: 11, fill: 'var(--ui-text)' }} />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                <div className="h-full flex items-center justify-center text-xs text-ui-muted">
                   Loading monthly trend...
                 </div>
               )}
@@ -1222,8 +1252,8 @@ export const WorkerProfilePage: React.FC = () => {
           </div>
 
           {/* Anti-Ranking Notice */}
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-slate-400 shrink-0" />
+          <div className="p-3.5 rounded-xl bg-white/60 text-xs text-ui-muted flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-ui-muted shrink-0" />
             <span>
               HACA Marketing OS enforces individual craftsmanship metrics. Cross-person rankings,
               speed scorecards, and peer comparisons are strictly prohibited.
@@ -1234,8 +1264,8 @@ export const WorkerProfilePage: React.FC = () => {
 
       {/* TAB 4: RATINGS */}
       {activeTab === 'ratings' && (
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
-          <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+        <div className="glass-panel rounded-ui-panel p-5 space-y-4">
+          <h3 className="text-xs font-black text-ui-muted">
             Ratings & Feedback Summary
           </h3>
           {ratingsData?.averageRating !== null && ratingsData?.averageRating !== undefined ? (
@@ -1257,14 +1287,14 @@ export const WorkerProfilePage: React.FC = () => {
                       />
                     ))}
                   </div>
-                  <span className="text-xs text-slate-400 font-semibold">
+                  <span className="text-xs text-ui-muted font-semibold">
                     Based on {ratingsData.totalRatings || 0} reviews
                   </span>
                 </div>
               </div>
             </div>
           ) : (
-            <p className="text-xs text-slate-400 italic">
+            <p className="text-xs text-ui-muted italic">
               Fewer than 3 ratings received. Average rating is kept confidential until minimum 3
               reviews are recorded.
             </p>
@@ -1274,27 +1304,27 @@ export const WorkerProfilePage: React.FC = () => {
 
       {/* TAB 5: ACTIVITY */}
       {activeTab === 'activity' && (
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
-          <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+        <div className="glass-panel rounded-ui-panel p-5 space-y-4">
+          <h3 className="text-xs font-black text-ui-muted">
             Recent Operational Activity
           </h3>
           <div className="space-y-3">
             {activityData?.length > 0 ? (
               activityData.map((ev: any) => (
-                <div key={ev._id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center justify-between">
+                <div key={ev._id} className="p-3 rounded-xl bg-white/60 text-xs flex items-center justify-between">
                   <div>
                     <span className="font-bold text-slate-800">{ev.action}</span>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-ui-muted">
                       Entity: {ev.entityType} • Actor: {ev.actorId?.name || 'System'}
                     </p>
                   </div>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-[10px] text-ui-muted">
                     {new Date(ev.timestamp || ev.createdAt).toLocaleString()}
                   </span>
                 </div>
               ))
             ) : (
-              <p className="text-xs text-slate-400 italic">No activity recorded</p>
+              <p className="text-xs text-ui-muted italic">No activity recorded</p>
             )}
           </div>
         </div>
@@ -1302,13 +1332,13 @@ export const WorkerProfilePage: React.FC = () => {
 
       {/* TAB 6: CHANGES AUDIT LOG */}
       {activeTab === 'changes' && (isAdmin || isCreativeHead) && (
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
-          <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+        <div className="glass-panel rounded-ui-panel p-5 space-y-4">
+          <h3 className="text-xs font-black text-ui-muted">
             Operational Changes Audit Log
           </h3>
           <div className="overflow-x-auto">
             <table className="ui-table w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-400 font-bold uppercase text-[10px]">
+              <thead className="bg-slate-50 text-ui-muted font-bold text-[10px]">
                 <tr>
                   <th className="p-2.5">Date & Time</th>
                   <th className="p-2.5">Changed By</th>
@@ -1321,20 +1351,20 @@ export const WorkerProfilePage: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {changesData?.map((log: any) => (
                   <tr key={log._id}>
-                    <td className="p-2.5 text-slate-500 whitespace-nowrap">
+                    <td className="p-2.5 text-ui-muted whitespace-nowrap">
                       {new Date(log.createdAt).toLocaleString()}
                     </td>
                     <td className="p-2.5 font-bold text-slate-800">
                       {log.actorId?.name || 'Admin'}
                     </td>
-                    <td className="p-2.5 font-semibold text-indigo-700">{log.field}</td>
-                    <td className="p-2.5 text-slate-500">
+                    <td className="p-2.5 font-semibold text-ui-ink">{log.field}</td>
+                    <td className="p-2.5 text-ui-muted">
                       {JSON.stringify(log.oldValue || '—')}
                     </td>
                     <td className="p-2.5 font-bold text-slate-900">
                       {JSON.stringify(log.newValue || '—')}
                     </td>
-                    <td className="p-2.5 text-slate-500 italic">{log.reason || '—'}</td>
+                    <td className="p-2.5 text-ui-muted italic">{log.reason || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1345,18 +1375,24 @@ export const WorkerProfilePage: React.FC = () => {
 
       {/* MODAL: Reassign Steps */}
       {showReassignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="w-full max-w-md p-6 rounded-3xl bg-white border border-slate-200 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Reassign Steps</h3>
-            <p className="text-xs text-slate-500">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim backdrop-blur-xs">
+          <div
+            ref={reassignDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-reassign-title"
+            className="glass-modal w-full max-w-md p-6 space-y-4"
+          >
+            <h3 id="profile-reassign-title" className="text-base font-bold text-ui-ink">Reassign Steps</h3>
+            <p className="text-xs text-ui-muted">
               Reassign active deliverable steps from {profile.name} to another team member.
             </p>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-700 block">New Assignee</label>
+              <label className="text-[13px] font-medium text-ui-muted block">New Assignee</label>
               <select
                 value={targetAssigneeId}
                 onChange={(e) => setTargetAssigneeId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                className="ui-select w-full"
               >
                 <option value="">Select team member...</option>
                 {allWorkers.map((w) => (
@@ -1370,7 +1406,7 @@ export const WorkerProfilePage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowReassignModal(false)}
-                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs"
+                className="ui-btn ui-btn-secondary h-11"
               >
                 Cancel
               </button>
@@ -1378,7 +1414,7 @@ export const WorkerProfilePage: React.FC = () => {
                 type="button"
                 onClick={handleReassign}
                 disabled={reassigning || !targetAssigneeId}
-                className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+                className="ui-btn ui-btn-primary h-11"
               >
                 {reassigning ? 'Reassigning...' : 'Confirm Reassign'}
               </button>
@@ -1389,16 +1425,22 @@ export const WorkerProfilePage: React.FC = () => {
 
       {/* MODAL: Edit Operational Details */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="w-full max-w-md p-6 rounded-3xl bg-white border border-slate-200 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Edit Operational Details</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim backdrop-blur-xs">
+          <div
+            ref={editOpsDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-edit-ops-title"
+            className="glass-modal w-full max-w-md p-6 space-y-4"
+          >
+            <h3 id="profile-edit-ops-title" className="text-base font-bold text-ui-ink">Edit Operational Details</h3>
             <form onSubmit={handleSaveEdit} className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-slate-700 block">Job Role</label>
+                <label className="text-[13px] font-medium text-ui-muted block">Job Role</label>
                 <select
                   value={editForm.jobRole}
                   onChange={(e) => setEditForm({ ...editForm, jobRole: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  className="ui-select w-full"
                 >
                   <option value="">Select Job Role...</option>
                   {JOB_ROLES.map((r) => (
@@ -1410,7 +1452,7 @@ export const WorkerProfilePage: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block">Weekly Capacity (hours)</label>
+                <label className="text-[13px] font-medium text-ui-muted block">Weekly Capacity (hours)</label>
                 <input
                   type="number"
                   min="0"
@@ -1419,18 +1461,18 @@ export const WorkerProfilePage: React.FC = () => {
                   onChange={(e) =>
                     setEditForm({ ...editForm, weeklyCapacityHours: parseInt(e.target.value, 10) || 40 })
                   }
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  className="ui-input w-full"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block">Reason for Change</label>
+                <label className="text-[13px] font-medium text-ui-muted block">Reason for Change</label>
                 <input
                   type="text"
                   placeholder="e.g. Workload rebalancing, role update"
                   value={editForm.reason}
                   onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium"
+                  className="ui-input w-full"
                   required
                 />
               </div>
@@ -1439,13 +1481,13 @@ export const WorkerProfilePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs shadow-sm hover:bg-black"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   Save Changes
                 </button>
@@ -1457,15 +1499,21 @@ export const WorkerProfilePage: React.FC = () => {
 
       {/* MODAL: Edit Profile with OTP Verification & Admin-Only Email Lock */}
       {showEditProfileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 ui-scrim backdrop-blur-md animate-in fade-in duration-200">
+          <div
+            ref={editProfileDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-edit-title"
+            className="glass-modal w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden"
+          >
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-ui-line shrink-0">
               <div>
-                <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                <h3 id="profile-edit-title" className="text-base sm:text-lg font-bold text-ui-ink">
                   {isSelf ? 'Edit Your Profile' : `Edit Profile: ${profile.name}`}
                 </h3>
-                <p className="text-xs text-slate-500 font-medium">
+                <p className="text-xs text-ui-muted font-medium">
                   {isSelf
                     ? 'Keep your personal details, contact info and skills up to date'
                     : 'Administrator edit for team member personal details'}
@@ -1474,7 +1522,8 @@ export const WorkerProfilePage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowEditProfileModal(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                aria-label="Close"
+                className="ui-icon-btn"
                 title="Close modal"
               >
                 <X className="w-5 h-5" />
@@ -1485,20 +1534,20 @@ export const WorkerProfilePage: React.FC = () => {
             <form onSubmit={handleSaveProfile} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
               {/* Alert Feedback */}
               {profileError && (
-                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start gap-2.5">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                <div className="p-3.5 rounded-2xl status-tint status-changes text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                   <span className="font-semibold">{profileError}</span>
                 </div>
               )}
               {profileSuccess && (
-                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                <div className="p-3.5 rounded-2xl status-tint status-approved text-xs flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                   <span className="font-semibold">{profileSuccess}</span>
                 </div>
               )}
 
               {/* Photo Avatar Preview & Action */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-4">
+              <div className="p-4 rounded-2xl bg-white/60 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
                   <Avatar
                     url={profile.avatarUrl}
@@ -1508,7 +1557,7 @@ export const WorkerProfilePage: React.FC = () => {
                   />
                   <div>
                     <h4 className="text-xs font-bold text-slate-900">Profile Picture</h4>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-ui-muted">
                       Standard circular avatar shown across teams
                     </p>
                   </div>
@@ -1529,17 +1578,17 @@ export const WorkerProfilePage: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">
-                    Full Legal Name <span className="text-rose-500">*</span>
+                    Full Legal Name <span className="text-ui-ink" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="text"
                     value={profileForm.name}
                     onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 text-xs font-medium text-slate-900 transition-all outline-hidden"
+                    className="ui-input w-full"
                     placeholder="e.g. Test Writer One"
                     required
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">
+                  <span className="text-[10px] text-ui-muted mt-1 block">
                     Official name used in reports and formal records.
                   </span>
                 </div>
@@ -1554,10 +1603,10 @@ export const WorkerProfilePage: React.FC = () => {
                     onChange={(e) =>
                       setProfileForm({ ...profileForm, preferredName: e.target.value })
                     }
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 text-xs font-medium text-slate-900 transition-all outline-hidden"
+                    className="ui-input w-full"
                     placeholder="e.g. Alex"
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">
+                  <span className="text-[10px] text-ui-muted mt-1 block">
                     Displayed across calendar, assignment cards & chat.
                   </span>
                 </div>
@@ -1567,16 +1616,16 @@ export const WorkerProfilePage: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-slate-400" />
+                    <Mail className="w-3.5 h-3.5 text-ui-muted" />
                     <span>Registered Email Address</span>
                   </label>
                   {isAdmin && !isSelf ? (
-                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                    <span className="status-chip status-waiting text-[11px] font-semibold px-2 py-0.5">
                       Admin Email Override
                     </span>
                   ) : (
                     <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1">
-                      <Lock className="w-2.5 h-2.5 text-slate-500" /> Registered Email (Locked)
+                      <Lock className="w-2.5 h-2.5 text-ui-muted" /> Registered Email (Locked)
                     </span>
                   )}
                 </div>
@@ -1587,10 +1636,10 @@ export const WorkerProfilePage: React.FC = () => {
                       type="email"
                       value={profileForm.email}
                       onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-amber-300 bg-amber-50/30 text-xs font-medium text-slate-900 outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                      className="ui-input w-full"
                       required
                     />
-                    <p className="text-[11px] text-amber-700 font-medium mt-1">
+                    <p className="text-xs text-ui-text font-medium mt-1">
                       ⚠️ Modifying official email changes the user login credentials.
                     </p>
                   </>
@@ -1602,12 +1651,12 @@ export const WorkerProfilePage: React.FC = () => {
                         value={profileForm.email}
                         readOnly
                         disabled
-                        className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 bg-slate-100 text-xs font-medium text-slate-600 cursor-not-allowed select-all"
+                        className="ui-input w-full pr-10 cursor-not-allowed"
                       />
-                      <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+                      <Lock className="w-4 h-4 text-ui-muted absolute right-3 top-3" />
                     </div>
-                    <div className="mt-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200/70 text-[11px] text-slate-500 flex items-center gap-2">
-                      <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <div className="mt-1.5 p-2 rounded-xl bg-white/60 text-[11px] text-ui-muted flex items-center gap-2">
+                      <Lock className="w-3.5 h-3.5 text-ui-muted shrink-0" />
                       <span>
                         Registered email cannot be changed by the user. Contact an administrator to
                         request an email update.
@@ -1618,20 +1667,20 @@ export const WorkerProfilePage: React.FC = () => {
               </div>
 
               {/* Mobile Phone Number & OTP Verification */}
-              <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/90 space-y-3">
+              <div className="p-4 rounded-2xl bg-white/60 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-slate-500" />
+                    <Phone className="w-3.5 h-3.5 text-ui-muted" />
                     <span>Mobile Phone Number</span>
-                    <span className="text-rose-500">*</span>
+                    <span className="text-ui-ink" aria-hidden="true">*</span>
                   </label>
                   {isPhoneVerified ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="status-chip status-approved text-[11px] font-semibold px-2 py-0.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
                       Verified
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    <span className="status-chip status-waiting text-[11px] font-semibold px-2 py-0.5">
                       Verification Required
                     </span>
                   )}
@@ -1644,7 +1693,7 @@ export const WorkerProfilePage: React.FC = () => {
                       value={profileForm.phone}
                       onChange={(e) => handlePhoneChange(e.target.value)}
                       placeholder="+919876543210"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 text-xs font-medium text-slate-900 bg-white transition-all outline-hidden"
+                      className="ui-input w-full"
                     />
                   </div>
 
@@ -1657,7 +1706,7 @@ export const WorkerProfilePage: React.FC = () => {
                         otpCountdown > 0 ||
                         !profileForm.phone.replace(/[\s\-\(\)]/g, '')
                       }
-                      className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 shrink-0 min-h-[40px]"
+                      className="ui-btn ui-btn-primary h-11"
                     >
                       {otpSending ? (
                         <>
@@ -1673,19 +1722,19 @@ export const WorkerProfilePage: React.FC = () => {
                   )}
                 </div>
 
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-ui-muted">
                   Enter mobile number with country code (e.g. +91 9876543210 or 9000000011).
                   Changes require OTP verification before saving.
                 </p>
 
                 {/* OTP Verification Box */}
                 {!isPhoneVerified && otpSent && (
-                  <div className="p-3.5 rounded-2xl bg-white border border-indigo-200 shadow-2xs space-y-3 animate-in fade-in duration-150">
+                  <div className="p-3.5 rounded-2xl bg-white border border-ui-line shadow-2xs space-y-3 animate-in fade-in duration-150">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-indigo-900">
+                      <span className="text-xs font-bold text-ui-ink">
                         Enter 6-Digit OTP Code
                       </span>
-                      <span className="text-[11px] font-semibold text-indigo-600">
+                      <span className="text-[11px] font-semibold text-ui-ink">
                         Code sent to {profileForm.phone}
                       </span>
                     </div>
@@ -1697,13 +1746,13 @@ export const WorkerProfilePage: React.FC = () => {
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
                         placeholder="123456"
-                        className="w-36 px-3 py-2 rounded-xl border border-indigo-300 text-center text-sm font-black tracking-widest text-indigo-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                        className="ui-input w-36 text-center"
                       />
                       <button
                         type="button"
                         onClick={handleVerifyPhoneOtp}
                         disabled={otpVerifying || otpCode.trim().length !== 6}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs disabled:opacity-50 transition-all flex items-center gap-1.5"
+                        className="ui-btn ui-btn-primary h-11"
                       >
                         {otpVerifying ? (
                           <>
@@ -1720,10 +1769,10 @@ export const WorkerProfilePage: React.FC = () => {
                     </div>
 
                     {otpError && (
-                      <p className="text-[11px] font-semibold text-rose-600">{otpError}</p>
+                      <p className="text-xs font-semibold rounded-lg px-2 py-1 status-tint status-changes">{otpError}</p>
                     )}
                     {otpSuccess && (
-                      <p className="text-[11px] font-semibold text-emerald-600">{otpSuccess}</p>
+                      <p className="text-xs font-semibold rounded-lg px-2 py-1 status-tint status-approved">{otpSuccess}</p>
                     )}
                   </div>
                 )}
@@ -1733,7 +1782,7 @@ export const WorkerProfilePage: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    <MessageCircle className="w-3.5 h-3.5 text-ui-ink" />
                     <span>WhatsApp Number</span>
                   </label>
                   <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-600 select-none">
@@ -1748,7 +1797,7 @@ export const WorkerProfilePage: React.FC = () => {
                           whatsappNumber: checked ? prev.phone : prev.whatsappNumber,
                         }));
                       }}
-                      className="rounded text-indigo-600 focus:ring-indigo-500"
+                      className="rounded text-ui-ink focus:ring-ui-ink"
                     />
                     <span>Same as mobile number</span>
                   </label>
@@ -1761,9 +1810,7 @@ export const WorkerProfilePage: React.FC = () => {
                     setProfileForm({ ...profileForm, whatsappNumber: e.target.value })
                   }
                   placeholder="+919876543210"
-                  className={`w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-900 transition-all outline-hidden ${
-                    profileForm.sameAsPhone ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600'
-                  }`}
+                  className={`ui-input w-full ${profileForm.sameAsPhone ? 'opacity-60 cursor-not-allowed' : ''}`}
                 />
               </div>
 
@@ -1771,7 +1818,7 @@ export const WorkerProfilePage: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-bold text-slate-700">About / Bio</label>
-                  <span className="text-[10px] text-slate-400 font-medium">
+                  <span className="text-[10px] text-ui-muted font-medium">
                     {profileForm.about.length} / 500 characters
                   </span>
                 </div>
@@ -1781,7 +1828,7 @@ export const WorkerProfilePage: React.FC = () => {
                   value={profileForm.about}
                   onChange={(e) => setProfileForm({ ...profileForm, about: e.target.value })}
                   placeholder="Share a short summary of your background, interests and creative strengths..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 text-xs font-medium text-slate-900 transition-all outline-hidden resize-none"
+                  className="ui-input ui-textarea w-full resize-none"
                 />
               </div>
 
@@ -1794,13 +1841,13 @@ export const WorkerProfilePage: React.FC = () => {
                   {profileForm.languages.map((lang) => (
                     <span
                       key={lang}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/70 text-ui-ink text-xs font-bold border border-ui-line"
                     >
                       {lang}
                       <button
                         type="button"
                         onClick={() => removeLanguage(lang)}
-                        className="p-0.5 rounded-full hover:bg-indigo-200 text-indigo-600"
+                        className="p-0.5 rounded-full hover:bg-white text-ui-ink"
                         title={`Remove ${lang}`}
                       >
                         <X className="w-3 h-3" />
@@ -1808,7 +1855,7 @@ export const WorkerProfilePage: React.FC = () => {
                     </span>
                   ))}
                   {profileForm.languages.length === 0 && (
-                    <span className="text-xs text-slate-400 italic">No languages added yet.</span>
+                    <span className="text-xs text-ui-muted italic">No languages added yet.</span>
                   )}
                 </div>
                 {profileForm.languages.length < 5 && (
@@ -1860,7 +1907,7 @@ export const WorkerProfilePage: React.FC = () => {
                     </span>
                   ))}
                   {profileForm.skills.length === 0 && (
-                    <span className="text-xs text-slate-400 italic">No skill tags added yet.</span>
+                    <span className="text-xs text-ui-muted italic">No skill tags added yet.</span>
                   )}
                 </div>
                 {profileForm.skills.length < 10 && (
@@ -1890,11 +1937,11 @@ export const WorkerProfilePage: React.FC = () => {
               </div>
 
               {/* Footer Actions */}
-              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-ui-line">
                 <button
                   type="button"
                   onClick={() => setShowEditProfileModal(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs min-h-[44px] transition-all"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
@@ -1907,7 +1954,7 @@ export const WorkerProfilePage: React.FC = () => {
                         initialPhone.replace(/[\s\-\(\)]/g, '') &&
                       !isPhoneVerified)
                   }
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-200 disabled:opacity-50 transition-all min-h-[44px] flex items-center gap-1.5"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {savingProfile ? (
                     <>

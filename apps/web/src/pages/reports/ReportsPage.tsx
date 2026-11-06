@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useDialogFocus } from '../../lib/useDialogFocus';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useGlobalFilter } from '../../context/GlobalFilterContext';
@@ -78,6 +79,10 @@ export const ReportsPage: React.FC = () => {
   const [isLiveReportLoading, setIsLiveReportLoading] = useState(false);
   const [previewModalReport, setPreviewModalReport] = useState<GeneratedReport | null>(null);
   const [ruleDetailsModal, setRuleDetailsModal] = useState<AutomationRule | null>(null);
+  const previewDialogRef = useRef<HTMLDivElement>(null);
+  const ruleDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(previewDialogRef, Boolean(previewModalReport), () => setPreviewModalReport(null));
+  useDialogFocus(ruleDialogRef, Boolean(ruleDetailsModal), () => setRuleDetailsModal(null));
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [copiedHtml, setCopiedHtml] = useState(false);
@@ -202,34 +207,30 @@ export const ReportsPage: React.FC = () => {
     <div className="space-y-6 animate-fade-in pb-16">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-900/90 text-white text-xs font-semibold shadow-2xl backdrop-blur-md border border-white/20 animate-in slide-in-from-bottom-2">
-          <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl bg-ui-ink text-white text-[13px] font-semibold shadow-2xl animate-in slide-in-from-bottom-2">
+          <Sparkles className="w-4 h-4 text-white/70 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Top Header */}
-      <div className="glass-panel p-6 sm:p-8 rounded-[28px] border border-white/80 shadow-glass relative overflow-hidden">
-        <div className="absolute -right-12 -top-12 w-48 h-48 bg-gradient-to-br from-purple-500/10 to-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="space-y-5">
         
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5 mb-2">
-              <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-[11px] font-bold tracking-wide uppercase">
-                Screen 14 &bull; Phase 7
-              </span>
-              <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-[13px] text-ui-muted font-medium flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-ui-muted" />
                 Automated BullMQ Schedules
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <h1 className="text-[28px] sm:text-[32px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink flex flex-wrap items-center gap-3">
               Reports & Automation
-              <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
+              <span className="status-chip status-approved px-2.5 py-0.5 text-xs font-semibold tracking-normal">
                 Live Engine
               </span>
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl">
+            <p className="text-[15px] text-ui-muted mt-1.5 max-w-[70ch]">
               Configure organizational automation rules, audit scheduled background workflows, and trigger on-demand executive report snapshots.
             </p>
           </div>
@@ -238,7 +239,7 @@ export const ReportsPage: React.FC = () => {
           <button
             onClick={fetchData}
             disabled={isLoading}
-            className="self-start md:self-auto flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/80 hover:bg-white text-slate-700 text-xs font-bold border border-slate-200 shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+            className="ui-btn ui-btn-secondary bg-transparent h-11 self-start md:self-auto"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh Status
@@ -246,48 +247,41 @@ export const ReportsPage: React.FC = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex flex-wrap items-center gap-2 mt-6 pt-6 border-t border-slate-100">
+        <div className="max-w-full overflow-x-auto no-scrollbar">
+          <div className="ui-tabs">
           <button
             onClick={() => setActiveTab('reports')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'reports'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
-                : 'bg-white/60 text-slate-600 hover:bg-white border border-slate-200/60'
-            }`}
+            aria-pressed={activeTab === 'reports'}
+            className={`ui-tab ${activeTab === 'reports' ? 'is-active' : ''}`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
             Report Definitions
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'reports' ? 'bg-purple-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+            <span className={`px-1.5 py-0.5 rounded-full text-[11px] tabular-nums ${activeTab === 'reports' ? 'bg-white/20 text-white' : 'bg-ui-ink/10 text-ui-text'}`}>
               {reportDefs.length || 4}
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('rules')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'rules'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
-                : 'bg-white/60 text-slate-600 hover:bg-white border border-slate-200/60'
-            }`}
+            aria-pressed={activeTab === 'rules'}
+            className={`ui-tab ${activeTab === 'rules' ? 'is-active' : ''}`}
           >
             <Zap className="w-3.5 h-3.5" />
             Automation Rules
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === 'rules' ? 'bg-purple-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+            <span className={`px-1.5 py-0.5 rounded-full text-[11px] tabular-nums ${activeTab === 'rules' ? 'bg-white/20 text-white' : 'bg-ui-ink/10 text-ui-text'}`}>
               {rules.length || 6}
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('viewer')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'viewer'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
-                : 'bg-white/60 text-slate-600 hover:bg-white border border-slate-200/60'
-            }`}
+            aria-pressed={activeTab === 'viewer'}
+            className={`ui-tab ${activeTab === 'viewer' ? 'is-active' : ''}`}
           >
             <Eye className="w-3.5 h-3.5" />
             Live Report Viewer
           </button>
+        </div>
         </div>
       </div>
 
@@ -299,49 +293,45 @@ export const ReportsPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {reportDefs.map((def) => {
               const isGenerating = actionLoading === `generate-${def.reportKey}`;
-              const cadenceColor =
-                def.cadence === 'Weekly'
-                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                  : def.cadence === 'Monthly'
-                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+              // Cadence is named in the chip itself; no colour coding needed.
+              const cadenceColor = 'bg-white/80 text-ui-text border-transparent';
 
               return (
                 <div
                   key={def._id}
-                  className="glass-panel p-5 rounded-2xl border border-white/80 shadow-glass flex flex-col justify-between hover:shadow-md transition-all group"
+                  className="glass-card p-5 flex flex-col justify-between group"
                 >
                   <div>
                     {/* Header: Cadence & Schedule */}
                     <div className="flex items-center justify-between gap-2 mb-3">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${cadenceColor}`}>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${cadenceColor}`}>
                         {def.cadence}
                       </span>
-                      <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-400" />
+                      <span className="text-[11px] font-semibold text-ui-muted flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-ui-muted" />
                         {def.scheduleDisplay}
                       </span>
                     </div>
 
-                    <h3 className="text-base font-bold text-slate-900 group-hover:text-purple-600 transition-colors">
+                    <h3 className="text-base font-semibold text-ui-ink">
                       {def.name}
                     </h3>
-                    <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                    <p className="text-xs text-ui-muted mt-1.5 leading-relaxed">
                       {def.description}
                     </p>
 
                     {/* Recipients */}
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Recipients:</span>
+                    <div className="mt-4 pt-3 border-t border-ui-line flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-bold text-ui-muted">Recipients:</span>
                       {def.recipients.map((r) => (
-                        <span key={r} className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                        <span key={r} className="px-2 py-0.5 rounded-full bg-white/80 text-ui-text text-[11px] font-medium">
                           {r.replace('_', ' ')}
                         </span>
                       ))}
                     </div>
 
                     {/* Last Generated At */}
-                    <div className="mt-3 text-[11px] text-slate-400 flex items-center gap-1">
+                    <div className="mt-3 text-[11px] text-ui-muted flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
                       <span>
                         {def.lastGeneratedAt
@@ -352,12 +342,12 @@ export const ReportsPage: React.FC = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="mt-5 pt-4 border-t border-slate-100 flex items-center gap-2">
+                  <div className="mt-5 pt-4 border-t border-ui-line flex items-center gap-2">
                     {hasPermission('report.configure') && (
                       <button
                         onClick={() => handleGenerateReport(def.reportKey)}
                         disabled={isGenerating}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-sm transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                        className="ui-btn ui-btn-primary h-11 flex-1"
                       >
                         {isGenerating ? (
                           <>
@@ -378,7 +368,8 @@ export const ReportsPage: React.FC = () => {
                         setSelectedReportKey(def.reportKey);
                         setActiveTab('viewer');
                       }}
-                      className="px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 transition-colors"
+                      aria-label="View Live Interactive Data"
+                      className="ui-icon-btn"
                       title="View Live Interactive Data"
                     >
                       <Eye className="w-3.5 h-3.5" />
@@ -396,14 +387,14 @@ export const ReportsPage: React.FC = () => {
       {/* ------------------------------------------------------------- */}
       {activeTab === 'rules' && (
         <div className="space-y-4">
-          <div className="glass-panel p-4 rounded-2xl border border-white/80 shadow-glass flex items-center justify-between">
+          <div className="glass-panel rounded-ui-panel p-4 sm:p-5 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-purple-600" />
-              <span className="text-xs font-bold text-slate-800">
+              <Zap className="w-4 h-4 text-ui-ink" />
+              <span className="text-[13px] font-semibold text-ui-text">
                 BullMQ Automation Dispatcher &bull; 6 Fixed Marketing OS Rules
               </span>
             </div>
-            <span className="text-[11px] text-slate-500">
+            <span className="text-[11px] text-ui-muted">
               Active Rules: <strong>{rules.filter((r) => r.active).length} / {rules.length}</strong>
             </span>
           </div>
@@ -416,70 +407,79 @@ export const ReportsPage: React.FC = () => {
               return (
                 <div
                   key={rule._id}
-                  className={`glass-panel p-5 rounded-2xl border transition-all ${
+                  className={`glass-card p-5 ${
                     rule.active ? 'border-white/80 shadow-glass' : 'border-slate-200/60 bg-slate-50/50 opacity-80'
                   }`}
                 >
                   {/* Top Bar: Trigger pill & Active toggle */}
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider">
+                      <span className="px-2.5 py-0.5 rounded-full bg-white/80 text-ui-text text-[11px] font-semibold">
                         {rule.trigger}
                       </span>
-                      <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-400" />
+                      <span className="text-[11px] text-ui-muted font-medium flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-ui-muted" />
                         {rule.schedule}
                       </span>
                     </div>
 
                     {/* Active Toggle Switch */}
                     <div className="flex items-center gap-2">
-                      <span className={`text-[11px] font-bold ${rule.active ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <span className={`status-chip ${rule.active ? 'status-approved' : 'status-not-started'} text-[11px] font-semibold px-2 py-0.5`}>
                         {rule.active ? 'Active' : 'Paused'}
                       </span>
                       {hasPermission('automation.manage') && (
                         <button
+                          type="button"
+                          role="switch"
+                          aria-checked={rule.active}
+                          aria-label={`${rule.name}: ${rule.active ? 'active' : 'paused'}`}
                           onClick={() => handleToggleRule(rule)}
                           disabled={isToggling}
-                          className={`w-10 h-5 rounded-full transition-colors relative p-0.5 ${
-                            rule.active ? 'bg-emerald-500' : 'bg-slate-300'
-                          }`}
+                          className="min-w-[44px] min-h-[44px] -m-2 flex items-center justify-center rounded-full disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink"
                         >
-                          <div
-                            className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-                              rule.active ? 'translate-x-5' : 'translate-x-0'
+                          <span
+                            aria-hidden="true"
+                            className={`w-10 h-6 rounded-full transition-colors relative p-0.5 flex items-center ${
+                              rule.active ? 'bg-ui-ink' : 'bg-ui-muted/60'
                             }`}
-                          />
+                          >
+                            <span
+                              className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
+                                rule.active ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </span>
                         </button>
                       )}
                     </div>
                   </div>
 
-                  <h3 className="text-sm font-bold text-slate-900">{rule.name}</h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">{rule.description}</p>
+                  <h3 className="text-sm font-semibold text-ui-ink">{rule.name}</h3>
+                  <p className="text-xs text-ui-muted mt-1 leading-relaxed">{rule.description}</p>
 
                   {/* Last Run Info */}
-                  <div className="mt-4 p-3 rounded-xl bg-slate-50/80 border border-slate-100 text-[11px]">
-                    <div className="flex items-center justify-between text-slate-600">
+                  <div className="mt-4 p-3 rounded-xl bg-white/60 text-xs">
+                    <div className="flex items-center justify-between text-ui-text">
                       <span className="font-semibold">Last Execution:</span>
                       <span className="flex items-center gap-1 font-mono text-[10px]">
                         {rule.lastRunStatus === 'success' && (
-                          <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
+                          <span className="status-chip status-approved px-1.5 py-0.5 font-semibold">
                             SUCCESS
                           </span>
                         )}
                         {rule.lastRunStatus === 'failed' && (
-                          <span className="px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 font-bold">
+                          <span className="status-chip status-changes px-1.5 py-0.5 font-semibold">
                             FAILED
                           </span>
                         )}
                         {rule.lastRunStatus === 'running' && (
-                          <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold animate-pulse">
+                          <span className="status-chip status-waiting px-1.5 py-0.5 font-semibold animate-pulse">
                             RUNNING
                           </span>
                         )}
                         {rule.lastRunStatus === 'idle' && (
-                          <span className="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-bold">
+                          <span className="status-chip status-not-started px-1.5 py-0.5 font-semibold">
                             IDLE
                           </span>
                         )}
@@ -487,17 +487,17 @@ export const ReportsPage: React.FC = () => {
                       </span>
                     </div>
                     {rule.lastRunSummary && (
-                      <p className="mt-1 text-[11px] text-slate-500 truncate">
+                      <p className="mt-1 text-[11px] text-ui-muted truncate">
                         {rule.lastRunSummary}
                       </p>
                     )}
                   </div>
 
                   {/* Footer Actions */}
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div className="mt-4 pt-3 border-t border-ui-line flex items-center justify-between gap-2">
                     <button
                       onClick={() => setRuleDetailsModal(rule)}
-                      className="text-[11px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 transition-colors"
+                      className="min-h-[44px] text-xs font-semibold text-ui-text hover:underline underline-offset-4 flex items-center gap-1 rounded-full"
                     >
                       <Sliders className="w-3 h-3" />
                       View Config & Logs
@@ -507,7 +507,7 @@ export const ReportsPage: React.FC = () => {
                       <button
                         onClick={() => handleRunRule(rule)}
                         disabled={isRunning}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                        className="ui-btn ui-btn-primary h-11"
                       >
                         {isRunning ? (
                           <RefreshCw className="w-3 h-3 animate-spin" />
@@ -531,13 +531,14 @@ export const ReportsPage: React.FC = () => {
       {activeTab === 'viewer' && (
         <div className="space-y-6">
           {/* Controls Bar */}
-          <div className="glass-panel p-4 rounded-2xl border border-white/80 shadow-glass flex flex-wrap items-center justify-between gap-4">
+          <div className="glass-panel rounded-ui-panel p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-700">Select Report:</span>
+              <label htmlFor="report-viewer-select" className="text-[13px] font-medium text-ui-muted">Select Report:</label>
               <select
+                id="report-viewer-select"
                 value={selectedReportKey}
                 onChange={(e) => setSelectedReportKey(e.target.value)}
-                className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="ui-select"
               >
                 {reportDefs.map((def) => (
                   <option key={def.reportKey} value={def.reportKey}>
@@ -551,7 +552,7 @@ export const ReportsPage: React.FC = () => {
               <button
                 onClick={() => fetchLiveReport(selectedReportKey)}
                 disabled={isLiveReportLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-200 transition-colors shadow-sm"
+                className="ui-btn ui-btn-secondary h-11"
               >
                 <RefreshCw className={`w-3 h-3 ${isLiveReportLoading ? 'animate-spin' : ''}`} />
                 Reload
@@ -560,7 +561,7 @@ export const ReportsPage: React.FC = () => {
               {liveReport && (
                 <button
                   onClick={() => copyReportHtml(liveReport.html)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold border border-purple-200 transition-colors shadow-sm"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   <Copy className="w-3 h-3" />
                   {copiedHtml ? 'Copied HTML!' : 'Copy HTML'}
@@ -571,22 +572,22 @@ export const ReportsPage: React.FC = () => {
 
           {/* Report Display Container */}
           {isLiveReportLoading ? (
-            <div className="glass-panel p-12 rounded-3xl border border-white/80 text-center">
-              <RefreshCw className="w-8 h-8 text-purple-600 animate-spin mx-auto mb-3" />
-              <p className="text-xs text-slate-500 font-semibold">Generating live scoped report analytics...</p>
+            <div className="glass-panel rounded-ui-panel p-12 text-center">
+              <RefreshCw className="w-8 h-8 text-ui-ink animate-spin mx-auto mb-3" />
+              <p className="text-xs text-ui-muted font-semibold">Generating live scoped report analytics...</p>
             </div>
           ) : liveReport ? (
-            <div className="glass-panel p-6 sm:p-8 rounded-[28px] border border-white/80 shadow-glass space-y-6">
+            <div className="glass-panel rounded-ui-panel p-5 sm:p-8 space-y-6">
               {/* Report Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-100 gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-ui-line gap-3">
                 <div>
-                  <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold uppercase tracking-wider">
+                  <span className="px-2.5 py-0.5 rounded-full bg-white/80 text-ui-text text-[11px] font-semibold">
                     {liveReport.cadence} Report
                   </span>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-2">
+                  <h2 className="text-xl sm:text-2xl font-bold text-ui-ink mt-2">
                     {liveReport.title}
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-ui-muted mt-0.5">
                     Data scoped to active filters &bull; Generated {new Date(liveReport.generatedAt).toLocaleString()}
                   </p>
                 </div>
@@ -595,11 +596,11 @@ export const ReportsPage: React.FC = () => {
               {/* KPI Summary Strip */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {Object.entries(liveReport.summary || {}).map(([key, val]) => (
-                  <div key={key} className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  <div key={key} className="glass-card p-4">
+                    <span className="text-xs font-medium text-ui-muted block">
                       {key.replace(/([A-Z])/g, ' $1')}
                     </span>
-                    <span className="text-lg font-black text-slate-900 mt-1 block">
+                    <span className="text-xl font-semibold text-ui-ink mt-1 block tabular-nums">
                       {typeof val === 'number' ? val.toLocaleString() : String(val)}
                     </span>
                   </div>
@@ -608,12 +609,12 @@ export const ReportsPage: React.FC = () => {
 
               {/* Report Tables */}
               {liveReport.tables.map((table, idx) => (
-                <div key={idx} className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
-                  <div className="px-5 py-3.5 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                <div key={idx} className="glass-card overflow-hidden">
+                  <div className="px-5 py-3.5 border-b border-ui-line flex items-center justify-between gap-2">
+                    <h3 className="text-[13px] font-semibold text-ui-text">
                       {table.title}
                     </h3>
-                    <span className="text-[11px] text-slate-400 font-semibold">
+                    <span className="text-[11px] text-ui-muted font-semibold">
                       {table.rows.length} rows
                     </span>
                   </div>
@@ -621,26 +622,26 @@ export const ReportsPage: React.FC = () => {
                   <div className="overflow-x-auto">
                     <table className="ui-table w-full text-left text-xs">
                       <thead>
-                        <tr className="border-b border-slate-100 bg-slate-50/40">
+                        <tr className="border-b border-ui-line">
                           {table.columns.map((col, cIdx) => (
-                            <th key={cIdx} className="px-4 py-2.5 font-bold text-slate-500 text-[10px] uppercase tracking-wider">
+                            <th key={cIdx} className="px-4 py-2.5 text-ui-muted text-xs">
                               {col}
                             </th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-ui-line">
                         {table.rows.length === 0 ? (
                           <tr>
-                            <td colSpan={table.columns.length} className="px-4 py-8 text-center text-slate-400">
+                            <td colSpan={table.columns.length} className="px-4 py-8 text-center text-ui-muted">
                               No data records available for current filter scope.
                             </td>
                           </tr>
                         ) : (
                           table.rows.map((row, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-slate-50/50 transition-colors">
+                            <tr key={rIdx} className="hover:bg-white/60 transition-colors">
                               {row.map((cell, cIdx) => (
-                                <td key={cIdx} className="px-4 py-2.5 text-slate-700 font-medium">
+                                <td key={cIdx} className="px-4 py-2.5 text-ui-text font-medium">
                                   {cell}
                                 </td>
                               ))}
@@ -654,7 +655,7 @@ export const ReportsPage: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="glass-panel p-12 rounded-3xl border border-white/80 text-center text-slate-400">
+            <div className="glass-panel rounded-ui-panel p-12 text-center text-ui-muted">
               Select a report above to view its live data.
             </div>
           )}
@@ -665,28 +666,34 @@ export const ReportsPage: React.FC = () => {
       {/* PREVIEW HTML MODAL */}
       {/* ------------------------------------------------------------- */}
       {previewModalReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-fade-in">
-          <div className="glass-modal max-w-4xl w-full max-h-[90vh] flex flex-col p-6 shadow-modal-glass border border-white">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim backdrop-blur-md animate-fade-in">
+          <div
+            ref={previewDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="report-preview-title"
+            className="glass-modal max-w-4xl w-full max-h-[90vh] flex flex-col p-6"
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-ui-line shrink-0">
               <div>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                <span className="status-chip status-approved px-2.5 py-0.5 text-[11px] font-semibold">
                   Generated Snapshot
                 </span>
-                <h3 className="text-lg font-bold text-slate-900 mt-1">
+                <h3 id="report-preview-title" className="text-lg font-bold text-ui-ink mt-1">
                   {previewModalReport.title}
                 </h3>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => copyReportHtml(previewModalReport.html)}
-                  className="px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 text-xs font-bold border border-purple-200"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   <Copy className="w-3.5 h-3.5 inline mr-1" />
                   {copiedHtml ? 'Copied!' : 'Copy HTML'}
                 </button>
                 <button
                   onClick={() => setPreviewModalReport(null)}
-                  className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center"
+                  aria-label="Close" className="ui-icon-btn"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -702,7 +709,7 @@ export const ReportsPage: React.FC = () => {
               />
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex justify-end">
+            <div className="pt-3 border-t border-ui-line flex justify-end">
               <button
                 onClick={() => setPreviewModalReport(null)}
                 className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
@@ -718,20 +725,26 @@ export const ReportsPage: React.FC = () => {
       {/* RULE DETAILS MODAL */}
       {/* ------------------------------------------------------------- */}
       {ruleDetailsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-fade-in">
-          <div className="glass-modal max-w-lg w-full p-6 shadow-modal-glass border border-white space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim backdrop-blur-md animate-fade-in">
+          <div
+            ref={ruleDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rule-details-title"
+            className="glass-modal max-w-lg w-full p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-ui-line">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">
+                <span className="text-[10px] font-bold text-ui-ink">
                   {ruleDetailsModal.ruleKey}
                 </span>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 id="rule-details-title" className="text-base font-bold text-ui-ink">
                   {ruleDetailsModal.name}
                 </h3>
               </div>
               <button
                 onClick={() => setRuleDetailsModal(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center"
+                aria-label="Close" className="ui-icon-btn"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -760,7 +773,7 @@ export const ReportsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex justify-end">
+            <div className="pt-3 border-t border-ui-line flex justify-end">
               <button
                 onClick={() => setRuleDetailsModal(null)}
                 className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"

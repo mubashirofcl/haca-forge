@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   Users,
   Search,
@@ -8,9 +8,13 @@ import {
   AlertTriangle,
   ChevronRight,
   RefreshCw,
+  UserPlus,
 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
-import { roleClass } from '../../lib/statusTone';
+import { OverdueChip } from '../../components/OverdueChip';
+import { useAuth } from '../../context/AuthContext';
+import { InviteUserDialog } from './InviteUserDialog';
+import { roleClass, bandClass } from '../../lib/statusTone';
 import { Avatar } from '../../components/Avatar';
 import { ROLE_LABELS } from '@mmp/shared';
 
@@ -42,7 +46,10 @@ interface DirectoryMember {
 }
 
 export const TeamDirectoryPage: React.FC = () => {
-  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [members, setMembers] = useState<DirectoryMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,67 +118,95 @@ export const TeamDirectoryPage: React.FC = () => {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [members]);
 
-  const getBandBadgeClass = (band: string) => {
-    switch (band) {
-      case 'Overloaded':
-        return 'bg-rose-50 text-rose-700 border-rose-200';
-      case 'High':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
-      default:
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    }
-  };
+  // Capacity colours come from the shared .band-* classes; the band label is always shown.
+  const getBandBadgeClass = (band: string) => `band-tint ${bandClass(band)} border-transparent`;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-16 space-y-6 animate-fade-in">
+    <div className="max-w-7xl mx-auto pb-16 space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-[28px] sm:text-[32px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink">
               Team Directory
             </h1>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-white/70 text-ui-text">
               {members.length} members
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
+          <p className="text-[15px] text-ui-muted mt-1.5 max-w-[70ch]">
             View and manage team members, assignments, capacity, and individual performance profiles
           </p>
+          {/* Always mounted so screen readers announce the message when it appears; no height when empty. */}
+          <div role="status" aria-live="polite">
+            {notice && (
+              <p className="mt-3 max-w-[70ch] status-tint status-approved rounded-ui-card px-4 py-3 text-[13px] font-medium">
+                {notice}
+              </p>
+            )}
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={fetchDirectory}
-          className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/80 hover:bg-white text-slate-700 border border-slate-200/80 font-bold text-xs shadow-2xs hover:shadow-xs transition-all active:scale-95"
-          title="Refresh Directory"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={fetchDirectory}
+            className="ui-btn ui-btn-secondary bg-transparent h-11"
+            title="Refresh Directory"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setNotice(null);
+                setInviteOpen(true);
+              }}
+              className="ui-btn ui-btn-primary h-11"
+            >
+              <UserPlus className="w-3.5 h-3.5" aria-hidden="true" />
+              Invite user
+            </button>
+          )}
+        </div>
       </div>
 
+      {isAdmin && inviteOpen && (
+        <InviteUserDialog
+          onClose={() => setInviteOpen(false)}
+          onInvited={(message) => {
+            setInviteOpen(false);
+            setNotice(message);
+            fetchDirectory();
+          }}
+        />
+      )}
+
       {/* Filter and Search Bar */}
-      <div className="p-4 rounded-2xl bg-white/70 backdrop-blur-md border border-slate-200/80 shadow-2xs space-y-3">
+      <div className="glass-panel rounded-ui-panel p-4 sm:p-5 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Text Search */}
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-ui-muted absolute left-4 top-1/2 -translate-y-1/2" aria-hidden="true" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, job role, skills..."
-              className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all min-h-[44px]"
+              aria-label="Search name, job role, skills"
+              className="ui-input w-full pl-10 pr-3"
             />
           </div>
 
           {/* Role Filter */}
           <div>
             <select
+              aria-label="Role"
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all min-h-[44px]"
+              className="ui-select w-full"
             >
               <option value="all">All Roles</option>
               <option value="team_member">Team Member</option>
@@ -183,27 +218,31 @@ export const TeamDirectoryPage: React.FC = () => {
           </div>
 
           {/* Department Filter */}
-          <div>
-            <select
-              value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all min-h-[44px]"
-            >
-              <option value="all">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {(departments.length > 0 || deptFilter !== 'all') && (
+            <div>
+              <select
+                aria-label="Department"
+                value={deptFilter}
+                onChange={(e) => setDeptFilter(e.target.value)}
+                className="ui-select w-full"
+              >
+                <option value="all">All Departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Load Band Filter */}
           <div>
             <select
+              aria-label="Load band"
               value={bandFilter}
               onChange={(e) => setBandFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all min-h-[44px]"
+              className="ui-select w-full"
             >
               <option value="all">All Load Bands</option>
               <option value="Healthy">Healthy (&lt; 65%)</option>
@@ -214,18 +253,17 @@ export const TeamDirectoryPage: React.FC = () => {
         </div>
 
         {/* Secondary Toggles & Whitelist Sorting */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-ui-line">
           <div className="flex items-center gap-4 flex-wrap">
             {/* Status Filter */}
-            <div className="flex items-center gap-1.5 text-xs text-slate-600 font-semibold">
+            <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-ui-muted font-medium">
               <span>Status:</span>
               <button
                 type="button"
                 onClick={() => setStatusFilter('active')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                  statusFilter === 'active'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                aria-pressed={statusFilter === 'active'}
+                className={`h-11 px-4 rounded-full text-[13px] font-semibold border transition-colors ${
+                  statusFilter === 'active' ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
                 }`}
               >
                 Active
@@ -233,10 +271,9 @@ export const TeamDirectoryPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setStatusFilter('suspended')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                  statusFilter === 'suspended'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                aria-pressed={statusFilter === 'suspended'}
+                className={`h-11 px-4 rounded-full text-[13px] font-semibold border transition-colors ${
+                  statusFilter === 'suspended' ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
                 }`}
               >
                 Suspended
@@ -244,10 +281,9 @@ export const TeamDirectoryPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setStatusFilter('all')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                  statusFilter === 'all'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                aria-pressed={statusFilter === 'all'}
+                className={`h-11 px-4 rounded-full text-[13px] font-semibold border transition-colors ${
+                  statusFilter === 'all' ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
                 }`}
               >
                 All
@@ -255,15 +291,15 @@ export const TeamDirectoryPage: React.FC = () => {
             </div>
 
             {/* Late Only Toggle */}
-            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+            <label className="flex items-center gap-2 min-h-[44px] cursor-pointer text-[13px] font-medium text-ui-text select-none">
               <input
                 type="checkbox"
                 checked={hasLateOnly}
                 onChange={(e) => setHasLateOnly(e.target.checked)}
-                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                className="w-4 h-4 rounded text-ui-ink focus:ring-ui-ink border-slate-300"
               />
-              <span className="flex items-center gap-1 text-rose-700">
-                <AlertCircle className="w-3.5 h-3.5" />
+              <span className="flex items-center gap-1 text-ui-ink">
+                <AlertCircle className="w-3.5 h-3.5 text-ui-coral" />
                 Has Late Work Only
               </span>
             </label>
@@ -271,18 +307,19 @@ export const TeamDirectoryPage: React.FC = () => {
 
           {/* Whitelist Sorting Dropdown */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500 font-semibold flex items-center gap-1">
+            <span className="text-ui-muted font-semibold flex items-center gap-1">
               <ArrowUpDown className="w-3.5 h-3.5" />
               Sort:
             </span>
             <select
+              aria-label="Sort by"
               value={`${sortBy}_${sortDir}`}
               onChange={(e) => {
                 const [field, dir] = e.target.value.split('_');
                 setSortBy(field as any);
                 setSortDir(dir as any);
               }}
-              className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[38px]"
+              className="ui-select"
             >
               <option value="name_asc">Name (A – Z)</option>
               <option value="name_desc">Name (Z – A)</option>
@@ -298,27 +335,27 @@ export const TeamDirectoryPage: React.FC = () => {
       {/* Directory Grid & Cards */}
       {loading ? (
         <div className="flex flex-col items-center justify-center p-16 space-y-3">
-          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs font-semibold text-slate-500">Loading team directory...</p>
+          <div className="w-8 h-8 border-3 border-ui-line border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-semibold text-ui-muted">Loading team directory...</p>
         </div>
       ) : error ? (
-        <div className="p-8 text-center space-y-3 rounded-2xl bg-rose-50/70 border border-rose-200">
-          <AlertTriangle className="w-8 h-8 text-rose-500 mx-auto" />
+        <div className="p-8 text-center space-y-3 rounded-ui-card status-tint status-changes">
+          <AlertTriangle className="w-8 h-8 mx-auto" />
           <h3 className="text-sm font-bold text-slate-900">Failed to load directory</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">{error}</p>
+          <p className="text-xs text-ui-muted max-w-sm mx-auto">{error}</p>
           <button
             type="button"
             onClick={fetchDirectory}
-            className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-sm"
+            className="ui-btn ui-btn-primary h-11"
           >
             Try Again
           </button>
         </div>
       ) : members.length === 0 ? (
-        <div className="p-12 text-center space-y-2 rounded-2xl bg-white/70 border border-slate-200">
-          <Users className="w-8 h-8 text-slate-400 mx-auto" />
+        <div className="glass-card p-12 text-center space-y-2">
+          <Users className="w-8 h-8 text-ui-muted mx-auto" />
           <h3 className="text-sm font-bold text-slate-800">No team members found</h3>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ui-muted">
             Try adjusting your search query, status or role filters.
           </p>
         </div>
@@ -333,7 +370,7 @@ export const TeamDirectoryPage: React.FC = () => {
             return (
               <div
                 key={member._id}
-                className="p-5 rounded-2xl bg-white/80 hover:bg-white border border-slate-200/90 hover:border-indigo-300 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between space-y-4 group"
+                className="glass-card p-5 flex flex-col justify-between space-y-4 group"
               >
                 {/* Header: Avatar, Name, Role */}
                 <div className="flex items-start justify-between gap-3">
@@ -345,25 +382,27 @@ export const TeamDirectoryPage: React.FC = () => {
                       className="border border-slate-200/80 shadow-2xs"
                     />
                     <div className="min-w-0">
-                      <h3
-                        onClick={() => navigate(`/team/${member._id}`)}
-                        className="text-sm font-bold text-slate-900 hover:text-indigo-600 transition-colors truncate cursor-pointer"
-                        title={displayName}
-                      >
+                      <h3 className="text-sm font-semibold text-ui-ink truncate">
+                        <Link
+                          to={`/team/${member._id}`}
+                          title={displayName}
+                          className="inline-flex items-center min-h-[44px] -my-3 hover:underline underline-offset-4 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink focus-visible:ring-offset-2"
+                        >
                         {displayName}
+                        </Link>
                       </h3>
                       <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                         <span className={`role-badge ${roleClass(member.role)} text-[10px] font-extrabold px-2 py-0.5`}>
                           {roleLabel}
                         </span>
                         {member.jobRole && (
-                          <span className="text-[10px] font-semibold text-slate-500">
+                          <span className="text-[10px] font-semibold text-ui-muted">
                             • {member.jobRole}
                           </span>
                         )}
                       </div>
                       {member.department?.name && (
-                        <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">
+                        <p className="text-[11px] text-ui-muted font-medium truncate mt-0.5">
                           {member.department.name}
                         </p>
                       )}
@@ -371,10 +410,10 @@ export const TeamDirectoryPage: React.FC = () => {
                   </div>
 
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                       member.status === 'active'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        ? 'status-tint status-approved'
+                        : 'status-tint status-not-started'
                     }`}
                   >
                     {member.status}
@@ -382,13 +421,13 @@ export const TeamDirectoryPage: React.FC = () => {
                 </div>
 
                 {/* Load & Capacity Band Indicator */}
-                <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                <div className="space-y-1.5 pt-2 border-t border-ui-line">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-semibold">Weekly Load:</span>
+                    <span className="text-ui-muted font-semibold">Weekly Load:</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-slate-800">{member.loadPct}%</span>
+                      <span className="font-semibold text-ui-ink tabular-nums">{member.loadPct}%</span>
                       <span
-                        className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded border ${getBandBadgeClass(
+                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${getBandBadgeClass(
                           member.capacityBand
                         )}`}
                       >
@@ -397,36 +436,30 @@ export const TeamDirectoryPage: React.FC = () => {
                     </div>
                   </div>
                   {/* Visual progress bar */}
-                  <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="w-full h-1.5 rounded-full bg-ui-line overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        member.capacityBand === 'Overloaded'
-                          ? 'bg-rose-500'
-                          : member.capacityBand === 'High'
-                          ? 'bg-amber-500'
-                          : 'bg-emerald-500'
-                      }`}
+                      className={`h-full rounded-full band-bar ${bandClass(member.capacityBand)}`}
                       style={{ width: `${Math.min(100, member.loadPct)}%` }}
                     />
                   </div>
                 </div>
 
                 {/* 'Now' Active Step Indicator */}
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1">
-                  <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block">
+                <div className="p-3 rounded-xl bg-white/60 text-xs space-y-1">
+                  <span className="text-xs font-medium text-ui-muted block">
                     Now Working On
                   </span>
                   {member.currentStep ? (
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700">
+                        <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-white text-ui-text">
                           {member.currentStep.stageKey}
                         </span>
                         <span className="font-semibold text-slate-900 truncate">
                           {member.currentStep.title}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+                      <div className="flex items-center justify-between text-[11px] text-ui-muted mt-1">
                         <span>
                           Due:{' '}
                           {member.currentStep.dueDate
@@ -434,36 +467,34 @@ export const TeamDirectoryPage: React.FC = () => {
                             : '—'}
                         </span>
                         {member.currentStep.isLate && (
-                          <span className="text-[10px] font-black text-rose-600 uppercase">
-                            Overdue
-                          </span>
+                          <OverdueChip deadline={member.currentStep.dueDate} className="px-1.5 py-0.5" />
                         )}
                       </div>
                     </div>
                   ) : (
-                    <span className="text-slate-400 italic">No active deliverable</span>
+                    <span className="text-ui-muted italic">No active deliverable</span>
                   )}
                 </div>
 
                 {/* Operational Counts & View Profile CTA */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between pt-2 border-t border-ui-line">
                   <div className="flex items-center gap-2 text-xs">
                     <span
                       title="In Progress"
-                      className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold"
+                      className="status-chip status-in-progress px-2 py-0.5 font-semibold"
                     >
                       {member.counts.inProgress} in prog
                     </span>
                     <span
                       title="Waiting for Approval"
-                      className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold"
+                      className="status-chip status-waiting px-2 py-0.5 font-semibold"
                     >
                       {member.counts.waitingApproval} wait
                     </span>
                     {member.counts.late > 0 && (
                       <span
                         title="Late Deliverables"
-                        className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 font-black"
+                        className="status-chip status-changes px-2 py-0.5 font-semibold"
                       >
                         {member.counts.late} late
                       </span>
@@ -472,7 +503,7 @@ export const TeamDirectoryPage: React.FC = () => {
 
                   <Link
                     to={`/team/${member._id}`}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                    className="inline-flex items-center gap-1 min-h-[44px] px-2 -mr-2 text-[13px] font-semibold text-ui-ink hover:underline underline-offset-4 rounded-full"
                   >
                     Profile
                     <ChevronRight className="w-3.5 h-3.5" />
