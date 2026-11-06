@@ -44,8 +44,6 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
-      - key: SENTRY_DSN
-        sync: false
       - key: ADMIN_SEED_EMAIL
         sync: false
       - key: ADMIN_SEED_PASSWORD
@@ -75,8 +73,6 @@ services:
         sync: false
       - key: MAIL_FROM
         value: Marketing Portal <no-reply@yourdomain.com>
-      - key: SENTRY_DSN
-        sync: false
 
   # 3. Redis Instance for BullMQ
   - type: redis

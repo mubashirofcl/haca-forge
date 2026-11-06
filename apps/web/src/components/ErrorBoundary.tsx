@@ -1,6 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
-import { captureFrontendError } from '../lib/sentry';
 
 interface Props {
   children: ReactNode;
@@ -24,7 +23,6 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[ErrorBoundary caught error]:', error, errorInfo);
-    captureFrontendError(error, errorInfo);
   }
 
   private handleReset = () => {

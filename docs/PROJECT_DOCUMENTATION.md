@@ -56,7 +56,7 @@ haca-forge/
 │   ├── api/                     # Express 5 REST API & Socket.io server
 │   │   ├── src/
 │   │   │   ├── config/          # Environment schema (Zod), MongoDB & Redis connectors
-│   │   │   ├── lib/             # Mailer, Scope resolution, Cloudinary, Sentry
+│   │   │   ├── lib/             # Mailer, Scope resolution, Cloudinary
 │   │   │   ├── middleware/      # Authentication (JWT), CASL RBAC, rate-limiting, error handling
 │   │   │   ├── modules/         # Domain modules (access, assignment, auth, automation,
 │   │   │   │                    #  blockers, calendar, departments, feedback, notifications,

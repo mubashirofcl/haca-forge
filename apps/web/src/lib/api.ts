@@ -88,11 +88,29 @@ export async function apiFetch<T = any>(
 
   const { _isRetry, ...fetchOptions } = options;
 
-  const response = await fetch(url, {
-    ...fetchOptions,
-    headers,
-    credentials: "include", // Ensure cookies are sent
-  });
+  const doFetch = () =>
+    fetch(url, {
+      ...fetchOptions,
+      headers,
+      credentials: "include", // Ensure cookies are sent
+    });
+
+  // While the API is (re)starting, the dev proxy answers 503 SERVER_RESTARTING.
+  // Wait and retry quietly for a few seconds instead of surfacing an error.
+  // Skipped for FormData/streams, whose bodies can't be re-sent.
+  const canRetryBody =
+    fetchOptions.body == null || typeof fetchOptions.body === "string";
+  let response = await doFetch();
+  for (let i = 0; i < 6 && response.status === 503 && canRetryBody; i++) {
+    const code = await response
+      .clone()
+      .json()
+      .then((d) => d?.error?.code)
+      .catch(() => undefined);
+    if (code !== "SERVER_RESTARTING") break;
+    await new Promise((r) => setTimeout(r, 1000));
+    response = await doFetch();
+  }
 
   // Handle silent token refresh on 401 Unauthorized
   if (response.status === 401 && !isAuthEndpoint(url) && !_isRetry) {

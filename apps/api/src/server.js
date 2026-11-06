@@ -25,7 +25,6 @@ import { logger } from "./lib/logger.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { redactContact } from "./middleware/redactContact.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
-import { initSentry, sentryErrorHandler } from "./config/sentry.js";
 import rateLimit from "express-rate-limit";
 
 import statusRoutes from "./modules/status/routes.js";
@@ -62,9 +61,6 @@ import { initDomainEventListeners } from "./modules/notifications/service.js";
 
 const app = express();
 const server = http.createServer(app);
-
-// Initialize Observability
-initSentry(app);
 
 // 1. Request Correlation ID
 app.use(requestIdMiddleware);
@@ -245,8 +241,7 @@ app.use((req, res) => {
   });
 });
 
-// 8. Error Handling & Observability
-app.use(sentryErrorHandler);
+// 8. Error Handling
 app.use(errorHandler);
 
 // 9. Startup & Database
@@ -258,52 +253,73 @@ export async function startServer() {
   await ensureReportDefinitions();
   initDomainEventListeners(io);
 
-  return new Promise((resolve, reject) => {
-    server.once("error", (err) => {
-      if (err.code === "EADDRINUSE") {
-        logger.warn(
-          `Port ${env.PORT} is temporarily busy (EADDRINUSE). Retrying in 1.2s...`,
-        );
-        setTimeout(() => {
-          server.close();
-          server.listen(env.PORT, "0.0.0.0", () => {
-            logger.info(
-              `🚀 API Server running on port ${env.PORT} [${env.NODE_ENV}]`,
-            );
-            logger.info(
-              `🔗 Health check available at http://localhost:${env.PORT}/api/status`,
-            );
-            resolve(server);
-          });
-        }, 1200);
-      } else {
-        reject(err);
-      }
-    });
+  return listenWithRetry();
+}
 
-    server.listen(env.PORT, "0.0.0.0", () => {
-      logger.info(
-        `🚀 API Server running on port ${env.PORT} [${env.NODE_ENV}]`,
-      );
-      logger.info(
-        `🔗 Health check available at http://localhost:${env.PORT}/api/status`,
-      );
+/**
+ * Bind the HTTP server to env.PORT. If the port is still held by a previous
+ * process (e.g. a dev restart that hasn't fully exited yet), keep retrying
+ * instead of crashing. Production gives up after a bounded number of tries.
+ */
+function listenWithRetry() {
+  const maxAttempts = env.NODE_ENV === "production" ? 10 : Infinity;
+  const retryDelayMs = 1000;
+
+  return new Promise((resolve, reject) => {
+    let attempt = 0;
+
+    const onListening = () => {
+      server.off("error", onError);
+      logger.info(`🚀 API Server running on port ${env.PORT} [${env.NODE_ENV}]`);
+      logger.info(`🔗 Health check available at http://localhost:${env.PORT}/api/status`);
       resolve(server);
-    });
+    };
+
+    const onError = (err) => {
+      if (err.code !== "EADDRINUSE" || attempt >= maxAttempts) {
+        server.off("listening", onListening);
+        server.off("error", onError);
+        reject(err);
+        return;
+      }
+      if (attempt === 1 || attempt % 5 === 0) {
+        logger.warn(
+          `Port ${env.PORT} is busy (EADDRINUSE) — another API process is still running or shutting down. Retrying every ${retryDelayMs / 1000}s (attempt ${attempt})...`,
+        );
+      }
+      setTimeout(tryListen, retryDelayMs);
+    };
+
+    const tryListen = () => {
+      attempt += 1;
+      server.listen(env.PORT, "0.0.0.0");
+    };
+
+    server.on("error", onError);
+    server.once("listening", onListening);
+    tryListen();
   });
 }
 
+let shuttingDown = false;
 const shutdown = (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   logger.info(`Received ${signal}. Closing HTTP server...`);
+  // Release the port right away so a restarted process can bind immediately:
+  // disconnect Socket.IO clients and drop idle/keep-alive HTTP connections.
+  io.close();
   server.close(() => {
     logger.info("HTTP server closed.");
     process.exit(0);
   });
+  server.closeAllConnections?.();
   setTimeout(() => process.exit(0), 1500).unref();
 };
 
 process.once("SIGTERM", () => shutdown("SIGTERM"));
 process.once("SIGINT", () => shutdown("SIGINT"));
+process.once("SIGBREAK", () => shutdown("SIGBREAK")); // Windows console close / Ctrl+Break
 
 // Automatically start if called directly
 if (process.env.NODE_ENV !== "test") {
