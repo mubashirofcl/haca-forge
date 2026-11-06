@@ -155,7 +155,7 @@ export const WritingStudioCanvas: React.FC<WritingStudioCanvasProps> = ({
   };
 
   return (
-    <div className="writing-studio-canvas-container flex-1 overflow-auto bg-slate-200/60 p-4 sm:p-8 flex justify-center items-start">
+    <div className="writing-studio-canvas-container flex-1 min-h-0 overflow-auto bg-ui-canvas-deep/60 p-4 sm:p-8 flex justify-center items-start">
       <div
         style={{
           transform: `scale(${zoom / 100})`,

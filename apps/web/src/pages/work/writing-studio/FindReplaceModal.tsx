@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { useDialogFocus } from '../../../lib/useDialogFocus';
 import type { Editor } from '@tiptap/react';
 import { Search, X } from 'lucide-react';
 
@@ -17,6 +18,11 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
   const [replaceTerm, setReplaceTerm] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [matchCount, setMatchCount] = useState<number | null>(null);
+  // Keyboard: focus in on open, Escape closes, Tab stays inside, focus returns to the opener.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const findInputRef = useRef<HTMLInputElement>(null);
+  // The hook focuses the search box (was `autoFocus`, which hid the opener from the hook).
+  useDialogFocus(panelRef, Boolean(isOpen && editor), onClose, { initialFocusRef: findInputRef });
 
   if (!isOpen || !editor) return null;
 
@@ -55,29 +61,36 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
   };
 
   return (
-    <div className="fixed top-24 right-8 z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 w-80 space-y-3">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-          <Search className="w-3.5 h-3.5 text-indigo-600" />
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-labelledby="ws-find-title"
+      className="no-print fixed top-24 right-4 sm:right-8 z-50 glass-modal p-4 w-[calc(100vw-2rem)] sm:w-80 space-y-3"
+    >
+      <div className="flex items-center justify-between border-b border-ui-line pb-2">
+        <h2 id="ws-find-title" className="flex items-center gap-1.5 text-sm font-semibold text-ui-ink">
+          <Search className="w-3.5 h-3.5" aria-hidden="true" />
           Find & Replace
-        </div>
-        <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100">
+        </h2>
+        <button type="button" onClick={onClose} aria-label="Close" className="ui-icon-btn border-transparent">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* Find Input */}
       <div className="space-y-1">
-        <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
-          <span>FIND</span>
+        <div className="flex items-center justify-between text-xs font-medium text-ui-muted">
+          <label htmlFor="ws-find-input">Find</label>
           {matchCount !== null && (
-            <span className={matchCount > 0 ? 'text-indigo-600' : 'text-rose-500'}>
+            <span role="status" className={matchCount > 0 ? 'text-ui-ink font-semibold' : 'status-chip status-changes px-2'}>
               {matchCount} match{matchCount !== 1 ? 'es' : ''}
             </span>
           )}
         </div>
         <div className="relative">
           <input
+            id="ws-find-input"
+            ref={findInputRef}
             type="text"
             value={searchTerm}
             onChange={(e) => {
@@ -88,13 +101,14 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
               if (e.key === 'Enter') handleFind();
             }}
             placeholder="Search text..."
-            className="w-full text-xs border border-slate-200 rounded-xl px-3 py-1.5 pr-8 text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            autoFocus
+            className="ui-input w-full pr-12"
           />
           <button
+            type="button"
             onClick={handleFind}
-            className="absolute right-1.5 top-1.5 text-slate-400 hover:text-indigo-600"
+            className="absolute right-0 top-0 ui-icon-btn border-transparent bg-transparent"
             title="Search"
+            aria-label="Search"
           >
             <Search className="w-3.5 h-3.5" />
           </button>
@@ -103,40 +117,43 @@ export const FindReplaceModal: React.FC<FindReplaceModalProps> = ({
 
       {/* Replace Input */}
       <div className="space-y-1">
-        <span className="text-[10px] font-bold text-slate-400">REPLACE WITH</span>
+        <label htmlFor="ws-replace-input" className="text-xs font-medium text-ui-muted">Replace with</label>
         <input
+          id="ws-replace-input"
           type="text"
           value={replaceTerm}
           onChange={(e) => setReplaceTerm(e.target.value)}
           placeholder="Replace with..."
-          className="w-full text-xs border border-slate-200 rounded-xl px-3 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="ui-input w-full"
         />
       </div>
 
       {/* Case Sensitive Toggle */}
-      <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600 cursor-pointer">
+      <label className="flex items-center gap-2 min-h-[44px] text-xs font-medium text-ui-text cursor-pointer">
         <input
           type="checkbox"
           checked={caseSensitive}
           onChange={(e) => setCaseSensitive(e.target.checked)}
-          className="rounded text-indigo-600"
+          className="w-4 h-4 accent-ui-ink"
         />
         Match case
       </label>
 
       {/* Action Buttons */}
-      <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-ui-line">
         <button
+          type="button"
           onClick={handleReplaceSingle}
           disabled={!searchTerm}
-          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 rounded-xl text-xs font-bold"
+          className="ui-btn ui-btn-secondary h-11"
         >
           Replace
         </button>
         <button
+          type="button"
           onClick={handleReplaceAll}
           disabled={!searchTerm}
-          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold shadow-xs"
+          className="ui-btn ui-btn-primary h-11"
         >
           Replace All
         </button>

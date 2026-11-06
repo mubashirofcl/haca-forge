@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useDialogFocus } from '../../../lib/useDialogFocus';
 import type { Editor } from '@tiptap/react';
 import { apiFetch } from '../../../lib/api';
 import { statusClass, statusTone } from '../../../lib/statusTone';
@@ -78,6 +79,9 @@ export const WritingStudioPage: React.FC = () => {
   const [showTeleprompter, setShowTeleprompter] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showLinkFallbackModal, setShowLinkFallbackModal] = useState(false);
+  // Fallback link dialog: focus in on open, Escape closes, Tab stays inside, focus returns.
+  const linkFallbackDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(linkFallbackDialogRef, showLinkFallbackModal, () => setShowLinkFallbackModal(false));
   const [fallbackLinkUrl, setFallbackLinkUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -522,17 +526,17 @@ export const WritingStudioPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs font-bold text-slate-300">Loading Writing Studio...</p>
+      <div className="min-h-screen bg-ui-canvas flex items-center justify-center text-ui-ink">
+        <div className="flex flex-col items-center gap-3" role="status">
+          <div className="w-8 h-8 border-4 border-ui-ink border-t-transparent rounded-full motion-safe:animate-spin" aria-hidden="true" />
+          <p className="text-xs font-semibold text-ui-muted">Loading Writing Studio...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100/90 text-slate-900 select-none">
+    <div className="min-h-screen flex flex-col bg-ui-canvas text-ui-ink select-none">
       {/* Hidden File Inputs */}
       <input
         type="file"
@@ -552,47 +556,50 @@ export const WritingStudioPage: React.FC = () => {
       {/* Focus Mode Floating Exit Button */}
       {isFocusMode && (
         <button
+          type="button"
           onClick={() => setIsFocusMode(false)}
-          className="fixed top-4 right-4 z-50 px-3 py-1.5 bg-slate-900/80 hover:bg-slate-900 text-white rounded-xl text-xs font-bold backdrop-blur-md shadow-lg flex items-center gap-1.5 cursor-pointer"
+          className="no-print fixed top-4 right-4 z-50 ui-btn ui-btn-primary h-11 gap-1.5"
         >
-          <Minimize2 className="w-3.5 h-3.5" />
+          <Minimize2 className="w-3.5 h-3.5" aria-hidden="true" />
           Exit Focus Mode
         </button>
       )}
 
       {/* 1. Writing Studio Top Header Bar (Hidden in Focus Mode & Print) */}
       {!isFocusMode && (
-        <header className="writing-studio-header h-14 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between z-30">
+        <header className="writing-studio-header min-h-[60px] bg-ui-card/95 backdrop-blur-md border-b border-ui-line px-3 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 z-30">
           {/* Back & Document Title */}
           <div className="flex items-center gap-3 min-w-0">
             <button
+              type="button"
               onClick={() => navigate(`/work/${id}`)}
-              className="text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+              className="inline-flex items-center gap-1 min-h-[44px] min-w-[44px] justify-center sm:justify-start px-1 text-[13px] font-semibold text-ui-muted hover:text-ui-ink rounded-full"
               title="Return to Step Page"
+              aria-label="Back to Step"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
+              <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Back to Step</span>
             </button>
 
-            <span className="text-slate-300">|</span>
+            <span className="text-ui-line" aria-hidden="true">|</span>
 
-            <div className="truncate">
-              <span className="text-xs font-extrabold text-slate-900 truncate">
+            <div className="truncate min-w-0">
+              <h1 className="inline text-sm font-bold text-ui-ink truncate">
                 {documentTitle}
-              </span>
-              <span className="hidden md:inline text-[11px] font-bold text-indigo-600 ml-2 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100">
+              </h1>
+              <span className="hidden md:inline text-[11px] font-semibold text-ui-text ml-2 px-2 py-0.5 rounded-full bg-white/70 border border-ui-line">
                 {workItem?.stageKey || 'Script'} Studio
               </span>
             </div>
           </div>
 
           {/* Right Status & Submit Actions */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
             {/* Status Badge */}
             <span
               className={`status-chip ${statusClass(
                 isUnderReview ? 'waiting' : statusTone(workItem?.status || 'In Progress')
-              )} px-2.5 py-1 text-xs font-black uppercase tracking-wider gap-1`}
+              )} px-2.5 py-1 text-xs font-semibold gap-1`}
             >
               {isUnderReview ? (
                 <>
@@ -611,30 +618,28 @@ export const WritingStudioPage: React.FC = () => {
 
             {/* Fallback Option (Task 6) */}
             <button
+              type="button"
               onClick={() => setShowLinkFallbackModal(true)}
               disabled={isReadOnly}
-              className="hidden lg:flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-800 disabled:opacity-30 cursor-pointer"
+              className="hidden lg:inline-flex items-center gap-1 min-h-[44px] px-2 text-xs font-semibold text-ui-text hover:text-ui-ink hover:underline underline-offset-4 disabled:opacity-40 rounded-full"
               title="Use external Google Docs or Drive link instead"
             >
-              <LinkIcon className="w-3 h-3" />
+              <LinkIcon className="w-3 h-3" aria-hidden="true" />
               Use a link instead
             </button>
 
             {/* Submit for Approval Button */}
             {isUnderReview ? (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 text-xs font-extrabold">
-                <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
+              <div className="status-chip status-waiting min-h-[44px] px-3 gap-1.5 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full status-dot motion-safe:animate-pulse" aria-hidden="true" />
                 Under Review
               </div>
             ) : (
               <button
+                type="button"
                 onClick={handleSubmitForApproval}
                 disabled={isDocumentEmpty || isReadOnly || submitting}
-                className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer ${
-                  isDocumentEmpty || isReadOnly
-                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
-                }`}
+                className="ui-btn ui-btn-primary h-11 gap-1.5"
                 title={
                   isDocumentEmpty
                     ? 'Document is empty. Write your script before submitting.'
@@ -643,7 +648,7 @@ export const WritingStudioPage: React.FC = () => {
                     : 'Submit script for Creative Head approval'
                 }
               >
-                <Send className="w-3.5 h-3.5" />
+                <Send className="w-3.5 h-3.5" aria-hidden="true" />
                 {submitting
                   ? 'Submitting...'
                   : (workItem?.revisions || 0) > 0
@@ -657,8 +662,8 @@ export const WritingStudioPage: React.FC = () => {
 
       {/* 2. Read-Only / Concurrency Banner */}
       {isLockedByOther && (
-        <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 shadow-inner">
-          <Lock className="w-4 h-4" />
+        <div role="status" className="no-print status-tint status-waiting px-4 py-2 text-xs font-semibold flex items-center justify-center gap-2 text-center">
+          <Lock className="w-4 h-4 shrink-0" aria-hidden="true" />
           <span>
             {lockHeldBy || 'Another user'} is currently editing this document. You are in read-only view.
           </span>
@@ -666,8 +671,8 @@ export const WritingStudioPage: React.FC = () => {
       )}
 
       {isUnderReview && !isLockedByOther && (
-        <div className="bg-indigo-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 shadow-inner">
-          <Clock className="w-4 h-4" />
+        <div role="status" className="no-print status-tint status-waiting px-4 py-2 text-xs font-semibold flex items-center justify-center gap-2 text-center">
+          <Clock className="w-4 h-4 shrink-0" aria-hidden="true" />
           <span>This step is currently waiting for Creative Head approval. The studio is in read-only view.</span>
         </div>
       )}
@@ -708,7 +713,7 @@ export const WritingStudioPage: React.FC = () => {
       )}
 
       {/* 4. Main Body: A4 Canvas + Docked Sidebar */}
-      <main className="flex-1 flex overflow-hidden relative">
+      <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
         {/* Canvas Area */}
         <WritingStudioCanvas
           initialContent={initialContent}
@@ -810,22 +815,30 @@ export const WritingStudioPage: React.FC = () => {
 
       {/* Fallback External Link Modal (Task 6) */}
       {showLinkFallbackModal && (
-        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-1.5">
-                <LinkIcon className="w-4 h-4 text-indigo-600" />
+        <div className="fixed inset-0 ui-scrim flex items-center justify-center z-50 p-4">
+          <div
+            ref={linkFallbackDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ws-fallback-title"
+            className="glass-modal max-w-md w-full p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h3 id="ws-fallback-title" className="text-base font-bold text-ui-ink flex items-center gap-1.5">
+                <LinkIcon className="w-4 h-4" aria-hidden="true" />
                 Submit via External Link
               </h3>
               <button
+                type="button"
                 onClick={() => setShowLinkFallbackModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100"
+                aria-label="Close"
+                className="ui-icon-btn shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-ui-text">
               If you worked outside the Writing Studio, provide your external document link (e.g. Google Docs, Notion, or
               OneDrive).
             </p>
@@ -835,20 +848,23 @@ export const WritingStudioPage: React.FC = () => {
               value={fallbackLinkUrl}
               onChange={(e) => setFallbackLinkUrl(e.target.value)}
               placeholder="https://docs.google.com/document/d/..."
-              className="w-full text-xs font-semibold border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              aria-label="External document link"
+              className="ui-input w-full"
             />
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setShowLinkFallbackModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                className="ui-btn ui-btn-secondary h-11"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleFallbackLinkSubmit}
                 disabled={!fallbackLinkUrl.trim() || submitting}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white shadow-xs"
+                className="ui-btn ui-btn-primary h-11"
               >
                 {submitting ? 'Submitting...' : 'Submit Link for Review'}
               </button>
