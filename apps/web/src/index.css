@@ -251,12 +251,13 @@ button.glass-card:hover,
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-    min-height: 36px;
+    min-height: 44px; /* touch target */
     padding: 0 1rem;
     border-radius: var(--ui-radius-control);
     font-size: 0.8125rem;
     font-weight: 600;
     color: var(--ui-muted);
+    white-space: nowrap;
     transition: background-color 150ms ease, color 150ms ease;
   }
   .ui-tab:hover {
@@ -283,6 +284,13 @@ button.glass-card:hover,
   }
   .ui-input::placeholder {
     color: var(--ui-muted);
+  }
+  /* Multi-line text: same fill, border and focus as .ui-input, but a soft rectangle. */
+  .ui-textarea {
+    min-height: 88px;
+    padding: 0.75rem 1rem;
+    border-radius: 16px;
+    line-height: 1.5;
   }
   .ui-input:hover,
   .ui-select:hover {
@@ -344,6 +352,42 @@ button.glass-card:hover,
 .status-blocked     { --st-bg: var(--ui-coral); --st-fg: var(--ui-ink); --st-border: transparent; --st-dot: var(--ui-coral); }
 .status-posted      { --st-bg: #ffffff; --st-fg: var(--ui-ink); --st-border: rgba(11, 11, 13, 0.55); --st-dot: var(--ui-ink); }
 
+/* Workflow diagram (PipelineStepper): the card head and the arrows take their colour from a status tone class. */
+.flow-node {
+  border: 1px var(--st-border-style, solid) var(--ui-line);
+}
+.flow-head {
+  background: var(--st-bg);
+  color: var(--st-fg);
+  border-bottom: 1px var(--st-border-style, solid) var(--ui-line);
+}
+.flow-edge {
+  color: var(--st-dot);
+}
+
+/* Calendar entries: coloured by a status tone class. */
+.cal-chip {
+  background: var(--st-bg);
+  color: var(--st-fg);
+  border: 1px var(--st-border-style, solid) var(--st-border);
+}
+.cal-individual {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  background: var(--ui-ink);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+:where(.status-chip) {
+  padding: 0.125rem 0.5rem;
+}
 .status-chip {
   display: inline-flex;
   align-items: center;
@@ -362,6 +406,41 @@ button.glass-card:hover,
   color: var(--st-fg);
   border-color: var(--st-border);
 }
+
+/* Calendar identity dots (Creative Calendar). Ink, blue, coral and two neutrals;
+   "Other" is a hollow ring so it differs by shape, not only by colour. The calendar
+   name is always shown beside the dot. Keys match CALENDAR_KEYS in @mmp/shared. */
+.cal-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--cal-dot);
+}
+.cal-sm                   { --cal-dot: var(--ui-ink); }
+.cal-sales                { --cal-dot: var(--ui-blue); }
+.cal-ads                  { --cal-dot: var(--ui-coral); }
+.cal-academics_management { --cal-dot: var(--ui-muted); }
+.cal-other                { --cal-dot: transparent; }
+.cal-dot.cal-other        { box-shadow: inset 0 0 0 1.5px var(--ui-muted); }
+
+/* Workload capacity bands: Healthy (<65%), High (65-85%), Overloaded (>85%).
+   Healthy = blue, High = neutral ink, Overloaded = coral. The band label is always
+   shown next to the colour. Text passes AA (7.5:1, 10.2:1, 6.6:1). */
+.band-healthy    { --band-bg: var(--ui-blue-soft); --band-fg: #23457c; --band-bar: var(--ui-blue); }
+.band-high       { --band-bg: rgba(39, 50, 71, 0.1); --band-fg: #2b3240; --band-bar: var(--ui-ink); }
+.band-overloaded { --band-bg: var(--ui-coral-soft); --band-fg: #8b2d2a; --band-bar: var(--ui-coral); }
+.band-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 9999px;
+  background: var(--band-bg);
+  color: var(--band-fg);
+}
+.band-tint { background: var(--band-bg); color: var(--band-fg); }
+.band-bar  { background: var(--band-bar); }
 
 /* Role badges: one set for the 5 roles, desaturated to sit with the palette. */
 .role-badge {
@@ -388,6 +467,47 @@ button.glass-card:hover,
   }
 }
 
+/* Header Team Chat: faces of recent chats. One size, one overlap, one ring, so the stack reads as a unit. */
+.shell-scope .chat-stack .chat-stack-item {
+  display: inline-flex;
+  flex: none;
+}
+.shell-scope .chat-stack .chat-stack-item + .chat-stack-item {
+  margin-left: -6px;
+}
+.shell-scope .chat-stack .ui-avatar {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+}
+.shell-scope .chat-stack .ui-avatar,
+.shell-scope .chat-stack .chat-stack-more {
+  box-shadow: 0 0 0 2px var(--shell-surface);
+}
+.shell-scope .chat-stack .chat-stack-more {
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  /* The face before it covers 8px on the left, so the count is centred in what stays visible. */
+  padding: 0 4px 0 12px;
+  border-radius: 9999px;
+  background: var(--ui-ink);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+/* On the active (dark) chat pill the rings and the chip follow the pill colour. */
+.shell-scope .chat-stack.is-active .ui-avatar,
+.shell-scope .chat-stack.is-active .chat-stack-more {
+  box-shadow: 0 0 0 2px #4f46e5;
+}
+.shell-scope .chat-stack.is-active .chat-stack-more {
+  background: #ffffff;
+  color: var(--ui-ink);
+}
+
 @layer components {
   /* Drawers: a frosted panel edge with a card body. */
   .ui-drawer {
@@ -405,7 +525,8 @@ button.glass-card:hover,
 /* Pulsing dots and bounces stop for people who ask for less motion. */
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
-  .animate-bounce {
+  .animate-bounce,
+  .animate-ping {
     animation: none;
   }
   .ui-btn,
@@ -441,6 +562,36 @@ input[type='range']::-webkit-slider-runnable-track {
   background: #e2e8f0;
   border-radius: 9999px;
   cursor: pointer;
+}
+
+/* Video scrubbers on the dark media stage (Review Studio, workspace player): neutral
+   white thumb with an ink ring instead of the legacy purple thumb above. Scoped by class
+   so other range inputs (e.g. the Teleprompter) keep their current look. */
+input[type='range'].ui-media-range::-webkit-slider-thumb {
+  background: #ffffff;
+  border: 3px solid var(--ui-ink);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+input[type='range'].ui-media-range::-moz-range-thumb {
+  background: #ffffff;
+  border: 3px solid var(--ui-ink);
+}
+input[type='range'].ui-media-range::-webkit-slider-runnable-track {
+  background: rgba(255, 255, 255, 0.35);
+}
+/* Neutral slider on light surfaces (e.g. avatar crop zoom): ink thumb, hairline track.
+   Scoped by class; the Teleprompter keeps the legacy rule above. */
+input[type='range'].ui-range::-webkit-slider-thumb {
+  background: var(--ui-ink);
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(45, 58, 82, 0.3);
+}
+input[type='range'].ui-range::-moz-range-thumb {
+  background: var(--ui-ink);
+  border: 3px solid #ffffff;
+}
+input[type='range'].ui-range::-webkit-slider-runnable-track {
+  background: rgb(var(--ui-ink-rgb) / 0.15);
 }
 
 .no-scrollbar::-webkit-scrollbar {

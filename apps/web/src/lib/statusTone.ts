@@ -57,3 +57,23 @@ export function roleClass(role?: string | null): string {
       return 'role-team-member';
   }
 }
+
+/** Workload capacity band -> shared class (`band-healthy` | `band-high` | `band-overloaded`).
+ *  Combine with `band-chip`, `band-tint` or `band-bar`. Thresholds: <65 Healthy, 65-85 High, >85 Overloaded. */
+export function bandClass(band?: string | null): string {
+  switch (band) {
+    case 'Overloaded':
+      return 'band-overloaded';
+    case 'High':
+      return 'band-high';
+    default:
+      return 'band-healthy';
+  }
+}
+
+/** Same thresholds as the API's capacity bands; the real (unclamped) percentage is passed in. */
+export function bandForPct(pct: number): 'Healthy' | 'High' | 'Overloaded' {
+  if (pct > 85) return 'Overloaded';
+  if (pct >= 65) return 'High';
+  return 'Healthy';
+}
