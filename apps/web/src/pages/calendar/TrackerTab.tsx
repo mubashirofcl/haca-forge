@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../../lib/api';
 import { statusClass, statusTone } from '../../lib/statusTone';
+import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useAuth } from '../../context/AuthContext';
 import {
   Table,
@@ -97,7 +98,9 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
   // Assign Modal State
   const [selectedPieceForAssign, setSelectedPieceForAssign] = useState<ContentPieceTrackerRow | null>(null);
   const [drawerPersonId, setDrawerPersonId] = useState<string | null>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
   const [selectedTimelinePiece, setSelectedTimelinePiece] = useState<ContentPieceTrackerRow | null>(null);
+  useDialogFocus(timelineRef, Boolean(selectedTimelinePiece), () => setSelectedTimelinePiece(null));
   const [recommendations, setRecommendations] = useState<AssignRecommendation[]>([]);
   const [assignSelections, setAssignSelections] = useState<Record<string, string>>({});
   const [overrideReasons, setOverrideReasons] = useState<Record<string, string>>({});
@@ -106,6 +109,10 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
   // Reschedule Modal State
   const [selectedPieceForReschedule, setSelectedPieceForReschedule] = useState<ContentPieceTrackerRow | null>(null);
+  const assignDialogRef = useRef<HTMLDivElement>(null);
+  const rescheduleDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(assignDialogRef, Boolean(selectedPieceForAssign), () => setSelectedPieceForAssign(null));
+  useDialogFocus(rescheduleDialogRef, Boolean(selectedPieceForReschedule), () => setSelectedPieceForReschedule(null));
   const [newPostingDate, setNewPostingDate] = useState('');
   const [shiftUnstarted, setShiftUnstarted] = useState(true);
   const [isRescheduling, setIsRescheduling] = useState(false);
@@ -304,14 +311,14 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
   return (
     <div className="space-y-4">
       {/* Filter Cockpit Strip */}
-      <div className="glass-card p-4 space-y-3">
+      <div className="glass-panel rounded-ui-panel p-5 sm:p-6 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <Table className="w-5 h-5 text-purple-600" />
+            <h2 className="text-lg font-bold text-ui-ink flex items-center gap-2">
+              <Table className="w-5 h-5 text-ui-ink" />
               Content Flow Tracker
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-[13px] text-ui-muted mt-0.5 max-w-[70ch]">
               Multi-stage pipeline tracking: stage status, deadlines, intelligent assignments, approvals, and turnaround.
             </p>
           </div>
@@ -320,10 +327,9 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
               onClick={() => setFilterNeedsOwner(!filterNeedsOwner)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                filterNeedsOwner
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              aria-pressed={filterNeedsOwner}
+              className={`h-11 px-4 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${
+                filterNeedsOwner ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
               }`}
             >
               <UserX className="w-3.5 h-3.5" />
@@ -332,10 +338,9 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
             <button
               onClick={() => setFilterWaitingApproval(!filterWaitingApproval)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                filterWaitingApproval
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              aria-pressed={filterWaitingApproval}
+              className={`h-11 px-4 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${
+                filterWaitingApproval ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
@@ -344,10 +349,9 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
             <button
               onClick={() => setFilterOverdue(!filterOverdue)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                filterOverdue
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              aria-pressed={filterOverdue}
+              className={`h-11 px-4 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${
+                filterOverdue ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
               }`}
             >
               <AlertTriangle className="w-3.5 h-3.5" />
@@ -356,10 +360,9 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
             <button
               onClick={() => setFilterBlocked(!filterBlocked)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                filterBlocked
-                  ? 'bg-rose-700 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              aria-pressed={filterBlocked}
+              className={`h-11 px-4 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${
+                filterBlocked ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
               }`}
             >
               Blocked
@@ -368,15 +371,16 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
         </div>
 
         {/* Dropdown Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-4 border-t border-ui-line text-xs">
           <div>
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+            <label className="text-[13px] font-medium text-ui-muted block mb-1">
               Month
             </label>
             <select
+              aria-label="Month"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="ui-select w-full"
             >
               <option value="all">All Months</option>
               <option value="2026-10">October 2026</option>
@@ -386,13 +390,14 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
           </div>
 
           <div>
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+            <label className="text-[13px] font-medium text-ui-muted block mb-1">
               Content Type
             </label>
             <select
+              aria-label="Content type"
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="ui-select w-full"
             >
               <option value="all">All Content Types</option>
               <option value="Reel">Reel</option>
@@ -414,13 +419,14 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
           </div>
 
           <div>
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+            <label className="text-[13px] font-medium text-ui-muted block mb-1">
               Stage Status
             </label>
             <select
+              aria-label="Stage status"
               value={selectedStageStatus}
               onChange={(e) => setSelectedStageStatus(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="ui-select w-full"
             >
               <option value="all">All Stage Statuses</option>
               <option value="Not Started">Not Started</option>
@@ -433,18 +439,18 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
           </div>
 
           <div className="flex items-end">
-            <span className="text-xs text-slate-500 font-medium">
-              Showing <span className="font-bold text-slate-900">{pieces.length}</span> tracker items
+            <span className="text-xs text-ui-muted font-medium">
+              Showing <span className="font-semibold text-ui-ink">{pieces.length}</span> tracker items
             </span>
           </div>
         </div>
       </div>
 
       {/* Sheet-like Tracker Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="glass-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="ui-table w-full text-left text-xs border-collapse">
-            <thead className="bg-slate-50/90 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200">
+            <thead className="bg-slate-50/90 text-slate-600 font-bold border-b border-slate-200">
               <tr>
                 <th className="p-3 whitespace-nowrap">Content Piece</th>
                 <th className="p-3 whitespace-nowrap">Final Date (F)</th>
@@ -464,7 +470,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
             <tbody className="divide-y divide-slate-100">
               {pieces.length === 0 && !isLoading ? (
                 <tr>
-                  <td colSpan={13} className="p-8 text-center text-slate-400">
+                  <td colSpan={13} className="p-8 text-center text-ui-muted">
                     No approved content pieces match the selected filters.
                   </td>
                 </tr>
@@ -475,25 +481,31 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                     <tr
                       key={piece._id}
                       onClick={() => setSelectedTimelinePiece(piece)}
-                      className="hover:bg-purple-50/40 transition-colors cursor-pointer"
+                      className="hover:bg-white transition-colors cursor-pointer"
                     >
                       {/* Content Piece Details */}
                       <td className="p-3 max-w-[200px]">
-                        <div className="font-bold text-slate-900 line-clamp-1" title={piece.topic}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTimelinePiece(piece);
+                          }}
+                          className="block max-w-full py-[14px] -my-[14px] text-left font-semibold text-ui-ink line-clamp-1 hover:underline underline-offset-2 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink focus-visible:ring-offset-2"
+                          title={piece.topic}
+                        >
                           {piece.topic}
-                        </div>
+                        </button>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-1 py-0.2 rounded">
+                          <span className="text-[10px] font-mono text-ui-ink bg-white/70 px-1 py-0.2 rounded">
                             {piece.contentType}
                           </span>
-                          <span
-                            className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
-                            style={{ backgroundColor: cal.bg, borderColor: cal.border, color: cal.text }}
-                          >
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-white/80 text-ui-text">
+                            <span className={`cal-dot cal-${cal.key}`} />
                             {cal.name}
                           </span>
                           {piece.planId && (
-                            <span className="text-[10px] text-slate-400">
+                            <span className="text-[10px] text-ui-muted">
                               {piece.planId.code}
                             </span>
                           )}
@@ -509,7 +521,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                       <td className="p-3">
                         <div className="flex items-center gap-2 flex-wrap">
                           {piece.stages.length === 0 ? (
-                            <span className="text-slate-400 italic text-[11px]">No stages generated</span>
+                            <span className="text-ui-muted italic text-[11px]">No stages generated</span>
                           ) : (
                             piece.stages.map((st) => {
                               const style = statusClass(statusTone(st.status, st.isLocked));
@@ -518,8 +530,8 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                   key={st._id}
                                   className={`p-2 rounded-xl border flex flex-col gap-1 min-w-[100px] transition-all ${
                                     st.isLocked
-                                      ? 'bg-slate-50 border-slate-200 opacity-60'
-                                      : 'bg-white border-slate-200/90 shadow-2xs'
+                                      ? 'bg-white/40 border-dashed border-ui-line'
+                                      : 'bg-white border-ui-line'
                                   }`}
                                 >
                                   <div className="flex items-center justify-between gap-1">
@@ -528,7 +540,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                     </span>
                                     {st.isLocked ? (
                                       <span title="Locked stage">
-                                        <Lock className="w-3 h-3 text-slate-400" />
+                                        <Lock className="w-3 h-3 text-ui-muted" />
                                       </span>
                                     ) : (
                                       <span className={`w-2 h-2 rounded-full status-dot ${style}`} />
@@ -539,7 +551,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                     {st.status}
                                   </span>
 
-                                  <div className="text-[10px] text-slate-500 truncate" title={st.ownerId?.name || 'Needs owner'}>
+                                  <div className="text-[10px] text-ui-muted truncate" title={st.ownerId?.name || 'Needs owner'}>
                                     {st.ownerId ? (
                                       <button
                                         type="button"
@@ -547,7 +559,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                           e.stopPropagation();
                                           setDrawerPersonId(st.ownerId!._id);
                                         }}
-                                        className="inline-flex items-center gap-1.5 hover:text-purple-600 transition-colors cursor-pointer text-left group"
+                                        className="inline-flex items-center gap-1.5 min-h-[44px] -my-3 hover:text-ui-ink transition-colors cursor-pointer text-left group"
                                       >
                                         <Avatar
                                           url={(st.ownerId as any).avatarUrl}
@@ -555,7 +567,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                           userId={st.ownerId._id}
                                           size="xs"
                                         />
-                                        <span className="text-slate-700 font-medium group-hover:text-purple-600 truncate max-w-[120px]">
+                                        <span className="text-slate-700 font-medium group-hover:text-ui-ink truncate max-w-[120px]">
                                           {st.ownerId.name}
                                         </span>
                                       </button>
@@ -564,14 +576,14 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                     )}
                                   </div>
 
-                                  <div className="text-[9px] text-slate-400 font-mono">
+                                  <div className="text-[9px] text-ui-muted font-mono">
                                     Due: {new Date(st.dueDate).toLocaleDateString()}
                                   </div>
 
                                   {canManageSteps && !st.isLocked && st.status === 'Not Started' && (
                                     <button
                                       onClick={() => handleToggleSkipStage(piece._id, st._id, st.isSkipped)}
-                                      className="text-[9px] text-slate-400 hover:text-purple-600 text-left pt-0.5"
+                                      className="flex items-center min-h-[44px] -my-3 text-[10px] text-ui-muted hover:text-ui-ink hover:underline text-left"
                                     >
                                       {st.isSkipped ? 'Restore step' : 'Skip step'}
                                     </button>
@@ -605,7 +617,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                             <span>{new Date(piece.latestApprovalDate).toLocaleDateString()}</span>
                           </div>
                         ) : (
-                          <span className="text-slate-400 text-[11px]">—</span>
+                          <span className="text-ui-muted text-[11px]">—</span>
                         )}
                       </td>
 
@@ -616,16 +628,16 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                             href={piece.liveUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-purple-600 hover:underline flex items-center gap-1 font-semibold text-[11px]"
+                            className="text-ui-ink hover:underline flex items-center gap-1 font-semibold text-[11px]"
                           >
                             <span>Live Reel/Post</span>
                             <ExternalLink className="w-3 h-3" />
                           </a>
                         ) : (
-                          <span className="text-slate-400 text-[11px]">Unpublished</span>
+                          <span className="text-ui-muted text-[11px]">Unpublished</span>
                         )}
                         {piece.publishedAt && (
-                          <div className="text-[10px] text-slate-400">
+                          <div className="text-[10px] text-ui-muted">
                             {new Date(piece.publishedAt).toLocaleDateString()}
                           </div>
                         )}
@@ -640,7 +652,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                               e.stopPropagation();
                               setDrawerPersonId(piece.postingOwner!._id);
                             }}
-                            className="inline-flex items-center gap-1.5 hover:text-purple-600 transition-colors cursor-pointer group"
+                            className="inline-flex items-center gap-1.5 min-h-[44px] -my-3 hover:text-ui-ink transition-colors cursor-pointer group"
                           >
                             <Avatar
                               url={(piece.postingOwner as any).avatarUrl}
@@ -648,12 +660,12 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                               userId={piece.postingOwner._id}
                               size="xs"
                             />
-                            <span className="text-slate-700 font-medium group-hover:text-purple-600">
+                            <span className="text-slate-700 font-medium group-hover:text-ui-ink">
                               {piece.postingOwner.name}
                             </span>
                           </button>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-ui-muted">—</span>
                         )}
                       </td>
 
@@ -664,26 +676,27 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                             {piece.turnaroundDays}d
                           </span>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-ui-muted">—</span>
                         )}
                       </td>
 
                       {/* Remarks */}
-                      <td className="p-3 max-w-[150px] truncate text-slate-500" title={piece.remarks}>
+                      <td className="p-3 max-w-[150px] truncate text-ui-muted" title={piece.remarks}>
                         {piece.remarks || '—'}
                       </td>
 
                       {/* Actions */}
                       {!isExecutive && (
-                        <td className="p-3 text-right whitespace-nowrap">
+                        <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          {/* Row actions open their own dialogs; keep the click from also opening the row timeline. */}
                           <div className="flex items-center justify-end gap-1.5">
                             {canAssign && (
                               <button
                                 onClick={() => handleOpenAssignModal(piece)}
-                                className="px-2.5 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold flex items-center gap-1 shadow-2xs"
+                                className="ui-btn ui-btn-secondary h-11 px-3"
                                 title="Compute recommendations and assign stages"
                               >
-                                <Sparkles className="w-3 h-3 text-purple-600" />
+                                <Sparkles className="w-3 h-3 text-ui-ink" />
                                 Assign
                               </button>
                             )}
@@ -695,7 +708,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                   setNewPostingDate(piece.postingDate.substring(0, 10));
                                   setShiftUnstarted(true);
                                 }}
-                                className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium"
+                                className="ui-btn ui-btn-secondary h-11 px-3"
                                 title="Change final date and shift stage deadlines"
                               >
                                 Change date
@@ -715,21 +728,27 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
       {/* Assign Stages Modal */}
       {selectedPieceForAssign && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col animate-scaleUp">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 ui-scrim backdrop-blur-sm flex items-center justify-center p-4">
+          <div
+            ref={assignDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tracker-assign-title"
+            className="glass-modal max-w-2xl w-full p-6 max-h-[90vh] flex flex-col animate-scaleUp"
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-ui-line">
               <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-purple-600" />
+                <h3 id="tracker-assign-title" className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-ui-ink" />
                   Assign Stage Owners: {selectedPieceForAssign.topic}
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-ui-muted mt-0.5">
                   Algorithmic owner recommendations based on work preferences, current workload (&lt;85%), revisions, and bandwidth.
                 </p>
               </div>
               <button
                 onClick={() => setSelectedPieceForAssign(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                aria-label="Close" className="ui-icon-btn"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -737,19 +756,19 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
             <div className="py-4 space-y-4 overflow-y-auto flex-1">
               {isLoadingRecs ? (
-                <div className="text-center py-8 text-xs text-purple-600 font-semibold">
+                <div className="text-center py-8 text-xs text-ui-ink font-semibold">
                   Calculating member bandwidth, work preferences, and lowest workload candidates...
                 </div>
               ) : (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    <span className="text-xs font-bold text-slate-700">
                       Stages ({recommendations.length})
                     </span>
                     <button
                       type="button"
                       onClick={handleAcceptAllRecommendations}
-                      className="px-3 py-1 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 text-xs font-bold flex items-center gap-1 shadow-2xs"
+                      className="px-3 py-1 rounded-lg bg-white/70 text-ui-ink border border-ui-line hover:bg-white text-xs font-bold flex items-center gap-1 shadow-2xs"
                     >
                       <Check className="w-3.5 h-3.5" />
                       Accept All Recommendations
@@ -803,17 +822,18 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[11px] text-slate-500 mt-1 italic">{rec.rationale}</p>
+                              <p className="text-[11px] text-ui-muted mt-1 italic">{rec.rationale}</p>
                             </div>
                           </div>
 
                           {/* Owner Selection Dropdown */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                             <div>
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                              <label className="text-[10px] font-bold text-ui-muted block mb-1">
                                 Assign Owner
                               </label>
                               <select
+                                aria-label="Assign owner"
                                 value={selectedPersonId}
                                 onChange={(e) =>
                                   setAssignSelections({
@@ -821,7 +841,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                     [rec.workItemId]: e.target.value,
                                   })
                                 }
-                                className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+                                className="ui-select w-full"
                               >
                                 <option value="">— Needs Owner (Unassigned) —</option>
                                 {availableUsers.map((u: any) => (
@@ -835,7 +855,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                             {/* Override Reason input if overriding */}
                             {isOverriding && (
                               <div>
-                                <label className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block mb-1">
+                                <label className="text-[10px] font-bold text-amber-700 block mb-1">
                                   Override Reason (Logged)
                                 </label>
                                 <input
@@ -848,7 +868,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                       [rec.workItemId]: e.target.value,
                                     })
                                   }
-                                  className="w-full text-xs px-2.5 py-1.5 border border-amber-300 rounded-lg bg-amber-50/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                  className="ui-input w-full"
                                 />
                               </div>
                             )}
@@ -861,7 +881,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
               )}
             </div>
 
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
+            <div className="pt-4 border-t border-ui-line flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setSelectedPieceForAssign(null)}
@@ -873,7 +893,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                 type="button"
                 disabled={isSavingAssign || isLoadingRecs}
                 onClick={handleSaveAssignments}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-200 disabled:opacity-50"
+                className="px-4 py-2 rounded-xl bg-ui-ink hover:bg-ui-ink/85 text-white text-xs font-bold shadow-md disabled:opacity-50"
               >
                 {isSavingAssign ? 'Saving...' : 'Save Stage Assignments'}
               </button>
@@ -884,13 +904,19 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
       {/* Reschedule Modal */}
       {selectedPieceForReschedule && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-scaleUp">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">Reschedule Final Posting Date</h3>
+        <div className="fixed inset-0 z-50 ui-scrim backdrop-blur-sm flex items-center justify-center p-4">
+          <div
+            ref={rescheduleDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tracker-reschedule-title"
+            className="glass-modal max-w-md w-full p-6 animate-scaleUp"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-ui-line">
+              <h3 id="tracker-reschedule-title" className="text-base font-bold text-slate-900">Reschedule Final Posting Date</h3>
               <button
                 onClick={() => setSelectedPieceForReschedule(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                aria-label="Close" className="ui-icon-btn"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -904,27 +930,27 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                   required
                   value={newPostingDate}
                   onChange={(e) => setNewPostingDate(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  className="ui-input w-full"
                 />
               </div>
 
-              <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+              <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer p-3 bg-white/70 rounded-xl border border-ui-line">
                 <input
                   type="checkbox"
                   checked={shiftUnstarted}
                   onChange={(e) => setShiftUnstarted(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                  className="mt-0.5 rounded border-slate-300 text-ui-ink focus:ring-ui-ink"
                 />
                 <div>
                   <span className="font-bold block">Shift unstarted stage deadlines</span>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[11px] text-ui-muted">
                     Automatically recalculates due dates for all unstarted stages backwards from the new final date.
                   </span>
                 </div>
               </label>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+            <div className="pt-3 border-t border-ui-line flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setSelectedPieceForReschedule(null)}
@@ -936,7 +962,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                 type="button"
                 disabled={isRescheduling}
                 onClick={handleSaveReschedule}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-200 disabled:opacity-50"
+                className="px-4 py-2 rounded-xl bg-ui-ink hover:bg-ui-ink/85 text-white text-xs font-bold shadow-md disabled:opacity-50"
               >
                 {isRescheduling ? 'Rescheduling...' : 'Update Date'}
               </button>
@@ -947,15 +973,21 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
       {/* Timeline Drawer for Content Piece */}
       {selectedTimelinePiece && (
-        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 ui-scrim backdrop-blur-xs flex items-center justify-center p-4">
+          <div
+            ref={timelineRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Content piece timeline"
+            className="glass-modal max-w-2xl w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-ui-line">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block">
+                <span className="text-[10px] font-bold text-ui-ink block">
                   Piece Timeline &amp; Step Lifecycle
                 </span>
                 <h3 className="text-base font-extrabold text-slate-900">{selectedTimelinePiece.topic}</h3>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-ui-muted">
                   {selectedTimelinePiece.contentType} • Posting Date:{' '}
                   {new Date(selectedTimelinePiece.postingDate).toLocaleDateString()}
                 </p>
@@ -963,7 +995,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
               <button
                 type="button"
                 onClick={() => setSelectedTimelinePiece(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                aria-label="Close" className="ui-icon-btn"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -980,7 +1012,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                         {st.status}
                       </span>
                     </div>
-                    <span className="text-xs text-slate-500 font-semibold">
+                    <span className="text-xs text-ui-muted font-semibold">
                       Holder: <strong className="text-slate-800">{st.holder || st.ownerId?.name || '—'}</strong>
                     </span>
                   </div>
@@ -988,37 +1020,37 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                   {/* Stage Timestamps */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] bg-white p-2.5 rounded-xl border border-slate-100">
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Due Date</span>
+                      <span className="text-ui-muted block text-[10px] font-bold">Due Date</span>
                       <span className="font-semibold text-slate-800">
                         {st.dueDate ? new Date(st.dueDate).toLocaleDateString() : '—'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Started</span>
+                      <span className="text-ui-muted block text-[10px] font-bold">Started</span>
                       <span className="font-semibold text-slate-800">
                         {st.startedAt ? new Date(st.startedAt).toLocaleString() : '—'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Submitted</span>
+                      <span className="text-ui-muted block text-[10px] font-bold">Submitted</span>
                       <span className="font-semibold text-slate-800">
                         {st.submittedAt ? new Date(st.submittedAt).toLocaleString() : '—'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Approved</span>
+                      <span className="text-ui-muted block text-[10px] font-bold">Approved</span>
                       <span className="font-semibold text-slate-800">
                         {st.approvedAt ? new Date(st.approvedAt).toLocaleString() : '—'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Work Time</span>
+                      <span className="text-ui-muted block text-[10px] font-bold">Work Time</span>
                       <span className="font-semibold text-slate-800">
                         {st.measures?.workTimeFormatted || '—'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Approval Wait</span>
+                      <span className="text-ui-muted block text-[10px] font-bold">Approval Wait</span>
                       <span className="font-semibold text-slate-800">
                         {st.measures?.approvalWaitFormatted || '—'}
                       </span>
@@ -1028,14 +1060,14 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                   {/* Paused intervals if any */}
                   {Array.isArray(st.intervals) && st.intervals.length > 0 && (
                     <div className="space-y-1 pt-1">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      <span className="text-[10px] font-bold text-ui-muted block">
                         Paused Intervals ({st.intervals.length})
                       </span>
                       {st.intervals.map((iv: any, idx: number) => (
                         <div key={idx} className="text-[11px] text-slate-600 bg-white p-2 rounded-lg border border-slate-100 flex items-center justify-between">
-                          <span className="font-bold text-rose-700 uppercase">{iv.kind}</span>
+                          <span className="font-bold text-rose-700">{iv.kind}</span>
                           <span>{new Date(iv.startedAt).toLocaleTimeString()} → {iv.endedAt ? new Date(iv.endedAt).toLocaleTimeString() : 'ongoing'}</span>
-                          {iv.reason && <span className="text-slate-500">({iv.reason})</span>}
+                          {iv.reason && <span className="text-ui-muted">({iv.reason})</span>}
                         </div>
                       ))}
                     </div>
@@ -1044,7 +1076,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
               ))}
             </div>
 
-            <div className="pt-3 border-t border-slate-100 text-right">
+            <div className="pt-3 border-t border-ui-line text-right">
               <button
                 type="button"
                 onClick={() => setSelectedTimelinePiece(null)}

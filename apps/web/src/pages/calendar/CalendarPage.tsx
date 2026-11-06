@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -6,12 +6,14 @@ import {
   WORK_ITEM_STATUSES,
   CALENDAR_LIST,
   getCalendarDefinition,
+  getStepStatusLabel,
   type CalendarKey,
   type WorkType,
   type Priority,
   type WorkItemStatus,
 } from '@mmp/shared';
 import { statusClass, statusTone } from '../../lib/statusTone';
+import { useDialogFocus } from '../../lib/useDialogFocus';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -21,9 +23,11 @@ import {
   CalendarRange,
   ListFilter,
   Plus,
+  UserRound,
   X,
 } from 'lucide-react';
 import { PlansTab } from './PlansTab';
+import { OverdueChip, overdueLabel } from '../../components/OverdueChip';
 import { TrackerTab } from './TrackerTab';
 
 interface WorkItemCalendar {
@@ -31,11 +35,17 @@ interface WorkItemCalendar {
   title: string;
   workType: WorkType;
   deadline: string;
-  estimatedEffortHrs: number;
+  estimatedEffortHrs?: number;
   status: WorkItemStatus;
-  priority: Priority;
-  revisions: number;
+  priority?: Priority;
+  revisions?: number;
   isOverdue?: boolean;
+  isLocked?: boolean;
+  /** From an individual plan, not a monthly plan. */
+  isIndividual?: boolean;
+  isPublishEvent?: boolean;
+  /** The real work item behind a publish date. */
+  workItemId?: string | null;
   calendar?: CalendarKey;
   departmentId?: { _id: string; name: string };
   ownerId?: { _id: string; name: string; email: string; jobRole?: string };
@@ -66,6 +76,38 @@ function formatCalendarItemTitle(item: any): string {
     return `${item.stageKey} due: ${rawTitle}${ownerName ? ` (${ownerName})` : ''}`;
   }
   return item.title;
+}
+
+const isLockedItem = (item: Pick<WorkItemCalendar, 'isLocked' | 'status'>) =>
+  Boolean(item.isLocked) && item.status !== 'Approved' && item.status !== 'Published';
+const itemTone = (item: WorkItemCalendar) => statusClass(statusTone(item.status, isLockedItem(item)));
+const itemStatusLabel = (item: WorkItemCalendar) => (isLockedItem(item) ? 'Locked' : getStepStatusLabel(item.status));
+
+/** In a narrow month cell only the icon shows; screen readers still get the word. */
+const IndividualBadge: React.FC<{ compact?: boolean }> = ({ compact }) => (
+  <span className={`cal-individual ${compact ? 'max-sm:!px-0.5' : ''}`} title="Individual work">
+    <UserRound className="w-2.5 h-2.5" aria-hidden="true" />
+    <span className={compact ? 'sr-only 2xl:not-sr-only' : undefined}>Individual</span>
+  </span>
+);
+
+const COLOUR_KEY: { tone: Parameters<typeof statusClass>[0]; label: string }[] = [
+  { tone: 'not-started', label: `${getStepStatusLabel('Not Started')} or planned` },
+  { tone: 'in-progress', label: getStepStatusLabel('In Progress') },
+  { tone: 'waiting', label: getStepStatusLabel('Pending') },
+  { tone: 'changes', label: getStepStatusLabel('Feedback') },
+  { tone: 'approved', label: getStepStatusLabel('Approved') },
+  { tone: 'blocked', label: getStepStatusLabel('Blocked') },
+  { tone: 'posted', label: getStepStatusLabel('Published') },
+  { tone: 'locked', label: 'Locked' },
+];
+
+/** Local calendar date for a date input (YYYY-MM-DD). */
+function toDateInput(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function fromInputLabel(value: string): string {
+  return new Date(`${value}T00:00:00`).toLocaleDateString('default', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export const CalendarPage: React.FC = () => {
@@ -106,7 +148,22 @@ export const CalendarPage: React.FC = () => {
 
   // Calendar Date State (Default: current date)
   const [currentDate, setCurrentDate] = useState(() => new Date());
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'list'>('month');
+  const [viewMode, setViewMode] = useState<'month' | 'week' | 'list' | 'custom'>('month');
+  // Custom range (local calendar dates, YYYY-MM-DD). Starts at today through the next 30 days.
+  const [customFrom, setCustomFrom] = useState(() => toDateInput(new Date()));
+  const [customTo, setCustomTo] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return toDateInput(d);
+  });
+  const isCustom = viewMode === 'custom';
+  const customError = !isCustom
+    ? null
+    : !customFrom || !customTo
+      ? 'Choose both a start and an end date.'
+      : customTo < customFrom
+        ? 'The end date cannot be before the start date.'
+        : null;
 
   // Filter States
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
@@ -136,7 +193,7 @@ export const CalendarPage: React.FC = () => {
           apiFetch<{ data: UserOption[] }>('/api/people?status=active').catch(() =>
             apiFetch<{ data: UserOption[] }>('/api/users?limit=100').catch(() => ({ data: [] }))
           ),
-          apiFetch<{ data?: DepartmentOption[]; departments?: DepartmentOption[] }>('/api/departments?limit=50').catch(() => ({ data: [] })),
+          apiFetch<{ data?: DepartmentOption[]; departments?: DepartmentOption[] }>('/api/departments?inUse=true').catch(() => ({ data: [] })),
         ]);
         setUsers(uRes.data || []);
         setDepartments(dRes.data || (dRes as any).departments || []);
@@ -148,12 +205,20 @@ export const CalendarPage: React.FC = () => {
   }, []);
 
   // Fetch Work Items for the Calendar Range
+  const fetchRequestRef = useRef(0);
   const fetchCalendarItems = async () => {
+    const requestId = ++fetchRequestRef.current;
+    if (customError) {
+      setItems([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
-      // Calculate start and end range with padding (covering whole month grid)
-      const startDate = new Date(year, month - 1, 20).toISOString();
-      const endDate = new Date(year, month + 2, 10).toISOString();
+      // Custom: the chosen days, start to end inclusive, in local time.
+      // Otherwise: the month with padding (covering the whole month grid).
+      const startDate = isCustom ? new Date(`${customFrom}T00:00:00`).toISOString() : new Date(year, month - 1, 20).toISOString();
+      const endDate = isCustom ? new Date(`${customTo}T23:59:59.999`).toISOString() : new Date(year, month + 2, 10).toISOString();
 
       const params = new URLSearchParams({
         start: startDate,
@@ -166,17 +231,18 @@ export const CalendarPage: React.FC = () => {
       if (currentCalendar !== 'all') params.set('calendar', currentCalendar);
 
       const res = await apiFetch<{ data: WorkItemCalendar[] }>(`/api/work/calendar?${params.toString()}`);
-      setItems(res.data || []);
+      // Dates can change quickly: only the latest request may update the list.
+      if (requestId === fetchRequestRef.current) setItems(res.data || []);
     } catch (err) {
       console.error('Failed to fetch calendar work items', err);
     } finally {
-      setIsLoading(false);
+      if (requestId === fetchRequestRef.current) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchCalendarItems();
-  }, [year, month, selectedDepartment, selectedStatus, selectedOwner, currentCalendar]);
+  }, [year, month, selectedDepartment, selectedStatus, selectedOwner, currentCalendar, isCustom, customFrom, customTo]);
 
   // Navigate Calendar
   const handlePrev = () => {
@@ -273,148 +339,261 @@ export const CalendarPage: React.FC = () => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   }, []);
 
-  const canCreatePlans = user?.role === 'sm_manager' || user?.role === 'admin' || user?.role === 'creative_head';
+  // Preview modal: focus moves in on open, Escape closes, Tab stays inside, focus returns on close.
+  const previewRef = useRef<HTMLDivElement>(null);
+  const previewCloseRef = useRef<HTMLButtonElement>(null);
+  useDialogFocus(previewRef, Boolean(selectedItem), () => setSelectedItem(null), { initialFocusRef: previewCloseRef });
+
+  // Plan creation is SM Manager / Admin only (the API refuses the Creative Head), so only they see Add individual work.
+  const canCreatePlans = user?.role === 'sm_manager' || user?.role === 'admin';
+
+  // Shared text styles for this screen
+  const fieldLabel = 'text-[13px] font-medium text-ui-muted';
+
+  // Neutral calendar tag: identity comes from the dot (.cal-*), the name is always shown.
+  const calTag = (key: string, name: string, size: 'sm' | 'md' = 'sm') => (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full bg-white/80 text-ui-text font-medium shrink-0 ${
+        size === 'md' ? 'text-xs px-2.5 py-1' : 'text-[11px] px-2 py-0.5'
+      }`}
+    >
+      <span className={`cal-dot cal-${key}`} />
+      {name}
+    </span>
+  );
+
+  const tabs: Array<{ id: 'month' | 'plans' | 'tracker'; label: string; Icon: typeof CalendarIcon }> = [
+    { id: 'month', label: 'Month (Deadlines)', Icon: CalendarIcon },
+    { id: 'plans', label: 'Plans & Approval', Icon: CalendarRange },
+    { id: 'tracker', label: 'Content Flow Tracker', Icon: ListFilter },
+  ];
+
+  const views: Array<{ id: 'month' | 'week' | 'list' | 'custom'; label: string }> = [
+    { id: 'month', label: 'Month' },
+    { id: 'week', label: 'Week' },
+    { id: 'list', label: 'List Agenda' },
+    { id: 'custom', label: 'Custom' },
+  ];
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12 animate-fadeIn">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-purple-100 text-purple-700">
-              <CalendarIcon className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Creative Calendar</h1>
-              <p className="text-sm font-medium text-slate-500">
-                Plan, schedule and track deliverables across creative calendars
-              </p>
-            </div>
-          </div>
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Page title on the canvas */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[28px] sm:text-[32px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink">
+            Creative Calendar
+          </h1>
+          <p className="mt-1.5 text-[15px] leading-relaxed text-ui-muted max-w-[70ch]">
+            Plan, schedule and track deliverables across creative calendars
+          </p>
         </div>
 
         {canCreatePlans && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                handleTabChange('plans');
-                setIsIndividualCreateRequested(true);
-              }}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all flex items-center gap-1.5 shadow-xs"
-            >
-              <Plus className="w-4 h-4" />
-              Add individual work
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              handleTabChange('plans');
+              setIsIndividualCreateRequested(true);
+            }}
+            className="ui-btn ui-btn-primary h-11 self-start md:self-auto"
+          >
+            <Plus className="w-4 h-4" />
+            Add individual work
+          </button>
         )}
       </div>
 
       {user?.role === 'team_member' && (
-        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center justify-between gap-3 animate-fadeIn">
+        <div className="p-4 rounded-2xl status-tint status-waiting text-[13px] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             <span>
               Creative Team Members view their personal stage assignments, deliverables, and submissions directly in the <strong>My Work</strong> portal.
             </span>
           </div>
-          <button
-            onClick={() => navigate('/my-work')}
-            className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs whitespace-nowrap"
-          >
+          <button onClick={() => navigate('/my-work')} className="ui-btn ui-btn-primary h-11 self-start sm:self-auto">
             Go to My Work
           </button>
         </div>
       )}
 
-      {/* Top Calendar Selector Row with Legend */}
-      <div className="glass-card p-3 border border-slate-200/90 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">
-            Calendar:
-          </span>
-          <button
-            onClick={() => handleCalendarSelect('all')}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 border ${
-              currentCalendar === 'all'
-                ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-            }`}
-          >
-            <span>All Calendars</span>
-          </button>
-          {CALENDAR_LIST.map((cal) => {
-            const isSelected = currentCalendar === cal.key;
-            return (
-              <button
-                key={cal.key}
-                onClick={() => handleCalendarSelect(cal.key)}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 border ${
-                  isSelected ? 'shadow-sm' : 'hover:opacity-90'
-                }`}
-                style={{
-                  backgroundColor: isSelected ? cal.bg : '#ffffff',
-                  borderColor: isSelected ? cal.border : '#e2e8f0',
-                  color: isSelected ? cal.text : '#475569',
-                }}
-              >
+      {/* Controls: one panel. Row 1 = view tabs + calendar selector. Row 2 (month tab) = navigation, filters, view switch. */}
+      <section className="glass-panel rounded-ui-panel p-4 sm:p-6 space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="shrink-0 max-w-full overflow-x-auto no-scrollbar">
+            <div role="tablist" aria-label="Calendar views" className="ui-tabs">
+              {tabs.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={activeTab === id}
+                  onClick={() => handleTabChange(id)}
+                  className="ui-tab"
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Calendar filter: one dropdown, aligned with the tabs. */}
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <label htmlFor="calendar-filter" className={`${fieldLabel} shrink-0`}>Calendar</label>
+            <div className="relative flex-1 sm:flex-none sm:w-64">
+              {currentCalendar !== 'all' && (
                 <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: cal.color }}
+                  className={`cal-dot cal-${currentCalendar} absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none`}
+                  aria-hidden="true"
                 />
-                <span>{cal.name}</span>
+              )}
+              <select
+                id="calendar-filter"
+                value={currentCalendar}
+                onChange={(e) => handleCalendarSelect(e.target.value)}
+                className={`ui-select w-full cursor-pointer ${currentCalendar !== 'all' ? 'pl-9' : ''}`}
+              >
+                <option value="all">All Calendars</option>
+                {CALENDAR_LIST.map((cal) => (
+                  <option key={cal.key} value={cal.key}>{cal.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {activeTab === 'month' && (
+          <div className="pt-5 border-t border-ui-line space-y-4">
+            {/* Row 1: custom range pickers, or Prev / Today / Next and month title, with the view switcher opposite */}
+            <div className="flex flex-wrap items-end justify-between gap-4">
+            {isCustom ? (
+              <div className="grid grid-cols-2 gap-3 w-full sm:w-auto">
+                <div className="min-w-0">
+                  <label htmlFor="cal-custom-from" className={`${fieldLabel} block mb-1`}>From</label>
+                  <input
+                    id="cal-custom-from"
+                    type="date"
+                    value={customFrom}
+                    max={customTo || undefined}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    aria-invalid={customError ? true : undefined}
+                    aria-describedby={customError ? 'cal-custom-error' : undefined}
+                    className="ui-input w-full sm:w-44"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label htmlFor="cal-custom-to" className={`${fieldLabel} block mb-1`}>To</label>
+                  <input
+                    id="cal-custom-to"
+                    type="date"
+                    value={customTo}
+                    min={customFrom || undefined}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    aria-invalid={customError ? true : undefined}
+                    aria-describedby={customError ? 'cal-custom-error' : undefined}
+                    className="ui-input w-full sm:w-44"
+                  />
+                </div>
+              </div>
+            ) : (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button onClick={handlePrev} className="ui-icon-btn" title="Previous" aria-label="Previous">
+                <ChevronLeft className="w-4 h-4" />
               </button>
-            );
-          })}
-        </div>
+              <button onClick={handleToday} className="ui-btn ui-btn-secondary h-11 px-4">
+                Today
+              </button>
+              <button onClick={handleNext} className="ui-icon-btn" title="Next" aria-label="Next">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <h2 className="order-first w-full sm:order-none sm:w-auto sm:ml-2 text-lg font-bold text-ui-ink whitespace-nowrap">
+                {monthName}
+              </h2>
+            </div>
+            )}
 
-        {/* Status / Scope Note */}
-        <div className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
-          <span>Viewing:</span>
-          <span className="font-semibold text-slate-700">
-            {currentCalendar === 'all'
-              ? 'All Calendars'
-              : getCalendarDefinition(currentCalendar as CalendarKey).name}
-          </span>
-        </div>
-      </div>
+              {/* View switcher */}
+              <div role="tablist" aria-label="Layout" className="ui-tabs flex-wrap max-w-full rounded-ui-card">
+                {views.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    role="tab"
+                    aria-selected={viewMode === id}
+                    onClick={() => setViewMode(id)}
+                    className="ui-tab"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-      {/* Main Tab Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar">
-        {/* overflow-x-auto: the three tabs exceed 360px once page text uses Plus Jakarta Sans */}
-        <button
-          onClick={() => handleTabChange('month')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            activeTab === 'month'
-              ? 'bg-purple-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <CalendarIcon className="w-4 h-4" />
-          Month (Deadlines)
-        </button>
-        <button
-          onClick={() => handleTabChange('plans')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            activeTab === 'plans'
-              ? 'bg-purple-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <CalendarRange className="w-4 h-4" />
-          Plans & Approval
-        </button>
-        <button
-          onClick={() => handleTabChange('tracker')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            activeTab === 'tracker'
-              ? 'bg-purple-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <ListFilter className="w-4 h-4" />
-          Content Flow Tracker
-        </button>
-      </div>
+            {/* Row 2: filters, full width */}
+            <div className={`grid grid-cols-1 gap-3 ${departments.length > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+              <div className="min-w-0">
+                <label htmlFor="cal-filter-status" className={`${fieldLabel} block mb-1`}>
+                  Status
+                </label>
+                <select
+                  id="cal-filter-status"
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="ui-select w-full cursor-pointer"
+                >
+                  <option value="all">All Statuses</option>
+                  {WORK_ITEM_STATUSES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="min-w-0">
+                <label htmlFor="cal-filter-owner" className={`${fieldLabel} block mb-1`}>
+                  Assigned owner
+                </label>
+                <select
+                  id="cal-filter-owner"
+                  value={selectedOwner}
+                  onChange={(e) => setSelectedOwner(e.target.value)}
+                  className="ui-select w-full cursor-pointer"
+                >
+                  <option value="all">All Team Members</option>
+                  {users.map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.name} ({u.role.replace('_', ' ')})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {departments.length > 0 && (
+                <div className="min-w-0">
+                  <label htmlFor="cal-filter-department" className={`${fieldLabel} block mb-1`}>
+                    Department
+                  </label>
+                  <select
+                    id="cal-filter-department"
+                    value={selectedDepartment}
+                    onChange={(e) => setSelectedDepartment(e.target.value)}
+                    className="ui-select w-full cursor-pointer"
+                  >
+                    <option value="all">All Departments</option>
+                    {departments.map((d) => (
+                      <option key={d._id} value={d._id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {activeTab === 'month' && customError && (
+          <p id="cal-custom-error" role="alert" className="status-tint status-changes rounded-ui-control px-3 py-2 text-sm">
+            {customError}
+          </p>
+        )}
+      </section>
 
       {/* Tab: Plans & Approval */}
       {activeTab === 'plans' && (
@@ -434,143 +613,25 @@ export const CalendarPage: React.FC = () => {
       {activeTab === 'month' && (
         <>
           {isLoading && (
-            <div className="text-center py-1 text-xs text-purple-600 animate-pulse font-medium">
+            <div className="text-center py-1 text-[13px] text-ui-muted animate-pulse font-medium">
               Loading calendar deliverables...
             </div>
           )}
-          {/* Controls Bar */}
-          <div className="glass-card p-4 border border-white/80 flex flex-col md:flex-row items-center justify-between gap-4">
-            {/* Prev / Today / Next and Month Title */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-                <button
-                  onClick={handlePrev}
-                  className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-white rounded-lg transition-all"
-                  title="Previous"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={handleToday}
-                  className="px-2.5 py-1 text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-white rounded-lg transition-all"
-                >
-                  Today
-                </button>
-                <button
-                  onClick={handleNext}
-                  className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-white rounded-lg transition-all"
-                  title="Next"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-              <h2 className="text-base font-extrabold text-slate-900 min-w-[160px]">
-                {monthName}
-              </h2>
-            </div>
 
-            {/* View Switcher */}
-            <div className="flex items-center gap-3">
-              <div className="glass-pill-container p-1 flex items-center gap-1 border border-slate-200/80">
-                <button
-                  onClick={() => setViewMode('month')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    viewMode === 'month' ? 'pill-active shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Month
-                </button>
-                <button
-                  onClick={() => setViewMode('week')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    viewMode === 'week' ? 'pill-active shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Week
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    viewMode === 'list' ? 'pill-active shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  List Agenda
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Filter Row */}
-          <div className="glass-card p-4 border border-white/80">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Status
-                </label>
-                <select
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-200 bg-white/90 text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="all">All Statuses</option>
-                  {WORK_ITEM_STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Assigned Owner
-                </label>
-                <select
-                  value={selectedOwner}
-                  onChange={(e) => setSelectedOwner(e.target.value)}
-                  className="w-full text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-200 bg-white/90 text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="all">All Team Members</option>
-                  {users.map((u) => (
-                    <option key={u._id} value={u._id}>
-                      {u.name} ({u.role.replace('_', ' ')})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Department
-                </label>
-                <select
-                  value={selectedDepartment}
-                  onChange={(e) => setSelectedDepartment(e.target.value)}
-                  className="w-full text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-200 bg-white/90 text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="all">All Departments</option>
-                  {departments.map((d) => (
-                    <option key={d._id} value={d._id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* VIEW: MONTH GRID PERSPECTIVE */}
+          {/* VIEW: MONTH GRID */}
           {viewMode === 'month' && (
-            <div className="glass-card p-4 border border-white/80 overflow-hidden">
+            <section className="glass-panel rounded-ui-panel p-3 sm:p-5 overflow-hidden">
               {/* Day headers */}
               <div className="grid grid-cols-7 gap-px mb-2 text-center">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                  <div key={d} className="py-2 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                  <div key={d} className="py-2 text-[11px] font-semibold uppercase tracking-wider text-ui-muted">
                     {d}
                   </div>
                 ))}
               </div>
 
-              {/* Days Grid */}
-              <div className="grid grid-cols-7 gap-2">
+              {/* Days grid */}
+              <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
                 {calendarDays.map(({ date, isCurrentMonth, key }) => {
                   const dayItems = itemsByDate.get(key) || [];
                   const isToday = key === todayKey;
@@ -578,51 +639,43 @@ export const CalendarPage: React.FC = () => {
                   return (
                     <div
                       key={key}
-                      className={`min-h-[110px] p-2 rounded-xl border flex flex-col justify-between transition-all ${
-                        isCurrentMonth ? 'bg-white/60 border-slate-200/70' : 'bg-slate-50/40 border-slate-100 opacity-60'
-                      } ${isToday ? 'ring-2 ring-purple-500/30 border-purple-300 bg-purple-50/20' : ''}`}
+                      className={`min-h-[110px] p-1.5 sm:p-2 rounded-2xl bg-ui-card flex flex-col justify-between ${
+                        isToday ? 'ring-[1.5px] ring-ui-ink' : ''
+                      }`}
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span
-                          className={`text-xs font-extrabold w-6 h-6 flex items-center justify-center rounded-full ${
-                            isToday
-                              ? 'bg-purple-600 text-white shadow-xs'
-                              : isCurrentMonth
-                              ? 'text-slate-800'
-                              : 'text-slate-400'
+                          className={`text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full ${
+                            isToday ? 'bg-ui-ink text-white' : isCurrentMonth ? 'text-ui-text' : 'text-ui-muted'
                           }`}
                         >
                           {date.getDate()}
                         </span>
                       </div>
 
-                      {/* Day Deliverables */}
-                      <div className="space-y-1 overflow-y-auto max-h-[85px] no-scrollbar">
+                      {/* Day deliverables */}
+                      <div className="space-y-1 overflow-y-auto max-h-[110px] no-scrollbar">
                         {dayItems.slice(0, 3).map((item) => {
                           const cal = getCalendarDefinition(item.calendar);
                           return (
-                            <div
+                            <button
+                              type="button"
                               key={item._id}
                               onClick={() => setSelectedItem(item)}
-                              className="px-2 py-1 rounded text-[11px] font-medium border cursor-pointer transition-all hover:scale-[1.02] truncate flex items-center gap-1.5"
-                              style={{
-                                backgroundColor: cal.bg,
-                                borderColor: cal.border,
-                                color: cal.text,
-                              }}
-                              title={`${item.title} (${item.status}) [${cal.name}]`}
+                              className={`cal-chip ${itemTone(item)} w-full text-left px-1 sm:px-2 py-1 rounded-lg text-[11px] cursor-pointer hover:brightness-95 transition truncate flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink focus-visible:ring-offset-2`}
+                              title={`${item.title} (${itemStatusLabel(item)}) [${cal.name}]${item.isIndividual ? ' Individual work' : ''}`}
                             >
-                              <span
-                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                style={{ backgroundColor: cal.color }}
-                              />
-                              <span className="truncate flex-1 font-semibold">
-                                {formatCalendarItemTitle(item)}
-                              </span>
+                              {/* On a phone the cell only fits one mark, so the badge takes the dot's place. */}
+                              <span className={`cal-dot cal-${cal.key} ${item.isIndividual ? 'max-sm:hidden' : ''}`} />
+                              <span className="truncate flex-1 min-w-0 font-medium">{formatCalendarItemTitle(item)}</span>
+                              <span className="sr-only">{itemStatusLabel(item)}</span>
+                              {item.isIndividual && <IndividualBadge compact />}
                               {item.isOverdue && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0" title="Overdue" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-ui-coral ring-1 ring-white flex-shrink-0" title={overdueLabel(item.deadline)}>
+                                  <span className="sr-only">{overdueLabel(item.deadline)}</span>
+                                </span>
                               )}
-                            </div>
+                            </button>
                           );
                         })}
 
@@ -632,9 +685,9 @@ export const CalendarPage: React.FC = () => {
                               setCurrentDate(date);
                               setViewMode('list');
                             }}
-                            className="text-[10px] font-bold text-purple-600 hover:text-purple-800 pl-1 block text-left"
+                            className="text-[11px] font-semibold text-ui-text hover:underline underline-offset-2 pl-1 block text-left"
                           >
-                            +{dayItems.length - 3} more items
+                            +{dayItems.length - 3}<span className="max-sm:sr-only"> more items</span>
                           </button>
                         )}
                       </div>
@@ -642,10 +695,10 @@ export const CalendarPage: React.FC = () => {
                   );
                 })}
               </div>
-            </div>
+            </section>
           )}
 
-          {/* VIEW: WEEK PERSPECTIVE */}
+          {/* VIEW: WEEK */}
           {viewMode === 'week' && (
             <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
               {weekDays.map(({ date, key }) => {
@@ -655,69 +708,59 @@ export const CalendarPage: React.FC = () => {
                 return (
                   <div
                     key={key}
-                    className={`glass-card p-3 border flex flex-col justify-between min-h-[380px] ${
-                      isToday ? 'border-purple-300 ring-2 ring-purple-500/20 bg-purple-50/20' : 'border-slate-200'
+                    className={`glass-card p-3 flex flex-col justify-between min-h-[380px] ${
+                      isToday ? 'ring-[1.5px] ring-ui-ink' : ''
                     }`}
                   >
                     <div>
-                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-ui-line">
                         <div>
-                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                          <span className="text-[11px] font-semibold text-ui-muted uppercase tracking-wider block">
                             {date.toLocaleDateString('default', { weekday: 'short' })}
                           </span>
-                          <span className={`text-sm font-extrabold ${isToday ? 'text-purple-600' : 'text-slate-800'}`}>
+                          <span className="text-sm font-bold text-ui-ink">
                             {date.getDate()} {date.toLocaleDateString('default', { month: 'short' })}
                           </span>
                         </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white text-ui-text tabular-nums">
                           {dayItems.length}
                         </span>
                       </div>
 
-                      {/* Item Cards */}
+                      {/* Item cards */}
                       <div className="space-y-2">
                         {dayItems.length === 0 ? (
-                          <p className="text-[11px] text-slate-400 italic text-center py-8">
-                            No deliverables scheduled
-                          </p>
+                          <p className="text-xs text-ui-muted italic text-center py-8">No deliverables scheduled</p>
                         ) : (
                           dayItems.map((item) => {
-                            const statusStyle = statusClass(statusTone(item.status));
+                            const statusStyle = itemTone(item);
                             const cal = getCalendarDefinition(item.calendar);
 
                             return (
-                              <div
+                              <button
+                                type="button"
                                 key={item._id}
                                 onClick={() => setSelectedItem(item)}
-                                className="p-2.5 rounded-xl bg-white border border-slate-200/90 hover:border-purple-300 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+                                className="block w-full text-left p-2.5 rounded-xl bg-white/70 hover:bg-white transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink focus-visible:ring-offset-2"
                               >
-                                <div className="flex items-center justify-between gap-1 mb-1">
-                                  <span
-                                    className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
-                                    style={{
-                                      backgroundColor: cal.bg,
-                                      borderColor: cal.border,
-                                      color: cal.text,
-                                    }}
-                                  >
-                                    {cal.name}
-                                  </span>
+                                <span className="flex flex-wrap items-center justify-between gap-1 mb-1">
+                                  {calTag(cal.key, cal.name)}
                                   <span className={`status-chip ${statusStyle} text-[10px] font-semibold px-1.5 py-0.5`}>
-                                    {item.status}
+                                    {itemStatusLabel(item)}
                                   </span>
-                                </div>
-                                <h4 className="text-xs font-bold text-slate-800 line-clamp-2 group-hover:text-purple-600 transition-colors">
+                                  {item.isIndividual && <IndividualBadge />}
+                                  {item.isOverdue && <OverdueChip deadline={item.deadline} className="text-[10px] px-1.5 py-0.5" />}
+                                </span>
+                                <span className="block text-xs font-semibold text-ui-text line-clamp-2 group-hover:underline underline-offset-2">
                                   {formatCalendarItemTitle(item)}
-                                </h4>
-                                <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-50 text-[10px] text-slate-400">
+                                </span>
+                                <span className="flex items-center justify-between mt-2 pt-1 border-t border-ui-line text-[11px] text-ui-muted">
                                   <span>{item.workType}</span>
                                   {item.ownerId && (
-                                    <span className="font-medium text-slate-600 truncate max-w-[80px]">
-                                      {item.ownerId.name}
-                                    </span>
+                                    <span className="font-medium text-ui-text truncate max-w-[80px]">{item.ownerId.name}</span>
                                   )}
-                                </div>
-                              </div>
+                                </span>
+                              </button>
                             );
                           })
                         )}
@@ -729,22 +772,26 @@ export const CalendarPage: React.FC = () => {
             </div>
           )}
 
-          {/* VIEW: LIST AGENDA PERSPECTIVE */}
-          {viewMode === 'list' && (
-            <div className="glass-card p-6 border border-slate-200">
-              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <ListFilter className="w-4 h-4 text-purple-600" />
-                Chronological Deliverable Agenda
+          {/* VIEW: LIST AGENDA */}
+          {(viewMode === 'list' || isCustom) && (
+            <section className="glass-panel rounded-ui-panel p-5 sm:p-6">
+              <h3 className="text-base font-semibold text-ui-text mb-4 flex items-center gap-2">
+                <ListFilter className="w-4 h-4 text-ui-ink" />
+                {isCustom && !customError
+                  ? `Deliverables, ${fromInputLabel(customFrom)} to ${fromInputLabel(customTo)}`
+                  : 'Chronological Deliverable Agenda'}
               </h3>
 
               {items.length === 0 ? (
-                <div className="text-center py-12">
-                  <CalendarRange className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-slate-600">No deliverables found for this filter range</p>
-                  <p className="text-xs text-slate-400 mt-1">Try adjusting filters or adding a new deliverable.</p>
+                <div className="glass-card text-center py-12">
+                  <CalendarRange className="w-10 h-10 text-ui-muted mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-ui-text">
+                    {customError ? 'Fix the dates above to see deliverables' : 'No deliverables found for this filter range'}
+                  </p>
+                  {!customError && <p className="text-[13px] text-ui-muted mt-1">Try adjusting filters or adding a new deliverable.</p>}
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-ui-line">
                   {Array.from(itemsByDate.entries())
                     .sort(([a], [b]) => a.localeCompare(b))
                     .map(([dateKey, dayItems]) => {
@@ -755,54 +802,46 @@ export const CalendarPage: React.FC = () => {
                         <div key={dateKey} className="py-4 first:pt-0 last:pb-0">
                           <div className="flex items-center gap-3 mb-2">
                             <span
-                              className={`text-xs font-extrabold px-3 py-1 rounded-full ${
-                                isToday ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-700'
+                              className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                                isToday ? 'bg-ui-ink text-white' : 'bg-white/70 text-ui-text'
                               }`}
                             >
                               {d.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                             </span>
-                            {isToday && (
-                              <span className="text-[11px] font-bold text-purple-600 uppercase tracking-wider">
-                                Today
-                              </span>
-                            )}
+                            {isToday && <span className="text-[13px] font-semibold text-ui-ink">Today</span>}
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             {dayItems.map((item) => {
-                              const statusStyle = statusClass(statusTone(item.status));
+                              const statusStyle = itemTone(item);
                               const cal = getCalendarDefinition(item.calendar);
 
                               return (
-                                <div
+                                <button
+                                  type="button"
                                   key={item._id}
                                   onClick={() => setSelectedItem(item)}
-                                  className="p-3 rounded-xl bg-white/90 border border-slate-200 hover:border-purple-300 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
+                                  className="glass-card cursor-pointer w-full text-left p-3 flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink focus-visible:ring-offset-2"
                                 >
-                                  <div>
-                                    <div className="flex items-center justify-between mb-1.5">
-                                      <span
-                                        className="text-[10px] font-bold px-2 py-0.5 rounded border"
-                                        style={{
-                                          backgroundColor: cal.bg,
-                                          borderColor: cal.border,
-                                          color: cal.text,
-                                        }}
-                                      >
-                                        {cal.name}
-                                      </span>
+                                  <span className="block w-full">
+                                    <span className="flex flex-wrap items-center justify-between gap-1 mb-1.5">
+                                      {calTag(cal.key, cal.name)}
                                       <span className={`status-chip ${statusStyle} text-[10px] font-semibold px-2 py-0.5`}>
-                                        {item.status}
+                                        {itemStatusLabel(item)}
                                       </span>
-                                    </div>
-                                    <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{formatCalendarItemTitle(item)}</h4>
-                                  </div>
+                                      {item.isIndividual && <IndividualBadge />}
+                                      {item.isOverdue && <OverdueChip deadline={item.deadline} className="text-[10px] px-2 py-0.5" />}
+                                    </span>
+                                    <span className="block text-[13px] font-semibold text-ui-text line-clamp-1">
+                                      {formatCalendarItemTitle(item)}
+                                    </span>
+                                  </span>
 
-                                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-100 text-[10px] text-slate-500">
-                                    <span>{item.estimatedEffortHrs}h</span>
-                                    <span className="font-medium text-slate-700">{item.ownerId?.name || 'Unassigned'}</span>
-                                  </div>
-                                </div>
+                                  <span className="flex w-full items-center justify-between mt-3 pt-2 border-t border-ui-line text-[11px] text-ui-muted">
+                                    <span>{item.estimatedEffortHrs != null ? `${item.estimatedEffortHrs}h` : item.workType}</span>
+                                    <span className="font-medium text-ui-text">{item.ownerId?.name || 'Unassigned'}</span>
+                                  </span>
+                                </button>
                               );
                             })}
                           </div>
@@ -811,88 +850,102 @@ export const CalendarPage: React.FC = () => {
                     })}
                 </div>
               )}
-            </div>
+            </section>
           )}
+
+          {/* What the colours and the badge mean */}
+          <ul className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] font-medium" aria-label="Calendar key">
+            {COLOUR_KEY.map(({ tone, label }) => (
+              <li key={tone} className={`cal-chip ${statusClass(tone)} rounded-lg px-2 py-0.5`}>
+                {label}
+              </li>
+            ))}
+            <li className="inline-flex items-center gap-1.5 text-ui-muted">
+              <IndividualBadge /> Individual work, not part of a monthly plan
+            </li>
+          </ul>
 
           {/* QUICK PREVIEW MODAL */}
           {selectedItem && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-              <div className="glass-modal w-full max-w-lg p-6 relative">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim backdrop-blur-sm">
+              <div
+                ref={previewRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="cal-preview-title"
+                className="glass-modal w-full max-w-lg p-6 relative"
+              >
                 <button
+                  ref={previewCloseRef}
                   onClick={() => setSelectedItem(null)}
-                  className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  aria-label="Close"
+                  className="ui-icon-btn absolute top-4 right-4"
                 >
                   <X className="w-5 h-5" />
                 </button>
 
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex flex-wrap items-center gap-2 mb-2 pr-12">
                   {(() => {
                     const cal = getCalendarDefinition(selectedItem.calendar);
-                    return (
-                      <span
-                        className="text-xs font-bold px-2.5 py-0.5 rounded border"
-                        style={{
-                          backgroundColor: cal.bg,
-                          borderColor: cal.border,
-                          color: cal.text,
-                        }}
-                      >
-                        {cal.name}
-                      </span>
-                    );
+                    return calTag(cal.key, cal.name, 'md');
                   })()}
-                  <span className={`text-xs font-bold px-2.5 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200`}>
+                  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-white/80 text-ui-text">
                     {selectedItem.workType}
                   </span>
-                  <span className={`status-chip ${statusClass(statusTone(selectedItem.status))} text-xs font-semibold px-2.5 py-0.5`}>
-                    {selectedItem.status}
+                  <span className={`status-chip ${itemTone(selectedItem)} text-xs font-semibold px-2.5 py-0.5`}>
+                    {itemStatusLabel(selectedItem)}
                   </span>
+                  {selectedItem.isIndividual && <IndividualBadge />}
                   {selectedItem.isOverdue && (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200">
-                      Overdue
-                    </span>
+                    <OverdueChip deadline={selectedItem.deadline} className="text-xs px-2.5 py-0.5" />
                   )}
                 </div>
 
-                <h3 className="text-lg font-bold text-slate-900 mb-4">{selectedItem.title}</h3>
+                <h3 id="cal-preview-title" className="text-lg font-bold text-ui-ink mb-4">
+                  {selectedItem.title}
+                </h3>
 
-                <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 mb-5 text-xs">
+                <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-white/70 mb-5 text-[13px]">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Deliverable Type</span>
-                    <span className="font-semibold text-slate-700">{selectedItem.workType}</span>
+                    <span className="text-xs font-medium text-ui-muted block">Deliverable type</span>
+                    <span className="font-semibold text-ui-text">{selectedItem.workType}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Deadline</span>
-                    <span className="font-semibold text-slate-700">
+                    <span className="text-xs font-medium text-ui-muted block">Deadline</span>
+                    <span className="font-semibold text-ui-text">
                       {new Date(selectedItem.deadline).toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assigned To</span>
-                    <span className="font-semibold text-slate-700">{selectedItem.ownerId?.name || 'Unassigned'}</span>
+                    <span className="text-xs font-medium text-ui-muted block">Assigned to</span>
+                    <span className="font-semibold text-ui-text">{selectedItem.ownerId?.name || 'Unassigned'}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Effort / Priority</span>
-                    <span className="font-semibold text-slate-700">{selectedItem.estimatedEffortHrs}h • {selectedItem.priority.toUpperCase()}</span>
+                    <span className="text-xs font-medium text-ui-muted block">Effort / priority</span>
+                    <span className="font-semibold text-ui-text">
+                      {[selectedItem.estimatedEffortHrs != null ? `${selectedItem.estimatedEffortHrs}h` : null, selectedItem.priority?.toUpperCase()]
+                        .filter(Boolean)
+                        .join(' • ') || '–'}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-2">
-                  <button
-                    onClick={() => setSelectedItem(null)}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
-                  >
+                <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+                  <button onClick={() => setSelectedItem(null)} className="ui-btn ui-btn-secondary h-11">
                     Close
                   </button>
-                  <button
-                    onClick={() => {
-                      navigate(`/work/${selectedItem._id}`);
-                    }}
-                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md shadow-purple-200 transition-all flex items-center gap-2"
-                  >
-                    Open Workplace
-                    <ArrowUpRight className="w-4 h-4" />
-                  </button>
+                  {/* A publish date opens its final step; a row with no steps yet has nothing to open. */}
+                  {(!selectedItem.isPublishEvent || selectedItem.workItemId) && (
+                    <button
+                      onClick={() => {
+                        navigate(`/work/${selectedItem.workItemId || selectedItem._id}`);
+                      }}
+                      className="ui-btn ui-btn-primary h-11"
+                    >
+                      Open Workplace
+                      <ArrowUpRight className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

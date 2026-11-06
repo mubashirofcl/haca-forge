@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { HeaderChatAvatars, type ChatPerson } from './HeaderChatAvatars';
 import {
   LayoutDashboard,
   BarChart3,
@@ -28,6 +29,8 @@ import { Avatar } from './Avatar';
 
 interface LayoutProps {
   children: React.ReactNode;
+  /** Focused workspace (plan grid): the header stays as is; the sidebar is hidden and the content uses the full width. */
+  focusMode?: boolean;
 }
 
 interface NavItem {
@@ -57,7 +60,7 @@ interface SidebarItem {
   badge?: number;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, focusMode = false }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -65,6 +68,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
+  // Faces for the header chat link: people from your own recent chats (no extra request, nothing you cannot already see).
+  const [chatPeople, setChatPeople] = useState<ChatPerson[]>([]);
+  const [chatTeamMore, setChatTeamMore] = useState(0);
+  const teamMembersCache = React.useRef<Array<{ _id: string; name?: string; preferredName?: string; avatarUrl?: string | null; status?: string }> | null>(null);
   const [headerHidden, setHeaderHidden] = useState(false);
 
   // Hide the header while scrolling down, reveal it when scrolling up / near the top
@@ -83,10 +90,48 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   useEffect(() => {
     if (!user) return;
-    apiFetch<{ channels: Array<{ unreadCount?: number }> }>('/api/chat/channels')
+    type ChatUser = { _id: string; name?: string; preferredName?: string; avatarUrl?: string | null; status?: string };
+    apiFetch<{
+      channels: Array<{ unreadCount?: number; type?: string; isArchived?: boolean; membersCount?: number; otherUser?: ChatUser | null; createdById?: ChatUser | string | null }>;
+    }>('/api/chat/channels')
       .then((res) => {
-        const total = (res.channels || []).reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+        const channels = res.channels || [];
+        const total = channels.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
         setChatUnreadCount(total);
+        // Most recent first (the API sorts by last message): direct-message partners, then group creators.
+        const me = String(user?.id || user?._id || '');
+        const seen = new Set<string>([me]);
+        const people: ChatPerson[] = [];
+        const add = (u?: ChatUser | string | null) => {
+          if (!u || typeof u !== 'object' || !u._id || seen.has(String(u._id)) || u.status === 'suspended') return;
+          seen.add(String(u._id));
+          people.push({ _id: String(u._id), name: u.preferredName || u.name || 'Teammate', avatarUrl: u.avatarUrl });
+        };
+        channels.filter((c) => c.type === 'dm' && !c.isArchived).forEach((c) => add(c.otherUser));
+        channels.filter((c) => c.type !== 'dm' && c.type !== 'team' && !c.isArchived).forEach((c) => add(c.createdById));
+        const team = channels.find((c) => c.type === 'team') as { _id?: string; membersCount?: number } | undefined;
+        const teamMembers = Math.max(0, (team?.membersCount || 0) - 1);
+        const finish = (list: ChatPerson[]) => {
+          setChatPeople(list);
+          // "+N": the rest of the team in Team Chat (everyone but you and the faces shown).
+          setChatTeamMore(Math.max(0, teamMembers - Math.min(list.length, 4)));
+        };
+        if (people.length >= 4 || !team?._id) return finish(people);
+        // Fill the remaining faces from Team Chat (every member already sees its members), photos first. Read once per session.
+        const fill = (members: ChatUser[]) => {
+          const rest = members.filter((m) => m && m._id && !seen.has(String(m._id)) && m.status !== 'suspended');
+          rest.sort((a, b) => Number(Boolean(b.avatarUrl)) - Number(Boolean(a.avatarUrl)));
+          rest.forEach((m) => add(m));
+          finish(people);
+        };
+        if (teamMembersCache.current) return fill(teamMembersCache.current);
+        apiFetch<{ members?: Array<{ userId?: ChatUser }>; data?: { members?: Array<{ userId?: ChatUser }> } }>(`/api/chat/channels/${team._id}`)
+          .then((d) => {
+            const members = ((d.members || d.data?.members || []) as Array<{ userId?: ChatUser }>).map((m) => m.userId).filter(Boolean) as ChatUser[];
+            teamMembersCache.current = members;
+            fill(members);
+          })
+          .catch(() => finish(people));
       })
       .catch(() => {});
   }, [user, location.pathname]);
@@ -533,7 +578,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </span>
                 <span className="mt-0.5 flex items-center justify-between gap-8 text-xs font-semibold text-slate-800 whitespace-nowrap">
                   Tasks and content
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                  <ChevronDown className="hidden lg:block w-3.5 h-3.5 text-slate-500" />
                 </span>
               </button>
 
@@ -549,31 +594,29 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     : 'hover:bg-white/60 text-slate-800'
                 }`}
               >
-                <span
-                  className={`flex items-center gap-1.5 text-[10px] font-medium ${
-                    location.pathname.startsWith('/chat') ? 'text-white/70' : 'text-slate-400'
-                  }`}
-                >
-                  <MessageSquare className="w-3 h-3" />
-                  Team Chat
-                </span>
-                <span className="mt-0.5 flex items-center justify-between gap-8 text-xs font-semibold whitespace-nowrap">
-                  <span className="flex items-center gap-1.5">
-                    Messages
-                    {chatUnreadCount > 0 && (
-                      <span
-                        data-testid="chat-unread-badge"
-                        className="px-1.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold bg-rose-500 text-white flex items-center justify-center shadow-sm"
-                      >
-                        {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-                      </span>
-                    )}
+                <span className="flex items-center justify-between gap-3 min-w-0">
+                  <span className="flex flex-col min-w-0">
+                    <span
+                      className={`flex items-center gap-1.5 text-[10px] font-medium ${
+                        location.pathname.startsWith('/chat') ? 'text-white/70' : 'text-slate-400'
+                      }`}
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      Team Chat
+                    </span>
+                    <span className="mt-0.5 flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap">
+                      Messages
+                      {chatUnreadCount > 0 && (
+                        <span
+                          data-testid="chat-unread-badge"
+                          className="px-1.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold bg-rose-500 text-white flex items-center justify-center shadow-sm"
+                        >
+                          {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 ${
-                      location.pathname.startsWith('/chat') ? 'text-white/70' : 'text-slate-500'
-                    }`}
-                  />
+                  <HeaderChatAvatars people={chatPeople} moreCount={chatTeamMore} active={location.pathname.startsWith('/chat')} />
                 </span>
               </Link>
             </div>
@@ -730,11 +773,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* 2. Main Body with Fixed Left Icon Sidebar (72px) & Content Area */}
-      <div className="flex-1 max-w-[1520px] w-full mx-auto px-4 sm:px-6 flex gap-6 pt-6 pb-12">
+      <div
+        className={
+          focusMode
+            ? 'flex-1 w-full min-w-0 px-2 sm:px-4 flex pt-3 pb-6'
+            : 'flex-1 max-w-[1520px] w-full mx-auto px-4 sm:px-6 flex gap-6 pt-6 pb-12'
+        }
+      >
         {/* Left sidebar: 72px icon rail that widens on hover/keyboard focus to show labels.
             It is part of the flex row, so the main content resizes along with it. */}
+        {!focusMode && (
         <aside
-          className="group/sidebar hidden lg:flex flex-col shrink-0 self-start sticky top-24 h-[calc(100vh-120px)] w-[72px] hover:w-60 focus-within:w-60 py-4 px-3.5 shell-scope glass-panel rounded-[24px] border border-white/80 shadow-glass overflow-hidden transition-[width] duration-200 ease-out hover:delay-75"
+          className="group/sidebar hidden lg:flex flex-col shrink-0 self-start sticky top-24 h-[calc(100vh-120px)] w-[72px] hover:w-60 focus-within:w-60 py-4 px-[13px] shell-scope glass-panel rounded-[24px] border border-white/80 shadow-glass overflow-hidden transition-[width] duration-200 ease-out hover:delay-75"
         >
             <nav aria-label="Sidebar navigation" className="flex-1 min-h-0 flex flex-col gap-2 overflow-y-auto overflow-x-hidden no-scrollbar">
               {sidebarItems
@@ -788,6 +838,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </Link>
             </div>
         </aside>
+        )}
 
         {/* 3. Main Dynamic Content Container */}
         <main className="flex-1 min-w-0">

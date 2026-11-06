@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
+import { OverdueChip } from '../../components/OverdueChip';
 import { statusClass, statusTone } from '../../lib/statusTone';
 import {
   WORK_TYPES,
@@ -41,6 +42,8 @@ interface WorkItemRow {
   ownerId?: { _id: string; name: string; email: string; jobRole?: string };
 }
 
+const formatDeadline = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
 export const WorkListPage: React.FC = () => {
   const navigate = useNavigate();
 
@@ -79,143 +82,141 @@ export const WorkListPage: React.FC = () => {
     fetchData();
   }, [statusFilter, workTypeFilter, isOverdueOnly]);
 
+  const priorityTone = (p?: string) =>
+    p === 'High' ? 'status-blocked' : p === 'Medium' ? 'status-waiting' : 'status-not-started';
+
+  const viewToggle = (mode: 'table' | 'grid', label: string, Icon: typeof TableIcon) => (
+    <button
+      type="button"
+      onClick={() => setViewMode(mode)}
+      aria-label={label}
+      aria-pressed={viewMode === mode}
+      title={label}
+      className={`h-11 w-11 inline-flex items-center justify-center rounded-ui-control transition-colors ${
+        viewMode === mode ? 'bg-ui-ink text-white' : 'text-ui-text hover:bg-ui-card-hover hover:text-ui-ink'
+      }`}
+    >
+      <Icon className="w-4 h-4" aria-hidden="true" />
+    </button>
+  );
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       {/* 1. Header & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-violet-100 text-[#7a6af6] border border-violet-200 flex items-center gap-1">
-              <Film className="w-3 h-3" />
-              Production Engine
-            </span>
-            <span className="text-xs font-semibold text-slate-400">Works Directory</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2 tracking-tight">
+          <h1 className="text-[28px] sm:text-[32px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink flex items-center gap-2">
+            <Film className="w-6 h-6 shrink-0" aria-hidden="true" />
             Work Items
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            All creative steps and production deliverables.
-          </p>
+          <p className="text-[15px] text-ui-muted mt-1.5">All creative steps and production deliverables.</p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          {/* View Mode Toggle */}
-          <div className="flex items-center bg-white border border-slate-200 rounded-2xl p-1 gap-1 text-xs shadow-xs">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-xl transition-all ${
-                viewMode === 'table' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'
-              }`}
-              title="Table view"
-            >
-              <TableIcon className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-xl transition-all ${
-                viewMode === 'grid' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'
-              }`}
-              title="Grid view"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-          </div>
+        <div role="group" aria-label="View" className="flex items-center glass-card rounded-ui-control p-1 gap-1 self-start sm:self-auto">
+          {viewToggle('table', 'Table view', TableIcon)}
+          {viewToggle('grid', 'Grid view', LayoutGrid)}
         </div>
       </div>
 
       {/* 2. Filter Bar */}
-      <div className="glass-card p-4 rounded-3xl border border-white/80 shadow-glass space-y-3">
-        {/* Filters */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
-            >
-              <option value="all">All Statuses</option>
-              {WORK_ITEM_STATUSES.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
+      <div className="glass-panel p-4 rounded-ui-panel">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="work-filter-status" className="text-xs font-semibold text-ui-muted">Status</label>
+              <select
+                id="work-filter-status"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="ui-select h-11"
+              >
+                <option value="all">All statuses</option>
+                {WORK_ITEM_STATUSES.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            {/* Work Type Filter */}
-            <select
-              value={workTypeFilter}
-              onChange={(e) => setWorkTypeFilter(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
-            >
-              <option value="all">All Work Types</option>
-              {WORK_TYPES.map((wt) => (
-                <option key={wt} value={wt}>
-                  {wt}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="work-filter-type" className="text-xs font-semibold text-ui-muted">Work type</label>
+              <select
+                id="work-filter-type"
+                value={workTypeFilter}
+                onChange={(e) => setWorkTypeFilter(e.target.value)}
+                className="ui-select h-11"
+              >
+                <option value="all">All work types</option>
+                {WORK_TYPES.map((wt) => (
+                  <option key={wt} value={wt}>
+                    {wt}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            {/* Overdue Only Toggle */}
             <button
+              type="button"
               onClick={() => setIsOverdueOnly(!isOverdueOnly)}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all border flex items-center gap-1.5 ${
-                isOverdueOnly
-                  ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
-                  : 'bg-white text-slate-600 border-slate-200 hover:text-rose-600'
-              }`}
+              aria-pressed={isOverdueOnly}
+              className={`ui-btn h-11 ${isOverdueOnly ? 'ui-btn-primary' : 'ui-btn-secondary'}`}
             >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Overdue Only
+              <AlertTriangle className="w-4 h-4" aria-hidden="true" />
+              Overdue only
             </button>
           </div>
 
-          {/* Search Box */}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search work items..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') fetchData();
-              }}
-              className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
-            />
+          <div className="flex flex-col gap-1 w-full sm:w-64">
+            <label htmlFor="work-search" className="text-xs font-semibold text-ui-muted">Search</label>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ui-muted pointer-events-none" aria-hidden="true" />
+              <input
+                id="work-search"
+                type="search"
+                placeholder="Title, then press Enter"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') fetchData();
+                }}
+                className="ui-input h-11 w-full pl-9"
+              />
+            </div>
           </div>
         </div>
       </div>
 
       {/* 3. Items View */}
       {isLoading ? (
-        <div className="py-20 text-center text-xs text-slate-400 animate-pulse">
+        <div className="py-20 text-center text-sm text-ui-muted" role="status">
           Loading work items...
         </div>
       ) : items.length === 0 ? (
-        <div className="glass-card p-12 text-center rounded-3xl border border-white/80">
-          <Film className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-          <h3 className="text-base font-bold text-slate-900">No work items found</h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-            No work items match your current filter settings.
+        <div className="glass-card p-12 text-center rounded-ui-card">
+          <Film className="w-10 h-10 text-ui-muted mx-auto mb-2" aria-hidden="true" />
+          <h2 className="text-base font-bold text-ui-ink">No work items found</h2>
+          <p className="text-sm text-ui-muted mt-1 max-w-sm mx-auto">
+            Change or clear the filters to see more work.
           </p>
         </div>
       ) : viewMode === 'table' ? (
-        <div className="glass-card rounded-3xl border border-white/80 shadow-glass overflow-hidden">
+        <div className="glass-panel rounded-ui-panel overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="ui-table w-full text-left text-xs">
-              <thead className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase text-[10px]">
+            <table className="ui-table w-full text-left text-sm">
+              <thead>
                 <tr>
-                  <th className="py-3 px-4">Title</th>
-                  <th className="py-3 px-4">Owner</th>
-                  <th className="py-3 px-4">Deadline</th>
-                  <th className="py-3 px-4">Priority</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Action</th>
+                  <th className="py-3 px-5 w-[40%]">Title</th>
+                  <th className="py-3 px-5">Owner</th>
+                  <th className="py-3 px-5">Deadline</th>
+                  <th className="py-3 px-5">Priority</th>
+                  <th className="py-3 px-5">Status</th>
+                  <th className="py-3 px-5 text-right">
+                    <span className="sr-only">Open</span>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+              <tbody className="text-ui-text">
                 {items.map((it) => {
                   const isPast = new Date(it.deadline) < new Date();
                   const isTerm = it.status === 'Approved' || it.status === 'Published';
@@ -225,69 +226,51 @@ export const WorkListPage: React.FC = () => {
                     <tr
                       key={it._id}
                       onClick={() => navigate(`/work/${it._id}`)}
-                      className="hover:bg-slate-50/60 transition-colors cursor-pointer group"
+                      className="hover:bg-ui-card-hover transition-colors cursor-pointer group"
                     >
-                      <td className="py-3.5 px-4 font-bold text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 text-[#7a6af6] border border-violet-100">
-                            {it.workType}
-                          </span>
+                      <td className="py-4 px-5 align-middle">
+                        <div className="font-semibold text-ui-ink group-hover:underline">{it.title}</div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <span className="status-chip status-not-started text-[11px]">{it.workType}</span>
                           {it.stageKey && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                              Stage: {it.stageKey}
-                            </span>
+                            <span className="status-chip status-not-started text-[11px]">Stage: {it.stageKey}</span>
                           )}
-                          <span className="group-hover:text-[#7a6af6] transition-colors">{it.title}</span>
                         </div>
                       </td>
 
-                      <td className="py-3.5 px-4">
-                        <div className="text-slate-900 font-semibold">{it.ownerId?.name || 'Unassigned'}</div>
-                        <div className="text-[10px] text-slate-400">{it.ownerId?.jobRole || 'Creative Staff'}</div>
+                      <td className="py-4 px-5 align-middle whitespace-nowrap">
+                        <div className="text-ui-ink font-medium">{it.ownerId?.name || 'Unassigned'}</div>
+                        <div className="text-[11px] text-ui-muted">{it.ownerId?.jobRole || 'Creative Staff'}</div>
                       </td>
 
-                      <td className="py-3.5 px-4">
-                        <span className={isOverdue ? 'text-rose-600 font-bold' : 'text-slate-700 font-semibold'}>
-                          {new Date(it.deadline).toLocaleDateString()}
-                        </span>
-                        {isOverdue && (
-                          <span className="ml-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase bg-rose-600 text-white">
-                            Overdue
-                          </span>
+                      <td className="py-4 px-5 align-middle whitespace-nowrap">
+                        <div className="text-ui-ink font-medium">{formatDeadline(it.deadline)}</div>
+                        {isOverdue && <OverdueChip deadline={it.deadline} className="mt-1.5" />}
+                      </td>
+
+                      <td className="py-4 px-5 align-middle">
+                        {it.priority && (
+                          <span className={`status-chip ${priorityTone(it.priority)} text-[11px]`}>{it.priority}</span>
                         )}
                       </td>
 
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            it.priority === 'High'
-                              ? 'bg-rose-100 text-rose-700'
-                              : it.priority === 'Medium'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {it.priority}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`status-chip ${statusClass(statusTone(it.status))} text-[10px] font-extrabold px-2.5 py-1 uppercase tracking-wider`}
-                        >
+                      <td className="py-4 px-5 align-middle whitespace-nowrap">
+                        <span className={`status-chip ${statusClass(statusTone(it.status))} text-[11px]`}>
                           {it.status}
                         </span>
                       </td>
 
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-2 px-5 align-middle text-right">
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             navigate(`/work/${it._id}`);
                           }}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-[#7a6af6] transition-colors"
+                          aria-label={`Open ${it.title}`}
+                          className="ui-icon-btn h-11 w-11"
                         >
-                          <ArrowUpRight className="w-4 h-4" />
+                          <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
                         </button>
                       </td>
                     </tr>
@@ -298,49 +281,44 @@ export const WorkListPage: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map((it) => {
             const isPast = new Date(it.deadline) < new Date();
             const isTerm = it.status === 'Approved' || it.status === 'Published';
             const isOverdue = isPast && !isTerm;
 
             return (
-              <div
-                key={it._id}
-                onClick={() => navigate(`/work/${it._id}`)}
-                className={`glass-card p-5 rounded-3xl flex flex-col justify-between transition-all border cursor-pointer group ${
-                  isOverdue ? 'border-rose-300 bg-rose-50/20' : 'border-white/80'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 text-[#7a6af6] border border-violet-100">
-                      {it.workType}
+              <li key={it._id}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/work/${it._id}`)}
+                  className={`glass-card w-full h-full text-left p-5 rounded-ui-card flex flex-col justify-between hover:bg-ui-card-hover transition-colors group ${
+                    isOverdue ? 'ring-1 ring-inset ring-ui-coral' : ''
+                  }`}
+                >
+                  <span className="block">
+                    <span className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <span className="status-chip status-not-started text-[11px]">{it.workType}</span>
+                      <span className={`status-chip ${statusClass(statusTone(it.status))} text-[11px]`}>
+                        {it.status}
+                      </span>
                     </span>
-                    <span
-                      className={`status-chip ${statusClass(statusTone(it.status))} text-[10px] font-bold px-2 py-0.5 uppercase tracking-wider`}
-                    >
-                      {it.status}
-                    </span>
-                  </div>
-
-                  <h3 className="text-sm font-extrabold text-slate-900 group-hover:text-[#7a6af6] transition-colors">
-                    {it.title}
-                  </h3>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                  <span className={isOverdue ? 'text-rose-600 font-bold' : ''}>
-                    Due: {new Date(it.deadline).toLocaleDateString()}
+                    <span className="block text-base font-bold text-ui-ink group-hover:underline">{it.title}</span>
                   </span>
-                  <span className="font-bold text-slate-800">{it.ownerId?.name || 'Unassigned'}</span>
-                </div>
-              </div>
+
+                  <span className="mt-4 pt-3 border-t border-ui-line block text-xs text-ui-muted">
+                    <span className="flex items-center justify-between gap-2">
+                      <span>Due {formatDeadline(it.deadline)}</span>
+                      <span className="font-medium text-ui-ink">{it.ownerId?.name || 'Unassigned'}</span>
+                    </span>
+                    {isOverdue && <OverdueChip deadline={it.deadline} className="mt-2" />}
+                  </span>
+                </button>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
-
     </div>
   );
 };

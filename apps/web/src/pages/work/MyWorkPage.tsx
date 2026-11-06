@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
+import { OverdueChip } from '../../components/OverdueChip';
 import { statusClass, statusTone } from '../../lib/statusTone';
+import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useAuth } from '../../context/AuthContext';
 import { ResumableUploadTask } from '../../lib/uploadManager';
 import {
@@ -145,6 +147,11 @@ export const MyWorkPage: React.FC = () => {
 
   // Deliverable Submit Modal State
   const [selectedItemForSubmit, setSelectedItemForSubmit] = useState<WorkItemSummary | null>(null);
+  // Modal keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
+  const blockDialogRef = useRef<HTMLDivElement>(null);
+  const submitDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(blockDialogRef, Boolean(selectedItemForBlock), () => setSelectedItemForBlock(null));
+  useDialogFocus(submitDialogRef, Boolean(selectedItemForSubmit), () => setSelectedItemForSubmit(null));
   const [deliverableUrl, setDeliverableUrl] = useState('');
   const [socialReferenceUrl, setSocialReferenceUrl] = useState('');
   const [uploadedFileUrl, setUploadedFileUrl] = useState('');
@@ -396,15 +403,15 @@ export const MyWorkPage: React.FC = () => {
       return (
         <div
           key={item._id}
-          className="p-5 rounded-2xl flex flex-col justify-between border border-slate-200/90 bg-slate-50/70 opacity-65 transition-all shadow-2xs hover:opacity-85"
+          className="p-5 rounded-ui-card flex flex-col justify-between bg-white/40 ring-1 ring-inset ring-ui-line"
         >
           <div>
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700 flex items-center gap-1">
-                <Lock className="w-3 h-3 text-slate-500" />
+              <span className="status-chip status-locked px-2.5 py-0.5 text-[11px] font-semibold">
+                <Lock className="w-3 h-3" />
                 Locked Stage {item.stageOrder ? `${item.stageOrder}: ${item.stageKey}` : ''}
               </span>
-              <span className="text-[10px] text-slate-500 font-medium">
+              <span className="text-[10px] text-ui-muted font-medium">
                 Unlocks when preceding stage completes
               </span>
             </div>
@@ -412,20 +419,20 @@ export const MyWorkPage: React.FC = () => {
               {item.contentPieceId?.topic || item.title}
             </h3>
             {item.stageKey && (
-              <span className="text-[11px] font-semibold text-purple-700/80 mt-1 flex items-center gap-1">
+              <span className="text-[11px] font-semibold text-ui-ink mt-1 flex items-center gap-1">
                 <StageIcon className="w-3 h-3" />
                 Step: {item.stageKey}
               </span>
             )}
             {item.contentPieceId?.brief && (
-              <p className="text-[11px] text-slate-500 mt-2 line-clamp-2 italic">
+              <p className="text-[11px] text-ui-muted mt-2 line-clamp-2 italic">
                 {item.contentPieceId.brief}
               </p>
             )}
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-slate-500 text-xs font-medium">
+          <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-ui-muted text-xs font-medium">
             <span>Due: {new Date(item.dueDate || item.deadline).toLocaleDateString()}</span>
-            <span className="italic text-[11px] bg-slate-200/70 px-2 py-0.5 rounded">Pipeline Queue</span>
+            <span className="italic text-[11px] bg-white/70 px-2 py-0.5 rounded-full">Pipeline Queue</span>
           </div>
         </div>
       );
@@ -449,33 +456,25 @@ export const MyWorkPage: React.FC = () => {
     return (
       <div
         key={item._id}
-        className={`glass-card p-5 rounded-2xl flex flex-col justify-between transition-all border group ${
-          isActuallyOverdue || isOverdueCard
-            ? 'border-rose-300/80 bg-rose-50/30 hover:border-rose-400'
-            : item.status === 'Blocked'
-            ? 'border-amber-300/80 bg-amber-50/20 hover:border-amber-400'
-            : item.status === 'Feedback'
-            ? 'border-amber-300/90 bg-amber-50/30 hover:border-amber-400'
-            : item.status === 'Pending'
-            ? 'border-indigo-200 bg-indigo-50/20 hover:border-indigo-300'
-            : 'border-white/80 hover:border-[#7a6af6]/40'
+        className={`glass-card p-5 flex flex-col justify-between group ${
+          isActuallyOverdue || isOverdueCard ? 'outline outline-1 -outline-offset-1 outline-ui-coral' : ''
         }`}
       >
         <div>
           {/* Top badges */}
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-[#7a6af6] border border-violet-200 flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/70 text-ui-ink border border-ui-line flex items-center gap-1">
                 <StageIcon className="w-3 h-3" />
                 {item.stageKey ? `Stage ${item.stageOrder}: ${item.stageKey}` : item.workType}
               </span>
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                   item.priority === 'High' || item.priority === 'Urgent'
-                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                    ? 'status-tint status-changes'
                     : item.priority === 'Medium'
-                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                    : 'bg-slate-100 text-slate-600 border border-slate-200'
+                    ? 'status-tint status-in-progress'
+                    : 'bg-white/70 text-ui-text'
                 }`}
               >
                 {item.priority}
@@ -484,12 +483,12 @@ export const MyWorkPage: React.FC = () => {
 
             <div className="flex items-center gap-1.5 flex-wrap">
               {item.status === 'In Progress' && measures.workTimeFormatted !== '—' && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/70 text-ui-text">
                   Working for {measures.workTimeFormatted}
                 </span>
               )}
               {item.revisions > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/70 text-ui-ink border border-ui-line">
                   Rev: {item.revisions}
                 </span>
               )}
@@ -502,7 +501,7 @@ export const MyWorkPage: React.FC = () => {
                     : isWaitingApproval
                     ? 'waiting'
                     : statusTone(item.status)
-                )} px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider`}
+                )} px-2.5 py-0.5 text-[10px] font-extrabold`}
               >
                 {isFeedbackRework ? 'Rework' : isWaitingApproval ? 'In Review' : item.status}
               </span>
@@ -511,7 +510,7 @@ export const MyWorkPage: React.FC = () => {
 
           {/* Individual Timing Metrics for Submitted / Reviewed tasks */}
           {(isWaitingApproval || isFeedbackRework || isTerminal) && (
-            <div className="flex items-center gap-2 mb-2 text-[10.5px] text-slate-500 font-medium bg-slate-50/80 px-2.5 py-1 rounded-lg border border-slate-100">
+            <div className="flex items-center gap-2 mb-2 text-[11px] text-ui-muted font-medium bg-white/60 px-2.5 py-1 rounded-lg">
               {measures.workTimeFormatted !== '—' && (
                 <span>Work: <strong className="text-slate-800">{measures.workTimeFormatted}</strong></span>
               )}
@@ -522,23 +521,26 @@ export const MyWorkPage: React.FC = () => {
           )}
 
           {/* Title / Topic */}
-          <h3
-            onClick={() => navigate(`/work/${item._id}`)}
-            className="text-sm font-extrabold text-slate-900 group-hover:text-[#7a6af6] transition-colors cursor-pointer leading-snug"
-          >
-            {item.contentPieceId?.topic || item.title}
+          <h3 className="text-[15px] font-semibold text-ui-ink leading-snug">
+            <button
+              type="button"
+              onClick={() => navigate(`/work/${item._id}`)}
+              className="text-left py-3 -my-3 hover:underline underline-offset-4 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink focus-visible:ring-offset-2"
+            >
+              {item.contentPieceId?.topic || item.title}
+            </button>
           </h3>
 
           {/* Program or Campaign Tag */}
           {item.contentPieceId?.programOrEvent && (
-            <div className="text-[11px] font-medium text-slate-500 mt-0.5">
+            <div className="text-[11px] font-medium text-ui-muted mt-0.5">
               Campaign: <span className="text-slate-700 font-semibold">{item.contentPieceId.programOrEvent}</span>
             </div>
           )}
 
           {/* Task Brief / Instructions */}
           {(item.contentPieceId?.brief || item.brief?.description || item.description) && (
-            <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed bg-slate-50/60 p-2 rounded-xl border border-slate-100">
+            <p className="text-xs text-ui-text mt-2 line-clamp-2 leading-relaxed bg-white/60 p-2.5 rounded-xl">
               <span className="font-bold text-slate-700">Brief: </span>
               {item.contentPieceId?.brief || item.brief?.description || item.description}
             </p>
@@ -546,13 +548,13 @@ export const MyWorkPage: React.FC = () => {
 
           {/* Reference Link if available */}
           {item.contentPieceId?.referenceLink && (
-            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ui-muted">
               <span className="font-bold text-slate-600 shrink-0">Inspiration Ref:</span>
               <a
                 href={item.contentPieceId.referenceLink}
                 target="_blank"
                 rel="noreferrer"
-                className="text-[#7a6af6] hover:underline truncate flex items-center gap-1"
+                className="text-ui-ink hover:underline truncate flex items-center gap-1 min-h-[44px] -my-3"
               >
                 <span className="truncate">{item.contentPieceId.referenceLink}</span>
                 <ExternalLink className="w-3 h-3 shrink-0" />
@@ -562,8 +564,8 @@ export const MyWorkPage: React.FC = () => {
 
           {/* Previous Stage Outputs Box */}
           {item.previousStage && (
-            <div className="mt-2.5 p-2.5 bg-purple-50/70 border border-purple-200/80 rounded-xl text-[11px]">
-              <span className="font-bold text-purple-900 block mb-0.5">
+            <div className="mt-2.5 p-2.5 bg-white/60 rounded-xl text-[11px]">
+              <span className="font-bold text-ui-ink block mb-0.5">
                 Previous Stage ({item.previousStage.stageKey}) Output:
               </span>
               {item.previousStage.deliverableUrl || item.previousStage.publishedUrl ? (
@@ -572,7 +574,7 @@ export const MyWorkPage: React.FC = () => {
                     href={item.previousStage.deliverableUrl || item.previousStage.publishedUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-purple-700 hover:underline flex items-center gap-1 font-semibold truncate"
+                    className="text-ui-ink hover:underline flex items-center gap-1 font-semibold truncate"
                   >
                     <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">{item.previousStage.deliverableUrl || item.previousStage.publishedUrl}</span>
@@ -587,7 +589,8 @@ export const MyWorkPage: React.FC = () => {
                       );
                     }}
                     title="Copy Link"
-                    className="p-1 rounded text-purple-600 hover:bg-purple-100 shrink-0"
+                    aria-label="Copy link"
+                    className="ui-icon-btn border-transparent shrink-0"
                   >
                     {copiedId === `prev-${item._id}` ? (
                       <Check className="w-3 h-3 text-emerald-600" />
@@ -597,22 +600,22 @@ export const MyWorkPage: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <span className="text-slate-400 italic">Outputs logged in previous stage</span>
+                <span className="text-ui-muted italic">Outputs logged in previous stage</span>
               )}
             </div>
           )}
 
           {/* Personal Output Box */}
           {item.deliverableUrl && (
-            <div className="mt-2.5 p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl text-[11px] flex items-center justify-between gap-2">
+            <div className="mt-2.5 pl-2.5 bg-white/60 rounded-xl text-[11px] flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
-                <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="font-extrabold text-emerald-950 shrink-0">Your Output Link:</span>
+                <FileCheck className="w-4 h-4 text-ui-ink shrink-0" />
+                <span className="font-semibold text-ui-text shrink-0">Your Output Link:</span>
                 <a
                   href={item.deliverableUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-emerald-700 hover:text-emerald-900 hover:underline font-bold truncate flex items-center gap-1"
+                  className="text-ui-ink hover:underline font-semibold truncate flex items-center gap-1"
                 >
                   <span className="truncate">{item.deliverableUrl}</span>
                   <ExternalLink className="w-3 h-3 shrink-0" />
@@ -625,7 +628,8 @@ export const MyWorkPage: React.FC = () => {
                   handleCopyLink(item.deliverableUrl || '', `deliv-${item._id}`);
                 }}
                 title="Copy Link"
-                className="p-1 rounded text-emerald-700 hover:bg-emerald-100 shrink-0"
+                aria-label="Copy link"
+                className="ui-icon-btn border-transparent shrink-0"
               >
                 {copiedId === `deliv-${item._id}` ? (
                   <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -638,15 +642,15 @@ export const MyWorkPage: React.FC = () => {
 
           {/* Live Publication Link Box */}
           {item.publishedUrl && (
-            <div className="mt-2.5 p-2.5 bg-teal-50/80 border border-teal-200 rounded-xl text-[11px] flex items-center justify-between gap-2">
+            <div className="mt-2.5 pl-2.5 bg-white/60 rounded-xl text-[11px] flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
-                <Globe className="w-4 h-4 text-teal-600 shrink-0" />
-                <span className="font-extrabold text-teal-950 shrink-0">Live Published Link:</span>
+                <Globe className="w-4 h-4 text-ui-ink shrink-0" />
+                <span className="font-semibold text-ui-text shrink-0">Live Published Link:</span>
                 <a
                   href={item.publishedUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-teal-700 hover:text-teal-900 hover:underline font-bold truncate flex items-center gap-1"
+                  className="text-ui-ink hover:underline font-semibold truncate flex items-center gap-1"
                 >
                   <span className="truncate">{item.publishedUrl}</span>
                   <ExternalLink className="w-3 h-3 shrink-0" />
@@ -659,7 +663,8 @@ export const MyWorkPage: React.FC = () => {
                   handleCopyLink(item.publishedUrl || '', `pub-${item._id}`);
                 }}
                 title="Copy Link"
-                className="p-1 rounded text-teal-700 hover:bg-teal-100 shrink-0"
+                aria-label="Copy link"
+                className="ui-icon-btn border-transparent shrink-0"
               >
                 {copiedId === `pub-${item._id}` ? (
                   <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -672,12 +677,12 @@ export const MyWorkPage: React.FC = () => {
 
           {/* Submission Under Review Banner */}
           {isWaitingApproval && (
-            <div className="mt-3 p-2.5 bg-indigo-50/90 border border-indigo-200 rounded-xl text-xs text-indigo-900 flex items-center justify-between gap-2">
+            <div className="mt-3 p-2.5 bg-white/60 rounded-xl text-xs text-ui-ink flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 font-bold">
-                <Send className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <Send className="w-3.5 h-3.5 text-ui-ink shrink-0" />
                 <span>Submitted Output</span>
               </div>
-              <span className="text-[10px] text-indigo-700 bg-white px-2 py-0.5 rounded font-semibold border border-indigo-100">
+              <span className="status-chip status-waiting text-[11px] px-2 py-0.5 font-semibold">
                 Waiting for approval
               </span>
             </div>
@@ -685,12 +690,12 @@ export const MyWorkPage: React.FC = () => {
 
           {/* Revision Requested Banner (Feedback) */}
           {isFeedbackRework && (
-            <div className="mt-3 p-3 bg-amber-50/95 border border-amber-300 rounded-xl text-xs text-amber-950">
-              <div className="font-extrabold flex items-center gap-1.5 text-amber-900 mb-1">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <div className="mt-3 p-3 rounded-xl text-xs status-tint status-changes">
+              <div className="font-semibold flex items-center gap-1.5 mb-1">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>Revision Requested by {item.latestFeedback?.reviewer || 'Creative Head'}</span>
               </div>
-              <p className="text-[11.5px] text-amber-900 font-medium pl-5 border-l-2 border-amber-400">
+              <p className="text-xs font-medium pl-3 ml-1 border-l-2 border-ui-coral">
                 "{item.latestFeedback?.text || 'Review comments on file. Please refine and submit next revision.'}"
               </p>
             </div>
@@ -698,30 +703,28 @@ export const MyWorkPage: React.FC = () => {
 
           {/* Blocker alert if blocked */}
           {item.status === 'Blocked' && (
-            <div className="mt-3 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800">
-              <div className="font-bold flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+            <div className="mt-3 p-2.5 rounded-xl text-xs status-tint status-changes">
+              <div className="font-semibold flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5" />
                 <span>Blocked: {item.blockerReason}</span>
               </div>
-              {item.blockerNote && <p className="text-[11px] text-rose-700 mt-0.5">{item.blockerNote}</p>}
+              {item.blockerNote && <p className="text-xs mt-0.5">{item.blockerNote}</p>}
             </div>
           )}
         </div>
 
         {/* Card Footer: Deadline & Action Triggers */}
-        <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <span className={isActuallyOverdue ? 'text-rose-600 font-bold' : 'text-slate-600'}>
+        <div className="mt-4 pt-3 border-t border-ui-line flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1 text-[11px] font-semibold text-ui-muted">
+            <Calendar className="w-3.5 h-3.5 text-ui-muted" />
+            <span className={isActuallyOverdue ? 'text-ui-ink font-semibold' : 'text-ui-text'}>
               Due: {new Date(item.dueDate || item.deadline).toLocaleDateString()}
             </span>
             {isActuallyOverdue && (
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-rose-600 text-white uppercase ml-1 animate-pulse">
-                Overdue
-              </span>
+              <OverdueChip deadline={item.dueDate || item.deadline} className="ml-1" />
             )}
             {item.estimatedEffortHrs && (
-              <span className="text-[10px] text-slate-400 ml-1">
+              <span className="text-[10px] text-ui-muted ml-1">
                 ({item.estimatedEffortHrs}h effort)
               </span>
             )}
@@ -737,7 +740,7 @@ export const MyWorkPage: React.FC = () => {
                   {actions.includes('start') && (
                     <button
                       onClick={() => handleTransition(item, 'In Progress')}
-                      className="px-3 py-1 bg-[#7a6af6] hover:bg-[#6857f5] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                      className="ui-btn ui-btn-primary h-11 px-4"
                     >
                       <Play className="w-3 h-3 fill-current" />
                       Start
@@ -755,7 +758,7 @@ export const MyWorkPage: React.FC = () => {
                         setSelectedItemForSubmit(item);
                         setDeliverableUrl(item.deliverableUrl || '');
                       }}
-                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                      className="ui-btn ui-btn-primary h-11 px-4"
                     >
                       <Send className="w-3 h-3" />
                       {isFeedbackRework ? `Resubmit (Rev ${item.revisions + 1})` : 'Submit for approval'}
@@ -772,7 +775,7 @@ export const MyWorkPage: React.FC = () => {
                         setUploadFileName('');
                         setUploadError(null);
                       }}
-                      className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                      className="ui-btn ui-btn-primary h-11 px-4"
                     >
                       <Globe className="w-3 h-3" />
                       Mark as posted
@@ -782,7 +785,7 @@ export const MyWorkPage: React.FC = () => {
                   {['Shoot', 'Edit', 'Design', 'Post'].includes(item.stageKey || '') && (
                     <button
                       onClick={() => navigate(`/work/${item._id}/workspace`)}
-                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border border-indigo-200 cursor-pointer"
+                      className="ui-btn ui-btn-secondary h-11 px-4"
                       title="Open full interactive workspace"
                     >
                       <Layers className="w-3 h-3" />
@@ -799,7 +802,7 @@ export const MyWorkPage: React.FC = () => {
                         const prevOwner = item.suggestedDependencyOwner || item.previousStage?.owner;
                         setDependencyOwnerId(prevOwner?._id || '');
                       }}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border border-slate-200 cursor-pointer"
+                      className="ui-btn ui-btn-secondary h-11 px-4"
                       title="Mark blocked"
                     >
                       <Ban className="w-3 h-3" />
@@ -816,7 +819,7 @@ export const MyWorkPage: React.FC = () => {
                         const prevOwner = item.suggestedDependencyOwner || item.previousStage?.owner;
                         setDependencyOwnerId(prevOwner?._id || '');
                       }}
-                      className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border border-amber-200 cursor-pointer"
+                      className="ui-btn ui-btn-secondary h-11 px-4"
                       title="Request help"
                     >
                       <AlertTriangle className="w-3 h-3" />
@@ -827,7 +830,7 @@ export const MyWorkPage: React.FC = () => {
                   {actions.includes('approve') && (
                     <button
                       onClick={() => navigate(`/work/${item._id}`)}
-                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                      className="ui-btn ui-btn-primary h-11 px-4"
                     >
                       <CheckCircle2 className="w-3 h-3" />
                       Review & Rate
@@ -837,7 +840,7 @@ export const MyWorkPage: React.FC = () => {
                   {actions.includes('request_revision') && (
                     <button
                       onClick={() => navigate(`/work/${item._id}`)}
-                      className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                      className="ui-btn ui-btn-secondary h-11 px-4"
                     >
                       <RotateCcw className="w-3 h-3" />
                       Request rework
@@ -845,7 +848,7 @@ export const MyWorkPage: React.FC = () => {
                   )}
 
                   {actions.length === 0 && (
-                    <span className="text-[11px] text-slate-500 italic font-medium px-1">
+                    <span className="text-[11px] text-ui-muted italic font-medium px-1">
                       {reason || 'No actions available'}
                     </span>
                   )}
@@ -855,8 +858,9 @@ export const MyWorkPage: React.FC = () => {
 
             <button
               onClick={() => navigate(`/work/${item._id}`)}
-              className="p-1 rounded-lg text-slate-400 hover:text-[#7a6af6] transition-colors cursor-pointer"
+              className="ui-icon-btn"
               title="Open detail"
+              aria-label="Open detail"
             >
               <ArrowRight className="w-4 h-4" />
             </button>
@@ -867,110 +871,81 @@ export const MyWorkPage: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6 pb-12">
       {/* 1. Header Banner & Personal Cockpit */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-violet-100 text-[#7a6af6] border border-violet-200 flex items-center gap-1">
-              <CheckSquare className="w-3 h-3" />
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2 text-[13px] font-medium text-ui-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <CheckSquare className="w-3.5 h-3.5" />
               Focus Cockpit
             </span>
-            <span className="text-xs font-semibold text-slate-400">Zero Surveillance • Mental Clarity</span>
+            <span aria-hidden="true">·</span>
+            <span>Zero Surveillance • Mental Clarity</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2 tracking-tight">
+          <h1 className="text-[28px] sm:text-[32px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink">
             My Work
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+          <p className="mt-1.5 text-[15px] leading-relaxed text-ui-muted max-w-[70ch]">
             Welcome back, <strong>{user?.name}</strong>. Manage your personal stage assignments, deliverables, and submissions.
           </p>
         </div>
 
         <button
           onClick={() => navigate('/calendar')}
-          className="px-4 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 hover:border-[#7a6af6] hover:text-[#7a6af6] transition-all shadow-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+          className="ui-btn ui-btn-secondary bg-transparent h-11 self-start sm:self-auto"
         >
           <Calendar className="w-3.5 h-3.5" />
           View Calendar
         </button>
       </div>
 
-      {/* 2. Personal KPI Summary Strip */}
+      {/* 2. Personal KPI Summary Strip: one card, hairline dividers */}
       {data?.stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-          <div className="glass-card p-3.5 rounded-2xl border border-white/80 shadow-glass">
-            <div className="text-[10px] font-bold uppercase text-slate-400">Active Work</div>
-            <div className="text-2xl font-black text-slate-900 mt-0.5">{data.stats.activeCount}</div>
-            <div className="text-[10px] text-slate-500 font-medium">In your queue</div>
-          </div>
-
-          <div className="glass-card p-3.5 rounded-2xl border border-white/80 shadow-glass">
-            <div className="text-[10px] font-bold uppercase text-purple-600">Stage Assignments</div>
-            <div className="text-2xl font-black text-purple-700 mt-0.5">{totalStageAssignments}</div>
-            <div className="text-[10px] text-slate-500 font-medium">Pipeline stages</div>
-          </div>
-
-          <div
-            className={`glass-card p-3.5 rounded-2xl border shadow-glass ${
-              data.stats.overdueCount > 0
-                ? 'border-rose-300 bg-rose-50/40 text-rose-900'
-                : 'border-white/80'
-            }`}
-          >
-            <div className="text-[10px] font-bold uppercase text-slate-400">Overdue</div>
-            <div
-              className={`text-2xl font-black mt-0.5 ${
-                data.stats.overdueCount > 0 ? 'text-rose-600' : 'text-slate-900'
-              }`}
-            >
-              {data.stats.overdueCount}
-            </div>
-            <div className="text-[10px] text-slate-500 font-medium">
-              {data.stats.overdueCount > 0 ? 'Needs action' : 'All on track'}
-            </div>
-          </div>
-
-          <div className="glass-card p-3.5 rounded-2xl border border-white/80 shadow-glass">
-            <div className="text-[10px] font-bold uppercase text-slate-400">Due Today</div>
-            <div className="text-2xl font-black text-violet-700 mt-0.5">{data.stats.todayCount}</div>
-            <div className="text-[10px] text-slate-500 font-medium">Daily commitment</div>
-          </div>
-
-          <div className="glass-card p-3.5 rounded-2xl border border-white/80 shadow-glass">
-            <div className="text-[10px] font-bold uppercase text-indigo-600">Submissions</div>
-            <div className="text-2xl font-black text-indigo-700 mt-0.5">{totalSubmissions}</div>
-            <div className="text-[10px] text-slate-500 font-medium">In Review / Rework</div>
-          </div>
-
-          <div className="glass-card p-3.5 rounded-2xl border border-white/80 shadow-glass col-span-2 sm:col-span-1">
-            <div className="text-[10px] font-bold uppercase text-slate-400">Completed</div>
-            <div className="text-2xl font-black text-emerald-700 mt-0.5">{data.stats.completedCount}</div>
-            <div className="text-[10px] text-slate-500 font-medium">Approved / Live</div>
+        <div className="glass-card overflow-hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-ui-line">
+            {[
+              { label: 'Active Work', value: data.stats.activeCount, note: 'In your queue' },
+              { label: 'Stage Assignments', value: totalStageAssignments, note: 'Pipeline stages' },
+              {
+                label: 'Overdue',
+                value: data.stats.overdueCount,
+                note: data.stats.overdueCount > 0 ? 'Needs action' : 'All on track',
+                alert: data.stats.overdueCount > 0,
+              },
+              { label: 'Due Today', value: data.stats.todayCount, note: 'Daily commitment' },
+              { label: 'Submissions', value: totalSubmissions, note: 'In Review / Rework' },
+              { label: 'Completed', value: data.stats.completedCount, note: 'Approved / Live' },
+            ].map(({ label, value, note, alert }) => (
+              <div key={label} className="p-4 sm:p-5 bg-ui-card">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[13px] font-medium text-ui-muted">{label}</span>
+                  {alert && <AlertTriangle className="w-4 h-4 text-ui-coral shrink-0" aria-hidden="true" />}
+                </div>
+                <div className="mt-1 text-[28px] leading-9 font-semibold text-ui-ink tabular-nums">{value}</div>
+                <div className="text-xs text-ui-muted">{note}</div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       {/* 2.5 Quick Filter Navigation Bar & Search */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 pb-1">
-        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200">
+        <div className="max-w-full overflow-x-auto no-scrollbar">
+        <div className="ui-tabs">
           <button
             onClick={() => setActiveFilter('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeFilter === 'all'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-            }`}
+            aria-pressed={activeFilter === 'all'}
+            className={`ui-tab ${activeFilter === 'all' ? 'is-active' : ''}`}
           >
             All Work ({data?.stats?.activeCount ?? 0})
           </button>
 
           <button
             onClick={() => setActiveFilter('stages')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeFilter === 'stages'
-                ? 'bg-[#7a6af6] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-            }`}
+            aria-pressed={activeFilter === 'stages'}
+            className={`ui-tab ${activeFilter === 'stages' ? 'is-active' : ''}`}
           >
             <Layers className="w-3.5 h-3.5" />
             Stage Assignments ({totalStageAssignments})
@@ -978,11 +953,8 @@ export const MyWorkPage: React.FC = () => {
 
           <button
             onClick={() => setActiveFilter('deliverables')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeFilter === 'deliverables'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-            }`}
+            aria-pressed={activeFilter === 'deliverables'}
+            className={`ui-tab ${activeFilter === 'deliverables' ? 'is-active' : ''}`}
           >
             <FileCheck className="w-3.5 h-3.5" />
             Outputs ({totalDeliverables})
@@ -990,31 +962,31 @@ export const MyWorkPage: React.FC = () => {
 
           <button
             onClick={() => setActiveFilter('submissions')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeFilter === 'submissions'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-            }`}
+            aria-pressed={activeFilter === 'submissions'}
+            className={`ui-tab ${activeFilter === 'submissions' ? 'is-active' : ''}`}
           >
             <Send className="w-3.5 h-3.5" />
             Submissions & Reviews ({totalSubmissions})
           </button>
         </div>
+        </div>
 
         {/* Quick Search Input */}
         <div className="relative w-full sm:w-72">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-ui-muted absolute left-4 top-1/2 -translate-y-1/2" aria-hidden="true" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search steps, topics, tasks..."
-            className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]/40 transition-all shadow-2xs"
+            aria-label="Search steps, topics, tasks"
+            className="ui-input w-full pl-10 pr-11"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              aria-label="Clear search"
+              className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full text-ui-muted hover:text-ui-ink"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -1024,7 +996,7 @@ export const MyWorkPage: React.FC = () => {
 
       {/* 3. Main Queues */}
       {isLoading ? (
-        <div className="py-20 text-center text-xs text-slate-400 animate-pulse">
+        <div className="py-20 text-center text-xs text-ui-muted animate-pulse">
           Loading personal work queue...
         </div>
       ) : !hasAnyFilteredActive && filteredCompleted.length === 0 ? (
@@ -1037,7 +1009,7 @@ export const MyWorkPage: React.FC = () => {
               ? `No items found under "${activeFilter}"`
               : 'All caught up! Zero pending deliverables.'}
           </h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+          <p className="text-xs text-ui-muted mt-1 max-w-md mx-auto">
             {searchQuery
               ? 'Try adjusting your search query or clear the filter to see your complete queue.'
               : 'You have cleared all scheduled stage items. When new content pieces or stage handoffs unlock, they will appear here automatically.'}
@@ -1048,7 +1020,7 @@ export const MyWorkPage: React.FC = () => {
                 setActiveFilter('all');
                 setSearchQuery('');
               }}
-              className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all cursor-pointer"
+              className="ui-btn ui-btn-primary h-11 mt-4"
             >
               Reset Filters
             </button>
@@ -1060,9 +1032,9 @@ export const MyWorkPage: React.FC = () => {
           {filteredOverdue.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping" />
-                <h2 className="text-base font-extrabold text-rose-700 flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                <span className="w-2.5 h-2.5 rounded-full bg-ui-coral animate-ping" aria-hidden="true" />
+                <h2 className="text-base font-semibold text-ui-ink flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-ui-coral" />
                   Overdue Action Required ({filteredOverdue.length})
                 </h2>
               </div>
@@ -1075,8 +1047,8 @@ export const MyWorkPage: React.FC = () => {
           {/* Section B: Today's Priorities */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                <CalendarCheck className="w-4 h-4 text-[#7a6af6]" />
+              <h2 className="text-base font-semibold text-ui-ink flex items-center gap-2">
+                <CalendarCheck className="w-4 h-4 text-ui-ink" />
                 Today's Priorities ({filteredToday.length})
               </h2>
             </div>
@@ -1089,7 +1061,7 @@ export const MyWorkPage: React.FC = () => {
               <div className="glass-card p-6 text-center rounded-2xl border border-white/80">
                 <Sparkles className="w-7 h-7 text-emerald-500 mx-auto mb-1.5" />
                 <h4 className="text-sm font-bold text-slate-900">No deadlines for today!</h4>
-                <p className="text-xs text-slate-500 mt-0.5 max-w-sm mx-auto">
+                <p className="text-xs text-ui-muted mt-0.5 max-w-sm mx-auto">
                   You have cleared all of today's deliverables. You can pull work from your upcoming queue or focus on deep creative production.
                 </p>
               </div>
@@ -1099,8 +1071,8 @@ export const MyWorkPage: React.FC = () => {
           {/* Section C: This Week */}
           {filteredThisWeek.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-slate-500" />
+              <h2 className="text-base font-semibold text-ui-ink flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-ui-muted" />
                 This Week ({filteredThisWeek.length})
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1112,8 +1084,8 @@ export const MyWorkPage: React.FC = () => {
           {/* Section D: Upcoming / Later */}
           {filteredUpcoming.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-slate-500" />
+              <h2 className="text-base font-semibold text-ui-ink flex items-center gap-2">
+                <Layers className="w-4 h-4 text-ui-muted" />
                 Upcoming / Pipeline ({filteredUpcoming.length})
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1127,7 +1099,8 @@ export const MyWorkPage: React.FC = () => {
             <div className="space-y-3 pt-4 border-t border-slate-200">
               <button
                 onClick={() => setShowCompleted(!showCompleted)}
-                className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                aria-expanded={showCompleted}
+                className="flex items-center gap-2 min-h-[44px] text-sm font-semibold text-ui-text hover:text-ui-ink transition-colors"
               >
                 <FileCheck className="w-4 h-4 text-emerald-600" />
                 Recently Completed ({filteredCompleted.length})
@@ -1146,23 +1119,29 @@ export const MyWorkPage: React.FC = () => {
 
       {/* 4. Mark Blocked Modal */}
       {selectedItemForBlock && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal w-full max-w-md p-6 sm:p-7 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-rose-600">
-                <Ban className="w-5 h-5" />
-                <h3 className="text-base font-extrabold text-slate-900">Mark Work Item Blocked</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim backdrop-blur-sm animate-fade-in">
+          <div
+            ref={blockDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mywork-block-title"
+            className="glass-modal w-full max-w-md p-6 sm:p-7 space-y-5"
+          >
+            <div className="flex items-center justify-between border-b border-ui-line pb-3">
+              <div className="flex items-center gap-2 text-ui-ink">
+                <Ban className="w-5 h-5 text-ui-coral" />
+                <h3 id="mywork-block-title" className="text-base font-semibold text-ui-ink">Mark Work Item Blocked</h3>
               </div>
               <button
                 onClick={() => setSelectedItemForBlock(null)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer"
+                aria-label="Close" className="ui-icon-btn"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {blockError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
+              <div className="p-3 rounded-xl text-xs status-tint status-changes">
                 {blockError}
               </div>
             )}
@@ -1170,8 +1149,8 @@ export const MyWorkPage: React.FC = () => {
             <form onSubmit={submitBlocker} className="space-y-4">
               {/* Suggested Previous Stage Dependency Owner */}
               {(selectedItemForBlock?.suggestedDependencyOwner || selectedItemForBlock?.previousStage?.owner) && (
-                <div className="p-3 bg-purple-50/90 border border-purple-200/90 rounded-xl text-xs">
-                  <span className="font-bold text-purple-900 block mb-1">
+                <div className="p-3 bg-white/70 border border-ui-line rounded-xl text-xs">
+                  <span className="font-bold text-ui-ink block mb-1">
                     Suggested Dependency Owner (Previous Stage):
                   </span>
                   <div className="flex items-center justify-between gap-2">
@@ -1181,7 +1160,7 @@ export const MyWorkPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setDependencyOwnerId(selectedItemForBlock?.suggestedDependencyOwner?._id || selectedItemForBlock?.previousStage?.owner?._id || '')}
-                      className="text-[11px] font-bold text-purple-600 hover:text-purple-800 bg-white px-2 py-0.5 rounded border border-purple-200 shadow-2xs whitespace-nowrap cursor-pointer"
+                      className="text-[11px] font-bold text-ui-ink hover:text-ui-ink bg-white px-2 py-0.5 rounded border border-ui-line shadow-2xs whitespace-nowrap cursor-pointer"
                     >
                       {dependencyOwnerId === (selectedItemForBlock?.suggestedDependencyOwner?._id || selectedItemForBlock?.previousStage?.owner?._id) ? 'Selected ✓' : 'Select'}
                     </button>
@@ -1197,7 +1176,7 @@ export const MyWorkPage: React.FC = () => {
                   required
                   value={blockerReason}
                   onChange={(e) => setBlockerReason(e.target.value as BlockerReason)}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className="ui-select w-full"
                 >
                   {BLOCKER_REASONS.map((r) => (
                     <option key={r} value={r}>
@@ -1216,7 +1195,7 @@ export const MyWorkPage: React.FC = () => {
                   value={blockerNote}
                   onChange={(e) => setBlockerNote(e.target.value)}
                   placeholder="Explain what is blocking progress so it can be resolved..."
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
@@ -1224,14 +1203,14 @@ export const MyWorkPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedItemForBlock(null)}
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isBlocking}
-                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 cursor-pointer"
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {isBlocking ? 'Updating...' : 'Confirm Blocked'}
                 </button>
@@ -1243,16 +1222,22 @@ export const MyWorkPage: React.FC = () => {
 
       {/* 5. Submit Output for Review / Publish Modal */}
       {selectedItemForSubmit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-fade-in">
-          <div className="glass-modal w-full max-w-md p-6 sm:p-7 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim backdrop-blur-sm animate-fade-in">
+          <div
+            ref={submitDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mywork-submit-title"
+            className="glass-modal w-full max-w-md p-6 sm:p-7 space-y-5"
+          >
+            <div className="flex items-center justify-between border-b border-ui-line pb-3">
               <div className="flex items-center gap-2">
                 {selectedItemForSubmit.stageKey === 'Post' ? (
                   <Globe className="w-5 h-5 text-teal-600" />
                 ) : (
-                  <Send className="w-5 h-5 text-indigo-600" />
+                  <Send className="w-5 h-5 text-ui-ink" />
                 )}
-                <h3 className="text-base font-extrabold text-slate-900">
+                <h3 id="mywork-submit-title" className="text-base font-extrabold text-slate-900">
                   {selectedItemForSubmit.stageKey === 'Post'
                     ? 'Mark as posted & add social link'
                     : 'Submit for approval'}
@@ -1260,7 +1245,7 @@ export const MyWorkPage: React.FC = () => {
               </div>
               <button
                 onClick={() => setSelectedItemForSubmit(null)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-700 cursor-pointer"
+                aria-label="Close" className="ui-icon-btn"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1298,14 +1283,14 @@ export const MyWorkPage: React.FC = () => {
                       </button>
                     </div>
                   ) : isUploadingFile ? (
-                    <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs space-y-1">
-                      <div className="flex justify-between text-indigo-900 font-semibold text-[11px]">
+                    <div className="p-2.5 rounded-xl bg-white/70 border border-ui-line text-xs space-y-1">
+                      <div className="flex justify-between text-ui-ink font-semibold text-[11px]">
                         <span>Uploading {uploadFileName}...</span>
                         <span>{uploadProgress}%</span>
                       </div>
-                      <div className="w-full bg-indigo-200 rounded-full h-1.5 overflow-hidden">
+                      <div className="w-full bg-ui-line rounded-full h-1.5 overflow-hidden">
                         <div
-                          className="bg-indigo-600 h-full rounded-full transition-all"
+                          className="bg-ui-blue h-full rounded-full transition-all"
                           style={{ width: `${uploadProgress}%` }}
                         />
                       </div>
@@ -1314,7 +1299,7 @@ export const MyWorkPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => submitFileInputRef.current?.click()}
-                      className="w-full py-2 px-3 border border-dashed border-slate-300 hover:border-indigo-400 rounded-xl text-xs text-slate-600 hover:text-indigo-600 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      className="w-full py-2 px-3 border border-dashed border-slate-300 hover:border-ui-ink/30 rounded-xl text-xs text-slate-600 hover:text-ui-ink flex items-center justify-center gap-1.5 transition cursor-pointer"
                     >
                       <Upload className="w-3.5 h-3.5" />
                       <span>{selectedItemForSubmit.stageKey === 'Post' ? 'Attach post image / video / proof' : 'Attach deliverable file'}</span>
@@ -1339,9 +1324,9 @@ export const MyWorkPage: React.FC = () => {
                       setSocialReferenceUrl(e.target.value);
                       setDeliverableUrl(e.target.value);
                     }}
-                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6] font-mono"
+                    className="ui-input w-full font-mono"
                   />
-                  <p className="text-[10px] text-slate-500 mt-1">
+                  <p className="text-[10px] text-ui-muted mt-1">
                     Paste the live published URL from the social platform as reference.
                   </p>
                 </div>
@@ -1355,7 +1340,7 @@ export const MyWorkPage: React.FC = () => {
                     placeholder="https://drive.google.com/... or Figma link"
                     value={deliverableUrl}
                     onChange={(e) => setDeliverableUrl(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                    className="ui-input w-full"
                   />
                 </div>
               )}
@@ -1375,7 +1360,7 @@ export const MyWorkPage: React.FC = () => {
                       ? 'e.g. Published as Reel with pinned comment, audio sync verified...'
                       : 'Summarize key outputs, raw footage drive link, or review context...'
                   }
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#7a6af6]"
+                  className="ui-input ui-textarea w-full"
                 />
               </div>
 
@@ -1383,18 +1368,14 @@ export const MyWorkPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedItemForSubmit(null)}
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="ui-btn ui-btn-secondary h-11"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting || isUploadingFile}
-                  className={`px-5 py-2 text-white rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-50 cursor-pointer ${
-                    selectedItemForSubmit.stageKey === 'Post'
-                      ? 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/20'
-                      : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20'
-                  }`}
+                  className="ui-btn ui-btn-primary h-11"
                 >
                   {isSubmitting
                     ? 'Submitting...'
