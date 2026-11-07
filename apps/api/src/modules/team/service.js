@@ -9,6 +9,7 @@ import { PersonChangeAudit } from './audit.model.js';
 import { Session } from '../auth/session.model.js';
 import { logActivity } from '../activity/service.js';
 import { getRatingsSummary } from '../submissions/service.js';
+import { disconnectUserSockets } from '../../lib/socketHub.js';
 import {
   calculateIndividualWorkMeasures,
   formatDuration,
@@ -1073,6 +1074,7 @@ export async function forceLogout(personId, actor) {
   }
 
   await Session.deleteMany({ userId: personId });
+  disconnectUserSockets(personId);
 
   return {
     success: true,

@@ -15,6 +15,7 @@ import { AccessRequest } from '../access/model.js';
 import { CalendarPlan } from '../calendar/plan.model.js';
 import { WorkItem } from '../workItems/model.js';
 import { PhoneVerification } from './phoneVerification.model.js';
+import { disconnectUserSockets } from '../../lib/socketHub.js';
 
 export function stripHtml(str) {
   if (typeof str !== 'string') return str;
@@ -753,6 +754,7 @@ export async function revokeSession(userId, sessionId, currentRefreshToken = nul
   }
 
   const isCurrent = Boolean(currentSessionId && sessionId === currentSessionId);
+  disconnectUserSockets(userId);
   return { success: true, isCurrent };
 }
 
@@ -787,6 +789,7 @@ export async function revokeOtherSessions(userId, currentRefreshToken = null) {
     logger.warn({ err: e.message }, 'Failed to record ActivityEvent for revoke other sessions');
   }
 
+  disconnectUserSockets(userId);
   return { success: true, revokedCount: result.modifiedCount };
 }
 

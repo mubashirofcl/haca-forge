@@ -57,6 +57,8 @@ import { ensureAutomationRules } from "./modules/automation/runner.js";
 import { ensureReportDefinitions } from "./modules/reports/service.js";
 import { ensureBaselineUsers } from "./modules/people/baselineUsers.js";
 import { authenticate } from "./middleware/auth.js";
+import { setSocketServer } from "./lib/socketHub.js";
+import { User } from "./modules/people/model.js";
 import { initQueues } from "./lib/queue.js";
 import { initDomainEventListeners } from "./modules/notifications/service.js";
 
@@ -119,46 +121,38 @@ export const io = new SocketIOServer(server, {
     credentials: true,
   },
 });
+setSocketServer(io);
 
-io.use((socket, next) => {
+/** The access token from the handshake: the httpOnly cookie, or an auth field / header. Never the URL. */
+function handshakeToken(handshake) {
+  const cookieHeader = handshake.headers.cookie || "";
+  const match = cookieHeader.match(/(?:^|;\s*)accessToken=([^;]+)/);
+  if (match) return decodeURIComponent(match[1]);
+  if (typeof handshake.auth?.token === "string" && handshake.auth.token) return handshake.auth.token;
+  const parts = (handshake.headers.authorization || "").split(" ");
+  if (parts.length === 2 && parts[0] === "Bearer") return parts[1];
+  return null;
+}
+
+// Every connection is checked against the user as they are now: they must exist and not be
+// suspended, and their role comes from the database, not from the token.
+io.use(async (socket, next) => {
   try {
-    const cookieHeader = socket.handshake.headers.cookie;
-    let token = null;
-
-    if (cookieHeader) {
-      const match = cookieHeader.match(/accessToken=([^;]+)/);
-      if (match) token = match[1];
-    }
-
-    if (!token && socket.handshake.auth?.token) {
-      token = socket.handshake.auth.token;
-    }
-
-    if (!token && socket.handshake.query?.token) {
-      token = socket.handshake.query.token;
-    }
-
-    if (!token && socket.handshake.headers.authorization) {
-      const parts = socket.handshake.headers.authorization.split(" ");
-      if (parts.length === 2 && parts[0] === "Bearer") {
-        token = parts[1];
-      }
-    }
-
-    if (token) {
-      const decoded = jwt.verify(token, env.JWT_SECRET);
-      if (decoded.role) {
-        decoded.role = normalizeRole(decoded.role);
-      }
-      socket.user = decoded;
-      return next();
-    }
-    return next(new Error("Authentication failed: Valid accessToken required"));
+    const token = handshakeToken(socket.handshake);
+    if (!token) return next(new Error("Authentication failed: Valid accessToken required"));
+    const decoded = jwt.verify(token, env.JWT_SECRET);
+    const user = await User.findById(decoded.userId).select("role status name preferredName").lean();
+    if (!user) return next(new Error("Authentication failed: User not found"));
+    if (user.status === "suspended") return next(new Error("Authentication failed: Account is suspended"));
+    socket.user = {
+      userId: String(user._id),
+      role: normalizeRole(user.role),
+      name: user.preferredName || user.name,
+    };
+    return next();
   } catch (err) {
     logger.warn({ err: err.message }, "Socket.io authentication error");
-    return next(
-      new Error("Authentication failed: Invalid or expired accessToken"),
-    );
+    return next(new Error("Authentication failed: Invalid or expired accessToken"));
   }
 });
 

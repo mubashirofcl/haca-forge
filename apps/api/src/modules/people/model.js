@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { ROLE_KEYS, JOB_ROLES, normalizeRole, WORK_PREFERENCES } from '@mmp/shared';
+import { disconnectUserSockets } from '../../lib/socketHub.js';
 
 const personSchema = new mongoose.Schema(
   {
@@ -239,6 +240,20 @@ personSchema.post('init', function () {
   if (this.role) {
     this.role = normalizeRole(this.role);
   }
+  this.$locals.accessKey = `${this.role}|${this.status}`;
+});
+
+// A changed role or status ends the user's live sockets. A reconnect goes through the
+// handshake again, which refuses a suspended user and joins the new role's room.
+personSchema.pre('save', function (next) {
+  this.$locals.resetSockets = !this.isNew && this.$locals.accessKey !== `${this.role}|${this.status}`;
+  next();
+});
+
+personSchema.post('save', function (doc) {
+  if (doc.$locals.resetSockets) disconnectUserSockets(doc._id);
+  doc.$locals.accessKey = `${doc.role}|${doc.status}`;
+  doc.$locals.resetSockets = false;
 });
 
 // Primary Person model, pointing to 'users' collection to transform in-place

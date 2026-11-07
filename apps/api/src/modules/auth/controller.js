@@ -2,6 +2,7 @@ import { env } from "../../config/env.js";
 import * as authService from "./service.js";
 import { User } from "../people/model.js";
 import { ROLE_PERMISSIONS, normalizeRole } from "@mmp/shared";
+import { disconnectUserSockets } from "../../lib/socketHub.js";
 
 function getCookieOptions(maxAgeMs) {
   const isProd = env.NODE_ENV === "production";
@@ -76,6 +77,7 @@ export async function logout(req, res, next) {
       await User.findByIdAndUpdate(req.user._id, {
         $unset: { refreshTokenHash: 1 },
       });
+      disconnectUserSockets(req.user._id);
     }
 
     const clearOptions = {

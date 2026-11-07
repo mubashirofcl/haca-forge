@@ -10,6 +10,7 @@ import { recordRoundSubmission } from '../workItems/rounds.js';
 import { assertCanHoldEditorLock, canSeePrivateReview, isTeamMember, requireParticipant } from '../workItems/access.js';
 import { visibleVersionsFilter } from '../workItems/viewerRules.js';
 import { createNotification, getSocketIO } from '../notifications/service.js';
+import { withoutContact } from '../../lib/socketHub.js';
 import {
   assertDecisionAllowed,
   assertValidRating,
@@ -510,7 +511,7 @@ export async function addComment(submissionId, commentData, user) {
     }
   }
 
-  const populated = await SubmissionComment.findById(comment._id).populate('authorId', 'name email role jobRole');
+  const populated = withoutContact(await SubmissionComment.findById(comment._id).populate('authorId', 'name role jobRole'));
 
   const io = getSocketIO();
   if (io) {
@@ -724,8 +725,9 @@ export async function requestRevision(submissionId, { comment, rootCause }, user
   // The decision is saved. What follows must not fail it.
   if (commentRecord) {
     await afterDecision('the live comment', async () => {
-      const populatedComment = await SubmissionComment.findById(commentRecord._id)
-        .populate('authorId', 'name email role jobRole');
+      const populatedComment = withoutContact(
+        await SubmissionComment.findById(commentRecord._id).populate('authorId', 'name role jobRole')
+      );
       const io = getSocketIO();
       if (io) {
         if (ownerId) io.to(`user:${ownerId}`).emit('comment:new', populatedComment);

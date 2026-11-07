@@ -14,6 +14,7 @@ import { createNotification } from '../notifications/service.js';
 import { logger } from '../../lib/logger.js';
 import { buildChatAttachments } from './attachments.js';
 import { safeLink } from '../uploads/fileTypes.js';
+import { removeUserFromRoom } from '../../lib/socketHub.js';
 import {
   CHAT_REACTION_EMOJIS,
   CHAT_ATTACHMENT_CONFIG,
@@ -478,6 +479,8 @@ export async function removeGroupMember(channelId, user, targetUserId) {
   }
 
   await ChannelMember.deleteOne({ _id: targetMember._id });
+  // Their open sockets stop receiving this channel's live events.
+  removeUserFromRoom(targetUserId, `channel:${channelId}`);
   return { success: true };
 }
 

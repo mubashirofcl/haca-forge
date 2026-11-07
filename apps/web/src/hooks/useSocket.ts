@@ -48,8 +48,12 @@ export function useSocket() {
         setIsConnected(true);
       });
 
-      socket.on('disconnect', () => {
+      // The server closes a user's sockets when their session or access changes (logout
+      // elsewhere, revoked sessions, a new role). Socket.IO does not reconnect after that, so
+      // try once; the handshake decides whether this browser may still connect.
+      socket.on('disconnect', (reason) => {
         setIsConnected(false);
+        if (reason === 'io server disconnect' && socketInstance === socket) socket.connect();
       });
 
       // A refused handshake is not retried by Socket.IO. If the access cookie had expired,

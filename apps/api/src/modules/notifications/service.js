@@ -1,6 +1,7 @@
 import { Notification } from './model.js';
 import { User } from '../people/model.js';
 import { logger } from '../../lib/logger.js';
+import { withoutContact } from '../../lib/socketHub.js';
 import { enqueueEmail } from '../../lib/queue.js';
 import { eventBus, EVENTS } from '../../lib/events.js';
 
@@ -64,7 +65,7 @@ export async function createNotification({
     });
 
     if (io) {
-      io.to(`user:${recipient}`).emit('notification:new', notification);
+      io.to(`user:${recipient}`).emit('notification:new', withoutContact(notification));
     }
 
     return notification;
