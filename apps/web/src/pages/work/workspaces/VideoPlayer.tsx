@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { isDriveLink } from '@mmp/shared';
 import {
   Play,
   Pause,
@@ -20,7 +21,7 @@ interface VideoPlayerProps {
   className?: string;
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({
+const PlayableVideo: React.FC<VideoPlayerProps> = ({
   url,
   thumbnailUrl,
   onReferenceMoment,
@@ -322,4 +323,31 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       </div>
     </div>
   );
+};
+
+/**
+ * A clip or cut may be a Google Drive link: Drive files cannot play in the page, so they get an
+ * "Open in Drive" card. Everything else plays as before.
+ */
+export const VideoPlayer: React.FC<VideoPlayerProps> = (props) => {
+  if (isDriveLink(props.url)) {
+    return (
+      <div
+        className="w-full min-h-[220px] rounded-xl bg-black/80 flex flex-col items-center justify-center gap-3 p-6 text-center"
+        data-testid="drive-video-card"
+      >
+        <p className="text-sm font-semibold text-white">This clip is a Google Drive file</p>
+        <p className="text-xs text-white/70">It opens in Drive; it does not play here.</p>
+        <a
+          href={props.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 rounded-lg bg-white text-ui-ink text-xs font-semibold"
+        >
+          Open in Drive
+        </a>
+      </div>
+    );
+  }
+  return <PlayableVideo {...props} />;
 };

@@ -1,16 +1,22 @@
 import React from 'react';
 import { ExternalLink, Globe, ShieldCheck, Copy, Check } from 'lucide-react';
+import { DRIVE_LINK_HINT } from '@mmp/shared';
+import { safeUrl } from '../../../lib/safeUrl';
+import { AssetLinks, type AssetItem } from '../../../components/AssetLinks';
 
 interface LinkOpenerViewerProps {
   url: string;
   title?: string;
   notes?: string;
+  /** Every link in the version, when there is more than one (e.g. a design's slides). */
+  links?: AssetItem[];
 }
 
 export const LinkOpenerViewer: React.FC<LinkOpenerViewerProps> = ({
   url,
   title = 'External Link Submission',
   notes,
+  links = [],
 }) => {
   const [copied, setCopied] = React.useState(false);
 
@@ -63,7 +69,7 @@ export const LinkOpenerViewer: React.FC<LinkOpenerViewerProps> = ({
 
           <div className="flex items-center gap-3 w-full justify-center">
             <a
-              href={url}
+              href={safeUrl(url)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white hover:bg-neutral-200 text-neutral-950 font-semibold text-sm transition-colors cursor-pointer"
@@ -80,6 +86,15 @@ export const LinkOpenerViewer: React.FC<LinkOpenerViewerProps> = ({
               {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
+
+          {links.length > 1 && (
+            <div className="w-full mt-6 text-left">
+              <span className="text-xs font-semibold text-slate-400 block mb-2">All links in this version ({links.length})</span>
+              <AssetLinks items={links} testId="review-link-list" />
+            </div>
+          )}
+
+          <p className="mt-4 text-xs text-slate-400">{DRIVE_LINK_HINT}</p>
 
           <div className="flex items-center gap-1.5 mt-6 text-xs text-slate-500">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />

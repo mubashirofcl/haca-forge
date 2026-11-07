@@ -5,7 +5,8 @@ import type { Editor } from '@tiptap/react';
 import { apiFetch } from '../../../lib/api';
 import { statusClass, statusTone } from '../../../lib/statusTone';
 import { useAuth } from '../../../context/AuthContext';
-import { getWorkspaceModeInfo } from '@mmp/shared';
+import { getWorkspaceModeInfo, isPostableWorkType } from '@mmp/shared';
+import { DriveLinkInput, driveLinkError } from '../../../components/DriveLinkInput';
 import { WritingStudioRibbon, type RibbonTab } from './WritingStudioRibbon';
 import { WritingStudioCanvas } from './WritingStudioCanvas';
 import { WritingStudioSidebar, type SidebarTab, type CommentItem } from './WritingStudioSidebar';
@@ -326,9 +327,25 @@ export const WritingStudioPage: React.FC = () => {
   // Empty document check (Task 5: disabled while document is empty)
   const isDocumentEmpty = !currentText.trim() || currentText.trim() === 'Start writing your script...';
 
+  // A postable deliverable (Reel, Static Post, Carousel Post, Story) needs a caption and hashtags,
+  // whether the script is the document here or a Drive link. The API applies the same rule.
+  const needsCaption = isPostableWorkType(workItem?.workType || '');
+  const captionMissing = needsCaption && (!captionText.trim() || !hashtagsText.trim());
+  const CAPTION_MESSAGE = 'Add the caption and hashtags in the caption box before submitting.';
+  const driveLink = fallbackLinkUrl.trim();
+  const driveLinkValid = Boolean(driveLink) && !driveLinkError(driveLink);
+
   // Submit for Approval Handler
   const handleSubmitForApproval = async () => {
     if (!id || !editor || isDocumentEmpty || isReadOnly) return;
+    if (captionMissing) {
+      alert(CAPTION_MESSAGE);
+      return;
+    }
+    if (driveLink && !driveLinkValid) {
+      alert(driveLinkError(driveLink));
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -356,6 +373,8 @@ export const WritingStudioPage: React.FC = () => {
             htmlSnapshot: html,
             metadata,
           },
+          // An optional Google Drive link travels alongside the document, never instead of it.
+          ...(driveLinkValid ? { linkUrl: driveLink } : {}),
           notes: `Submitted from Writing Studio (${wordCount} words, ~${Math.round((wordCount / wpm) * 60)}s)`,
         }),
       });
@@ -376,23 +395,42 @@ export const WritingStudioPage: React.FC = () => {
 
   // Fallback Link Submission (Task 6)
   const handleFallbackLinkSubmit = async () => {
-    if (!id || !fallbackLinkUrl.trim()) return;
+    if (!id || !driveLink) return;
+    if (!driveLinkValid) {
+      alert(driveLinkError(driveLink));
+      return;
+    }
+    if (captionMissing) {
+      alert(CAPTION_MESSAGE);
+      return;
+    }
 
     try {
       setSubmitting(true);
+      const html = editor && !isDocumentEmpty ? editor.getHTML() : '';
+      const metadata = {
+        title: documentTitle,
+        targetDuration,
+        wpm,
+        caption: captionText,
+        hashtags: hashtagsText,
+        shotList: html ? extractSceneTableData(html).shotList : shotList,
+      };
       await apiFetch(`/api/work/${id}/submit`, {
         method: 'POST',
         body: JSON.stringify({
           kind: 'document',
-          linkUrl: fallbackLinkUrl.trim(),
-          notes: 'Submitted via external document link fallback',
+          linkUrl: driveLink,
+          // A Drive link alone is enough; any document text here goes with it.
+          document: html ? { json: editor!.getJSON(), htmlSnapshot: html, metadata } : { metadata },
+          notes: 'Submitted as a Google Drive link',
         }),
       });
 
       setShowLinkFallbackModal(false);
       const updatedRes = await apiFetch<any>(`/api/work/${id}`);
       setWorkItem(updatedRes.data);
-      alert('External document link submitted for Creative Head approval.');
+      alert('Google Drive link submitted for Creative Head approval.');
     } catch (err: any) {
       alert(`Submission failed: ${err.message}`);
     } finally {
@@ -826,7 +864,7 @@ export const WritingStudioPage: React.FC = () => {
             <div className="flex items-center justify-between gap-3">
               <h3 id="ws-fallback-title" className="text-base font-bold text-ui-ink flex items-center gap-1.5">
                 <LinkIcon className="w-4 h-4" aria-hidden="true" />
-                Submit via External Link
+                Submit as a Google Drive link
               </h3>
               <button
                 type="button"
@@ -839,18 +877,12 @@ export const WritingStudioPage: React.FC = () => {
             </div>
 
             <p className="text-xs text-ui-text">
-              If you worked outside the Writing Studio, provide your external document link (e.g. Google Docs, Notion, or
-              OneDrive).
+              If you wrote the script outside the Writing Studio, submit its Google Drive or Docs link. Any text in the
+              document here is sent with it.
+              {needsCaption ? ' The caption and hashtags from the caption box are still required.' : ''}
             </p>
 
-            <input
-              type="url"
-              value={fallbackLinkUrl}
-              onChange={(e) => setFallbackLinkUrl(e.target.value)}
-              placeholder="https://docs.google.com/document/d/..."
-              aria-label="External document link"
-              className="ui-input w-full"
-            />
+            <DriveLinkInput id="ws-drive-link" label="Google Drive or Docs link" value={fallbackLinkUrl} onChange={setFallbackLinkUrl} />
 
             <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
               <button
@@ -863,7 +895,7 @@ export const WritingStudioPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleFallbackLinkSubmit}
-                disabled={!fallbackLinkUrl.trim() || submitting}
+                disabled={!driveLinkValid || submitting}
                 className="ui-btn ui-btn-primary h-11"
               >
                 {submitting ? 'Submitting...' : 'Submit Link for Review'}

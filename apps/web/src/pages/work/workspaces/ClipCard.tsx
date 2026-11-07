@@ -16,6 +16,7 @@ import {
 import { MediaItemType, getMediaItemStatusLabel } from '@mmp/shared';
 import { useAuth } from '../../../context/AuthContext';
 import { ShareToChatModal } from '../../chat/ShareToChatModal';
+import { isDriveLink } from '@mmp/shared';
 
 interface ClipCardProps {
   clip: MediaItemType;
@@ -293,7 +294,12 @@ export const ClipCard: React.FC<ClipCardProps> = ({
 
       {/* Thumbnail + Video Details */}
       <div className="relative aspect-video rounded-xl bg-black/60 overflow-hidden border border-white/10 flex items-center justify-center">
-        {clip.thumbnailUrl || clip.url ? (
+        {isDriveLink(clip.url) ? (
+          <div className="flex flex-col items-center gap-1 text-white/80 text-xs" data-testid="drive-clip-thumb">
+            <Film className="w-8 h-8" />
+            <span>Google Drive clip</span>
+          </div>
+        ) : clip.thumbnailUrl || clip.url ? (
           clip.kind === 'image' ? (
             <img
               src={clip.thumbnailUrl || clip.url}

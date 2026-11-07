@@ -18,6 +18,7 @@ import { UploadManager, useGlobalUploadQueue } from './UploadManager';
 import { ClipCard } from './ClipCard';
 import { VideoPlayer } from './VideoPlayer';
 import { MediaThread } from './MediaThread';
+import { DriveLinkInput, driveLinkError } from '../../../components/DriveLinkInput';
 
 interface ShootWorkspaceProps {
   workItem: {
@@ -88,6 +89,10 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
   const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
 
   // Fetch clips and shot coverage from backend
+  const [driveClipUrl, setDriveClipUrl] = useState('');
+  const [driveClipTitle, setDriveClipTitle] = useState('');
+  const [addingDriveClip, setAddingDriveClip] = useState(false);
+
   const fetchClips = useCallback(async () => {
     try {
       setLoading(true);
@@ -199,6 +204,26 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
     }
   };
 
+  // Add a clip as a Google Drive link (the API checks the same shared rule)
+  const handleAddDriveClip = async () => {
+    const url = driveClipUrl.trim();
+    if (!url || driveLinkError(url)) return;
+    try {
+      setAddingDriveClip(true);
+      await apiFetch(`/api/work/${stageItemId}/clips`, {
+        method: 'POST',
+        body: JSON.stringify({ url, kind: 'video', title: driveClipTitle.trim() || 'Drive clip' }),
+      });
+      setDriveClipUrl('');
+      setDriveClipTitle('');
+      await fetchClips();
+    } catch (err: any) {
+      alert(err.message || 'Failed to add the Drive clip');
+    } finally {
+      setAddingDriveClip(false);
+    }
+  };
+
   // Replace clip file
   const handleReplaceClip = async (clipId: string, file: File) => {
     try {
@@ -301,6 +326,28 @@ export const ShootWorkspace: React.FC<ShootWorkspaceProps> = ({
               maxClips={10}
               currentClipsCount={clips.length}
             />
+            {/* Or a clip as a Google Drive link: reviewed like any other clip, opened in Drive. */}
+            <div className="mt-3 p-3 rounded-xl bg-white/60 border border-ui-line space-y-2" data-testid="drive-clip-form">
+              <DriveLinkInput id="shoot-drive-clip" label="Add a clip as a Google Drive link" value={driveClipUrl} onChange={setDriveClipUrl} />
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={driveClipTitle}
+                  onChange={(e) => setDriveClipTitle(e.target.value)}
+                  placeholder="Clip title"
+                  aria-label="Drive clip title"
+                  className="ui-input flex-1 min-w-[160px]"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddDriveClip}
+                  disabled={addingDriveClip || !driveClipUrl.trim() || Boolean(driveLinkError(driveClipUrl)) || clips.length >= 10}
+                  className="ui-btn ui-btn-secondary h-10"
+                >
+                  {addingDriveClip ? 'Adding...' : 'Add Drive clip'}
+                </button>
+              </div>
+            </div>
           </section>
 
           {/* Clips Grid Section */}

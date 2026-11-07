@@ -14,6 +14,8 @@ import {
   Link as LinkIcon,
 } from 'lucide-react';
 import { ResumableUploadTask } from '../../../lib/uploadManager';
+import { AssetLinks, AssetItem } from '../../../components/AssetLinks';
+import { DriveLinkInput, driveLinkError } from '../../../components/DriveLinkInput';
 
 interface PostWorkspaceProps {
   workItem: {
@@ -25,11 +27,8 @@ interface PostWorkspaceProps {
     deliverableUrl?: string;
     publishedUrl?: string;
   };
-  approvedDeliverable?: {
-    fileUrl?: string;
-    contentUrl?: string;
-    mediaType?: string;
-  };
+  /** The approved final cut or design files handed over from the Edit or Design step. */
+  finalAssets?: AssetItem[];
   captionsAndHashtags?: {
     caption?: string;
     hashtags?: string;
@@ -46,7 +45,7 @@ interface PostWorkspaceProps {
 
 export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
   workItem,
-  approvedDeliverable,
+  finalAssets = [],
   captionsAndHashtags,
   onMarkAsPosted,
   isSubmitting = false,
@@ -64,18 +63,10 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
     coverFrame: false,
   });
 
-  // Initial deliverable from upstream
-  const deliverableUrl =
-    approvedDeliverable?.fileUrl ||
-    approvedDeliverable?.contentUrl ||
-    (workItem as any).deliverableUrl ||
-    (workItem as any).fileUrl ||
-    (workItem as any).contentUrl ||
-    '';
-
   // Uploaded post asset / file state
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadedFileUrl, setUploadedFileUrl] = useState<string>(deliverableUrl);
+  // The poster's own post asset, if they attach one. The approved master comes from the handoff.
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string>('');
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'completed' | 'error'>('idle');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadFileName, setUploadFileName] = useState('');
@@ -164,7 +155,7 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
     await onMarkAsPosted({
       publishedUrl: publishedUrl.trim(),
       publishedAt: new Date(publishedAt).toISOString(),
-      deliverableUrl: uploadedFileUrl.trim() || deliverableUrl || undefined,
+      deliverableUrl: uploadedFileUrl.trim() || undefined,
       notes: postNotes.trim() || undefined,
     });
   };
@@ -214,20 +205,13 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
             </div>
           </div>
 
-          {deliverableUrl ? (
-            <a
-              href={deliverableUrl}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-              className="min-h-[44px] px-5 py-2.5 rounded-xl bg-ui-ink hover:bg-black text-white font-semibold text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer flex-shrink-0"
-            >
-              <Download className="w-4 h-4" />
-              Download Approved Master
-            </a>
-          ) : (
-            <span className="text-xs text-ui-muted italic">No master file attached</span>
-          )}
+          <div className="w-full">
+            <AssetLinks
+              items={finalAssets}
+              emptyText="The approved final cut or design will appear here once it is approved."
+              testId="post-final-assets"
+            />
+          </div>
         </div>
 
         {/* 2. Upload / Attach Post File Asset */}
@@ -262,17 +246,14 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
 
           {showManualLink ? (
             <div className="flex gap-2">
-              <input
-                type="url"
-                value={manualLink}
-                onChange={(e) => setManualLink(e.target.value)}
-                placeholder="https://drive.google.com/... or Figma link"
-                className="ui-input flex-1"
-              />
+              <div className="flex-1">
+                <DriveLinkInput id="post-asset-link" label="Google Drive link" value={manualLink} onChange={setManualLink} />
+              </div>
               <button
                 type="button"
+                disabled={!manualLink.trim() || Boolean(driveLinkError(manualLink))}
                 onClick={() => {
-                  if (manualLink.trim()) {
+                  if (manualLink.trim() && !driveLinkError(manualLink)) {
                     setUploadedFileUrl(manualLink.trim());
                     setUploadStatus('completed');
                     setUploadFileName('External Asset Link');

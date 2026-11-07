@@ -51,11 +51,18 @@ import {
   FileCheck,
 } from 'lucide-react';
 import { PipelineStepper, type PipelineStageItem } from '../../components/PipelineStepper';
+import { AssetLinks } from '../../components/AssetLinks';
 
 const NO_SUBMISSION_TO_REVIEW =
   'This step has no submission to review yet. It can be approved or sent back once the owner submits their work.';
 
 interface WorkItemDetail {
+  /** Approved files of a finished non-postable Design step (sm_manager, creative_head and admin only). */
+  handover?: {
+    approvedAt?: string | null;
+    version?: number | null;
+    items: Array<{ url: string; name?: string | null; kind?: 'upload' | 'drive' | 'link' }>;
+  };
   _id: string;
   title: string;
   workType: WorkType;
@@ -1613,6 +1620,18 @@ export const WorkDetailPage: React.FC = () => {
           {/* Tab 2: Links and files */}
           {activeTab === 'deliverable' && (
             <div className="glass-card p-5 sm:p-6 space-y-6">
+              {item.handover && (
+                <div data-testid="handover-panel">
+                  <span className="text-[13px] font-medium text-ui-muted block mb-1">
+                    Approved files for handover
+                  </span>
+                  <p className="text-xs text-ui-text mb-2">
+                    This design is approved and ready to hand over{item.handover.version ? ` (version ${item.handover.version})` : ''}.
+                  </p>
+                  <AssetLinks items={item.handover.items || []} emptyText="No approved files found." testId="handover-files" />
+                </div>
+              )}
+
               <div>
                 <span className="text-[13px] font-medium text-ui-muted block mb-1">
                   Worker Output Link

@@ -255,6 +255,8 @@ describe('Media Workspaces WS3 Component Tests', () => {
       render(
         <PostWorkspace
           workItem={mockWorkItem}
+          finalAssets={[{ url: '/uploads/final-cut.mp4', name: 'final-cut.mp4', kind: 'upload' }]}
+          captionsAndHashtags={{ caption: mockWorkItem.caption, hashtags: mockWorkItem.hashtags }}
           isPosting={false}
           onMarkAsPosted={onMarkAsPosted}
         />
@@ -262,9 +264,9 @@ describe('Media Workspaces WS3 Component Tests', () => {
 
       expect(screen.getByText(/post to instagram & tiktok/i)).toBeInTheDocument();
 
-      // Download button
-      const downloadBtn = screen.getByRole('link', { name: /download approved master/i });
-      expect(downloadBtn).toHaveAttribute('href', 'https://storage.example.com/final-cut.mp4');
+      // The approved final cut handed over from Edit downloads from here
+      const downloadBtn = screen.getByRole('link', { name: /^download$/i });
+      expect(downloadBtn).toHaveAttribute('href', '/uploads/final-cut.mp4');
 
       // Copy caption button
       const copyCaptionBtn = screen.getByRole('button', { name: /copy caption/i });
@@ -318,9 +320,13 @@ describe('Media Workspaces WS3 Component Tests', () => {
       fireEvent.click(switchBtn);
 
       const assetInput = screen.getByPlaceholderText(/drive\.google\.com/i);
-      fireEvent.change(assetInput, { target: { value: 'https://cdn.haca.com/final_post_graphic.png' } });
-
       const attachBtn = screen.getByRole('button', { name: /attach/i });
+
+      // Only Google Drive links are accepted (the same shared rule as the API)
+      fireEvent.change(assetInput, { target: { value: 'https://cdn.haca.com/final_post_graphic.png' } });
+      expect(attachBtn).toBeDisabled();
+
+      fireEvent.change(assetInput, { target: { value: 'https://drive.google.com/file/d/final_post_graphic' } });
       fireEvent.click(attachBtn);
 
       // Verify asset attached
@@ -337,7 +343,7 @@ describe('Media Workspaces WS3 Component Tests', () => {
       expect(onMarkAsPosted).toHaveBeenCalledWith(
         expect.objectContaining({
           publishedUrl: 'https://instagram.com/reel/C89abcdef',
-          deliverableUrl: 'https://cdn.haca.com/final_post_graphic.png',
+          deliverableUrl: 'https://drive.google.com/file/d/final_post_graphic',
         })
       );
     });

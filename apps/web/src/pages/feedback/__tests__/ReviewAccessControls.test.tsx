@@ -29,7 +29,7 @@ describe('Review Studio controls by role', () => {
     version: 1,
     kind: 'video',
     status: 'submitted',
-    files: [{ url: 'https://example.test/v.mp4' }],
+    files: [{ url: '/uploads/v.mp4' }],
     workItemId: { _id: 'w1', title: 'Edit step', stageKey: 'Edit', ownerId: { _id: 'owner-1', name: 'Owner' } },
   };
   const showStudio = async () => {

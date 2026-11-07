@@ -11,6 +11,7 @@ import { EditWorkspace } from './EditWorkspace';
 import { DesignWorkspace } from './DesignWorkspace';
 import { PostWorkspace } from './PostWorkspace';
 import { EarlierOutputsViewer, StageOutput } from './EarlierOutputsViewer';
+import type { AssetItem } from '../../../components/AssetLinks';
 
 export const MediaWorkspacePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +26,7 @@ export const MediaWorkspacePage: React.FC = () => {
   const [scriptShotList, setScriptShotList] = useState<any[]>([]);
   const [scriptContent, setScriptContent] = useState<string>('');
   const [captionsData, setCaptionsData] = useState<{ caption?: string; hashtags?: string }>({});
+  const [finalAssets, setFinalAssets] = useState<AssetItem[]>([]);
   const [approvedCopy, setApprovedCopy] = useState<any>({});
   const [rawFootageClips, setRawFootageClips] = useState<any[]>([]);
   const [revisionComments, setRevisionComments] = useState<any[]>([]);
@@ -226,6 +228,24 @@ export const MediaWorkspacePage: React.FC = () => {
       setEarlierOutputs(outputsList);
       setRawFootageClips(footageClips);
 
+      // Phase 5 handoff: the latest approved outputs of the finished steps before this one.
+      const handoff: any[] = Array.isArray(item.handoff) ? item.handoff : [];
+      const shootEntry = handoff.find((e) => e.stageKey === 'Shoot');
+      if (shootEntry) {
+        setRawFootageClips(
+          (shootEntry.clips || []).map((c: any) => ({ id: c._id, name: c.title, url: c.url, kind: c.kind }))
+        );
+      }
+      const copyEntry = [...handoff].reverse().find((e) => e.stageKey === 'Script' || e.stageKey === 'Content');
+      if (copyEntry) {
+        setCaptionsData({ caption: copyEntry.caption || '', hashtags: copyEntry.hashtags || '' });
+        if (copyEntry.stageKey === 'Content') {
+          setApprovedCopy({ rawText: copyEntry.text || undefined, caption: copyEntry.caption || undefined, hashtags: copyEntry.hashtags || undefined });
+        }
+      }
+      const finalEntry = [...handoff].reverse().find((e) => e.stageKey === 'Edit' || e.stageKey === 'Design');
+      setFinalAssets(finalEntry ? finalEntry.items || [] : []);
+
       // Attach script content and shot list if present on item
       if (item.scriptContent) {
         setScriptContent(item.scriptContent);
@@ -276,14 +296,6 @@ export const MediaWorkspacePage: React.FC = () => {
             videoUrls: data.videoUrls,
           },
           submit: true, // triggers status transition to Feedback
-        }),
-      });
-
-      // Update work item deliverableUrl
-      await apiFetch(`/api/work-items/${workItem._id || workItem.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          deliverableUrl: data.fileUrl || (data.videoUrls && data.videoUrls[0]) || data.contentUrl,
         }),
       });
 
@@ -608,10 +620,7 @@ export const MediaWorkspacePage: React.FC = () => {
               deliverableUrl: workItem.deliverableUrl,
               publishedUrl: workItem.publishedUrl,
             }}
-            approvedDeliverable={{
-              fileUrl: workItem.deliverableUrl,
-              contentUrl: workItem.contentUrl,
-            }}
+            finalAssets={finalAssets}
             captionsAndHashtags={captionsData}
             onMarkAsPosted={handleMarkAsPosted}
             isSubmitting={isSubmitting}

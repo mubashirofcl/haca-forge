@@ -26,6 +26,8 @@ import { apiFetch } from '../../../lib/api';
 import { useSocket } from '../../../hooks/useSocket';
 import { useAuth } from '../../../context/AuthContext';
 import { ShareToChatModal } from '../../chat/ShareToChatModal';
+import { DriveLinkInput, driveLinkError } from '../../../components/DriveLinkInput';
+import { safeUrl } from '../../../lib/safeUrl';
 
 export interface FootageClip {
   id: string;
@@ -421,9 +423,13 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (fallbackUrl.trim() && driveLinkError(fallbackUrl)) {
+      setErrorMsg(driveLinkError(fallbackUrl));
+      return;
+    }
     const finalUrl = uploadedUrl || fallbackUrl.trim();
     if (!finalUrl) {
-      setErrorMsg('Please upload a video cut or provide an external preview link.');
+      setErrorMsg('Please upload the final cut or add it as a Google Drive link.');
       return;
     }
     if (uploadStatus === 'uploading') {
@@ -1065,20 +1071,12 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                     className="text-xs text-ui-ink hover:text-ui-ink flex items-center gap-1"
                   >
                     <LinkIcon className="w-3.5 h-3.5" />
-                    {showLinkFallback ? 'Hide Backup Frame.io / Drive Link' : '+ Add Backup Cloud Link'}
+                    {showLinkFallback ? 'Hide Google Drive link' : '+ Use a Google Drive link instead'}
                   </button>
 
                   {showLinkFallback && (
                     <div className="mt-2 p-3 rounded-xl bg-white/60 border border-ui-line space-y-2">
-                      <label htmlFor="edit-field-2" className="text-xs text-ui-muted">External Preview Link:</label>
-                      <input
-                        id="edit-field-2"
-                        type="url"
-                        value={fallbackUrl}
-                        onChange={(e) => setFallbackUrl(e.target.value)}
-                        placeholder="https://app.frame.io/player/..."
-                        className="ui-input w-full font-mono"
-                      />
+                      <DriveLinkInput id="edit-field-2" label="Final cut as a Google Drive link (instead of an upload)" value={fallbackUrl} onChange={setFallbackUrl} />
                     </div>
                   )}
                 </div>
@@ -1418,20 +1416,12 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                 className="text-xs text-ui-ink hover:text-ui-ink flex items-center gap-1"
               >
                 <LinkIcon className="w-3.5 h-3.5" />
-                {showLinkFallback ? 'Hide Backup Frame.io / Drive Link' : '+ Add Backup Cloud Link'}
+                {showLinkFallback ? 'Hide Google Drive link' : '+ Use a Google Drive link instead'}
               </button>
 
               {showLinkFallback && (
                 <div className="mt-2 p-3 rounded-xl bg-white/60 border border-ui-line space-y-2">
-                  <label htmlFor="edit-field-5" className="text-xs text-ui-muted">External Preview Link:</label>
-                  <input
-                    id="edit-field-5"
-                    type="url"
-                    value={fallbackUrl}
-                    onChange={(e) => setFallbackUrl(e.target.value)}
-                    placeholder="https://app.frame.io/player/..."
-                    className="ui-input w-full font-mono"
-                  />
+                  <DriveLinkInput id="edit-field-5" label="Final cut as a Google Drive link (instead of an upload)" value={fallbackUrl} onChange={setFallbackUrl} />
                 </div>
               )}
             </div>
@@ -1473,6 +1463,17 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                     </span>
                   </div>
 
+                  {clip.kind && clip.kind !== 'upload' ? (
+                    <a
+                      href={safeUrl(clip.url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-white/60 hover:bg-white text-ui-ink flex items-center gap-1.5 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      {clip.kind === 'drive' ? 'Open in Drive' : 'Open link'}
+                    </a>
+                  ) : (
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
@@ -1487,15 +1488,15 @@ export const EditWorkspace: React.FC<EditWorkspaceProps> = ({
                       Preview
                     </button>
                     <a
-                      href={clip.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href={safeUrl(clip.url)}
+                      download
                       className="px-3 py-1.5 rounded-lg bg-white/60 hover:bg-white text-ui-ink flex items-center gap-1.5 transition-colors"
                     >
                       <Download className="w-3.5 h-3.5" />
                       Download
                     </a>
                   </div>
+                  )}
                 </div>
               ))
             )}

@@ -22,6 +22,8 @@ import { useAuth } from '../../../context/AuthContext';
 import { ShareToChatModal } from '../../chat/ShareToChatModal';
 import { ResumableUploadTask } from '../../../lib/uploadManager';
 import type { RevisionComment } from './EditWorkspace';
+import { isDriveLink } from '@mmp/shared';
+import { DriveLinkInput, driveLinkError } from '../../../components/DriveLinkInput';
 
 interface SlideItem {
   id: string;
@@ -55,6 +57,8 @@ interface DesignWorkspaceProps {
     bodyCopy?: string;
     callToAction?: string;
     rawText?: string;
+    caption?: string;
+    hashtags?: string;
   };
   /** Submission comments for this step (same data the Edit workspace receives). */
   revisionComments?: RevisionComment[];
@@ -82,6 +86,8 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
     bodyCopy: rawCopy.bodyCopy || rawCopy.bodyText || (workItem as any).bodyCopy,
     callToAction: rawCopy.callToAction || (workItem as any).callToAction,
     rawText: rawCopy.rawText,
+    caption: rawCopy.caption,
+    hashtags: rawCopy.hashtags,
   };
 
   const [slides, setSlides] = useState<SlideItem[]>([]);
@@ -204,18 +210,17 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (slides.length === 0 && !fallbackUrl.trim()) {
-      setErrorMsg('Please upload design creative files or provide a Figma/Canva link.');
+    if (slides.length === 0) {
+      setErrorMsg('Please upload the design files or add them as Google Drive links.');
       return;
     }
 
     setErrorMsg(null);
-    const mainFileUrl = slides[0]?.url || fallbackUrl.trim();
+    const mainFileUrl = slides[0].url;
     const allUrls = slides.map((s) => s.url);
 
     await onSubmit({
       fileUrl: mainFileUrl,
-      contentUrl: fallbackUrl.trim() || mainFileUrl,
       notes: designNotes.trim(),
       metadata: {
         mediaType: mainFileUrl.toLowerCase().endsWith('.pdf') ? 'document' : 'image',
@@ -395,6 +400,41 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
                   <p className="text-xs text-ui-text whitespace-pre-wrap">{approvedCopy.rawText}</p>
                 </div>
               )}
+
+              {(approvedCopy.caption || approvedCopy.hashtags) && (
+                <div className="p-3 rounded-xl bg-white/60 border border-ui-line space-y-2" data-testid="design-approved-caption">
+                  {approvedCopy.caption && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-ui-ink">Caption</span>
+                        <button
+                          onClick={() => copyToClipboard('caption', approvedCopy.caption!)}
+                          className="p-1 rounded bg-white/60 hover:bg-white text-ui-text"
+                          title="Copy caption"
+                        >
+                          {copiedKey === 'caption' ? <Check className="w-3 h-3 text-emerald-800" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      </div>
+                      <p className="text-xs text-ui-text whitespace-pre-wrap">{approvedCopy.caption}</p>
+                    </div>
+                  )}
+                  {approvedCopy.hashtags && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-ui-ink">Hashtags</span>
+                        <button
+                          onClick={() => copyToClipboard('hashtags', approvedCopy.hashtags!)}
+                          className="p-1 rounded bg-white/60 hover:bg-white text-ui-text"
+                          title="Copy hashtags"
+                        >
+                          {copiedKey === 'hashtags' ? <Check className="w-3 h-3 text-emerald-800" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      </div>
+                      <p className="text-xs text-ui-text whitespace-pre-wrap">{approvedCopy.hashtags}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-xs text-ui-muted">No approved copy attached.</p>
@@ -501,7 +541,22 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
 
               {/* Image / PDF Display */}
               <div className="p-4 flex items-center justify-center max-h-[50vh] overflow-hidden">
-                {activeSlide.url.toLowerCase().endsWith('.pdf') ? (
+                {isDriveLink(activeSlide.url) ? (
+                  <div className="p-8 text-center text-ui-muted flex flex-col items-center" data-testid="design-drive-slide">
+                    <LinkIcon className="w-12 h-12 text-ui-ink mb-2" />
+                    <p className="text-sm font-semibold text-ui-ink">{activeSlide.name}</p>
+                    <p className="text-xs text-ui-muted mt-1">Google Drive file</p>
+                    <a
+                      href={activeSlide.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ui-ink hover:bg-black text-white text-xs font-semibold"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Open in Drive
+                    </a>
+                  </div>
+                ) : activeSlide.url.toLowerCase().endsWith('.pdf') ? (
                   <div className="p-8 text-center text-ui-muted flex flex-col items-center">
                     <FileIcon className="w-12 h-12 text-ui-ink mb-2" />
                     <p className="text-sm font-semibold text-ui-ink">{activeSlide.name}</p>
@@ -570,7 +625,9 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
                     }`}
                   >
                     <div className="relative h-24 rounded-lg overflow-hidden bg-ui-canvas flex items-center justify-center">
-                      {s.url.toLowerCase().endsWith('.pdf') ? (
+                      {isDriveLink(s.url) ? (
+                        <LinkIcon className="w-8 h-8 text-ui-ink" />
+                      ) : s.url.toLowerCase().endsWith('.pdf') ? (
                         <FileIcon className="w-8 h-8 text-ui-ink" />
                       ) : (
                         <img src={s.url} alt={s.name} className="w-full h-full object-cover" />
@@ -652,7 +709,7 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
             />
           </div>
 
-          {/* Link Fallback */}
+          {/* A file or slide as a Google Drive link */}
           <div>
             <button
               type="button"
@@ -660,20 +717,26 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
               className="text-xs text-ui-ink hover:text-ui-ink flex items-center gap-1"
             >
               <LinkIcon className="w-3.5 h-3.5" />
-              {showLinkFallback ? 'Hide Backup Figma / Canva Link' : '+ Add Backup Figma / Canva Link'}
+              {showLinkFallback ? 'Hide Google Drive link' : '+ Add a file as a Google Drive link'}
             </button>
 
             {showLinkFallback && (
               <div className="mt-2 p-3 rounded-xl bg-white/60 border border-ui-line space-y-2">
-                <label htmlFor="design-field-1" className="text-xs text-ui-muted">External Design Canvas URL:</label>
-                <input
-                  id="design-field-1"
-                  type="url"
-                  value={fallbackUrl}
-                  onChange={(e) => setFallbackUrl(e.target.value)}
-                  placeholder="https://www.figma.com/file/..."
-                  className="ui-input w-full font-mono"
-                />
+                <DriveLinkInput id="design-field-1" label="Google Drive link for one file or slide" value={fallbackUrl} onChange={setFallbackUrl} />
+                <button
+                  type="button"
+                  disabled={!fallbackUrl.trim() || Boolean(driveLinkError(fallbackUrl))}
+                  onClick={() => {
+                    const url = fallbackUrl.trim();
+                    if (!url || driveLinkError(url)) return;
+                    setSlides((prev) => [...prev, { id: `drive-${Date.now()}`, url, name: `Drive file ${prev.length + 1}` }]);
+                    setActiveSlideIndex(slides.length);
+                    setFallbackUrl('');
+                  }}
+                  className="ui-btn ui-btn-secondary h-10"
+                >
+                  Add link as a file
+                </button>
               </div>
             )}
           </div>

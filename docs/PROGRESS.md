@@ -1,6 +1,42 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after Phase 4):** 1487 passing, 0 failing: API 1219 (50 files), web 268 (35 files). Typecheck 0 errors; web build clean.
+**Current test count (after Phase 5):** 1524 passing, 0 failing: API 1247 (52 files), web 277 (36 files). Typecheck 0 errors; web build clean.
+
+## Phase 5: Asset handoff and Drive links (Status: COMPLETE; committed locally, not pushed)
+
+Three commits, each gated in the working tree: 5a `a90692d`, 5b `ca01bd7`, 5c (this commit). Uploads stay local for testing; Cloudinary comes in the deployment phase.
+
+- Why: the poster saw no final assets, because Post read its own empty `deliverableUrl`. Post also never received the caption, which it read from a field that does not exist. Edit saw only the Shoot step's first clip, Design got no approved copy, and a multi-slide design kept only slide 1.
+- 5a, saved output URLs:
+  - One shared rule in `@mmp/shared` (`isDriveLink`, `isAppUploadPath`, `isAllowedOutputUrl`). A clip or submission URL must be a file uploaded through the app or an https link on drive.google.com or docs.google.com.
+  - The API also checks that an uploaded file exists (`modules/uploads/outputUrls.js`). This covers submission files, fileUrl, linkUrl and drafts, clip create and replace (thumbnails: uploads only), and work-item deliverableUrl.
+  - Only new values are checked: records saved before Phase 5 are untouched and may be re-sent.
+  - `POST /api/submissions` keeps every design slide, and no longer copies local paths into linkUrl.
+- 5b, handoff:
+  - The work-item detail carries `handoff`: for each finished earlier step, its latest approved output, with Phase 3's fallback for legacy steps with no version marked approved. That is its files and links, Script or Content text, caption, hashtags and shot list, and a Shoot step's approved clips.
+  - Phase 3 rules filter it, and existing external URLs come through as plain links.
+  - A finished non-postable Design step shows `handover` to sm_manager, creative_head and admin. Its approval notifies active SM managers (`step_handover_ready`), once per approval, after the approval is saved.
+  - Postable Script and Content steps need a caption and hashtags, including as a Drive link and through `/transition`, where they come from the saved draft.
+- 5c, web:
+  - Post lists the approved final cut or every design file, with Download or Open in Drive, plus caption and hashtags. The poster's own deliverableUrl is saved only if they attach one.
+  - Edit's Footage shows every approved clip. Design shows Content's approved copy and caption.
+  - Drive link inputs (`components/DriveLinkInput.tsx`, using the shared rule and "Make sure the link is shared with HACA reviewers.") are on Script (alongside the document), Shoot (per clip), Edit (final cut) and Design (per file).
+  - Drive clips show "Open in Drive" instead of playing.
+  - Review Studio keeps the document in view when there is document text and lists links beside it. A links-only version opens in the link viewer, which lists every link. Uploads still preview and take pins; links take general comments.
+  - Work Detail shows "Approved files for handover".
+- Decisions applied: non-postable design handover on Design Work Detail plus SM notification; existing non-conforming URLs untouched; Content to Design handoff; Script document or Drive link, caption required for postable; Drive clips open in Drive; PDFs keep downloading.
+- External clip URLs checked before the Drive-only rule. All 14 were demo data: 3 from Google's public sample-video bucket and 11 on cdn.example.com, none with an uploader.
+- Tests updated for the new rules: placeholder hosts in fixtures became Drive links, journey fixtures save a caption for postable Script and Content steps, and the old Post and Review Studio fixtures use handed-over assets and an uploaded video.
+- Browser test, 27 of 27, on a disposable database:
+  - Reel: Script as a Drive link through the Writing Studio, with caption, and a non-Drive link refused. Shoot as an uploaded clip, with an external clip refused. Edit footage shows the approved clip. The Edit cut is uploaded. Post downloads the cut, shows the caption and is marked posted.
+  - Static Post: Design gets the copy and caption. A Drive slide is added in the UI plus an upload. Review Studio previews the upload and lists the Drive slide. Post gets both files and the caption.
+  - Poster: the Drive-link design is approved, one SM notification is sent, and the handover panel shows for SM and not for executive.
+  - Non-participant 404; no page errors or 5xx.
+- Known, not fixed:
+  - Review Studio has no inline PDF viewer (decision 6).
+  - Clips and designs that are Drive links have no thumbnails.
+  - The Work Detail "Worker Output Link" still shows the latest submitted link, not the approved one.
+  - A disposable fixture with an invalid content piece made publishing return 500 after the step was saved. It was test data only, but publishing updates the piece after the step, so a bad piece fails the request.
 
 ## Phase 4: Uploads and sockets (Status: COMPLETE; committed locally, not pushed)
 

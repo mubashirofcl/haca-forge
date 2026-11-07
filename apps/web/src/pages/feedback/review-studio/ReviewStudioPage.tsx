@@ -25,6 +25,8 @@ import { ReviewStudioSidebar } from './ReviewStudioSidebar';
 import { DecisionBar, RootCause } from './DecisionBar';
 import { ShootReviewView } from '../../work/workspaces/ShootReviewView';
 import { ShareToChatModal } from '../../chat/ShareToChatModal';
+import { DRIVE_LINK_HINT, isAppUploadPath } from '@mmp/shared';
+import { AssetLinks, assetKind, type AssetItem } from '../../../components/AssetLinks';
 
 interface ReviewQueueItem {
   id: string;
@@ -62,6 +64,31 @@ interface ReviewQueueItem {
     };
   };
 }
+
+
+/** Every output URL on a submission: files first, then fileUrl and linkUrl, without duplicates. */
+function submissionUrls(sub: any): string[] {
+  const urls: string[] = [];
+  const add = (u: unknown) => {
+    if (typeof u === 'string' && u.trim() && !urls.includes(u.trim())) urls.push(u.trim());
+  };
+  for (const f of Array.isArray(sub?.files) ? sub.files : []) add(typeof f === 'string' ? f : f?.url);
+  add(sub?.fileUrl);
+  add(sub?.linkUrl);
+  return urls;
+}
+/** Files uploaded here: these can be previewed and pinned. */
+const uploadUrls = (sub: any) => submissionUrls(sub).filter((u) => isAppUploadPath(u));
+/** Drive links (and older external links): opened in a new tab. */
+const externalLinks = (sub: any): AssetItem[] =>
+  submissionUrls(sub)
+    .filter((u) => !isAppUploadPath(u) && /^https?:\/\//i.test(u))
+    .map((u) => ({ url: u, kind: assetKind(u) }));
+const hasDocumentText = (sub: any) =>
+  Boolean(
+    (typeof sub?.textContent === 'string' && sub.textContent.trim()) ||
+      (typeof sub?.document?.htmlSnapshot === 'string' && sub.document.htmlSnapshot.replace(/<[^>]+>/g, '').trim())
+  );
 
 export const ReviewStudioPage: React.FC = () => {
   const { user } = useAuth();
@@ -284,8 +311,15 @@ export const ReviewStudioPage: React.FC = () => {
 
   const detectViewerType = (sub: any) => {
     const firstFile = Array.isArray(sub.files) && sub.files.length > 0 ? sub.files[0] : null;
-    const firstUrl = typeof firstFile === 'string' ? firstFile : firstFile?.url || '';
-    const url = (sub.fileUrl || sub.contentUrl || firstUrl || '').toLowerCase();
+    const uploads = uploadUrls(sub);
+    // A submission with only Drive / external links (no document text, nothing uploaded)
+    // opens in the link viewer. With document text, the document stays in view and the
+    // links are listed beside it.
+    if (uploads.length === 0 && !hasDocumentText(sub) && externalLinks(sub).length > 0) {
+      setViewerType('link');
+      return;
+    }
+    const url = (uploads[0] || '').toLowerCase();
     const mediaType = (
       sub.metadata?.mediaType ||
       sub.metadata?.fileType ||
@@ -646,16 +680,8 @@ export const ReviewStudioPage: React.FC = () => {
   // Images for image viewer
   const imageGallery = useMemo(() => {
     if (!activeSubmission) return [];
-    if (activeSubmission.metadata?.carouselSlides && Array.isArray(activeSubmission.metadata.carouselSlides)) {
-      return activeSubmission.metadata.carouselSlides;
-    }
-    if (activeSubmission.files && activeSubmission.files.length > 0) {
-      return activeSubmission.files.map((f: any) => (typeof f === 'string' ? f : f.url));
-    }
-    if (activeSubmission.fileUrl) {
-      return [activeSubmission.fileUrl];
-    }
-    return [];
+    // Only files uploaded here render as images; Drive links are listed beside the viewer.
+    return uploadUrls(activeSubmission);
   }, [activeSubmission]);
 
   const currentUserId = (user?._id || user?.id || (user as any)?.userId)?.toString();
@@ -881,7 +907,14 @@ export const ReviewStudioPage: React.FC = () => {
         ) : (
           <>
             {/* Left Viewer (~70% desktop width) */}
-            <main className="flex-1 h-full overflow-hidden p-3 md:p-4 flex flex-col">
+            <main className="flex-1 h-full overflow-hidden p-3 md:p-4 flex flex-col gap-3">
+              {viewerType !== 'link' && externalLinks(activeSubmission).length > 0 && (
+                <section className="p-3 rounded-xl bg-white/70 border border-ui-line space-y-2" data-testid="review-links-panel">
+                  <h3 className="text-xs font-bold text-ui-ink">Links in this version</h3>
+                  <AssetLinks items={externalLinks(activeSubmission)} testId="review-links" />
+                  <p className="text-[11px] text-ui-muted">{DRIVE_LINK_HINT} Comments on links go in the general comments.</p>
+                </section>
+              )}
               {viewerType === 'document' && (
                 <DocumentViewer
                   title={activeSubmission.workItemId?.title || 'Deliverable Document'}
@@ -898,7 +931,7 @@ export const ReviewStudioPage: React.FC = () => {
 
               {viewerType === 'video' && (
                 <VideoPlayerViewer
-                  src={activeSubmission.files?.[0]?.url || activeSubmission.fileUrl || activeSubmission.contentUrl || ''}
+                  src={uploadUrls(activeSubmission)[0] || ''}
                   title={activeSubmission.workItemId?.title || 'Video Deliverable'}
                   comments={comments}
                   activeCommentId={activeCommentId}
@@ -919,7 +952,8 @@ export const ReviewStudioPage: React.FC = () => {
 
               {viewerType === 'link' && (
                 <LinkOpenerViewer
-                  url={activeSubmission.linkUrl || activeSubmission.contentUrl || activeSubmission.fileUrl || ''}
+                  url={externalLinks(activeSubmission)[0]?.url || ''}
+                  links={externalLinks(activeSubmission)}
                   title={activeSubmission.workItemId?.title || 'External Deliverable'}
                   notes={activeSubmission.notes}
                 />
