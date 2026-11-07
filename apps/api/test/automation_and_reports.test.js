@@ -366,7 +366,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
       expect(res.body.report.tables[0].columns).toContain('Work Type');
     });
 
-    it('Generates Team Performance Digest with capacity utilization and bands', async () => {
+    it('Generates Team Performance Digest as team-level totals, with no per-person rows', async () => {
       const res = await request(app)
         .post('/api/reports/definitions/team_performance/generate')
         .set('Authorization', `Bearer ${headToken}`)
@@ -374,8 +374,12 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
 
       expect(res.status).toBe(200);
       expect(res.body.report.reportKey).toBe('team_performance');
-      expect(res.body.report.tables[0].columns).toContain('Team Member');
-      expect(res.body.report.tables[0].columns).toContain('Band');
+      expect(res.body.report.tables[0].title).toBe('Team Totals');
+      expect(res.body.report.tables[0].columns).toEqual(['Figure', 'Value', 'Based on']);
+      expect(res.body.report.tables[0].columns).not.toContain('Team Member');
+      // Workload has no reliable calculation yet, so no band is shown.
+      const workload = res.body.report.tables[0].rows.find((r) => r[0] === 'Workload');
+      expect(workload[1]).toBe('Not available yet');
     });
 
     it('GET /api/reports/view/:key returns interactive live report', async () => {

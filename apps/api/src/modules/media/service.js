@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { MediaItem, MediaMessage } from './model.js';
 import { WorkItem } from '../workItems/model.js';
 import { User } from '../people/model.js';
@@ -343,6 +346,26 @@ export async function replaceClip(clipId, newClipData, user) {
   return newClip;
 }
 
+const UPLOADS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../uploads');
+
+/**
+ * Delete a deleted clip's local files (video and thumbnail). Only a plain file directly in
+ * /uploads is touched, and only when no other clip still points at it.
+ */
+async function removeClipFiles(clip) {
+  for (const url of new Set([clip.url, clip.thumbnailUrl])) {
+    const match = /^\/uploads\/([A-Za-z0-9._-]+)$/.exec(String(url || ''));
+    if (!match || match[1].startsWith('.')) continue;
+    const stillUsed = await MediaItem.exists({ $or: [{ url }, { thumbnailUrl: url }] });
+    if (stillUsed) continue;
+    try {
+      fs.unlinkSync(path.join(UPLOADS_DIR, match[1]));
+    } catch {
+      // Already gone, or never stored locally.
+    }
+  }
+}
+
 /**
  * 5. Delete clip (only while not approved and step is editable)
  */
@@ -372,6 +395,8 @@ export async function deleteClip(clipId, user) {
 
   await MediaMessage.deleteMany({ mediaItemId: clip._id });
   await MediaItem.findByIdAndDelete(clip._id);
+  // A deleted clip's file goes too. Replaced clips and old versions keep theirs.
+  await removeClipFiles(clip);
 
   return { success: true };
 }

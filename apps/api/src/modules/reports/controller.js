@@ -103,15 +103,6 @@ export async function getTeamReportHandler(req, res, next) {
   }
 }
 
-export async function getIndividualReportHandler(req, res, next) {
-  try {
-    const report = await generateReport('team_performance', req.query, req.user);
-    return res.status(200).json({ success: true, data: report });
-  } catch (err) {
-    next(err);
-  }
-}
-
 export async function getContentReportHandler(req, res, next) {
   try {
     const report = await generateReport('creative_production', req.query, req.user);

@@ -20,7 +20,7 @@ import { Blocker } from '../blockers/model.js';
 export const isTeamMember = (user) => normalizeRole(user?.role) === 'team_member';
 export const userIdOf = (user) => (user?._id || user?.id || user?.userId)?.toString();
 const idOf = (value) => (value?._id || value)?.toString();
-const isFinished = (step) => step.status === 'Approved' || step.status === 'Published';
+export const isFinished = (step) => step.status === 'Approved' || step.status === 'Published';
 
 export function notFound() {
   const error = new Error('Not found');

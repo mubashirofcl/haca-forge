@@ -12,7 +12,6 @@ import {
   viewReportHandler,
   getDepartmentReportHandler,
   getTeamReportHandler,
-  getIndividualReportHandler,
   getContentReportHandler,
   getBottlenecksReportHandler,
   getScorecardReportHandler,
@@ -55,8 +54,7 @@ router.get("/view/:key", viewReportHandler);
 // -------------------------------------------------------------
 router.get("/department", getDepartmentReportHandler);
 router.get("/team", getTeamReportHandler);
-router.get("/individual", getIndividualReportHandler);
-router.get("/individual/:userId", getIndividualReportHandler);
+// No /individual routes: reports show team-level totals only, never one person.
 router.get("/content", getContentReportHandler);
 router.get("/bottlenecks", getBottlenecksReportHandler);
 router.get("/scorecard", getScorecardReportHandler);

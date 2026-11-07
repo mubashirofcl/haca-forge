@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { ReportDefinition, ScheduledReport } from './model.js';
 import { WorkItem } from '../workItems/model.js';
 import { Blocker } from '../blockers/model.js';
@@ -6,9 +7,27 @@ import { Person } from '../people/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { ActivityEvent } from '../activity/model.js';
 import { Rating } from '../submissions/model.js';
+import { approvedOutputOf, isFinished } from '../workItems/access.js';
 import { enqueueEmail } from '../../lib/queue.js';
 import { logger } from '../../lib/logger.js';
 import { REPORT_KEYS } from '@mmp/shared';
+
+/**
+ * The work-item filters a report request may apply. Everything else in the request
+ * (format, report, month and so on) is not a work-item field and must not reach the query,
+ * where it would match nothing and empty the report.
+ */
+function workItemFilters(filters = {}) {
+  const query = {};
+  const dept = filters.departmentId;
+  if (typeof dept === 'string' && dept !== 'all' && mongoose.isValidObjectId(dept)) {
+    query.departmentId = new mongoose.Types.ObjectId(dept);
+  }
+  if (typeof filters.status === 'string' && filters.status && filters.status !== 'all') {
+    query.status = filters.status;
+  }
+  return query;
+}
 
 // Default 4 Report Definitions seed data
 export const DEFAULT_REPORT_DEFINITIONS = [
@@ -101,6 +120,34 @@ export async function updateReportDefinition(keyOrId, updates = {}) {
 }
 
 /**
+ * Report email recipients, as the registered emails of active users only. A recipient may
+ * be a user id, a role (every active user with it) or an email address that belongs to an
+ * active user. Anything else, such as an outside address, is dropped.
+ */
+export async function resolveReportRecipients(recipients = []) {
+  const ids = [];
+  const roles = [];
+  const emails = [];
+  for (const raw of recipients) {
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+    const value = raw.trim();
+    if (/^[0-9a-fA-F]{24}$/.test(value)) ids.push(value);
+    else if (value.includes('@')) emails.push(value.toLowerCase());
+    else roles.push(value);
+  }
+  if (!ids.length && !roles.length && !emails.length) return [];
+  const people = await Person.find({
+    status: 'active',
+    $or: [
+      ...(ids.length ? [{ _id: { $in: ids } }] : []),
+      ...(roles.length ? [{ role: { $in: roles } }] : []),
+      ...(emails.length ? [{ email: { $in: emails } }] : []),
+    ],
+  }).select('email').lean();
+  return [...new Set(people.map((p) => (p.email || '').toLowerCase()).filter(Boolean))];
+}
+
+/**
  * Main Report Generator dispatcher.
  */
 export async function generateReport(reportKey, filters = {}, user = null, options = {}) {
@@ -150,29 +197,15 @@ export async function generateReport(reportKey, filters = {}, user = null, optio
     }
   );
 
-  // Dispatch email if requested (recipients can be people or email addresses)
+  // Dispatch email if requested: only to the registered emails of active users.
   if (options.sendEmail && options.recipients?.length > 0) {
-    for (const recipient of options.recipients) {
-      let targetEmail = typeof recipient === 'string' ? recipient.trim() : null;
-      if (targetEmail && !targetEmail.includes('@')) {
-        const person = await Person.findOne({
-          $or: [
-            { _id: targetEmail.match(/^[0-9a-fA-F]{24}$/) ? targetEmail : null },
-            { role: targetEmail },
-          ],
-        }).select('email');
-        if (person?.email) {
-          targetEmail = person.email;
-        }
-      }
-      if (targetEmail && targetEmail.includes('@')) {
-        await enqueueEmail({
-          to: targetEmail,
-          subject: `[Marketing OS] ${reportData.title} - ${new Date().toLocaleDateString()}`,
-          html: html,
-          text: `Please view the ${reportData.title} in the HACA Marketing OS Portal.`,
-        });
-      }
+    for (const to of await resolveReportRecipients(options.recipients)) {
+      await enqueueEmail({
+        to,
+        subject: `[Marketing OS] ${reportData.title} - ${new Date().toLocaleDateString()}`,
+        html: html,
+        text: `Please view the ${reportData.title} in the HACA Marketing OS Portal.`,
+      });
     }
   }
 
@@ -206,7 +239,7 @@ export async function generateReport(reportKey, filters = {}, user = null, optio
  * Summary of completed deliverables, on-time delivery rate, active bottlenecks, and upcoming week priorities.
  */
 async function generateWeeklyMarketingReport(filters, scope, user) {
-  const query = scope.buildQuery({ ...filters });
+  const query = scope.buildQuery(workItemFilters(filters));
 
   const workItems = await WorkItem.find(query)
     .populate('ownerId', 'name email role')
@@ -233,7 +266,8 @@ async function generateWeeklyMarketingReport(filters, scope, user) {
     : 100;
 
   // Active Bottlenecks & Blockers
-  const activeBlockers = await Blocker.find({ status: 'Active' })
+  // Only blockers on the work items this report covers, so the viewer's scope applies.
+  const activeBlockers = await Blocker.find({ status: 'Active', workItemId: { $in: workItems.map((w) => w._id) } })
     .populate('dependencyOwnerId', 'name email')
     .populate('workItemId', 'title workType')
     .sort({ createdAt: -1 })
@@ -334,7 +368,7 @@ async function generateMonthlyScorecardReport(filters, scope, user) {
   const currentMonth = filters.month || new Date().toISOString().slice(0, 7);
 
   // Deliverables in scope for the month
-  const workItemQuery = scope.buildQuery({ ...filters });
+  const workItemQuery = scope.buildQuery(workItemFilters(filters));
   const workItems = await WorkItem.find(workItemQuery)
     .populate('departmentId', 'name code')
     .lean();
@@ -423,7 +457,7 @@ async function generateMonthlyScorecardReport(filters, scope, user) {
  */
 async function generateCreativeProductionReport(filters, scope, user) {
   const { calculateIndividualWorkMeasures, formatDuration } = await import('@mmp/shared');
-  const query = scope.buildQuery({ ...filters });
+  const query = scope.buildQuery(workItemFilters(filters));
   const workItems = await WorkItem.find(query)
     .populate('ownerId', 'name')
     .populate('departmentId', 'name code')
@@ -580,138 +614,111 @@ async function generateCreativeProductionReport(filters, scope, user) {
 }
 
 /**
- * 4. Team Performance Digest
- * Per-person summary with individual metrics listed alphabetically (strictly no ranking),
- * showing average work time, average approval wait, on-time rate and revision count.
+ * 4. Team Performance Digest: team-level totals only, for every role. No per-person rows.
+ * Each figure reuses an existing calculation; a figure without a reliable one reads
+ * "Not available yet". "Based on" says how many steps a figure rests on.
  */
+const NOT_AVAILABLE = 'Not available yet';
+const MIN_RATINGS = 3; // Same rule as worker ratings: no average until 3 ratings exist.
+
 async function generateTeamPerformanceReport(filters, scope, user) {
   const { calculateIndividualWorkMeasures, formatDuration } = await import('@mmp/shared');
-  const people = await Person.find({
+  const contributors = await Person.countDocuments({
     $or: [{ status: 'active' }, { active: true }],
     role: { $in: ['team_member', 'sm_manager'] },
-  })
-    .populate('departmentId', 'name code')
-    .lean();
+  });
+  const steps = await WorkItem.find(scope.buildQuery(workItemFilters(filters))).lean();
+  const total = steps.length;
+  const finished = steps.filter((w) => isFinished(w));
+  const basedOn = (n) => `Based on ${n} of ${total} steps`;
+  const average = (values) => (values.length ? formatDuration(Math.round(values.reduce((a, b) => a + b, 0) / values.length)) : NOT_AVAILABLE);
 
-  // Strictly alphabetical listing (NO ranking by speed or performance)
-  people.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  // On-time: finished steps with a due date and a recorded submit or post time, judged by
+  // the shared isLate on that recorded time (never today's date).
+  const onTimeBase = finished.filter((w) => (w.dueDate || w.deadline) && (w.submittedAt || w.postedAt));
+  const onTimeCount = onTimeBase.filter(
+    (w) => !calculateIndividualWorkMeasures({ ...w, submittedAt: w.submittedAt || w.postedAt }).isLate
+  ).length;
+  const onTimeRate = onTimeBase.length ? `${Math.round((onTimeCount / onTimeBase.length) * 100)}%` : NOT_AVAILABLE;
 
-  const workItems = await WorkItem.find(scope.buildQuery({ ...filters })).lean();
-
-  const memberStats = people.map((p) => {
-    const assignedItems = workItems.filter((w) => String(w.ownerId) === String(p._id));
-    const completedItems = assignedItems.filter((w) => ['Approved', 'Published'].includes(w.status));
-    const effortHrs = assignedItems.reduce((sum, w) => sum + (w.estimatedEffortHrs || 4), 0);
-
-    // Individual timing metrics
-    let totalWorkMs = 0;
-    let workCount = 0;
-    let totalApprovalWaitMs = 0;
-    let approvalWaitCount = 0;
-    let onTimeCount = 0;
-    let withDeadlineCount = 0;
-
-    for (const item of completedItems) {
-      const measures = calculateIndividualWorkMeasures(item);
-      if (measures.workTimeMs != null) {
-        totalWorkMs += measures.workTimeMs;
-        workCount++;
-      }
-      if (measures.approvalWaitMs != null) {
-        totalApprovalWaitMs += measures.approvalWaitMs;
-        approvalWaitCount++;
-      }
-      if (item.deadline) {
-        withDeadlineCount++;
-        if (!measures.isLate) {
-          onTimeCount++;
-        }
-      }
+  // Work time: shared work time over submitted rounds only, so a live round never counts.
+  const workTimes = [];
+  for (const w of steps) {
+    const rounds = Array.isArray(w.rounds) ? w.rounds : [];
+    let measured = null;
+    if (rounds.length) {
+      const submitted = rounds.filter((r) => r.startedAt && r.submittedAt);
+      if (submitted.length) measured = calculateIndividualWorkMeasures({ ...w, rounds: submitted }).workTimeMs;
+    } else if (w.startedAt && w.submittedAt) {
+      measured = calculateIndividualWorkMeasures(w).workTimeMs;
     }
+    if (measured != null) workTimes.push(measured);
+  }
 
-    const avgWorkTime = workCount > 0 ? formatDuration(Math.round(totalWorkMs / workCount)) : '—';
-    const avgApprovalWait = approvalWaitCount > 0 ? formatDuration(Math.round(totalApprovalWaitMs / approvalWaitCount)) : '—';
-    const onTimePct = withDeadlineCount > 0 ? Math.round((onTimeCount / withDeadlineCount) * 100) : 100;
-    const revSum = assignedItems.reduce((sum, w) => sum + (w.revisions || 0), 0);
+  // Approval wait: shared approval wait, only where a decision was made, so a pending wait never counts.
+  const approvalWaits = [];
+  for (const w of steps) {
+    if (!w.submittedAt || !(w.decisionAt || w.approvedAt || w.changesRequestedAt)) continue;
+    const wait = calculateIndividualWorkMeasures(w).approvalWaitMs;
+    if (wait != null) approvalWaits.push(wait);
+  }
 
-    const capacityHrs = p.weeklyCapacityHours || 40;
-    const utilization = Math.round((effortHrs / capacityHrs) * 100);
-    const band = utilization > 85 ? 'Overloaded' : utilization >= 65 ? 'High' : 'Healthy';
+  // Ratings: one per finished step, the rating on its latest approved submission.
+  const ratedByStage = {};
+  const allScores = [];
+  for (const w of finished) {
+    const output = await approvedOutputOf(w);
+    if (!output) continue;
+    const rating = await Rating.findOne({ submissionId: output._id }).sort({ createdAt: -1 }).lean();
+    if (!rating || typeof rating.score !== 'number') continue;
+    allScores.push(rating.score);
+    const stage = w.stageKey || rating.stageKey || 'Other';
+    (ratedByStage[stage] ||= []).push(rating.score);
+  }
+  const ratingAverage = (scores) =>
+    scores.length >= MIN_RATINGS ? `${(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2)} ★` : NOT_AVAILABLE;
+  const stageRows = Object.entries(ratedByStage).map(([stage, scores]) => [stage, scores.length, ratingAverage(scores)]);
 
-    return {
-      name: p.name,
-      department: p.departmentId?.name || 'General',
-      avgWorkTime,
-      avgApprovalWait,
-      onTimeRate: `${onTimePct}%`,
-      revisionCount: revSum,
-      band,
-      utilization,
-    };
-  });
-
-  // Quality Ratings aggregation (Team average & step type average, strictly NO individual rankings)
-  const ratings = await Rating.find().lean();
-  const totalRatings = ratings.length;
-  const teamAverageScore = totalRatings > 0
-    ? Number((ratings.reduce((sum, r) => sum + r.score, 0) / totalRatings).toFixed(2))
-    : null;
-
-  const stageRatingsMap = {};
-  ratings.forEach((r) => {
-    const stage = r.stageKey || 'Other';
-    if (!stageRatingsMap[stage]) stageRatingsMap[stage] = { total: 0, count: 0 };
-    stageRatingsMap[stage].total += r.score;
-    stageRatingsMap[stage].count += 1;
-  });
-
-  const stepTypeRatingRows = Object.entries(stageRatingsMap).map(([stage, stats]) => [
-    stage,
-    stats.count,
-    stats.count > 0 ? `${(stats.total / stats.count).toFixed(2)} ★` : '—',
-  ]);
+  const revisionRounds = steps.reduce((sum, w) => sum + (w.revisions || 0), 0);
 
   return {
     reportKey: 'team_performance',
-    title: 'Team Performance Digest (Alphabetical Individual Metrics)',
+    title: 'Team Performance Digest (Team Totals)',
     cadence: 'Monthly',
     generatedAt: new Date().toISOString(),
     summary: {
-      activeCreativeContributors: people.length,
-      averageOnTimeRate: '92%',
-      averageQualityRating: '1.2 revisions per piece',
-      collaborationSlaAdherence: '96%',
-      teamAverageQualityRating: teamAverageScore !== null ? `${teamAverageScore} ★` : 'No ratings yet',
-      averageRatingPerStepType: Object.fromEntries(
-        Object.entries(stageRatingsMap).map(([k, v]) => [k, v.count > 0 ? Number((v.total / v.count).toFixed(2)) : 0])
-      ),
+      activeCreativeContributors: contributors,
+      stepsInScope: total,
+      stepsCompleted: finished.length,
+      onTimeRate,
+      averageWorkTime: average(workTimes),
+      averageApprovalWait: average(approvalWaits),
+      revisionsPerPiece: NOT_AVAILABLE,
+      workload: NOT_AVAILABLE,
+      teamAverageQualityRating: ratingAverage(allScores),
+      averageRatingPerStepType: Object.fromEntries(Object.entries(ratedByStage).map(([stage, scores]) => [stage, ratingAverage(scores)])),
     },
     tables: [
       {
-        title: 'Contributor Performance Digest (Listed Alphabetically)',
-        columns: [
-          'Team Member',
-          'Department',
-          'Avg Work Time',
-          'Avg Approval Wait',
-          'On-Time Rate',
-          'Revisions',
-          'Band',
+        title: 'Team Totals',
+        columns: ['Figure', 'Value', 'Based on'],
+        rows: [
+          ['Active contributors', contributors, 'Active team members and SM managers'],
+          ['Steps in scope', total, 'Steps matching the report filters'],
+          ['Steps completed', finished.length, basedOn(finished.length)],
+          ['On-time rate', onTimeRate, `Based on ${onTimeBase.length} of ${total} steps (finished, with a due date and a recorded submit or post time)`],
+          ['Average work time', average(workTimes), `${basedOn(workTimes.length)} (submitted rounds only)`],
+          ['Average approval wait', average(approvalWaits), `${basedOn(approvalWaits.length)} (decided submissions only)`],
+          ['Revision rounds recorded', revisionRounds, 'Sum of each step\'s recorded revision count'],
+          ['Revisions per piece', NOT_AVAILABLE, 'No shared calculation yet'],
+          ['Workload', NOT_AVAILABLE, 'No reliable effort data yet'],
+          ['Team average rating', ratingAverage(allScores), `Based on ${allScores.length} rated steps (minimum ${MIN_RATINGS})`],
         ],
-        rows: memberStats.map((m) => [
-          m.name,
-          m.department,
-          m.avgWorkTime,
-          m.avgApprovalWait,
-          m.onTimeRate,
-          m.revisionCount,
-          m.band,
-        ]),
       },
       {
         title: 'Stage Quality Ratings (Aggregated Baseline)',
-        columns: ['Step Type / Pipeline Stage', 'Total Ratings Count', 'Team Average Rating'],
-        rows: stepTypeRatingRows.length > 0 ? stepTypeRatingRows : [['No stage ratings recorded yet', 0, '—']],
+        columns: ['Step Type / Pipeline Stage', 'Rated Steps', 'Team Average Rating'],
+        rows: stageRows.length > 0 ? stageRows : [['No stage ratings recorded yet', 0, NOT_AVAILABLE]],
       },
     ],
   };

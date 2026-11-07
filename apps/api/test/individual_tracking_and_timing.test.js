@@ -378,7 +378,7 @@ describe('INDIVIDUAL TRACKING AND TIMING SUITE', () => {
   });
 
   describe('4. Anti-ranking verification in reports', () => {
-    it('team performance digest lists members alphabetically with no performance ranking', async () => {
+    it('team performance digest shows team-level totals, with no per-person rows', async () => {
       const reportRes = await request(app)
         .post('/api/reports/team_performance/generate')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -386,13 +386,11 @@ describe('INDIVIDUAL TRACKING AND TIMING SUITE', () => {
 
       expect(reportRes.status).toBe(200);
       const report = reportRes.body.report || reportRes.body.data;
-      const rows = report.tables[0].rows;
-      expect(rows.length).toBeGreaterThan(0);
-
-      // Check strictly alphabetical ordering
-      const names = rows.map((r) => r[0]);
-      const sortedNames = [...names].sort((a, b) => a.localeCompare(b));
-      expect(names).toEqual(sortedNames);
+      expect(report.tables[0].title).toBe('Team Totals');
+      expect(report.tables[0].columns).toEqual(['Figure', 'Value', 'Based on']);
+      const people = await Person.find({ role: { $in: ['team_member', 'sm_manager'] } }).select('name').lean();
+      const firstColumn = report.tables.flatMap((t) => t.rows.map((r) => String(r[0])));
+      for (const p of people) expect(firstColumn).not.toContain(p.name);
     });
   });
 });

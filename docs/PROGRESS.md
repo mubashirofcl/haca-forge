@@ -1,6 +1,61 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after Phase 3.5):** 1404 passing, 0 failing: API 1148 (46 files), web 256 (33 files). Typecheck 0 errors; web build clean. The working tree and a clean worktree now give the same counts.
+**Current test count (after Phase 4):** 1487 passing, 0 failing: API 1219 (50 files), web 268 (35 files). Typecheck 0 errors; web build clean.
+
+## Phase 4: Uploads and sockets (Status: COMPLETE; committed locally, not pushed)
+
+Four commits, each gated in the working tree: 4a `208f884`, 4b `69f290b`, 4d `74598d1`, 4e (this commit). Local `/uploads` stays public for development and testing; production file access will use Cloudinary signed URLs in the deployment phase.
+
+- 4a, upload safety:
+  - The general upload route accepts video, image and PDF only, matched on extension and type. Avatars accept images only. Files are stored under a random name with the server's extension (`modules/uploads/fileTypes.js`).
+  - `/uploads` is served with `Content-Security-Policy: sandbox` and `nosniff`. Anything that is not an image or video downloads, including PDFs: "Open Full PDF" in the Design workspace now downloads.
+  - Chat uploads need a valid channel id and membership before any file is written. Message attachments are built from the file on disk, and a share card sent by the client is ignored.
+  - Chat links are http(s) or site paths only, in the API and the web (`lib/safeUrl.ts`). Report HTML is escaped, and the Reports preview frame is sandboxed.
+- 4b, login tokens:
+  - Tokens live only in the httpOnly cookies. Login and refresh no longer return them in the body.
+  - The web stores no token and sends no Authorization header. Old copies in storage are cleared at start and at logout.
+  - REST, uploads and the socket renew an expired access cookie once and retry once.
+- 4d, sockets:
+  - The handshake reads the cookie or an auth field, never the URL. It looks the user up, refuses suspended users, and takes the role from the database.
+  - A user's sockets close on logout, suspension, forced logout, revoked sessions and any role or status change; the web reconnects once.
+  - Leaving or removal takes a member's sockets out of the channel room. Read receipts and typing need membership, and executives cannot type.
+  - No socket payload carries email, phone or WhatsApp (`lib/socketHub.js`).
+- 4e, reports and metadata:
+  - `POST /api/uploads/metadata` no longer attaches files to a submission.
+  - Report work-item filters are limited to `departmentId` and `status`. Earlier, `format`, `report` and `month` reached the query and emptied reports, so the web's month filter returned nothing.
+  - Weekly report blockers are limited to the report's own work items.
+  - `/api/reports/individual` and `/individual/:userId` are removed.
+  - Report emails go only to registered emails of active users; the automation default `creative_head@hacaforge.com` is dropped.
+  - Deleting a clip deletes its local video and thumbnail file. Replaced clips and old versions keep theirs.
+- Team performance digest: team-level totals only, for every role. Each figure and its source:
+  - Active contributors: count of active team members and SM managers.
+  - Steps in scope and steps completed: counts. Completed means Approved or Published, the same rule as `isFinished` in `workItems/access.js`.
+  - On-time rate: shared `calculateIndividualWorkMeasures().isLate`, only for finished steps with a due date and a recorded submit or post time. Post time stands in for submit time.
+  - Average work time: shared work time over submitted rounds only, so a live round never counts.
+  - Average approval wait: shared approval wait, only where a decision was recorded.
+  - Revision rounds recorded: sum of each step's stored `revisions` count.
+  - Team and per-step-type rating: one rating per finished step, the rating on its latest approved submission (`approvedOutputOf`). No average below 3 ratings, the same rule as worker ratings.
+  - Revisions per piece and workload: "Not available yet".
+  - Removed: the per-person table and three hard-coded summary figures ("92%", "1.2 revisions per piece", "96%").
+  - Every figure says how many steps it is based on.
+- Browser test, all 5 roles on a disposable database, 49 of 49 checks. Covered:
+  - Cookie login, with no token in storage after login, refresh and reload.
+  - Sockets with no token in the URL.
+  - Video upload and playback, including range requests.
+  - PDF download, avatar upload and display, .html and .svg refused.
+  - Chat attachment, media card and its video, live chat.
+  - A stored `javascript:` link that does not render as a link.
+  - A suspended user cut off from live chat at once.
+  - Executive with no composer and no uploads.
+  - Sandboxed Reports preview, team-only digest, logout.
+  - No page errors and no 5xx.
+- Known, not fixed:
+  - Attachment-only chat messages create no notification, because the empty text fails validation.
+  - The weekly report's own on-time rate still uses `updatedAt`.
+  - Clip and submission URLs are not checked when a clip or submission is saved; chat now drops unsafe ones when shared.
+  - A revoked or force-logged-out device can still reconnect until its 15-minute access token expires, the same as REST, because access tokens carry no session id.
+  - `.gitignore` line `uploads/` also matches `apps/api/src/modules/uploads/`, so new files there need `git add -f`.
+  - The month filter on reports is ignored, as it is not a work-item field; which date it should filter on is open.
 
 ## Phase 3.5: Landing the uncommitted work (Status: COMPLETE; committed locally, not pushed)
 

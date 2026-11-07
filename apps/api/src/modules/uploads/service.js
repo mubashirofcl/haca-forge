@@ -172,7 +172,9 @@ export async function generateUploadSignature({
 
 
 /**
- * Record metadata after upload has completed in browser
+ * Record metadata after upload has completed in browser. It describes the file only;
+ * it never attaches the file to a submission (that happens through the submission's own
+ * routes, which check the step owner).
  */
 export async function recordUploadMetadata({
   url,
@@ -182,8 +184,6 @@ export async function recordUploadMetadata({
   height,
   mime,
   name,
-  workItemId,
-  submissionId,
 }) {
   if (!url) {
     const err = new Error('File URL is required');
@@ -202,13 +202,6 @@ export async function recordUploadMetadata({
     name: name || '',
     recordedAt: new Date(),
   };
-
-  if (submissionId) {
-    const { Submission } = await import('../submissions/model.js');
-    await Submission.findByIdAndUpdate(submissionId, {
-      $push: { files: metadata },
-    });
-  }
 
   return metadata;
 }
