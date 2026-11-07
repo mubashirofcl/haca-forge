@@ -240,6 +240,8 @@ export async function getWorkItemById(id, user) {
       .populate('ownerId', 'name email role jobRole avatarUrl')
       .sort({ stageOrder: 1 });
     result.pieceStages = await withRecordedStepTimes(siblingStages);
+    // The latest approved outputs of the finished steps before this one (Phase 5).
+    result.handoff = await buildHandoff(result, siblingStages);
 
     if (result.stageOrder > 1) {
       const prevStage = siblingStages.find((s) => s.stageOrder === result.stageOrder - 1);
@@ -331,6 +333,13 @@ export async function getWorkItemById(id, user) {
       result.rating = rating;
     }
   } catch {}
+
+  // A finished non-postable Design step is handed over: its approved files, with download,
+  // for the SM manager, creative head and admin.
+  if (['sm_manager', 'creative_head', 'admin'].includes(normalizeRole(user?.role))) {
+    const handover = await buildHandover(result);
+    if (handover) result.handover = handover;
+  }
 
   return result;
 }
@@ -682,6 +691,7 @@ import { ContentPiece } from '../calendar/contentPiece.model.js';
 import { CalendarPlan } from '../calendar/plan.model.js';
 import { isPostableWorkType } from '@mmp/shared';
 import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
+import { buildHandoff, buildHandover } from './handoff.js';
 
 /** Same rule as the WorkItem isOverdue virtual, which .lean() results do not carry. */
 function isPastDeadline(deadline, status) {

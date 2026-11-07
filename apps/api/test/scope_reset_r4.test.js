@@ -19,6 +19,19 @@ import { ensureAutomationRules, executeAutomationRule } from '../src/modules/aut
 import { ensureReportDefinitions } from '../src/modules/reports/service.js';
 import { connectDB } from '../src/config/db.js';
 
+// Phase 5: a postable Script or Content step is submitted with its caption and hashtags,
+// which come from the saved draft when submitting through /transition.
+async function captionDraft(workItemId) {
+  await Submission.updateOne(
+    { workItemId, version: 0 },
+    {
+      $set: { 'document.metadata.caption': 'Test caption', 'document.metadata.hashtags': '#test' },
+      $setOnInsert: { kind: 'document', status: 'draft', stageKey: 'Script' },
+    },
+    { upsert: true }
+  );
+}
+
 describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table Walk Suite', () => {
   let adminUser, headUser, smUser, memberUser, execUser;
   let adminToken, headToken, smToken, memberToken, execToken;
@@ -315,6 +328,7 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
         });
 
       // Worker transitions stage to Pending Approval with deliverable URL
+      await captionDraft(stageScriptId);
       const submitRes = await request(app)
         .post(`/api/work/${stageScriptId}/transition`)
         .set('Authorization', `Bearer ${memberToken}`)

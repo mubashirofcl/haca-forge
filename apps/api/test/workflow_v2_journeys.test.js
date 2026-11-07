@@ -16,6 +16,19 @@ import { Blocker } from '../src/modules/blockers/model.js';
 import { Notification } from '../src/modules/notifications/model.js';
 import { connectDB } from '../src/config/db.js';
 
+// Phase 5: a postable Script or Content step is submitted with its caption and hashtags,
+// which come from the saved draft when submitting through /transition.
+async function captionDraft(workItemId) {
+  await Submission.updateOne(
+    { workItemId, version: 0 },
+    {
+      $set: { 'document.metadata.caption': 'Test caption', 'document.metadata.hashtags': '#test' },
+      $setOnInsert: { kind: 'document', status: 'draft', stageKey: 'Script' },
+    },
+    { upsert: true }
+  );
+}
+
 describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', () => {
   let adminUser, creativeHeadUser, smManagerUser, execUser;
   let writerUser, designerUser, videographerUser, editorUser, posterUser;
@@ -516,6 +529,7 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
       expect(startRes.status).toBe(200);
 
       // Worker submits deliverable for review: In Progress -> Feedback
+      await captionDraft(contentStage._id);
       const submitRes = await request(app)
         .post(`/api/work/${contentStage._id}/transition`)
         .set('Authorization', `Bearer ${writerToken}`)
@@ -610,6 +624,7 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
         .set('Authorization', `Bearer ${writerToken}`)
         .send({ toStatus: 'In Progress' });
 
+      await captionDraft(scriptStage._id);
       await request(app)
         .post(`/api/work/${scriptStage._id}/transition`)
         .set('Authorization', `Bearer ${writerToken}`)

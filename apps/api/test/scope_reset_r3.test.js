@@ -16,6 +16,19 @@ import { AssignmentOverride } from '../src/modules/assignment/model.js';
 import { Notification } from '../src/modules/notifications/model.js';
 import * as transitionService from '../src/modules/workItems/transition.service.js';
 import * as importService from '../src/modules/calendar/import.service.js';
+
+// Phase 5: a postable Script or Content step is submitted with its caption and hashtags,
+// which come from the saved draft when submitting through /transition.
+async function captionDraft(workItemId) {
+  await Submission.updateOne(
+    { workItemId, version: 0 },
+    {
+      $set: { 'document.metadata.caption': 'Test caption', 'document.metadata.hashtags': '#test' },
+      $setOnInsert: { kind: 'document', status: 'draft', stageKey: 'Script' },
+    },
+    { upsert: true }
+  );
+}
 import {
   derivePlanStatus,
   calculateStageDueDate,
@@ -636,6 +649,7 @@ describe('SCOPE RESET R3: Calendar Plans, Creative Head Approval and Assignment 
 
     it('worker submits review stage to Feedback -> Creative Head approves -> unlocks next stage', async () => {
       // 1. Worker submits Script stage for approval
+      await captionDraft(s1Script._id);
       await transitionService.transitionWorkItem(
         s1Script._id,
         { toStatus: 'Feedback', deliverableUrl: 'https://docs.google.com/script-v1' },
@@ -1248,6 +1262,7 @@ describe('SCOPE RESET R3: Calendar Plans, Creative Head Approval and Assignment 
       });
 
       // Submit Stage 1 to Feedback and have Creative Head approve it
+      await captionDraft(st1._id);
       await request(app)
         .post(`/api/work-items/${st1._id}/transition`)
         .set('Authorization', `Bearer ${writerToken}`)

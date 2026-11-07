@@ -43,6 +43,13 @@ async function scrubEarlierOutputs(result, participation) {
     const shoot = stages.find((s) => s.stageKey === 'Shoot');
     if (!shoot || !canSeeStepOutput(shoot, participation)) delete result.approvedClips;
   }
+  // Handed-over outputs follow the same rule: earlier finished steps this person may see.
+  if (Array.isArray(result.handoff)) {
+    result.handoff = result.handoff.filter((entry) =>
+      canSeeStepOutput({ ownerId: entry.ownerId, stageOrder: entry.stageOrder, status: entry.status }, participation)
+    );
+  }
+  delete result.handover;
   if (result.previousStage) {
     const previous = stages.find((s) => s.stageOrder === result.stageOrder - 1);
     if (!previous || !canSeeStepOutput(previous, participation)) {

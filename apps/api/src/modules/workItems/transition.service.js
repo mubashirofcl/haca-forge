@@ -6,6 +6,7 @@ import { Person } from '../people/model.js';
 import { logger } from '../../lib/logger.js';
 import { recordRoundSubmission } from './rounds.js';
 import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
+import { isHandoverStep, notifyHandoverReady } from './handoff.js';
 
 export const ALLOWED_TRANSITIONS = {
   'Not Started': ['In Progress', 'Blocked'],
@@ -306,6 +307,16 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
   // A new deliverable link is checked before anything below writes or notifies.
   if (deliverableUrl) assertChangedOutputUrl(deliverableUrl, workItem.deliverableUrl, 'deliverableUrl');
 
+  // A Script or Content step of a postable deliverable is submitted with its caption and
+  // hashtags, here too: they come from the saved draft, which becomes the new version.
+  let captionDraft = null;
+  if ((toStatus === 'Pending' || toStatus === 'Feedback') && !isReopen && !isReviewerRevision && ['Script', 'Content'].includes(workItem.stageKey) && !options.ownerSubmission) {
+    const { Submission } = await import('../submissions/model.js');
+    const { assertCaptionForPostable } = await import('../submissions/service.js');
+    captionDraft = await Submission.findOne({ workItemId: workItem._id, version: 0 }).lean();
+    assertCaptionForPostable(workItem, captionDraft?.document);
+  }
+
   // 7. Revision Counter: increment on revision request or when restarting work after feedback & notify owner
   if (
     ((fromStatus === 'Feedback' || fromStatus === 'Pending') && toStatus === 'In Progress') ||
@@ -421,6 +432,7 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
           stageKey: workItem.stageKey,
           version: nextVersion,
           kind,
+          ...(captionDraft?.document ? { document: captionDraft.document } : {}),
           linkUrl: url,
           notes: comment || '',
           files: url ? [{ name: 'deliverable', url }] : [],
@@ -479,6 +491,16 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
           metadata: { workItemId: workItem._id, contentPieceId: workItem.contentPieceId },
         });
       }
+    }
+  }
+
+  // The approval is saved: an approved non-postable Design step is ready to hand over.
+  // A failed notification never undoes the approval.
+  if (toStatus === 'Approved' && isHandoverStep(workItem)) {
+    try {
+      await notifyHandoverReady(workItem);
+    } catch (err) {
+      logger.warn({ err: err.message, workItemId: String(workItem._id) }, 'Failed to send handover notification');
     }
   }
 

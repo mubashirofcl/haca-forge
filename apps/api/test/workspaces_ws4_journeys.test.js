@@ -244,6 +244,7 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
             plainText: 'HOOK: Did you know that 90% of students choose the wrong major?',
             wordCount: 12,
             readingTimeSeconds: 5,
+            metadata: { caption: 'Choose your major wisely', hashtags: '#haca #masterclass' },
           },
         });
 
@@ -322,6 +323,7 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
             plainText: 'HOOK: 94% of our tech graduates land jobs within 90 days. Here is why.',
             wordCount: 14,
             readingTimeSeconds: 6,
+            metadata: { caption: 'Jobs in 90 days', hashtags: '#haca #masterclass' },
           },
         });
 
