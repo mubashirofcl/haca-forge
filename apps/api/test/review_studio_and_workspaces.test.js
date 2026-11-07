@@ -337,6 +337,7 @@ describe('Review Studio & Workspaces API Tests (WS3)', () => {
       .set('Authorization', `Bearer ${shooterToken}`)
       .send({
         toStatus: 'Published',
+        caption: 'Posted caption',
         publishedUrl: 'https://www.instagram.com/p/C3x918abc/',
         comment: 'Cross-posted to IG and Facebook',
       })

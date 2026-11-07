@@ -20,11 +20,9 @@ import {
 import {
   calculateDurationStats,
   checkHook,
-  checkCaptionLimits,
   extractSceneTableData,
   type ScriptDurationStats,
   type HookCheckResult,
-  type CaptionAnalysis,
   type ShotListItem,
 } from '../../../lib/scriptTools';
 import { Avatar } from '../../../components/Avatar';
@@ -74,10 +72,6 @@ interface WritingStudioSidebarProps {
   setTargetDuration: (target: number) => void;
   wpm: number;
   setWpm: (wpm: number) => void;
-  captionText: string;
-  setCaptionText: (text: string) => void;
-  hashtagsText: string;
-  setHashtagsText: (text: string) => void;
   comments: CommentItem[];
   onAddComment: (text: string, range?: { from: number; to: number; text: string }) => Promise<void>;
   onReplyComment: (parentId: string, text: string) => Promise<void>;
@@ -96,10 +90,6 @@ export const WritingStudioSidebar: React.FC<WritingStudioSidebarProps> = ({
   setTargetDuration,
   wpm,
   setWpm,
-  captionText,
-  setCaptionText,
-  hashtagsText,
-  setHashtagsText,
   comments,
   onAddComment,
   onReplyComment,
@@ -123,10 +113,7 @@ export const WritingStudioSidebar: React.FC<WritingStudioSidebarProps> = ({
     passes: true,
   });
 
-  const [captionStats, setCaptionStats] = useState<CaptionAnalysis>(checkCaptionLimits(captionText, hashtagsText));
   const [shotList, setShotList] = useState<ShotListItem[]>([]);
-  const [copiedCaption, setCopiedCaption] = useState(false);
-  const [copiedHashtags, setCopiedHashtags] = useState(false);
   const [copiedShotList, setCopiedShotList] = useState(false);
 
   // New Comment state
@@ -193,22 +180,8 @@ export const WritingStudioSidebar: React.FC<WritingStudioSidebarProps> = ({
     };
   }, [editor, targetDuration, wpm]);
 
-  // Recompute captions whenever inputs change
-  useEffect(() => {
-    setCaptionStats(checkCaptionLimits(captionText, hashtagsText));
-  }, [captionText, hashtagsText]);
 
-  const handleCopyCaption = () => {
-    navigator.clipboard.writeText(captionText);
-    setCopiedCaption(true);
-    setTimeout(() => setCopiedCaption(false), 2000);
-  };
 
-  const handleCopyHashtags = () => {
-    navigator.clipboard.writeText(hashtagsText);
-    setCopiedHashtags(true);
-    setTimeout(() => setCopiedHashtags(false), 2000);
-  };
 
   const handleCopyShotList = () => {
     const text = shotList.map((s) => `Scene ${s.sceneNumber}: ${s.visual}`).join('\n');
@@ -544,101 +517,6 @@ export const WritingStudioSidebar: React.FC<WritingStudioSidebarProps> = ({
                   Videographer!
                 </p>
               )}
-            </div>
-
-            {/* 4. Captions & Hashtags Section */}
-            <div className="bg-white/60 rounded-ui-card p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-ui-ink font-semibold text-xs">
-                  <FileText className="w-4 h-4" aria-hidden="true" />
-                  Captions & Hashtags
-                </div>
-              </div>
-
-              {/* Caption Textarea */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="ws-caption" className="text-xs font-medium text-ui-muted">Post Caption</label>
-                  <button
-                    type="button"
-                    onClick={handleCopyCaption}
-                    className="inline-flex items-center gap-1 min-h-[44px] px-2 -mr-2 text-xs font-semibold text-ui-ink hover:underline underline-offset-4 rounded-full"
-                  >
-                    {copiedCaption ? <Check className="w-3 h-3" aria-hidden="true" /> : <Copy className="w-3 h-3" />}
-                    Copy
-                  </button>
-                </div>
-                <textarea
-                  value={captionText}
-                  onChange={(e) => setCaptionText(e.target.value)}
-                  placeholder="Ready to build the future of robotics? Join HACA Winter 2026..."
-                  rows={3}
-                  id="ws-caption"
-                  className="ui-input ui-textarea w-full"
-                />
-              </div>
-
-              {/* Hashtags Input */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="ws-hashtags" className="text-xs font-medium text-ui-muted">Hashtags</label>
-                  <button
-                    type="button"
-                    onClick={handleCopyHashtags}
-                    className="inline-flex items-center gap-1 min-h-[44px] px-2 -mr-2 text-xs font-semibold text-ui-ink hover:underline underline-offset-4 rounded-full"
-                  >
-                    {copiedHashtags ? <Check className="w-3 h-3" aria-hidden="true" /> : <Copy className="w-3 h-3" />}
-                    Copy
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={hashtagsText}
-                  onChange={(e) => setHashtagsText(e.target.value)}
-                  placeholder="#Robotics #HACA #TechEducation #KeralaTech"
-                  id="ws-hashtags"
-                  className="ui-input w-full"
-                />
-              </div>
-
-              {/* Platform Limits Progress Bars */}
-              <div className="space-y-2 pt-2 border-t border-ui-line">
-                {/* Instagram */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-semibold">
-                    <span className="text-ui-text">Instagram (max 2,200)</span>
-                    <span className={captionStats.instagram.isOverLimit ? 'status-chip status-changes px-1.5' : 'text-ui-muted'}>
-                      {captionStats.instagram.charCount} / 2,200
-                    </span>
-                  </div>
-                  <div className="w-full bg-ui-line h-1.5 rounded-full overflow-hidden" aria-hidden="true">
-                    <div
-                      className={`h-full transition-all ${
-                        captionStats.instagram.isOverLimit ? 'bg-ui-coral' : 'bg-ui-ink'
-                      }`}
-                      style={{ width: `${captionStats.instagram.percent}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* LinkedIn */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-semibold">
-                    <span className="text-ui-text">LinkedIn (max 3,000)</span>
-                    <span className={captionStats.linkedin.isOverLimit ? 'status-chip status-changes px-1.5' : 'text-ui-muted'}>
-                      {captionStats.linkedin.charCount} / 3,000
-                    </span>
-                  </div>
-                  <div className="w-full bg-ui-line h-1.5 rounded-full overflow-hidden" aria-hidden="true">
-                    <div
-                      className={`h-full transition-all ${
-                        captionStats.linkedin.isOverLimit ? 'bg-ui-coral' : 'bg-ui-ink'
-                      }`}
-                      style={{ width: `${captionStats.linkedin.percent}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* 5. Personal Snippets Library */}

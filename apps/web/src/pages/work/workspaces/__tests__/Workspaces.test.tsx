@@ -256,7 +256,6 @@ describe('Media Workspaces WS3 Component Tests', () => {
         <PostWorkspace
           workItem={mockWorkItem}
           finalAssets={[{ url: '/uploads/final-cut.mp4', name: 'final-cut.mp4', kind: 'upload' }]}
-          captionsAndHashtags={{ caption: mockWorkItem.caption, hashtags: mockWorkItem.hashtags }}
           isPosting={false}
           onMarkAsPosted={onMarkAsPosted}
         />
@@ -267,6 +266,10 @@ describe('Media Workspaces WS3 Component Tests', () => {
       // The approved final cut handed over from Edit downloads from here
       const downloadBtn = screen.getByRole('link', { name: /^download$/i });
       expect(downloadBtn).toHaveAttribute('href', '/uploads/final-cut.mp4');
+
+      // The poster writes the caption and hashtags here
+      fireEvent.change(screen.getByLabelText(/post caption/i), { target: { value: mockWorkItem.caption } });
+      fireEvent.change(screen.getByLabelText(/^hashtags/i), { target: { value: mockWorkItem.hashtags } });
 
       // Copy caption button
       const copyCaptionBtn = screen.getByRole('button', { name: /copy caption/i });
@@ -293,6 +296,8 @@ describe('Media Workspaces WS3 Component Tests', () => {
       expect(onMarkAsPosted).toHaveBeenCalledWith(
         expect.objectContaining({
           publishedUrl: 'https://instagram.com/p/ABC123xyz',
+          caption: mockWorkItem.caption,
+          hashtags: mockWorkItem.hashtags,
         })
       );
     });
@@ -336,7 +341,10 @@ describe('Media Workspaces WS3 Component Tests', () => {
       const liveUrlInput = screen.getByPlaceholderText(/instagram\.com\/p/i);
       fireEvent.change(liveUrlInput, { target: { value: 'https://instagram.com/reel/C89abcdef' } });
 
+      // A caption is required to post; hashtags are optional
       const markPostedBtn = screen.getByRole('button', { name: /mark as posted/i });
+      expect(markPostedBtn).toBeDisabled();
+      fireEvent.change(screen.getByLabelText(/post caption/i), { target: { value: 'Final post graphic is live' } });
       expect(markPostedBtn).not.toBeDisabled();
       fireEvent.click(markPostedBtn);
 

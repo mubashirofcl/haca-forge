@@ -26,7 +26,6 @@ import {
   STAGE_FALLBACK_OUTPUT_KIND,
   normalizeRole,
   getWorkspaceMode,
-  isPostableWorkType,
 } from '@mmp/shared';
 
 /**
@@ -49,25 +48,6 @@ async function canAccessPieceOutputs(user, pieceId) {
 /**
  * Validates whether a submission has non-empty output matching the stage's requirements
  */
-/**
- * A Script or Content step of a postable deliverable (Reel, Static Post, Carousel Post,
- * Story) must carry a caption and hashtags, whether its output is the Writing Studio
- * document or a Drive link. They are what the Post step receives.
- */
-export function assertCaptionForPostable(workItem, document) {
-  if (!['Script', 'Content'].includes(workItem?.stageKey)) return;
-  if (!isPostableWorkType(workItem.workType || '')) return;
-  const meta = document?.metadata || {};
-  const caption = typeof meta.caption === 'string' ? meta.caption.trim() : '';
-  const hashtags = typeof meta.hashtags === 'string' ? meta.hashtags.trim() : '';
-  if (!caption || !hashtags) {
-    const err = new Error('Add the caption and hashtags in the Writing Studio caption box before submitting.');
-    err.statusCode = 400;
-    err.code = 'CAPTION_REQUIRED';
-    throw err;
-  }
-}
-
 function validateNonEmptySubmission(kind, stageKey, document, files, linkUrl) {
   const normalizedLink = (linkUrl || '').trim();
 
@@ -298,7 +278,6 @@ export async function submitForApproval(workItemId, submitData = {}, user) {
 
   // Non-empty output check
   validateNonEmptySubmission(kind, workItem.stageKey, sanitizedDoc, files, linkUrl);
-  assertCaptionForPostable(workItem, sanitizedDoc);
 
   // Compute next version
   const latestSubmission = await Submission.findOne({ workItemId, version: { $gt: 0 } }).sort({ version: -1 });

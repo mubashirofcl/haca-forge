@@ -57,8 +57,6 @@ interface DesignWorkspaceProps {
     bodyCopy?: string;
     callToAction?: string;
     rawText?: string;
-    caption?: string;
-    hashtags?: string;
   };
   /** Submission comments for this step (same data the Edit workspace receives). */
   revisionComments?: RevisionComment[];
@@ -86,8 +84,6 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
     bodyCopy: rawCopy.bodyCopy || rawCopy.bodyText || (workItem as any).bodyCopy,
     callToAction: rawCopy.callToAction || (workItem as any).callToAction,
     rawText: rawCopy.rawText,
-    caption: rawCopy.caption,
-    hashtags: rawCopy.hashtags,
   };
 
   const [slides, setSlides] = useState<SlideItem[]>([]);
@@ -401,40 +397,6 @@ export const DesignWorkspace: React.FC<DesignWorkspaceProps> = ({
                 </div>
               )}
 
-              {(approvedCopy.caption || approvedCopy.hashtags) && (
-                <div className="p-3 rounded-xl bg-white/60 border border-ui-line space-y-2" data-testid="design-approved-caption">
-                  {approvedCopy.caption && (
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-ui-ink">Caption</span>
-                        <button
-                          onClick={() => copyToClipboard('caption', approvedCopy.caption!)}
-                          className="p-1 rounded bg-white/60 hover:bg-white text-ui-text"
-                          title="Copy caption"
-                        >
-                          {copiedKey === 'caption' ? <Check className="w-3 h-3 text-emerald-800" /> : <Copy className="w-3 h-3" />}
-                        </button>
-                      </div>
-                      <p className="text-xs text-ui-text whitespace-pre-wrap">{approvedCopy.caption}</p>
-                    </div>
-                  )}
-                  {approvedCopy.hashtags && (
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-ui-ink">Hashtags</span>
-                        <button
-                          onClick={() => copyToClipboard('hashtags', approvedCopy.hashtags!)}
-                          className="p-1 rounded bg-white/60 hover:bg-white text-ui-text"
-                          title="Copy hashtags"
-                        >
-                          {copiedKey === 'hashtags' ? <Check className="w-3 h-3 text-emerald-800" /> : <Copy className="w-3 h-3" />}
-                        </button>
-                      </div>
-                      <p className="text-xs text-ui-text whitespace-pre-wrap">{approvedCopy.hashtags}</p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           ) : (
             <p className="text-xs text-ui-muted">No approved copy attached.</p>

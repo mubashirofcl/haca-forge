@@ -124,13 +124,16 @@ describe('Phase 5b: asset handoff', () => {
   });
 
   describe('Reel A: Script -> Shoot -> Edit -> Post', () => {
-    it('Post receives the final cut (latest approved only), the approved caption and hashtags, and the approved clips', async () => {
+    it('Post receives the final cut (latest approved only) and the approved clips, but no script caption', async () => {
       const res = await detail(reelA.Post, 'poster');
       expect(res.status).toBe(200);
       const handoff = handoffOf(res);
       expect(stagesOf(handoff)).toEqual(['Script', 'Shoot', 'Edit']);
       const script = handoff.find((e) => e.stageKey === 'Script');
-      expect(script).toMatchObject({ caption: 'Big news', hashtags: '#haca #reel', version: 2 });
+      expect(script).toMatchObject({ version: 2 });
+      // Captions are written by the poster on the Post step; a saved script caption is never handed over.
+      expect(script.caption).toBeUndefined();
+      expect(JSON.stringify(handoff)).not.toContain('Big news');
       expect(script.text).toContain('Final script');
       expect(JSON.stringify(handoff)).not.toMatch(/OLD SCRIPT|old caption/);
       const edit = handoff.find((e) => e.stageKey === 'Edit');
@@ -177,18 +180,19 @@ describe('Phase 5b: asset handoff', () => {
   });
 
   describe('designs', () => {
-    it('postable: Design receives the approved copy and caption; a legacy Content step falls back to its latest version', async () => {
+    it('postable: Design receives the approved copy (no caption); a legacy Content step falls back to its latest version', async () => {
       const handoff = handoffOf(await detail(postable.Design, 'designer'));
       expect(stagesOf(handoff)).toEqual(['Content']);
-      expect(handoff[0]).toMatchObject({ caption: 'Design caption', hashtags: '#design', version: 1 });
+      expect(handoff[0]).toMatchObject({ version: 1 });
+      expect(handoff[0].caption).toBeUndefined();
       expect(handoff[0].text).toContain('Approved copy');
     });
 
-    it('postable: Post receives every design file, upload and Drive, plus the caption', async () => {
+    it('postable: Post receives every design file, upload and Drive', async () => {
       const handoff = handoffOf(await detail(postable.Post, 'poster'));
       const design = handoff.find((e) => e.stageKey === 'Design');
       expect(design.items.map((i) => i.kind)).toEqual(['upload', 'drive']);
-      expect(handoff.find((e) => e.stageKey === 'Content').caption).toBe('Design caption');
+      expect(JSON.stringify(handoff)).not.toContain('Design caption');
     });
 
     it('non-postable: approval notifies SM managers once, and the handover shows for SM, CH and admin only', async () => {
@@ -249,46 +253,38 @@ describe('Phase 5b: asset handoff', () => {
 
     const submit = (w, who, body) => request(app).post(`/api/work/${w._id}/submit`).set('Authorization', `Bearer ${tokenFor(people[who])}`).send(body);
 
-    it('a Drive link alone without caption on a postable deliverable is refused', async () => {
+    it('a Drive link alone, with no caption, is accepted on a postable deliverable', async () => {
       const res = await submit(script, 'writer', { kind: 'document', linkUrl: DRIVE });
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('CAPTION_REQUIRED');
+      expect(res.status).toBeLessThan(300);
+      const v = await Submission.findOne({ workItemId: script._id, version: { $gt: 0 } }).sort({ version: -1 }).lean();
+      expect(v.linkUrl).toBe(DRIVE);
     });
 
     it('a non-Drive link is refused', async () => {
-      const res = await submit(script, 'writer', { kind: 'document', linkUrl: 'https://dropbox.com/s/x', document: { metadata: { caption: 'c', hashtags: '#h' } } });
+      const p = await piece('Reel', [['Script', 'In Progress', 'writer']]);
+      const res = await submit(p.Script, 'writer', { kind: 'document', linkUrl: 'https://dropbox.com/s/x' });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_OUTPUT_URL');
     });
 
-    it('a Drive link alone with caption and hashtags is accepted, and Shoot receives the link and the caption', async () => {
-      const res = await submit(script, 'writer', { kind: 'document', linkUrl: DRIVE, document: { metadata: { caption: 'Linked caption', hashtags: '#linked' } } });
-      expect(res.status).toBeLessThan(300);
+    it('Shoot receives the approved Drive link', async () => {
       const v = await Submission.findOne({ workItemId: script._id, version: { $gt: 0 } }).sort({ version: -1 });
       await Submission.updateOne({ _id: v._id }, { $set: { status: 'approved' } });
       await WorkItem.updateOne({ _id: script._id }, { $set: { status: 'Approved', approvedAt: new Date() } });
       const shoot = await WorkItem.findOne({ contentPieceId: script.contentPieceId, stageKey: 'Shoot' });
       const handoff = handoffOf(await detail(shoot, 'shooter'));
-      expect(handoff[0]).toMatchObject({ stageKey: 'Script', caption: 'Linked caption', hashtags: '#linked' });
       expect(handoff[0].items).toEqual([{ url: DRIVE, name: null, kind: 'drive' }]);
     });
 
-    it('a non-postable Content step needs no caption', async () => {
+    it('a non-postable Content step submits a document', async () => {
       const res = await submit(posterContent, 'copy', { kind: 'document', document: { htmlSnapshot: '<p>Poster text</p>' } });
       expect(res.status).toBeLessThan(300);
     });
 
-    it('submitting through /transition also needs the caption from the draft', async () => {
+    it('a postable Script step submits through /transition with no caption', async () => {
       const p = await piece('Story', [['Script', 'In Progress', 'writer']]);
-      const noCaption = await request(app).post(`/api/work-items/${p.Script._id}/transition`).set('Authorization', `Bearer ${tokenFor(people.writer)}`).send({ toStatus: 'Feedback' });
-      expect(noCaption.status).toBe(400);
-      expect(noCaption.body.error.code).toBe('CAPTION_REQUIRED');
-      expect((await WorkItem.findById(p.Script._id)).status).toBe('In Progress');
-      await request(app).put(`/api/work/${p.Script._id}/draft`).set('Authorization', `Bearer ${tokenFor(people.writer)}`).send({ document: { htmlSnapshot: '<p>Story</p>', metadata: { caption: 'Story caption', hashtags: '#story' } } }).expect(200);
       const ok = await request(app).post(`/api/work-items/${p.Script._id}/transition`).set('Authorization', `Bearer ${tokenFor(people.writer)}`).send({ toStatus: 'Feedback' });
       expect(ok.status).toBeLessThan(300);
-      const v = await Submission.findOne({ workItemId: p.Script._id, version: { $gt: 0 } }).lean();
-      expect(v.document.metadata.caption).toBe('Story caption');
     });
   });
 });

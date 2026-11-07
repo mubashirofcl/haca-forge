@@ -1,6 +1,6 @@
 import { WorkItem } from './model.js';
 import { logActivity } from '../activity/service.js';
-import { BLOCKER_REASONS, normalizeRole, getAvailableActions, getWorkspaceMode } from '@mmp/shared';
+import { BLOCKER_REASONS, normalizeRole, getAvailableActions, getWorkspaceMode, POST_CAPTION_MAX, postCaptionLength } from '@mmp/shared';
 import { resolveScope } from '../../lib/scope.js';
 import { Person } from '../people/model.js';
 import { logger } from '../../lib/logger.js';
@@ -171,6 +171,10 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
   if (toStatus === 'Published' && !workItem.stageKey && (userRole === 'sm_manager' || userRole === 'admin')) {
     isWorkerAction = false;
   }
+  // The SM manager and admin may also mark a Post step posted, writing its caption (Phase 5d).
+  if (toStatus === 'Published' && workItem.stageKey === 'Post' && (userRole === 'sm_manager' || userRole === 'admin')) {
+    isWorkerAction = false;
+  }
 
   if (isWorkerAction && !isOwner) {
     const error = new Error(
@@ -307,14 +311,30 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
   // A new deliverable link is checked before anything below writes or notifies.
   if (deliverableUrl) assertChangedOutputUrl(deliverableUrl, workItem.deliverableUrl, 'deliverableUrl');
 
-  // A Script or Content step of a postable deliverable is submitted with its caption and
-  // hashtags, here too: they come from the saved draft, which becomes the new version.
-  let captionDraft = null;
-  if ((toStatus === 'Pending' || toStatus === 'Feedback') && !isReopen && !isReviewerRevision && ['Script', 'Content'].includes(workItem.stageKey) && !options.ownerSubmission) {
-    const { Submission } = await import('../submissions/model.js');
-    const { assertCaptionForPostable } = await import('../submissions/service.js');
-    captionDraft = await Submission.findOne({ workItemId: workItem._id, version: 0 }).lean();
-    assertCaptionForPostable(workItem, captionDraft?.document);
+  // Posting a Post step (Phase 5d): the poster writes the caption (required) and hashtags
+  // (optional) here, within the platform limit. They are accepted nowhere else.
+  const postCaption = typeof transitionData.caption === 'string' ? transitionData.caption.trim() : '';
+  const postHashtags = typeof transitionData.hashtags === 'string' ? transitionData.hashtags.trim() : '';
+  const isPosting = toStatus === 'Published' && workItem.stageKey === 'Post';
+  if (!isPosting && (postCaption || postHashtags)) {
+    const error = new Error('A caption and hashtags are written only when marking a Post step as posted.');
+    error.statusCode = 400;
+    error.code = 'CAPTION_NOT_ALLOWED';
+    throw error;
+  }
+  if (isPosting) {
+    if (!postCaption) {
+      const error = new Error('Write the caption before marking this as posted.');
+      error.statusCode = 400;
+      error.code = 'CAPTION_REQUIRED';
+      throw error;
+    }
+    if (postCaptionLength(postCaption, postHashtags) > POST_CAPTION_MAX) {
+      const error = new Error(`Caption and hashtags together are over ${POST_CAPTION_MAX} characters.`);
+      error.statusCode = 400;
+      error.code = 'CAPTION_TOO_LONG';
+      throw error;
+    }
   }
 
   // 7. Revision Counter: increment on revision request or when restarting work after feedback & notify owner
@@ -389,6 +409,10 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
 
   if (toStatus === 'Published') {
     workItem.postedAt = now;
+    if (isPosting) {
+      workItem.postCaption = postCaption;
+      workItem.postHashtags = postHashtags;
+    }
     if (!workItem.approvedAt) workItem.approvedAt = now;
     if (Array.isArray(workItem.intervals)) {
       for (const iv of workItem.intervals) {
@@ -432,7 +456,6 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
           stageKey: workItem.stageKey,
           version: nextVersion,
           kind,
-          ...(captionDraft?.document ? { document: captionDraft.document } : {}),
           linkUrl: url,
           notes: comment || '',
           files: url ? [{ name: 'deliverable', url }] : [],

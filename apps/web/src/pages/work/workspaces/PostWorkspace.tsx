@@ -1,8 +1,6 @@
 import React, { useState, useRef } from 'react';
 import {
   Download,
-  Copy,
-  Check,
   CheckSquare,
   Square,
   Globe,
@@ -16,6 +14,7 @@ import {
 import { ResumableUploadTask } from '../../../lib/uploadManager';
 import { AssetLinks, AssetItem } from '../../../components/AssetLinks';
 import { DriveLinkInput, driveLinkError } from '../../../components/DriveLinkInput';
+import { PostCaptionFields, isCaptionTooLong } from '../../../components/PostCaptionFields';
 
 interface PostWorkspaceProps {
   workItem: {
@@ -26,14 +25,15 @@ interface PostWorkspaceProps {
     channel?: string;
     deliverableUrl?: string;
     publishedUrl?: string;
+    /** Saved when the step was marked posted. */
+    postCaption?: string;
+    postHashtags?: string;
   };
   /** The approved final cut or design files handed over from the Edit or Design step. */
   finalAssets?: AssetItem[];
-  captionsAndHashtags?: {
-    caption?: string;
-    hashtags?: string;
-  };
   onMarkAsPosted: (data: {
+    caption: string;
+    hashtags?: string;
     publishedUrl: string;
     publishedAt: string;
     deliverableUrl?: string;
@@ -46,14 +46,16 @@ interface PostWorkspaceProps {
 export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
   workItem,
   finalAssets = [],
-  captionsAndHashtags,
   onMarkAsPosted,
   isSubmitting = false,
   isPosting = false,
 }) => {
   const isPending = isSubmitting || isPosting;
-  const [copiedCaption, setCopiedCaption] = useState(false);
-  const [copiedHashtags, setCopiedHashtags] = useState(false);
+  // The poster writes the caption (required to post) and hashtags (optional) here.
+  const isPosted = workItem.status === 'Published';
+  const [caption, setCaption] = useState('');
+  const [hashtags, setHashtags] = useState('');
+  const captionOk = Boolean(caption.trim()) && !isCaptionTooLong(caption, hashtags);
 
   // Platform checklist
   const [checklist, setChecklist] = useState<{ [key: string]: boolean }>({
@@ -84,30 +86,8 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
   const [postNotes, setPostNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const captionText =
-    captionsAndHashtags?.caption ||
-    (workItem as any).caption;
-
-  const hashtagsText =
-    captionsAndHashtags?.hashtags ||
-    (workItem as any).hashtags;
-
   const toggleCheck = (key: string) => {
     setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const handleCopyCaption = () => {
-    if (!captionText) return;
-    navigator.clipboard.writeText(captionText);
-    setCopiedCaption(true);
-    setTimeout(() => setCopiedCaption(false), 2000);
-  };
-
-  const handleCopyHashtags = () => {
-    if (!hashtagsText) return;
-    navigator.clipboard.writeText(hashtagsText);
-    setCopiedHashtags(true);
-    setTimeout(() => setCopiedHashtags(false), 2000);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,8 +131,19 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
       return;
     }
 
+    if (!caption.trim()) {
+      setErrorMsg('Write the caption before marking this as posted.');
+      return;
+    }
+    if (isCaptionTooLong(caption, hashtags)) {
+      setErrorMsg('The caption and hashtags are over the 3,000 character limit.');
+      return;
+    }
+
     setErrorMsg(null);
     await onMarkAsPosted({
+      caption: caption.trim(),
+      hashtags: hashtags.trim(),
       publishedUrl: publishedUrl.trim(),
       publishedAt: new Date(publishedAt).toISOString(),
       deliverableUrl: uploadedFileUrl.trim() || undefined,
@@ -327,53 +318,14 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
           )}
         </div>
 
-        {/* 2. Captions & Hashtags Box */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Caption */}
-          <div className="p-4 rounded-2xl bg-white/60 border border-ui-line flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-ui-ink">
-                  Post Caption
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyCaption}
-                  disabled={!captionText}
-                  className="px-2.5 py-1 rounded-lg bg-white/60 hover:bg-white text-ui-ink text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40"
-                >
-                  {copiedCaption ? <Check className="w-3.5 h-3.5 text-emerald-800" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copiedCaption ? 'Copied' : 'Copy Caption'}
-                </button>
-              </div>
-              <p className="text-xs text-ui-text whitespace-pre-wrap max-h-36 overflow-y-auto p-2.5 rounded-lg bg-white/60 border border-ui-line">
-                {captionText || 'No caption entered in script metadata.'}
-              </p>
-            </div>
-          </div>
-
-          {/* Hashtags */}
-          <div className="p-4 rounded-2xl bg-white/60 border border-ui-line flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-ui-ink">
-                  Hashtags
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyHashtags}
-                  disabled={!hashtagsText}
-                  className="px-2.5 py-1 rounded-lg bg-white/60 hover:bg-white text-ui-ink text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40"
-                >
-                  {copiedHashtags ? <Check className="w-3.5 h-3.5 text-emerald-800" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copiedHashtags ? 'Copied' : 'Copy Hashtags'}
-                </button>
-              </div>
-              <p className="text-xs text-ui-ink font-mono whitespace-pre-wrap max-h-36 overflow-y-auto p-2.5 rounded-lg bg-white/60 border border-ui-line">
-                {hashtagsText || 'No hashtags entered in script metadata.'}
-              </p>
-            </div>
-          </div>
+        {/* 2. Caption & Hashtags: written by the poster */}
+        <div className="p-5 rounded-2xl bg-white/60 border border-ui-line space-y-3">
+          <h3 className="text-xs font-bold text-ui-ink">Caption & Hashtags</h3>
+          {isPosted ? (
+            <PostCaptionFields caption={workItem.postCaption || ''} hashtags={workItem.postHashtags || ''} readOnly />
+          ) : (
+            <PostCaptionFields caption={caption} hashtags={hashtags} onCaptionChange={setCaption} onHashtagsChange={setHashtags} />
+          )}
         </div>
 
         {/* 3. Platform Pre-Publish Checklist */}
@@ -501,7 +453,7 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              disabled={isPending || !publishedUrl.trim()}
+              disabled={isPending || isPosted || !publishedUrl.trim() || !captionOk}
               className="min-h-[44px] px-7 py-2.5 rounded-xl bg-ui-ink hover:bg-black disabled:opacity-40 text-white font-bold text-sm transition-all shadow-lg flex items-center gap-2 cursor-pointer"
             >
               <CheckCircle className="w-4 h-4" />

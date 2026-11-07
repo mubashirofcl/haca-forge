@@ -66,8 +66,6 @@ async function entryFor(step) {
     version: output?.version ?? null,
     items: [],
     text: '',
-    caption: '',
-    hashtags: '',
     shotList: [],
     clips: [],
   };
@@ -94,9 +92,8 @@ async function entryFor(step) {
   }
   entry.items = outputItems(output);
   if (step.stageKey === 'Script' || step.stageKey === 'Content') {
+    // Text and shot list only; captions are written by the poster on the Post step.
     entry.text = plainText(output?.document);
-    entry.caption = typeof meta.caption === 'string' ? meta.caption : '';
-    entry.hashtags = typeof meta.hashtags === 'string' ? meta.hashtags : '';
     entry.shotList = Array.isArray(meta.shotList) ? meta.shotList : [];
   }
   return entry;

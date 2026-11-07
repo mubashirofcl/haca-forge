@@ -12,6 +12,7 @@ import { DesignWorkspace } from './DesignWorkspace';
 import { PostWorkspace } from './PostWorkspace';
 import { EarlierOutputsViewer, StageOutput } from './EarlierOutputsViewer';
 import type { AssetItem } from '../../../components/AssetLinks';
+import { PostCaptionFields } from '../../../components/PostCaptionFields';
 
 export const MediaWorkspacePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,7 +26,6 @@ export const MediaWorkspacePage: React.FC = () => {
   const [earlierOutputs, setEarlierOutputs] = useState<StageOutput[]>([]);
   const [scriptShotList, setScriptShotList] = useState<any[]>([]);
   const [scriptContent, setScriptContent] = useState<string>('');
-  const [captionsData, setCaptionsData] = useState<{ caption?: string; hashtags?: string }>({});
   const [finalAssets, setFinalAssets] = useState<AssetItem[]>([]);
   const [approvedCopy, setApprovedCopy] = useState<any>({});
   const [rawFootageClips, setRawFootageClips] = useState<any[]>([]);
@@ -176,9 +176,6 @@ export const MediaWorkspacePage: React.FC = () => {
         }
 
         if (otherItem.stageKey === 'Script' || otherItem.stageKey === 'Content') {
-          if (otherItem.metadata?.captions) {
-            setCaptionsData(otherItem.metadata.captions);
-          }
           if (otherItem.metadata?.copySections) {
             setApprovedCopy(otherItem.metadata.copySections);
           } else if (otherItem.textContent) {
@@ -236,13 +233,9 @@ export const MediaWorkspacePage: React.FC = () => {
           (shootEntry.clips || []).map((c: any) => ({ id: c._id, name: c.title, url: c.url, kind: c.kind }))
         );
       }
-      const copyEntry = [...handoff].reverse().find((e) => e.stageKey === 'Script' || e.stageKey === 'Content');
-      if (copyEntry) {
-        setCaptionsData({ caption: copyEntry.caption || '', hashtags: copyEntry.hashtags || '' });
-        if (copyEntry.stageKey === 'Content') {
-          setApprovedCopy({ rawText: copyEntry.text || undefined, caption: copyEntry.caption || undefined, hashtags: copyEntry.hashtags || undefined });
-        }
-      }
+      // Design receives Content's approved copy. Captions are written by the poster on the Post step.
+      const copyEntry = [...handoff].reverse().find((e) => e.stageKey === 'Content');
+      if (copyEntry?.text) setApprovedCopy({ rawText: copyEntry.text });
       const finalEntry = [...handoff].reverse().find((e) => e.stageKey === 'Edit' || e.stageKey === 'Design');
       setFinalAssets(finalEntry ? finalEntry.items || [] : []);
 
@@ -310,6 +303,8 @@ export const MediaWorkspacePage: React.FC = () => {
 
   // Posting handler
   const handleMarkAsPosted = async (data: {
+    caption: string;
+    hashtags?: string;
     publishedUrl: string;
     publishedAt: string;
     deliverableUrl?: string;
@@ -322,6 +317,9 @@ export const MediaWorkspacePage: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           toStatus: 'Published',
+          // The poster's caption and hashtags are saved on the Post step.
+          caption: data.caption,
+          hashtags: data.hashtags || '',
           publishedUrl: data.publishedUrl,
           deliverableUrl: data.deliverableUrl,
           comment: data.notes,
@@ -512,6 +510,14 @@ export const MediaWorkspacePage: React.FC = () => {
             </div>
           </div>
 
+          {/* A posted Post step: the caption and hashtags the poster saved, read-only */}
+          {workItem.stageKey === 'Post' && workItem.status === 'Published' && (
+            <div className="p-5 rounded-2xl bg-white/60 border border-ui-line space-y-3" data-testid="posted-caption">
+              <h3 className="text-xs font-bold text-ui-ink">Posted caption & hashtags</h3>
+              <PostCaptionFields caption={workItem.postCaption || ''} hashtags={workItem.postHashtags || ''} readOnly />
+            </div>
+          )}
+
           <EarlierOutputsViewer outputs={earlierOutputs} currentStageKey={workItem.stageKey} />
         </div>
       </div>
@@ -619,9 +625,10 @@ export const MediaWorkspacePage: React.FC = () => {
               channel: contentPiece?.brief?.channel,
               deliverableUrl: workItem.deliverableUrl,
               publishedUrl: workItem.publishedUrl,
+              postCaption: workItem.postCaption,
+              postHashtags: workItem.postHashtags,
             }}
             finalAssets={finalAssets}
-            captionsAndHashtags={captionsData}
             onMarkAsPosted={handleMarkAsPosted}
             isSubmitting={isSubmitting}
           />

@@ -1,10 +1,10 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after Phase 5):** 1524 passing, 0 failing: API 1247 (52 files), web 277 (36 files). Typecheck 0 errors; web build clean.
+**Current test count (after Phase 5):** 1546 passing, 0 failing: API 1264 (53 files), web 282 (37 files). Typecheck 0 errors; web build clean.
 
 ## Phase 5: Asset handoff and Drive links (Status: COMPLETE; committed locally, not pushed)
 
-Three commits, each gated in the working tree: 5a `a90692d`, 5b `ca01bd7`, 5c (this commit). Uploads stay local for testing; Cloudinary comes in the deployment phase.
+Four commits, each gated in the working tree: 5a `a90692d`, 5b `ca01bd7`, 5c `23630eb`, 5d (this commit). Uploads stay local for testing; Cloudinary comes in the deployment phase.
 
 - Why: the poster saw no final assets, because Post read its own empty `deliverableUrl`. Post also never received the caption, which it read from a field that does not exist. Edit saw only the Shoot step's first clip, Design got no approved copy, and a multi-slide design kept only slide 1.
 - 5a, saved output URLs:
@@ -16,20 +16,26 @@ Three commits, each gated in the working tree: 5a `a90692d`, 5b `ca01bd7`, 5c (t
   - The work-item detail carries `handoff`: for each finished earlier step, its latest approved output, with Phase 3's fallback for legacy steps with no version marked approved. That is its files and links, Script or Content text, caption, hashtags and shot list, and a Shoot step's approved clips.
   - Phase 3 rules filter it, and existing external URLs come through as plain links.
   - A finished non-postable Design step shows `handover` to sm_manager, creative_head and admin. Its approval notifies active SM managers (`step_handover_ready`), once per approval, after the approval is saved.
-  - Postable Script and Content steps need a caption and hashtags, including as a Drive link and through `/transition`, where they come from the saved draft.
+  - 5b also required a caption on postable Script and Content steps; 5d replaced that (below).
 - 5c, web:
-  - Post lists the approved final cut or every design file, with Download or Open in Drive, plus caption and hashtags. The poster's own deliverableUrl is saved only if they attach one.
-  - Edit's Footage shows every approved clip. Design shows Content's approved copy and caption.
+  - Post lists the approved final cut or every design file, with Download or Open in Drive. The poster's own deliverableUrl is saved only if they attach one.
+  - Edit's Footage shows every approved clip. Design shows Content's approved copy.
   - Drive link inputs (`components/DriveLinkInput.tsx`, using the shared rule and "Make sure the link is shared with HACA reviewers.") are on Script (alongside the document), Shoot (per clip), Edit (final cut) and Design (per file).
   - Drive clips show "Open in Drive" instead of playing.
   - Review Studio keeps the document in view when there is document text and lists links beside it. A links-only version opens in the link viewer, which lists every link. Uploads still preview and take pins; links take general comments.
   - Work Detail shows "Approved files for handover".
-- Decisions applied: non-postable design handover on Design Work Detail plus SM notification; existing non-conforming URLs untouched; Content to Design handoff; Script document or Drive link, caption required for postable; Drive clips open in Drive; PDFs keep downloading.
+- 5d, caption and hashtags move to the Post step:
+  - The Writing Studio no longer has a caption box. Script and Content submit the document, a Drive link, or both, with no caption.
+  - Post has caption (required to post) and hashtags (optional) fields, with the Instagram (2,200) and LinkedIn (3,000) counters and Copy buttons (`components/PostCaptionFields.tsx`).
+  - They are saved on the Post step (`postCaption`, `postHashtags`) only through the posted transition. Only the Post owner, sm_manager or admin may set them, so sm_manager and admin can now mark a Post step posted. Elsewhere they are refused with `CAPTION_NOT_ALLOWED`.
+  - The API limits caption and hashtags together to 3,000 characters, LinkedIn's limit (`POST_CAPTION_MAX` in `@mmp/shared`). Over Instagram's 2,200 is a warning only.
+  - After posting they show read-only. Captions saved on scripts earlier are untouched and never shown in Post. Design receives the approved copy only.
+- Decisions applied: non-postable design handover on Design Work Detail plus SM notification; existing non-conforming URLs untouched; Content to Design handoff; Script is the document or a Drive link; caption and hashtags written on Post; Drive clips open in Drive; PDFs keep downloading.
 - External clip URLs checked before the Drive-only rule. All 14 were demo data: 3 from Google's public sample-video bucket and 11 on cdn.example.com, none with an uploader.
 - Tests updated for the new rules: placeholder hosts in fixtures became Drive links, journey fixtures save a caption for postable Script and Content steps, and the old Post and Review Studio fixtures use handed-over assets and an uploaded video.
-- Browser test, 27 of 27, on a disposable database:
-  - Reel: Script as a Drive link through the Writing Studio, with caption, and a non-Drive link refused. Shoot as an uploaded clip, with an external clip refused. Edit footage shows the approved clip. The Edit cut is uploaded. Post downloads the cut, shows the caption and is marked posted.
-  - Static Post: Design gets the copy and caption. A Drive slide is added in the UI plus an upload. Review Studio previews the upload and lists the Drive slide. Post gets both files and the caption.
+- Browser test, 30 of 30, on a disposable database, after 5d:
+  - Reel: the Writing Studio has no caption box. Script is a Drive link through the Writing Studio, with a non-Drive link refused. Shoot as an uploaded clip, with an external clip refused. Edit footage shows the approved clip. The Edit cut is uploaded. Post downloads the cut and starts with an empty caption box. Mark as posted stays disabled until the poster writes a caption. Caption and hashtags are saved on the Post step and show read-only after posting.
+  - Static Post: Design gets the copy and no caption. A Drive slide is added in the UI plus an upload. Review Studio previews the upload and lists the Drive slide. Post gets both files.
   - Poster: the Drive-link design is approved, one SM notification is sent, and the handover panel shows for SM and not for executive.
   - Non-participant 404; no page errors or 5xx.
 - Known, not fixed:

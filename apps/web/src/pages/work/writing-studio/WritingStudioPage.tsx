@@ -5,7 +5,7 @@ import type { Editor } from '@tiptap/react';
 import { apiFetch } from '../../../lib/api';
 import { statusClass, statusTone } from '../../../lib/statusTone';
 import { useAuth } from '../../../context/AuthContext';
-import { getWorkspaceModeInfo, isPostableWorkType } from '@mmp/shared';
+import { getWorkspaceModeInfo } from '@mmp/shared';
 import { DriveLinkInput, driveLinkError } from '../../../components/DriveLinkInput';
 import { WritingStudioRibbon, type RibbonTab } from './WritingStudioRibbon';
 import { WritingStudioCanvas } from './WritingStudioCanvas';
@@ -44,8 +44,6 @@ export const WritingStudioPage: React.FC = () => {
   const [currentText, setCurrentText] = useState<string>('');
   const [targetDuration, setTargetDuration] = useState<number>(60);
   const [wpm, setWpm] = useState<number>(130);
-  const [captionText, setCaptionText] = useState<string>('');
-  const [hashtagsText, setHashtagsText] = useState<string>('');
   const [shotList, setShotList] = useState<ShotListItem[]>([]);
 
   // Studio State
@@ -130,8 +128,6 @@ export const WritingStudioPage: React.FC = () => {
               if (meta.title) setDocumentTitle(meta.title);
               if (meta.targetDuration) setTargetDuration(meta.targetDuration);
               if (meta.wpm) setWpm(meta.wpm);
-              if (meta.caption) setCaptionText(meta.caption);
-              if (meta.hashtags) setHashtagsText(meta.hashtags);
               if (meta.shotList) setShotList(meta.shotList);
             }
           }
@@ -158,8 +154,6 @@ export const WritingStudioPage: React.FC = () => {
               draftContent = latest.document?.json || latest.document?.htmlSnapshot;
               if (latest.document?.metadata) {
                 const meta = latest.document.metadata;
-                if (meta.caption) setCaptionText(meta.caption);
-                if (meta.hashtags) setHashtagsText(meta.hashtags);
                 if (meta.shotList) setShotList(meta.shotList);
               }
             }
@@ -224,8 +218,6 @@ export const WritingStudioPage: React.FC = () => {
         title: documentTitle,
         targetDuration,
         wpm,
-        caption: captionText,
-        hashtags: hashtagsText,
         shotList: shotList.length > 0 ? shotList : extracted.shotList,
       };
 
@@ -261,7 +253,7 @@ export const WritingStudioPage: React.FC = () => {
         setSaveStatus('offline_buffered');
       }
     },
-    [id, editor, isLockedByOther, documentTitle, targetDuration, wpm, captionText, hashtagsText, shotList]
+    [id, editor, isLockedByOther, documentTitle, targetDuration, wpm, shotList]
   );
 
   // Content change handler (debounced 3s autosave)
@@ -327,21 +319,12 @@ export const WritingStudioPage: React.FC = () => {
   // Empty document check (Task 5: disabled while document is empty)
   const isDocumentEmpty = !currentText.trim() || currentText.trim() === 'Start writing your script...';
 
-  // A postable deliverable (Reel, Static Post, Carousel Post, Story) needs a caption and hashtags,
-  // whether the script is the document here or a Drive link. The API applies the same rule.
-  const needsCaption = isPostableWorkType(workItem?.workType || '');
-  const captionMissing = needsCaption && (!captionText.trim() || !hashtagsText.trim());
-  const CAPTION_MESSAGE = 'Add the caption and hashtags in the caption box before submitting.';
   const driveLink = fallbackLinkUrl.trim();
   const driveLinkValid = Boolean(driveLink) && !driveLinkError(driveLink);
 
   // Submit for Approval Handler
   const handleSubmitForApproval = async () => {
     if (!id || !editor || isDocumentEmpty || isReadOnly) return;
-    if (captionMissing) {
-      alert(CAPTION_MESSAGE);
-      return;
-    }
     if (driveLink && !driveLinkValid) {
       alert(driveLinkError(driveLink));
       return;
@@ -359,8 +342,6 @@ export const WritingStudioPage: React.FC = () => {
         title: documentTitle,
         targetDuration,
         wpm,
-        caption: captionText,
-        hashtags: hashtagsText,
         shotList: extracted.shotList,
       };
 
@@ -400,10 +381,6 @@ export const WritingStudioPage: React.FC = () => {
       alert(driveLinkError(driveLink));
       return;
     }
-    if (captionMissing) {
-      alert(CAPTION_MESSAGE);
-      return;
-    }
 
     try {
       setSubmitting(true);
@@ -412,8 +389,6 @@ export const WritingStudioPage: React.FC = () => {
         title: documentTitle,
         targetDuration,
         wpm,
-        caption: captionText,
-        hashtags: hashtagsText,
         shotList: html ? extractSceneTableData(html).shotList : shotList,
       };
       await apiFetch(`/api/work/${id}/submit`, {
@@ -557,8 +532,6 @@ export const WritingStudioPage: React.FC = () => {
       const meta = version.document.metadata;
       if (meta.title) setDocumentTitle(meta.title);
       if (meta.targetDuration) setTargetDuration(meta.targetDuration);
-      if (meta.caption) setCaptionText(meta.caption);
-      if (meta.hashtags) setHashtagsText(meta.hashtags);
     }
   };
 
@@ -799,10 +772,6 @@ export const WritingStudioPage: React.FC = () => {
             setTargetDuration={setTargetDuration}
             wpm={wpm}
             setWpm={setWpm}
-            captionText={captionText}
-            setCaptionText={setCaptionText}
-            hashtagsText={hashtagsText}
-            setHashtagsText={setHashtagsText}
             comments={comments}
             onAddComment={handleAddComment}
             onReplyComment={handleReplyComment}
@@ -879,7 +848,6 @@ export const WritingStudioPage: React.FC = () => {
             <p className="text-xs text-ui-text">
               If you wrote the script outside the Writing Studio, submit its Google Drive or Docs link. Any text in the
               document here is sent with it.
-              {needsCaption ? ' The caption and hashtags from the caption box are still required.' : ''}
             </p>
 
             <DriveLinkInput id="ws-drive-link" label="Google Drive or Docs link" value={fallbackLinkUrl} onChange={setFallbackLinkUrl} />

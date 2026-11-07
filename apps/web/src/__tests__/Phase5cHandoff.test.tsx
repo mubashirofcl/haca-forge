@@ -61,20 +61,17 @@ describe('AssetLinks', () => {
 });
 
 describe('Post workspace receives the handed-over assets', () => {
-  it('lists every approved design file with the right action, plus the approved caption', () => {
+  it('lists every approved design file with the right action', () => {
     render(
       <PostWorkspace
         workItem={{ id: 'p1', title: 'Post step', stageKey: 'Post' }}
         finalAssets={[{ url: '/uploads/slide-1.png', name: 'slide 1', kind: 'upload' }, { url: DRIVE, name: 'slide 2', kind: 'drive' }]}
-        captionsAndHashtags={{ caption: 'Approved caption', hashtags: '#approved' }}
         onMarkAsPosted={vi.fn()}
       />
     );
     const list = screen.getByTestId('post-final-assets');
     expect(within(list).getByRole('link', { name: /^download$/i })).toHaveAttribute('href', '/uploads/slide-1.png');
     expect(within(list).getByRole('link', { name: /open in drive/i })).toHaveAttribute('href', DRIVE);
-    expect(screen.getByText('Approved caption')).toBeInTheDocument();
-    expect(screen.getByText('#approved')).toBeInTheDocument();
   });
 
   it('says the final file is not approved yet when nothing has been handed over', () => {

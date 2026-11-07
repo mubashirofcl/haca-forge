@@ -74,6 +74,9 @@ const workItemSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    // Written by the poster when the Post step is marked posted (Phase 5d).
+    postCaption: { type: String, default: '', trim: true },
+    postHashtags: { type: String, default: '', trim: true },
     deliverableUrl: {
       type: String,
       trim: true,

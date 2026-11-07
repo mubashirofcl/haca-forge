@@ -1042,6 +1042,16 @@ export type WorkItemCreateInput = z.infer<typeof workItemCreateSchema>;
 export const workItemUpdateSchema = workItemCreateSchema.partial();
 export type WorkItemUpdateInput = z.infer<typeof workItemUpdateSchema>;
 
+// Post caption and hashtags (Phase 5d): written by the poster when marking a Post step posted.
+// Counted together, as on the platforms: Instagram allows 2,200 characters, LinkedIn 3,000.
+export const POST_CAPTION_LIMITS = { instagram: 2200, linkedin: 3000 } as const;
+export const POST_CAPTION_MAX = POST_CAPTION_LIMITS.linkedin;
+export function postCaptionLength(caption: string = "", hashtags: string = ""): number {
+  const parts = [String(caption || "").trim(), String(hashtags || "").trim()].filter(Boolean);
+  // Joined by a blank line, as posted: two characters between caption and hashtags.
+  return parts.join("").length + (parts.length > 1 ? 2 : 0);
+}
+
 export const workItemTransitionSchema = z.object({
   toStatus: z.enum(WORK_ITEM_STATUSES),
   blockerReason: z.enum(BLOCKER_REASONS).optional(),
@@ -1049,6 +1059,8 @@ export const workItemTransitionSchema = z.object({
   deliverableUrl: z.string().optional(),
   publishedUrl: z.string().optional(),
   comment: z.string().optional(),
+  caption: z.string().max(POST_CAPTION_MAX).optional(),
+  hashtags: z.string().max(POST_CAPTION_MAX).optional(),
 });
 export type WorkItemTransitionInput = z.infer<typeof workItemTransitionSchema>;
 
