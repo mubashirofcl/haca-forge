@@ -34,11 +34,10 @@ export async function login(req, res, next) {
       getCookieOptions(7 * 24 * 60 * 60 * 1000),
     ); // 7 days
 
+    // Tokens travel only in the httpOnly cookies, never in the body, so page script can't read them.
     return res.status(200).json({
       user: result.user,
       permissions: result.permissions,
-      accessToken: result.accessToken, // Optional fallback for clients
-      refreshToken: result.refreshToken,
     });
   } catch (error) {
     next(error);
@@ -61,11 +60,10 @@ export async function refresh(req, res, next) {
       getCookieOptions(7 * 24 * 60 * 60 * 1000),
     );
 
+    // Tokens travel only in the httpOnly cookies, never in the body, so page script can't read them.
     return res.status(200).json({
       user: result.user,
       permissions: result.permissions,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
     });
   } catch (error) {
     next(error);

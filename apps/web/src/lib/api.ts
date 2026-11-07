@@ -28,38 +28,48 @@ function isAuthEndpoint(url: string): boolean {
   );
 }
 
+/**
+ * Login tokens live only in httpOnly cookies set by the API, never in browser storage.
+ * Older builds kept copies in localStorage; this removes any that are left.
+ */
+const LEGACY_TOKEN_KEYS = ["accessToken", "refreshToken", "token"];
+
+export function clearLegacyTokens(): void {
+  if (typeof window === "undefined") return;
+  for (const name of ["localStorage", "sessionStorage"] as const) {
+    try {
+      const store = window[name];
+      for (const key of LEGACY_TOKEN_KEYS) store?.removeItem(key);
+    } catch {
+      // Storage can be unavailable (private mode, tests); nothing to clear then.
+    }
+  }
+}
+
 async function executeTokenRefresh(): Promise<boolean> {
   try {
-    const refreshToken =
-      typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function"
-        ? localStorage.getItem("refreshToken")
-        : null;
-
+    // The refresh cookie is sent automatically; the API answers with new cookies.
     const res = await fetch("/api/auth/refresh", {
       method: "POST",
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
     });
-
-    if (res.ok) {
-      const data = await res.json().catch(() => null);
-      if (typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.setItem === "function") {
-        if (data?.accessToken) {
-          localStorage.setItem("accessToken", data.accessToken);
-        }
-        if (data?.refreshToken) {
-          localStorage.setItem("refreshToken", data.refreshToken);
-        }
-      }
-      return true;
-    }
-    return false;
+    return res.ok;
   } catch {
     return false;
   }
+}
+
+/**
+ * Renew the access cookie once, shared by every caller that hits an expired session
+ * at the same moment (REST, uploads, the socket).
+ */
+export function refreshSession(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = executeTokenRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
 }
 
 export async function apiFetch<T = any>(
@@ -75,15 +85,6 @@ export async function apiFetch<T = any>(
   const headers = new Headers(options.headers || {});
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
-  }
-
-  // Inject Authorization Bearer header if token exists in localStorage and not explicitly passed
-  if (!headers.has("Authorization") && typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function") {
-    const token =
-      localStorage.getItem("accessToken") || localStorage.getItem("token");
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
   }
 
   const { _isRetry, ...fetchOptions } = options;
@@ -114,35 +115,14 @@ export async function apiFetch<T = any>(
 
   // Handle silent token refresh on 401 Unauthorized
   if (response.status === 401 && !isAuthEndpoint(url) && !_isRetry) {
-    if (!refreshPromise) {
-      refreshPromise = executeTokenRefresh().finally(() => {
-        refreshPromise = null;
-      });
-    }
-
-    const refreshed = await refreshPromise;
+    const refreshed = await refreshSession();
     if (refreshed) {
-      // Create new headers with fresh token if available
-      const retryHeaders = new Headers(options.headers || {});
-      if (typeof window !== "undefined") {
-        const freshToken =
-          localStorage.getItem("accessToken") || localStorage.getItem("token");
-        if (freshToken) {
-          retryHeaders.set("Authorization", `Bearer ${freshToken}`);
-        }
-      }
-      return apiFetch<T>(endpoint, {
-        ...options,
-        headers: retryHeaders,
-        _isRetry: true,
-      });
+      return apiFetch<T>(endpoint, { ...options, _isRetry: true });
     }
 
-    // Refresh failed - clear any stale tokens and redirect to login
+    // Refresh failed - the session is over; go to login
     if (typeof window !== "undefined") {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("token");
+      clearLegacyTokens();
       if (
         window.location &&
         !window.location.pathname.startsWith("/login") &&

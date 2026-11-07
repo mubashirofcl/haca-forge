@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
+import { refreshSession } from '../lib/api';
 
 let socketInstance: Socket | null = null;
 
@@ -32,31 +33,33 @@ export function useSocket() {
 
     // Connect socket if not already connected
     if (!socketInstance) {
-      const token =
-        typeof window !== 'undefined' && typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function'
-          ? localStorage.getItem('accessToken') || localStorage.getItem('token')
-          : null;
-      socketInstance = io(window.location.origin, {
+      // The handshake carries the httpOnly login cookie; no token is passed by script.
+      const socket = io(window.location.origin, {
         withCredentials: true,
-        auth: token ? { token } : undefined,
-        query: token ? { token } : undefined,
         transports: ['websocket', 'polling'],
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
       });
+      socketInstance = socket;
+      let renewedSinceLastConnect = false;
 
-      socketInstance.on('connect', () => {
+      socket.on('connect', () => {
+        renewedSinceLastConnect = false;
         setIsConnected(true);
       });
 
-      socketInstance.on('disconnect', () => {
+      socket.on('disconnect', () => {
         setIsConnected(false);
       });
 
-      socketInstance.on('connect_error', (err) => {
-        if (err.message && err.message.toLowerCase().includes('authentication')) {
-          setIsConnected(false);
-        }
+      // A refused handshake is not retried by Socket.IO. If the access cookie had expired,
+      // renew it once and reconnect; a second refusal in a row means the session is over.
+      socket.on('connect_error', async (err) => {
+        if (!err.message || !err.message.toLowerCase().includes('authentication')) return;
+        setIsConnected(false);
+        if (renewedSinceLastConnect) return;
+        renewedSinceLastConnect = true;
+        if (await refreshSession() && socketInstance === socket) socket.connect();
       });
     } else if (socketInstance.connected) {
       setIsConnected(true);

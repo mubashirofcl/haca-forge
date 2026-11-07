@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiFetch, refreshSession } from './api';
 
 export type UploadKind = 'video' | 'image' | 'pdf';
 
@@ -197,58 +197,62 @@ export class ResumableUploadTask {
       formData.append('file', this.file);
       formData.append('kind', this.kind);
 
-      const token =
-        typeof window !== 'undefined' && typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function'
-          ? localStorage.getItem('accessToken') || localStorage.getItem('token')
-          : null;
+      // Sent with the httpOnly login cookie. If it has expired, renew it once and resend.
+      let retriedAfterRefresh = false;
+      const send = () => {
+        this.xhr = new XMLHttpRequest();
+        this.xhr.open('POST', '/api/uploads/file');
+        this.xhr.withCredentials = true;
 
-      this.xhr = new XMLHttpRequest();
-      this.xhr.open('POST', '/api/uploads/file');
-      this.xhr.withCredentials = true;
-      if (token) {
-        this.xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      }
+        this.xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && !this.isPaused) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            this.currentProgress = percent;
+            this.onProgressCallback?.({ percentage: percent });
+          }
+        };
 
-      this.xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && !this.isPaused) {
-          const percent = Math.round((e.loaded / e.total) * 100);
-          this.currentProgress = percent;
-          this.onProgressCallback?.({ percentage: percent });
-        }
-      };
-
-      this.xhr.onload = async () => {
-        if (this.xhr && this.xhr.status >= 200 && this.xhr.status < 300) {
-          try {
-            const resp = JSON.parse(this.xhr.responseText);
-            const fileUrl = resp?.data?.url;
-            if (!fileUrl) {
-              throw new Error('Upload succeeded but no file URL was returned');
+        this.xhr.onload = async () => {
+          if (this.xhr && this.xhr.status === 401 && !retriedAfterRefresh) {
+            retriedAfterRefresh = true;
+            if (await refreshSession()) {
+              send();
+              return;
             }
-            await this.recordMetadata(fileUrl);
-            handleFinish(fileUrl);
-          } catch (e: any) {
-            handleFail(e);
           }
-        } else {
-          try {
-            const errResp = JSON.parse(this.xhr?.responseText || '{}');
-            handleFail(
-              new Error(
-                errResp?.error?.message || errResp?.message || `Upload failed with HTTP status ${this.xhr?.status}`
-              )
-            );
-          } catch {
-            handleFail(new Error(`Upload failed with HTTP status ${this.xhr?.status}`));
+          if (this.xhr && this.xhr.status >= 200 && this.xhr.status < 300) {
+            try {
+              const resp = JSON.parse(this.xhr.responseText);
+              const fileUrl = resp?.data?.url;
+              if (!fileUrl) {
+                throw new Error('Upload succeeded but no file URL was returned');
+              }
+              await this.recordMetadata(fileUrl);
+              handleFinish(fileUrl);
+            } catch (e: any) {
+              handleFail(e);
+            }
+          } else {
+            try {
+              const errResp = JSON.parse(this.xhr?.responseText || '{}');
+              handleFail(
+                new Error(
+                  errResp?.error?.message || errResp?.message || `Upload failed with HTTP status ${this.xhr?.status}`
+                )
+              );
+            } catch {
+              handleFail(new Error(`Upload failed with HTTP status ${this.xhr?.status}`));
+            }
           }
-        }
-      };
+        };
 
-      this.xhr.onerror = () => {
-        handleFail(new Error('Network error during upload'));
-      };
+        this.xhr.onerror = () => {
+          handleFail(new Error('Network error during upload'));
+        };
 
-      this.xhr.send(formData);
+        this.xhr.send(formData);
+      };
+      send();
     });
   }
 

@@ -14,6 +14,7 @@ import {
   Search,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '../lib/api';
 
 export const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -32,9 +33,8 @@ export const NotificationsPage: React.FC = () => {
         url += `&type=${activeTab}`;
       }
 
-      const res = await fetch(url);
-      if (!res.ok) return { data: [], unreadCount: 0, pagination: { total: 0, pages: 1 } };
-      return res.json();
+      // apiFetch sends the login cookie and renews it once if it has expired.
+      return apiFetch<any>(url).catch(() => ({ data: [], unreadCount: 0, pagination: { total: 0, pages: 1 } }));
     },
   });
 
@@ -44,7 +44,7 @@ export const NotificationsPage: React.FC = () => {
 
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
-      await fetch('/api/notifications/read-all', { method: 'PATCH' });
+      await apiFetch('/api/notifications/read-all', { method: 'PATCH' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -53,7 +53,7 @@ export const NotificationsPage: React.FC = () => {
 
   const markSingleReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
+      await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -62,7 +62,7 @@ export const NotificationsPage: React.FC = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/notifications/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });

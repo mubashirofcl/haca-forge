@@ -494,9 +494,10 @@ export default function ChatPage() {
         const formData = new FormData();
         pendingFiles.forEach((file) => formData.append('files', file));
         formData.append('channelId', activeChannelId);
-        const uploadRes = await fetch(`/api/chat/upload?channelId=${encodeURIComponent(activeChannelId)}`, { method: 'POST', body: formData, credentials: 'include' });
-        const uploadData = await uploadRes.json().catch(() => ({}));
-        if (!uploadRes.ok) throw new Error(uploadData?.error?.message || 'Failed to upload attachments.');
+        const uploadData = await apiFetch<{ attachments?: any[] }>(
+          `/api/chat/upload?channelId=${encodeURIComponent(activeChannelId)}`,
+          { method: 'POST', body: formData }
+        );
         if (uploadData.attachments) uploadedAttachments = uploadData.attachments;
       } catch (err: any) {
         console.error('Upload error:', err);

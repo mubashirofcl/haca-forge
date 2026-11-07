@@ -611,22 +611,10 @@ export const PlansTab: React.FC<PlansTabProps> = ({
     formData.append('file', file);
 
     try {
-      const token =
-        localStorage.getItem('accessToken') ||
-        localStorage.getItem('token') ||
-        sessionStorage.getItem('token');
-      const response = await fetch('/api/calendar-plans/preview', {
+      const res = await apiFetch<{ data: any }>('/api/calendar-plans/preview', {
         method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
         body: formData,
       });
-
-      const res = await response.json();
-      if (!response.ok) {
-        throw new Error(res.error || res.message || 'Validation preview failed');
-      }
       setPreviewData(res.data);
     } catch (err: any) {
       setImportError(err.message || 'Failed to validate uploaded file');

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '../hooks/useSocket';
+import { apiFetch } from '../lib/api';
 
 export const NotificationCenter: React.FC = () => {
   const navigate = useNavigate();
@@ -70,9 +71,8 @@ export const NotificationCenter: React.FC = () => {
         url += `&type=${activeTab}`;
       }
 
-      const res = await fetch(url);
-      if (!res.ok) return { data: [], unreadCount: 0 };
-      return res.json();
+      // apiFetch sends the login cookie and renews it once if it has expired.
+      return apiFetch<any>(url).catch(() => ({ data: [], unreadCount: 0 }));
     },
     refetchInterval: 30000,
   });
@@ -83,7 +83,7 @@ export const NotificationCenter: React.FC = () => {
   // Mark all read mutation
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
-      await fetch('/api/notifications/read-all', { method: 'PATCH' });
+      await apiFetch('/api/notifications/read-all', { method: 'PATCH' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -93,7 +93,7 @@ export const NotificationCenter: React.FC = () => {
   // Mark single notification read mutation
   const markSingleReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
+      await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -103,7 +103,7 @@ export const NotificationCenter: React.FC = () => {
   // Delete notification mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/notifications/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
