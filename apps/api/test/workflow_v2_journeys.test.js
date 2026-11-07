@@ -580,7 +580,7 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
         .set('Authorization', `Bearer ${designerToken}`)
         .send({
           toStatus: 'Feedback',
-          deliverableUrl: 'https://figma.com/file/admissions-poster-design',
+          deliverableUrl: 'https://drive.google.com/file/d/admissions-poster-design',
         });
 
       // Creative Head approves Design stage
@@ -648,7 +648,7 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
       expect(selfApproveRes.status).toBe(403);
 
       // It is submitted with an approved clip, then approved through review
-      await MediaItem.create({ stageItemId: shootStage._id, url: 'https://example.test/clip.mp4', title: 'Reel A clip', status: 'approved' });
+      await MediaItem.create({ stageItemId: shootStage._id, url: 'https://drive.google.com/file/d/clip.mp4', title: 'Reel A clip', status: 'approved' });
       await request(app)
         .post(`/api/work/${shootStage._id}/transition`)
         .set('Authorization', `Bearer ${videographerToken}`)

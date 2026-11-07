@@ -45,11 +45,11 @@ const makeSub = (w, version = 1, status = 'submitted', extra = {}) =>
     status,
     submittedById: w.ownerId,
     submittedAt: version > 0 ? new Date(Date.now() - 1000 * (20 - version)) : null,
-    linkUrl: 'https://example.test/x',
+    linkUrl: 'https://drive.google.com/file/d/x',
     ...extra,
   });
 const makeClip = (w, status = 'approved', extra = {}) =>
-  MediaItem.create({ stageItemId: w._id, uploadedBy: P.owner._id, kind: 'video', url: 'https://example.test/c.mp4', title: `${TITLE} clip`, take: 1, order: 0, version: 1, status, ...extra });
+  MediaItem.create({ stageItemId: w._id, uploadedBy: P.owner._id, kind: 'video', url: 'https://drive.google.com/file/d/c.mp4', title: `${TITLE} clip`, take: 1, order: 0, version: 1, status, ...extra });
 
 const approve = (s, who = 'head', body = { score: 4 }) => call('post', `/api/submissions/${s._id}/approve`, who, body);
 const revise = (s, who = 'head') => call('post', `/api/submissions/${s._id}/request-revision`, who, { comment: 'Please change this' });
@@ -573,7 +573,7 @@ describe('/transition', () => {
 
   it.each(['Edit', 'Shoot'])('a %s worker submitting through /transition gets a real version', async (stage) => {
     const w = await makeStep(stage, 'In Progress');
-    expect((await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: 'Feedback', deliverableUrl: 'https://example.test/cut' })).status).toBe(200);
+    expect((await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: 'Feedback', deliverableUrl: 'https://drive.google.com/file/d/cut' })).status).toBe(200);
     const subs = await Submission.find({ workItemId: w._id, version: { $gt: 0 } }).lean();
     expect(subs).toHaveLength(1);
     expect(subs[0].kind).toBe('video');
@@ -582,7 +582,7 @@ describe('/transition', () => {
 
   it('the worker can still submit: a version is created for review', async () => {
     const w = await makeStep('Design', 'In Progress');
-    expect((await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: 'Pending', deliverableUrl: 'https://example.test/d' })).status).toBe(200);
+    expect((await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: 'Pending', deliverableUrl: 'https://drive.google.com/file/d/d' })).status).toBe(200);
     const after = await state(w);
     expect(after.step.status).toBe('Pending');
     expect(after.subs).toHaveLength(1);
@@ -592,7 +592,7 @@ describe('/transition', () => {
 
 describe('Round timing', () => {
   const rounds = async (w) => (await WorkItem.findById(w._id).lean()).rounds;
-  const submit = (w, body = { kind: 'video', linkUrl: 'https://example.test/next' }) => call('post', `/api/work/${w._id}/submit`, 'owner', body);
+  const submit = (w, body = { kind: 'video', linkUrl: 'https://drive.google.com/file/d/next' }) => call('post', `/api/work/${w._id}/submit`, 'owner', body);
 
   it('resubmitting after a Feedback-route revision keeps the earlier submit time', async () => {
     const first = new Date(Date.now() - 600000);
@@ -646,7 +646,7 @@ describe('An owner cannot withdraw a submission awaiting review', () => {
       const w = await makeStep('Edit', status, { revisions: 2 });
       await makeSub(w);
       const before = await state(w);
-      const res = await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: to, blockerReason: 'Waiting for feedback', publishedUrl: 'https://example.test/live' });
+      const res = await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: to, blockerReason: 'Waiting for feedback', publishedUrl: 'https://drive.google.com/file/d/live' });
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('SUBMISSION_AWAITING_REVIEW');
       await expectUnchanged(w, before);
@@ -724,7 +724,7 @@ describe('Reopening a finished step', () => {
     expect((await revise(s)).status).toBe(409);
 
     // Owner resubmits: a new version, which can be decided.
-    await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: 'Pending', deliverableUrl: 'https://example.test/v2' });
+    await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: 'Pending', deliverableUrl: 'https://drive.google.com/file/d/v2' });
     const latest = await Submission.findOne({ workItemId: w._id, version: { $gt: 0 } }).sort({ version: -1 });
     expect(latest.version).toBe(2);
     expect(latest.status).toBe('submitted');
@@ -751,7 +751,7 @@ describe('Reopening a finished step', () => {
     const w = await makeStep('Design', 'Approved', { approvedAt: new Date(), decisionAt: new Date() });
     const old = await makeSub(w, 1, 'submitted');
     expect((await move(w, 'head', 'In Progress')).status).toBe(200);
-    await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: 'Pending', deliverableUrl: 'https://example.test/new' });
+    await call('post', `/api/work/${w._id}/transition`, 'owner', { toStatus: 'Pending', deliverableUrl: 'https://drive.google.com/file/d/new' });
     expect((await Submission.find({ workItemId: w._id, version: { $gt: 0 } })).length).toBe(2);
     expect((await approve(old)).status).toBe(409);
   });

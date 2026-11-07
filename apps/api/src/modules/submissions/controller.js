@@ -1,6 +1,7 @@
 import { isTeamMember, requireParticipant } from '../workItems/access.js';
 import { visibleVersionIdsInPiece } from '../workItems/viewerRules.js';
 import * as submissionService from './service.js';
+import { isDriveLink } from '../uploads/outputUrls.js';
 
 export async function getDraftHandler(req, res, next) {
   try {
@@ -226,6 +227,8 @@ export async function createOrSubmitHandler(req, res, next) {
       throw err;
     }
 
+    // Every output item (an uploaded file or a Drive link) goes in files[]. A design's
+    // slides arrive as metadata.carouselSlides and are all kept, not only the first.
     let files = explicitFiles || [];
     if (!files.length) {
       if (videoUrls && Array.isArray(videoUrls) && videoUrls.length > 0) {
@@ -233,12 +236,16 @@ export async function createOrSubmitHandler(req, res, next) {
           name: `clip_${i + 1}.mp4`,
           url,
         }));
+      } else if (Array.isArray(metadata?.carouselSlides) && metadata.carouselSlides.length > 0) {
+        files = metadata.carouselSlides.filter(Boolean).map((url, i) => ({ name: `slide_${i + 1}`, url }));
       } else if (fileUrl) {
         files = [{ name: 'deliverable', url: fileUrl }];
       }
     }
 
-    const linkUrl = explicitLinkUrl || contentUrl || (fileUrl && fileUrl.startsWith('http') ? fileUrl : '');
+    // linkUrl is a separate Drive link only; a local file path is never copied into it.
+    const candidateLink = explicitLinkUrl || contentUrl || '';
+    const linkUrl = isDriveLink(candidateLink) && !files.some((f) => f.url === candidateLink) ? candidateLink : (explicitLinkUrl || '');
 
     const submission = await submissionService.submitForApproval(
       workItemId,

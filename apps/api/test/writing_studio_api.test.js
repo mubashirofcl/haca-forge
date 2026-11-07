@@ -492,7 +492,7 @@ describe('WS2: Writing Studio API & Single-Editor Lock Suite', () => {
         .set('Authorization', `Bearer ${shooterToken}`)
         .send({
           workItemId: shootWorkItem._id,
-          videoUrls: ['https://storage.local/clips/clip1.mp4', 'https://storage.local/clips/clip2.mp4'],
+          videoUrls: ['https://drive.google.com/file/d/clips/clip1.mp4', 'https://drive.google.com/file/d/clips/clip2.mp4'],
           notes: 'Raw A-cam and B-cam reels uploaded in 4K.',
           metadata: {
             equipment: 'Sony FX3',

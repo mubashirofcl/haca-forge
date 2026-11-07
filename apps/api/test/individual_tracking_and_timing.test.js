@@ -217,7 +217,7 @@ describe('INDIVIDUAL TRACKING AND TIMING SUITE', () => {
         .post(`/api/work-items/${workItem._id}/submit`)
         .set('Authorization', `Bearer ${workerAToken}`)
         .send({
-          linkUrl: 'https://example.com/cut-v1.mp4',
+          linkUrl: 'https://drive.google.com/file/d/cut-v1.mp4',
           notes: 'Finished rough cut',
         });
 
@@ -266,7 +266,7 @@ describe('INDIVIDUAL TRACKING AND TIMING SUITE', () => {
         .post(`/api/work-items/${workItem._id}/submit`)
         .set('Authorization', `Bearer ${workerAToken}`)
         .send({
-          linkUrl: 'https://example.com/edit-v1.mp4',
+          linkUrl: 'https://drive.google.com/file/d/edit-v1.mp4',
           notes: 'Completed edit version 1',
         });
 
@@ -300,7 +300,7 @@ describe('INDIVIDUAL TRACKING AND TIMING SUITE', () => {
         .post(`/api/work-items/${workItem._id}/submit`)
         .set('Authorization', `Bearer ${workerAToken}`)
         .send({
-          linkUrl: 'https://example.com/edit-v2.mp4',
+          linkUrl: 'https://drive.google.com/file/d/edit-v2.mp4',
           notes: 'Paced up hook with tighter cuts',
         });
 

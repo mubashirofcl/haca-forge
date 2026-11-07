@@ -429,7 +429,11 @@ export async function updateWorkItem(id, data, user) {
     workItem.description = data.description;
     if (workItem.brief) workItem.brief.description = data.description;
   }
-  if (data.deliverableUrl !== undefined) workItem.deliverableUrl = data.deliverableUrl;
+  if (data.deliverableUrl !== undefined) {
+    // A new deliverable link must be an upload or a Drive link; an existing value may be re-sent.
+    assertChangedOutputUrl(data.deliverableUrl, workItem.deliverableUrl, 'deliverableUrl');
+    workItem.deliverableUrl = data.deliverableUrl;
+  }
   if (data.publishedUrl !== undefined) workItem.publishedUrl = data.publishedUrl;
 
   // Content Flow stage fields (Phase 3 delta)
@@ -677,6 +681,7 @@ export async function getMyWork(user) {
 import { ContentPiece } from '../calendar/contentPiece.model.js';
 import { CalendarPlan } from '../calendar/plan.model.js';
 import { isPostableWorkType } from '@mmp/shared';
+import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
 
 /** Same rule as the WorkItem isOverdue virtual, which .lean() results do not carry. */
 function isPastDeadline(deadline, status) {

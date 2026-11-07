@@ -1151,7 +1151,7 @@ describe('SCOPE RESET R3: Calendar Plans, Creative Head Approval and Assignment 
         .set('Authorization', `Bearer ${makeToken(designerUser)}`)
         .send({
           toStatus: 'Feedback',
-          deliverableUrl: 'https://figma.com/file/guards-test',
+          deliverableUrl: 'https://drive.google.com/file/d/guards-test',
         });
       expect(submitRes.status).toBe(200);
 

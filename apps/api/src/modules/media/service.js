@@ -8,6 +8,7 @@ import { resolveScope } from '../../lib/scope.js';
 import { getWorkspaceMode } from '@mmp/shared';
 import { createNotification } from '../notifications/service.js';
 import { canSeePrivateReview, canSeeStepOutput, getParticipation, isTeamMember } from '../workItems/access.js';
+import { assertOutputUrl } from '../uploads/outputUrls.js';
 
 /**
  * Sanitize plain text to ensure no dangerous HTML/scripts
@@ -102,6 +103,11 @@ export async function createClip(stageItemId, clipData, user) {
       version = (oldClip.version || 1) + 1;
     }
   }
+
+  // A clip is a file uploaded here or a Google Drive link; a thumbnail must be an upload.
+  assertOutputUrl(clipData.url, 'url');
+  if (!clipData.url) throw Object.assign(new Error('A clip URL is required'), { statusCode: 400, code: 'INVALID_OUTPUT_URL' });
+  assertOutputUrl(clipData.thumbnailUrl, 'thumbnailUrl', { uploadsOnly: true });
 
   const clip = await MediaItem.create({
     stageItemId,
@@ -318,6 +324,11 @@ export async function replaceClip(clipId, newClipData, user) {
   const width = Number(newClipData.width) || oldClip.width;
   const height = Number(newClipData.height) || oldClip.height;
   const orientationOk = width > 0 && height > 0 ? isOrientation916(width, height) : true;
+
+  // Only the values sent now are checked; a reused old thumbnail stays as it was.
+  if (!newClipData.url) throw Object.assign(new Error('A clip URL is required'), { statusCode: 400, code: 'INVALID_OUTPUT_URL' });
+  assertOutputUrl(newClipData.url, 'url');
+  assertOutputUrl(newClipData.thumbnailUrl, 'thumbnailUrl', { uploadsOnly: true });
 
   const newClip = await MediaItem.create({
     stageItemId: oldClip.stageItemId,

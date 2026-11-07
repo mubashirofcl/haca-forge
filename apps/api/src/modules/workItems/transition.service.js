@@ -5,6 +5,7 @@ import { resolveScope } from '../../lib/scope.js';
 import { Person } from '../people/model.js';
 import { logger } from '../../lib/logger.js';
 import { recordRoundSubmission } from './rounds.js';
+import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
 
 export const ALLOWED_TRANSITIONS = {
   'Not Started': ['In Progress', 'Blocked'],
@@ -301,6 +302,9 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
       }
     }
   }
+
+  // A new deliverable link is checked before anything below writes or notifies.
+  if (deliverableUrl) assertChangedOutputUrl(deliverableUrl, workItem.deliverableUrl, 'deliverableUrl');
 
   // 7. Revision Counter: increment on revision request or when restarting work after feedback & notify owner
   if (

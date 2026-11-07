@@ -379,7 +379,7 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
           files: [
             {
               name: 'scene1_take1.mp4',
-              url: 'https://storage.local/footage/scene1_take1.mp4',
+              url: 'https://drive.google.com/file/d/footage/scene1_take1.mp4',
               size: 104857600,
               mime: 'video/mp4',
             },
@@ -390,7 +390,7 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
       shootSubId = shootRes.body.data._id;
 
       // 2. Creative Head approves the clips, then the Shoot step
-      await MediaItem.create({ stageItemId: shootRes.body.data.workItemId, url: 'https://storage.local/footage/scene1_take1.mp4', title: 'WS4 Journey clip', status: 'approved' });
+      await MediaItem.create({ stageItemId: shootRes.body.data.workItemId, url: 'https://drive.google.com/file/d/footage/scene1_take1.mp4', title: 'WS4 Journey clip', status: 'approved' });
       const approveRes = await request(app)
         .post(`/api/submissions/${shootSubId}/approve`)
         .set('Authorization', `Bearer ${headToken}`)
@@ -415,7 +415,7 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
           files: [
             {
               name: 'cut_v1.mp4',
-              url: 'https://storage.local/video/cut_v1.mp4',
+              url: 'https://drive.google.com/file/d/video/cut_v1.mp4',
               size: 52428800,
               mime: 'video/mp4',
             },
@@ -462,7 +462,7 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
           files: [
             {
               name: 'cut_v2.mp4',
-              url: 'https://storage.local/video/cut_v2.mp4',
+              url: 'https://drive.google.com/file/d/video/cut_v2.mp4',
               size: 52428800,
               mime: 'video/mp4',
             },
@@ -504,13 +504,13 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
           files: [
             {
               name: 'slide1.png',
-              url: 'https://storage.local/design/slide1.png',
+              url: 'https://drive.google.com/file/d/design/slide1.png',
               size: 2048000,
               mime: 'image/png',
             },
             {
               name: 'slide2.png',
-              url: 'https://storage.local/design/slide2.png',
+              url: 'https://drive.google.com/file/d/design/slide2.png',
               size: 2048000,
               mime: 'image/png',
             },

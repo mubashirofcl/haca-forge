@@ -619,6 +619,47 @@ export const STAGE_FALLBACK_OUTPUT_KIND: Record<string, StepOutputKind> = {
 };
 
 // Workspaces Upload Constants & Server-side Limits
+// ==========================================
+// Saved output links (Phase 5)
+// ==========================================
+// A step's output is either a file uploaded through the app or a Google Drive / Docs link.
+
+export const DRIVE_LINK_HOSTS = ["drive.google.com", "docs.google.com"] as const;
+export const DRIVE_LINK_HINT = "Make sure the link is shared with HACA reviewers.";
+
+/** An https link on drive.google.com or docs.google.com, with no credentials or port. */
+export function isDriveLink(url: unknown): boolean {
+  if (typeof url !== "string") return false;
+  try {
+    const parsed = new URL(url.trim());
+    return (
+      parsed.protocol === "https:" &&
+      (DRIVE_LINK_HOSTS as readonly string[]).includes(parsed.hostname) &&
+      !parsed.port &&
+      !parsed.username &&
+      !parsed.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+const APP_UPLOAD_PATH =
+  /^\/uploads\/(?:[A-Za-z0-9_-][A-Za-z0-9._-]{0,200}|chat\/[0-9a-f]{24}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[A-Za-z0-9_-]{1,60}\.[a-z0-9]{2,5})$/;
+
+/** The shape of a file uploaded through the app (/uploads/...). The API also checks it exists. */
+export function isAppUploadPath(url: unknown): boolean {
+  return typeof url === "string" && APP_UPLOAD_PATH.test(url) && !url.includes("..");
+}
+
+/** A URL a clip or submission may be saved with: an app upload or a Drive link. */
+export function isAllowedOutputUrl(url: unknown): boolean {
+  return isAppUploadPath(url) || isDriveLink(url);
+}
+
+export const OUTPUT_URL_ERROR =
+  "Use a file uploaded here, or an https link on drive.google.com or docs.google.com.";
+
 export const UPLOAD_KINDS = ["video", "image", "pdf"] as const;
 export type UploadKind = (typeof UPLOAD_KINDS)[number];
 
@@ -2145,14 +2186,7 @@ export const mediaItemCreateSchema = z.object({
     .string()
     .trim()
     .min(1, "Valid media URL required")
-    .refine(
-      (val) =>
-        val.startsWith("/") ||
-        val.startsWith("http://") ||
-        val.startsWith("https://") ||
-        val.startsWith("blob:"),
-      { message: "Valid media URL required" }
-    ),
+    .refine((val) => isAllowedOutputUrl(val), { message: OUTPUT_URL_ERROR }),
   storageId: z.string().optional().default(""),
   thumbnailUrl: z.string().optional().default(""),
   kind: z.enum(["video", "image"]).default("video"),

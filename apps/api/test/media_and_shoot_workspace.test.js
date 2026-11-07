@@ -221,7 +221,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
         .post(`/api/work/${shootStage._id}/clips`)
         .set('Authorization', `Bearer ${shooterToken}`)
         .send({
-          url: 'https://storage.local/raw_clip1.mp4',
+          url: 'https://drive.google.com/file/d/raw_clip1.mp4',
           title: 'Campus Gate Wide',
           shotRef: 'Scene 1',
           take: 1,
@@ -246,7 +246,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
         .post(`/api/work/${shootStage._id}/clips`)
         .set('Authorization', `Bearer ${shooterToken}`)
         .send({
-          url: 'https://storage.local/raw_clip2.mp4',
+          url: 'https://drive.google.com/file/d/raw_clip2.mp4',
           title: 'Campus Gate Landscape',
           take: 2,
           width: 1920,
@@ -264,7 +264,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
       for (let i = 1; i <= 10; i++) {
         await MediaItem.create({
           stageItemId: shootStage._id,
-          url: `https://storage.local/clip_${i}.mp4`,
+          url: `https://drive.google.com/file/d/clip_${i}.mp4`,
           title: `Clip ${i}`,
           width: 1080,
           height: 1920,
@@ -276,7 +276,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
         .post(`/api/work/${shootStage._id}/clips`)
         .set('Authorization', `Bearer ${shooterToken}`)
         .send({
-          url: 'https://storage.local/clip_11.mp4',
+          url: 'https://drive.google.com/file/d/clip_11.mp4',
           title: 'Clip 11',
           width: 1080,
           height: 1920,
@@ -291,7 +291,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
         .post(`/api/work/${shootStage._id}/clips`)
         .set('Authorization', `Bearer ${shooterToken}`)
         .send({
-          url: 'https://storage.local/huge_video.mp4',
+          url: 'https://drive.google.com/file/d/huge_video.mp4',
           title: 'Huge Video',
           kind: 'video',
           sizeBytes: 550 * 1024 * 1024, // 550 MB
@@ -304,7 +304,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
     it('updates clip metadata while not approved and editable', async () => {
       const clip = await MediaItem.create({
         stageItemId: shootStage._id,
-        url: 'https://storage.local/clip.mp4',
+        url: 'https://drive.google.com/file/d/clip.mp4',
         title: 'Initial Title',
         take: 1,
       });
@@ -328,7 +328,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
     it('locks approved clips against update and deletion', async () => {
       const approvedClip = await MediaItem.create({
         stageItemId: shootStage._id,
-        url: 'https://storage.local/approved_clip.mp4',
+        url: 'https://drive.google.com/file/d/approved_clip.mp4',
         title: 'Approved Clip',
         status: 'approved',
       });
@@ -354,7 +354,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
     it('allows non-approved clip deletion by the owner', async () => {
       const clip = await MediaItem.create({
         stageItemId: shootStage._id,
-        url: 'https://storage.local/temp_clip.mp4',
+        url: 'https://drive.google.com/file/d/temp_clip.mp4',
         title: 'Temp Clip',
         status: 'uploaded',
       });
@@ -422,7 +422,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
     beforeEach(async () => {
       clip = await MediaItem.create({
         stageItemId: shootStage._id,
-        url: 'https://storage.local/clip.mp4',
+        url: 'https://drive.google.com/file/d/clip.mp4',
         title: 'Hero Shot',
         status: 'uploaded',
       });
@@ -573,7 +573,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
         status: 'submitted',
         submittedById: shootStage.ownerId,
         submittedAt: new Date(),
-        linkUrl: 'https://example.test/footage',
+        linkUrl: 'https://drive.google.com/file/d/footage',
       });
 
       clip1 = await MediaItem.create({
@@ -736,7 +736,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
         .post(`/api/clips/${flagged._id}/replace`)
         .set('Authorization', `Bearer ${shooterToken}`)
         .send({
-          url: 'new_smooth_clip.mp4',
+          url: 'https://drive.google.com/file/d/new_smooth_clip',
           title: 'Smooth Clip v2',
           durationSeconds: 12,
         })
@@ -763,7 +763,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
       // 1 approved clip, 1 rejected clip
       await MediaItem.create({
         stageItemId: shootStage._id,
-        url: 'https://storage.local/approved.mp4',
+        url: 'https://drive.google.com/file/d/approved.mp4',
         title: 'Approved Final Take',
         shotRef: 'Scene 1',
         take: 3,
@@ -773,7 +773,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
 
       await MediaItem.create({
         stageItemId: shootStage._id,
-        url: 'https://storage.local/bad.mp4',
+        url: 'https://drive.google.com/file/d/bad.mp4',
         title: 'Bad Take',
         status: 'reshoot_needed',
       });

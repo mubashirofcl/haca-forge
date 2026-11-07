@@ -91,9 +91,9 @@ describe.each(['/api/work', '/api/work-items'])('PATCH %s/:id access', (base) =>
     isSkipped: true,
     departmentId: new mongoose.Types.ObjectId().toString(),
     description: 'Changed',
-    publishedUrl: 'https://example.test/live',
-    contentLink: 'https://example.test/content',
-    assetsLink: 'https://example.test/assets',
+    publishedUrl: 'https://drive.google.com/file/d/live',
+    contentLink: 'https://drive.google.com/file/d/content',
+    assetsLink: 'https://drive.google.com/file/d/assets',
     brief: { description: 'Changed' },
     contentPieceId: new mongoose.Types.ObjectId().toString(),
     stageKey: 'Post',
@@ -112,11 +112,11 @@ describe.each(['/api/work', '/api/work-items'])('PATCH %s/:id access', (base) =>
 
     it.each(['admin', 'sm'])('%s can change the owner and the deliverable link after approval', async (key) => {
       await WorkItem.updateOne({ _id: step._id }, { status: 'Approved' });
-      const res = await patch(key, { ownerId: people.teammate._id.toString(), deliverableUrl: 'https://example.test/managed' });
+      const res = await patch(key, { ownerId: people.teammate._id.toString(), deliverableUrl: 'https://drive.google.com/file/d/managed' });
       expect(res.status).toBe(200);
       const after = await stored();
       expect(String(after.ownerId)).toBe(String(people.teammate._id));
-      expect(after.deliverableUrl).toBe('https://example.test/managed');
+      expect(after.deliverableUrl).toBe('https://drive.google.com/file/d/managed');
     });
   });
 
@@ -129,7 +129,7 @@ describe.each(['/api/work', '/api/work-items'])('PATCH %s/:id access', (base) =>
     });
 
     it('403 for the deliverable link too', async () => {
-      expect((await patch('exec', { deliverableUrl: 'https://example.test/x' })).status).toBe(403);
+      expect((await patch('exec', { deliverableUrl: 'https://drive.google.com/file/d/x' })).status).toBe(403);
     });
   });
 
@@ -142,13 +142,13 @@ describe.each(['/api/work', '/api/work-items'])('PATCH %s/:id access', (base) =>
     });
 
     it('403 for the deliverable link on a step they do not own', async () => {
-      expect((await patch('head', { deliverableUrl: 'https://example.test/x' })).status).toBe(403);
+      expect((await patch('head', { deliverableUrl: 'https://drive.google.com/file/d/x' })).status).toBe(403);
     });
 
     it('gets the same owner access as anyone on a step they own', async () => {
       await WorkItem.updateOne({ _id: step._id }, { ownerId: people.headOwner._id });
-      expect((await patch('headOwner', { deliverableUrl: 'https://example.test/head' })).status).toBe(200);
-      expect((await stored()).deliverableUrl).toBe('https://example.test/head');
+      expect((await patch('headOwner', { deliverableUrl: 'https://drive.google.com/file/d/head' })).status).toBe(200);
+      expect((await stored()).deliverableUrl).toBe('https://drive.google.com/file/d/head');
       expect((await patch('headOwner', { priority: 'Normal' })).status).toBe(403);
     });
   });
@@ -156,9 +156,9 @@ describe.each(['/api/work', '/api/work-items'])('PATCH %s/:id access', (base) =>
   describe('the step owner keeps the deliverable flow only', () => {
     it('can set the deliverable link while the step is awaiting review', async () => {
       await WorkItem.updateOne({ _id: step._id }, { status: 'Feedback' });
-      const res = await patch('owner', { deliverableUrl: 'https://example.test/cut' });
+      const res = await patch('owner', { deliverableUrl: 'https://drive.google.com/file/d/cut' });
       expect(res.status).toBe(200);
-      expect((await stored()).deliverableUrl).toBe('https://example.test/cut');
+      expect((await stored()).deliverableUrl).toBe('https://drive.google.com/file/d/cut');
     });
 
     it('an empty body from the deliverable flow still succeeds and changes nothing', async () => {
@@ -178,15 +178,15 @@ describe.each(['/api/work', '/api/work-items'])('PATCH %s/:id access', (base) =>
     });
 
     it('a real change does log an update event', async () => {
-      expect((await patch('owner', { deliverableUrl: 'https://example.test/cut' })).status).toBe(200);
+      expect((await patch('owner', { deliverableUrl: 'https://drive.google.com/file/d/cut' })).status).toBe(200);
       expect(await ActivityEvent.countDocuments({ entityId: step._id, action: 'work_item.updated' })).toBe(1);
     });
 
     it.each(['Approved', 'Published'])('cannot change the link once the step is %s', async (status) => {
-      await WorkItem.updateOne({ _id: step._id }, { status, deliverableUrl: 'https://example.test/final' });
-      const res = await patch('owner', { deliverableUrl: 'https://example.test/swapped' });
+      await WorkItem.updateOne({ _id: step._id }, { status, deliverableUrl: 'https://drive.google.com/file/d/final' });
+      const res = await patch('owner', { deliverableUrl: 'https://drive.google.com/file/d/swapped' });
       expect(res.status).toBe(403);
-      expect((await stored()).deliverableUrl).toBe('https://example.test/final');
+      expect((await stored()).deliverableUrl).toBe('https://drive.google.com/file/d/final');
     });
 
     it.each(Object.keys(MANAGEMENT_FIELDS))('403 and unchanged for %s', async (field) => {
@@ -197,7 +197,7 @@ describe.each(['/api/work', '/api/work-items'])('PATCH %s/:id access', (base) =>
     });
 
     it('a restricted field alongside the link rejects the whole request', async () => {
-      const res = await patch('owner', { deliverableUrl: 'https://example.test/cut', priority: 'Normal' });
+      const res = await patch('owner', { deliverableUrl: 'https://drive.google.com/file/d/cut', priority: 'Normal' });
       expect(res.status).toBe(403);
       const after = await stored();
       expect(after.deliverableUrl || '').toBe('');
@@ -208,7 +208,7 @@ describe.each(['/api/work', '/api/work-items'])('PATCH %s/:id access', (base) =>
   describe('team_member on the same piece but not this step gets 403', () => {
     it.each(['deliverableUrl', ...Object.keys(MANAGEMENT_FIELDS)])('403 and unchanged for %s', async (field) => {
       const before = await stored();
-      const res = await patch('teammate', { [field]: MANAGEMENT_FIELDS[field] || 'https://example.test/x' });
+      const res = await patch('teammate', { [field]: MANAGEMENT_FIELDS[field] || 'https://drive.google.com/file/d/x' });
       expect(res.status).toBe(403);
       expect((await stored()).updatedAt).toEqual(before.updatedAt);
     });
@@ -217,7 +217,7 @@ describe.each(['/api/work', '/api/work-items'])('PATCH %s/:id access', (base) =>
   describe('team_member not on the deliverable gets 404', () => {
     it.each(['deliverableUrl', ...Object.keys(MANAGEMENT_FIELDS)])('404 and unchanged for %s', async (field) => {
       const before = await stored();
-      const res = await patch('outsider', { [field]: MANAGEMENT_FIELDS[field] || 'https://example.test/x' });
+      const res = await patch('outsider', { [field]: MANAGEMENT_FIELDS[field] || 'https://drive.google.com/file/d/x' });
       expect(res.status).toBe(404);
       expect((await stored()).updatedAt).toEqual(before.updatedAt);
     });
@@ -271,7 +271,7 @@ describe.each(['/api/work', '/api/work-items'])('PATCH %s/:id access', (base) =>
     });
 
     it("the owner's deliverable update leaves the dates alone", async () => {
-      expect((await patch('owner', { deliverableUrl: 'https://example.test/cut' })).status).toBe(200);
+      expect((await patch('owner', { deliverableUrl: 'https://drive.google.com/file/d/cut' })).status).toBe(200);
       const after = await stored();
       expect(after.dueDate.toISOString()).toBe(DUE.toISOString());
       expect(after.dueDateSource ?? null).toBeNull();

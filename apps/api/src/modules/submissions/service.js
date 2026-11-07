@@ -11,6 +11,7 @@ import { assertCanHoldEditorLock, canSeePrivateReview, isTeamMember, requirePart
 import { visibleVersionsFilter } from '../workItems/viewerRules.js';
 import { createNotification, getSocketIO } from '../notifications/service.js';
 import { withoutContact } from '../../lib/socketHub.js';
+import { assertOutputUrl, assertOutputFiles } from '../uploads/outputUrls.js';
 import {
   assertDecisionAllowed,
   assertValidRating,
@@ -171,6 +172,9 @@ export async function saveDraft(workItemId, draftData, user) {
 
   // Sanitize document and enforce 1 MB size limit
   const sanitizedDoc = sanitizeDocumentPayload(draftData.document);
+  // Saved output links: files uploaded here or Google Drive / Docs links only.
+  if (draftData.files !== undefined) assertOutputFiles(draftData.files);
+  if (draftData.linkUrl !== undefined) assertOutputUrl(draftData.linkUrl, 'linkUrl');
 
   let draft = await Submission.findOne({ workItemId, version: 0 });
 
@@ -266,6 +270,11 @@ export async function submitForApproval(workItemId, submitData = {}, user) {
   const files = submitData.files !== undefined ? submitData.files : draft?.files || [];
   const linkUrl = submitData.linkUrl !== undefined ? submitData.linkUrl : draft?.linkUrl || '';
   const notes = submitData.notes !== undefined ? submitData.notes : draft?.notes || '';
+
+  // Saved output links: files uploaded here or Google Drive / Docs links only.
+  assertOutputFiles(files);
+  assertOutputUrl(linkUrl, 'linkUrl');
+  assertOutputUrl(submitData.fileUrl, 'fileUrl');
 
   // Non-empty output check
   validateNonEmptySubmission(kind, workItem.stageKey, sanitizedDoc, files, linkUrl);
