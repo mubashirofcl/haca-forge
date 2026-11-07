@@ -720,16 +720,26 @@ async function generateTeamPerformanceReport(filters, scope, user) {
 /**
  * Render structured report data into responsive, branded HTML email / view.
  */
+/** Every value placed in report HTML is text, never markup. */
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderReportToHtml(report) {
   const summaryCardsHtml = Object.entries(report.summary || {})
     .map(
       ([key, val]) => `
       <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 12px; flex: 1; min-width: 140px;">
         <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">
-          ${key.replace(/([A-Z])/g, ' $1')}
+          ${escapeHtml(key.replace(/([A-Z])/g, ' $1'))}
         </div>
         <div style="font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 4px;">
-          ${typeof val === 'number' ? val.toLocaleString() : val}
+          ${escapeHtml(typeof val === 'number' ? val.toLocaleString() : val)}
         </div>
       </div>
     `
@@ -741,7 +751,7 @@ function renderReportToHtml(report) {
       (table) => `
       <div style="margin-top: 24px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; overflow-x: auto;">
         <h3 style="margin-top: 0; font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 16px;">
-          ${table.title}
+          ${escapeHtml(table.title)}
         </h3>
         <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px;">
           <thead>
@@ -749,7 +759,7 @@ function renderReportToHtml(report) {
               ${table.columns
                 .map(
                   (col) =>
-                    `<th style="padding: 10px 12px; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em;">${col}</th>`
+                    `<th style="padding: 10px 12px; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em;">${escapeHtml(col)}</th>`
                 )
                 .join('')}
             </tr>
@@ -759,7 +769,7 @@ function renderReportToHtml(report) {
               .map(
                 (row) => `
                 <tr style="border-bottom: 1px solid #f1f5f9;">
-                  ${row.map((cell) => `<td style="padding: 10px 12px; color: #1e293b;">${cell}</td>`).join('')}
+                  ${row.map((cell) => `<td style="padding: 10px 12px; color: #1e293b;">${escapeHtml(cell)}</td>`).join('')}
                 </tr>
               `
               )
@@ -776,17 +786,17 @@ function renderReportToHtml(report) {
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>${report.title}</title>
+        <title>${escapeHtml(report.title)}</title>
       </head>
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; padding: 24px; margin: 0;">
         <div style="max-width: 800px; margin: 0 auto;">
           <!-- Header -->
           <div style="background-color: #0f172a; color: #ffffff; border-radius: 20px; padding: 28px; margin-bottom: 24px;">
             <div style="display: inline-block; padding: 4px 10px; background-color: rgba(255, 255, 255, 0.15); border-radius: 9999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">
-              HACA Marketing OS &bull; ${report.cadence}
+              HACA Marketing OS &bull; ${escapeHtml(report.cadence)}
             </div>
             <h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">
-              ${report.title}
+              ${escapeHtml(report.title)}
             </h1>
             <p style="margin: 8px 0 0 0; font-size: 12px; color: #94a3b8;">
               Generated on ${new Date(report.generatedAt).toLocaleString()}

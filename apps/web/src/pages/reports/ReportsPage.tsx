@@ -705,6 +705,7 @@ export const ReportsPage: React.FC = () => {
               <iframe
                 title="Report HTML Preview"
                 srcDoc={previewModalReport.html}
+                sandbox=""
                 className="w-full h-[550px] border-0"
               />
             </div>

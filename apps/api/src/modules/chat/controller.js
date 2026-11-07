@@ -122,7 +122,8 @@ export async function listMessages(req, res, next) {
 export async function sendMessage(req, res, next) {
   try {
     const data = sendMessageSchema.parse(req.body);
-    const message = await chatService.sendMessage(req.params.channelId, req.user, data);
+    // A share card is only ever made by share-to-chat, never taken from the client.
+    const message = await chatService.sendMessage(req.params.channelId, req.user, { ...data, sharedMedia: null });
 
     const io = getIO(req);
     chatSocket.emitChatMessageNew(io, req.params.channelId, message);

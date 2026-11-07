@@ -12,6 +12,8 @@ import { Submission } from '../submissions/model.js';
 import { logActivity } from '../activity/service.js';
 import { createNotification } from '../notifications/service.js';
 import { logger } from '../../lib/logger.js';
+import { buildChatAttachments } from './attachments.js';
+import { safeLink } from '../uploads/fileTypes.js';
 import {
   CHAT_REACTION_EMOJIS,
   CHAT_ATTACHMENT_CONFIG,
@@ -643,8 +645,10 @@ export async function sendMessage(channelId, user, { content = '', replyToId = n
   }
 
   const sanitized = sanitizeChatContent(content);
+  // Built from the files on disk; the client's own name, size, type or link are not used.
+  const builtAttachments = buildChatAttachments(channel._id, attachments);
 
-  if (!sanitized && attachments.length === 0 && !sharedMedia) {
+  if (!sanitized && builtAttachments.length === 0 && !sharedMedia) {
     const error = new Error('Message content or an attachment is required.');
     error.statusCode = 400;
     throw error;
@@ -681,7 +685,7 @@ export async function sendMessage(channelId, user, { content = '', replyToId = n
     kind: sharedMedia ? 'media_share' : 'text',
     content: sanitized,
     replyToId: replyToId || null,
-    attachments: attachments || [],
+    attachments: builtAttachments,
     sharedMedia: sharedMedia || null,
     seenBy: [{ userId: user.userId, seenAt: new Date() }],
   });
@@ -997,9 +1001,9 @@ export async function shareAssetToChat(user, { channelId, assetId, mediaItemId, 
     resolvedAssetType = 'clip';
     resolvedStageKey = stageKey || 'Shoot';
     title = clipDoc.title || 'Approved Clip';
-    thumbnailUrl = clipDoc.thumbnailUrl || '';
-    previewUrl = clipDoc.url;
-    downloadUrl = clipDoc.url;
+    thumbnailUrl = safeLink(clipDoc.thumbnailUrl);
+    previewUrl = safeLink(clipDoc.url);
+    downloadUrl = previewUrl;
     if (!piece && clipDoc.contentPieceId) {
       piece = await ContentPiece.findById(clipDoc.contentPieceId);
     }
@@ -1031,9 +1035,9 @@ export async function shareAssetToChat(user, { channelId, assetId, mediaItemId, 
       piece = await ContentPiece.findById(subDoc.contentPieceId);
     }
     title = subDoc.title || (piece ? `${piece.topic} - ${resolvedStageKey}` : 'Approved Deliverable');
-    thumbnailUrl = subDoc.thumbnailUrl || '';
-    previewUrl = subDoc.deliverableUrl || subDoc.fileUrl || (subDoc.files?.[0]?.url) || '';
-    downloadUrl = subDoc.deliverableUrl || subDoc.fileUrl || (subDoc.files?.[0]?.url) || '';
+    thumbnailUrl = safeLink(subDoc.thumbnailUrl);
+    previewUrl = safeLink(subDoc.deliverableUrl || subDoc.fileUrl || (subDoc.files?.[0]?.url));
+    downloadUrl = previewUrl;
 
     const subOwnerIds = [
       subDoc.submittedBy,
@@ -1096,7 +1100,7 @@ export async function shareAssetToChat(user, { channelId, assetId, mediaItemId, 
       _id: author._id,
       name: author.name,
       preferredName: author.preferredName,
-      avatarUrl: author.avatarUrl,
+      avatarUrl: safeLink(author.avatarUrl),
     },
     note: sanitizeChatContent(note),
     isRevoked: false,
@@ -1231,8 +1235,8 @@ export async function getSharedAssetAccess(grantId, user) {
       throw error;
     }
     title = clip.title;
-    previewUrl = clip.url;
-    downloadUrl = clip.url;
+    previewUrl = safeLink(clip.url);
+    downloadUrl = previewUrl;
     mimeType = clip.mimeType || 'video/mp4';
   } else {
     const sub = await Submission.findById(grant.assetId);
@@ -1242,8 +1246,8 @@ export async function getSharedAssetAccess(grantId, user) {
       throw error;
     }
     title = sub.title || 'Deliverable';
-    previewUrl = sub.deliverableUrl || sub.fileUrl || (sub.files && sub.files[0]?.url) || '';
-    downloadUrl = sub.deliverableUrl || sub.fileUrl || (sub.files && sub.files[0]?.url) || '';
+    previewUrl = safeLink(sub.deliverableUrl || sub.fileUrl || (sub.files && sub.files[0]?.url));
+    downloadUrl = previewUrl;
     mimeType = 'video/mp4';
   }
 

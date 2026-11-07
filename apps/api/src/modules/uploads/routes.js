@@ -8,6 +8,7 @@ import { requireAnyPermission } from '../../middleware/requirePermission.js';
 import { validate } from '../../middleware/validate.js';
 import { signUploadSchema } from '@mmp/shared';
 import * as uploadController from './controller.js';
+import { allowedFileFilter, storedFileName } from './fileTypes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,17 +22,20 @@ const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, uploadDir);
   },
+  // Random name with the server's extension for the matched type, never the uploader's name.
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const safeBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `${uniqueSuffix}-${safeBase}${ext}`);
+    try {
+      cb(null, storedFileName(file));
+    } catch (err) {
+      cb(err);
+    }
   },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB max
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB max; per-kind limits are checked after upload
+  fileFilter: allowedFileFilter(),
 });
 
 const router = Router();

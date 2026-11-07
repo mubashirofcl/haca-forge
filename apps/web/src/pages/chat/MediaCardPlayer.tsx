@@ -5,6 +5,7 @@ import { ChatSharedMediaCard } from '@mmp/shared';
 import { Avatar } from '../../components/Avatar';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../lib/api';
+import { safeUrl } from '../../lib/safeUrl';
 
 interface MediaCardPlayerProps {
   card: ChatSharedMediaCard;
@@ -97,7 +98,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
           <>
             {card.thumbnailUrl ? (
               <img
-                src={card.thumbnailUrl}
+                src={safeUrl(card.thumbnailUrl)}
                 alt={card.title}
                 className="w-full h-full object-cover opacity-85 group-hover:opacity-100 transition-opacity"
               />
@@ -118,7 +119,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
           </>
         ) : isImage ? (
           <img
-            src={card.previewUrl || card.thumbnailUrl}
+            src={safeUrl(card.previewUrl) || safeUrl(card.thumbnailUrl)}
             alt={card.title}
             className="w-full h-full object-contain max-h-[220px]"
           />
@@ -160,9 +161,9 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
                 Watch
               </button>
             )}
-            {card.downloadUrl && (
+            {safeUrl(card.downloadUrl) && (
               <a
-                href={card.downloadUrl}
+                href={safeUrl(card.downloadUrl)}
                 download
                 target="_blank"
                 rel="noreferrer"
@@ -211,7 +212,7 @@ export function MediaCardPlayer({ card, onRevoked }: MediaCardPlayerProps) {
             <div className="aspect-video bg-black flex items-center justify-center">
               <video
                 data-testid="inline-video-player"
-                src={card.previewUrl}
+                src={safeUrl(card.previewUrl)}
                 controls
                 autoPlay
                 className="max-h-[75vh] w-full object-contain"

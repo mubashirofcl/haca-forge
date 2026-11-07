@@ -16,6 +16,7 @@ import {
   signUploadSchema,
 } from '@mmp/shared';
 import * as profileController from './controller.js';
+import { allowedFileFilter, storedFileName } from '../uploads/fileTypes.js';
 import { env } from '../../config/env.js';
 
 const uploadDir = path.resolve(process.cwd(), 'uploads');
@@ -27,17 +28,20 @@ const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, uploadDir);
   },
+  // Random name with the server's extension for the matched image type.
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const safeBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `avatar-${uniqueSuffix}-${safeBase}${ext}`);
+    try {
+      cb(null, storedFileName(file, 'avatar-'));
+    } catch (err) {
+      cb(err);
+    }
   },
 });
 
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
+  fileFilter: allowedFileFilter(['image']),
 });
 
 // Password rate limiter: 5 attempts per 15 minutes

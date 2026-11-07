@@ -1,5 +1,7 @@
 import crypto from 'crypto';
+import fs from 'fs';
 import path from 'path';
+import { allowedFileType, fileTypeError } from './fileTypes.js';
 import { v2 as cloudinary } from 'cloudinary';
 import { env } from '../../config/env.js';
 import {
@@ -211,10 +213,16 @@ export async function recordUploadMetadata({
   return metadata;
 }
 
+function removeFile(file) {
+  if (file?.path && fs.existsSync(file.path)) {
+    try { fs.unlinkSync(file.path); } catch {}
+  }
+}
+
 /**
  * Validates and processes a locally uploaded file saved via Multer
  */
-export async function processLocalUploadedFile(file, requestedKind) {
+export async function processLocalUploadedFile(file) {
   if (!file) {
     const err = new Error('No file provided');
     err.statusCode = 400;
@@ -222,19 +230,18 @@ export async function processLocalUploadedFile(file, requestedKind) {
     throw err;
   }
 
-  const resolvedKind = resolveUploadKind({
-    kind: requestedKind,
-    fileType: file.mimetype,
-    fileName: file.originalname,
-  }) || 'image';
+  // The route's file filter has already matched the file to an allowed type.
+  const allowed = file.allowedType || allowedFileType(file.originalname, file.mimetype);
+  if (!allowed) {
+    removeFile(file);
+    throw fileTypeError();
+  }
+  const resolvedKind = allowed.kind;
 
   // Validate size limit
-  const maxAllowedBytes = UPLOAD_LIMITS_BYTES[resolvedKind] || (20 * 1024 * 1024);
+  const maxAllowedBytes = UPLOAD_LIMITS_BYTES[resolvedKind];
   if (file.size > maxAllowedBytes) {
-    const fs = await import('fs');
-    if (file.path && fs.existsSync(file.path)) {
-      try { fs.unlinkSync(file.path); } catch {}
-    }
+    removeFile(file);
     const err = new Error(
       `File size (${Math.round(file.size / (1024 * 1024))} MB) exceeds maximum allowed limit of ${Math.round(
         maxAllowedBytes / (1024 * 1024)
@@ -250,7 +257,7 @@ export async function processLocalUploadedFile(file, requestedKind) {
     storageId: file.filename,
     fileName: file.originalname,
     sizeBytes: file.size,
-    mimeType: file.mimetype,
+    mimeType: allowed.mimes[0],
     kind: resolvedKind,
   };
 }

@@ -20,7 +20,7 @@ export async function recordMetadataHandler(req, res, next) {
 
 export async function localUploadHandler(req, res, next) {
   try {
-    const result = await uploadService.processLocalUploadedFile(req.file, req.body?.kind);
+    const result = await uploadService.processLocalUploadedFile(req.file);
     res.status(201).json({ data: result });
   } catch (err) {
     next(err);

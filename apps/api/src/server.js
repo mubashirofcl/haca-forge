@@ -38,6 +38,7 @@ import notificationRoutes from "./modules/notifications/routes.js";
 import planRoutes from "./modules/calendar/plan.routes.js";
 import contentPieceRoutes from "./modules/calendar/contentPiece.routes.js";
 import uploadRoutes from "./modules/uploads/routes.js";
+import { setUploadHeaders } from "./modules/uploads/fileTypes.js";
 import reportRoutes from "./modules/reports/routes.js";
 import dashboardRoutes from "./modules/reports/dashboard.routes.js";
 import docsRoutes from "./modules/docs/routes.js";
@@ -196,8 +197,15 @@ app.use("/api/calendar-plans", planRoutes);
 app.use("/calendar-plans", planRoutes);
 app.use("/api/content-pieces", contentPieceRoutes);
 app.use("/content-pieces", contentPieceRoutes);
-app.use("/uploads", express.static(localUploadsDir));
-app.use("/api/uploads/files", express.static(localUploadsDir));
+// Local development and testing only; production files will come from Cloudinary.
+// Uploaded files are served so they can never run as a page: see setUploadHeaders.
+const serveUploads = express.static(localUploadsDir, {
+  index: false,
+  dotfiles: "deny",
+  setHeaders: setUploadHeaders,
+});
+app.use("/uploads", serveUploads);
+app.use("/api/uploads/files", serveUploads);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/dashboard", dashboardRoutes);

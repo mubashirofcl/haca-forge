@@ -36,6 +36,7 @@ import { Avatar } from '../../components/Avatar';
 import { EmojiPicker, QuickReactionsBar } from './EmojiPicker';
 import { MediaCardPlayer } from './MediaCardPlayer';
 import { GroupModal } from './GroupModal';
+import { safeUrl } from '../../lib/safeUrl';
 import {
   ChatChannelTypeDetail,
   ChatMessageType,
@@ -493,12 +494,13 @@ export default function ChatPage() {
         const formData = new FormData();
         pendingFiles.forEach((file) => formData.append('files', file));
         formData.append('channelId', activeChannelId);
-        const uploadRes = await fetch('/api/chat/upload', { method: 'POST', body: formData, credentials: 'include' });
-        const uploadData = await uploadRes.json();
+        const uploadRes = await fetch(`/api/chat/upload?channelId=${encodeURIComponent(activeChannelId)}`, { method: 'POST', body: formData, credentials: 'include' });
+        const uploadData = await uploadRes.json().catch(() => ({}));
+        if (!uploadRes.ok) throw new Error(uploadData?.error?.message || 'Failed to upload attachments.');
         if (uploadData.attachments) uploadedAttachments = uploadData.attachments;
-      } catch (err) {
+      } catch (err: any) {
         console.error('Upload error:', err);
-        alert('Failed to upload attachments.');
+        alert(err?.message || 'Failed to upload attachments.');
         setUploadingFiles(false);
         return;
       } finally {
@@ -855,17 +857,17 @@ export default function ChatPage() {
                       att.mimeType.startsWith('image/') ? (
                         <a
                           key={attIdx}
-                          href={att.storageUrl}
+                          href={safeUrl(att.storageUrl)}
                           target="_blank"
                           rel="noreferrer"
                           className="block rounded-xl overflow-hidden"
                         >
-                          <img src={att.storageUrl} alt={att.fileName} className="max-h-60 max-w-full object-cover rounded-xl" />
+                          <img src={safeUrl(att.storageUrl)} alt={att.fileName} className="max-h-60 max-w-full object-cover rounded-xl" />
                         </a>
                       ) : (
                         <a
                           key={attIdx}
-                          href={att.storageUrl}
+                          href={safeUrl(att.storageUrl)}
                           download={att.fileName}
                           className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
                             isMine ? 'bg-white/15 hover:bg-white/25 text-white' : 'bg-white/60 hover:bg-white/70 text-ui-text border border-ui-line'
@@ -1081,7 +1083,7 @@ export default function ChatPage() {
                             className="aspect-square rounded-lg overflow-hidden bg-ui-canvas"
                             title={p.name}
                           >
-                            <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
+                            <img src={safeUrl(p.url)} alt={p.name} className="w-full h-full object-cover" />
                           </button>
                         ))}
                       </div>
@@ -1098,7 +1100,7 @@ export default function ChatPage() {
                         {media.files.slice(0, 5).map((f, i) => (
                           <li key={`${f.messageId}-${i}`}>
                             <a
-                              href={f.url}
+                              href={safeUrl(f.url)}
                               download={f.name}
                               className="flex items-center gap-2 text-xs text-ui-text hover:text-ui-ink truncate"
                             >

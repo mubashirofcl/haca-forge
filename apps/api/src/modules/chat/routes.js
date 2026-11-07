@@ -3,28 +3,25 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { fileURLToPath } from 'url';
 import { authenticate } from '../../middleware/auth.js';
 import { requirePermission, requireAnyPermission } from '../../middleware/requirePermission.js';
 import * as chatController from './controller.js';
+import { CHAT_UPLOAD_ROOT, requireChatUploadChannel } from './attachments.js';
 import { CHAT_ATTACHMENT_CONFIG } from '@mmp/shared';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const rootUploads = path.resolve(__dirname, '../../../uploads/chat');
+const rootUploads = CHAT_UPLOAD_ROOT;
 
 if (!fs.existsSync(rootUploads)) {
   fs.mkdirSync(rootUploads, { recursive: true });
 }
 
-// Multer storage engine with UUID directory isolation
+// Each upload gets its own random folder inside the channel's folder. The channel id
+// was validated, and membership checked, by requireChatUploadChannel before this runs.
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const channelId = req.body.channelId || req.query.channelId || 'general';
     const uuid = crypto.randomUUID();
-    const dest = path.join(rootUploads, channelId, uuid);
+    const dest = path.join(rootUploads, req.chatUploadChannelId, uuid);
     fs.mkdirSync(dest, { recursive: true });
-    req._uploadSubdir = path.join('chat', channelId, uuid);
     cb(null, dest);
   },
   filename: (_req, file, cb) => {
@@ -32,7 +29,7 @@ const storage = multer.diskStorage({
     const safeBase = path
       .basename(file.originalname, ext)
       .replace(/[^a-zA-Z0-9_-]/g, '_')
-      .slice(0, 60);
+      .slice(0, 60) || 'file';
     cb(null, `${safeBase}${ext}`);
   },
 });
@@ -62,7 +59,10 @@ const upload = multer({
     if (isImage || isDoc || isVideo) {
       cb(null, true);
     } else {
-      cb(new Error(`File type "${ext}" (${mime}) is not allowed in team chat.`));
+      const err = new Error(`File type "${ext}" (${mime}) is not allowed in team chat.`);
+      err.statusCode = 400;
+      err.code = 'FILE_TYPE_NOT_ALLOWED';
+      cb(err);
     }
   },
 });
@@ -102,11 +102,11 @@ chatRouter.get('/shared-asset/:grantId', requireAnyPermission(['chat.use', 'chat
 chatRouter.get('/search', requireAnyPermission(['chat.use', 'chat.read']), chatController.searchMessages);
 
 // 5. File upload
-chatRouter.post('/upload', requirePermission('chat.use'), upload.array('files', 5), (req, res) => {
+chatRouter.post('/upload', requirePermission('chat.use'), requireChatUploadChannel, upload.array('files', 5), (req, res) => {
   const files = req.files || [];
   const attachments = files.map((f) => {
     // Relative storage URL
-    const relPath = path.relative(path.resolve(__dirname, '../../../uploads'), f.path).replace(/\\/g, '/');
+    const relPath = path.relative(path.dirname(rootUploads), f.path).replace(/\\/g, '/');
     const storageUrl = `/uploads/${relPath}`;
 
     return {
