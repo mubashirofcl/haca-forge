@@ -15,7 +15,7 @@ const PIPELINE_FIELDS = [
   'priority', 'contentPieceId', 'calendar', 'departmentId', 'ownerId', 'reviewRequired', 'createdAt', 'updatedAt', 'pieceStages',
 ];
 /** Added when that step's approved output is visible to them. */
-const OUTPUT_FIELDS = ['deliverableUrl', 'publishedUrl', 'contentLink', 'assetsLink', 'description', 'brief', 'previousStage'];
+const OUTPUT_FIELDS = ['deliverableUrl', 'publishedUrl', 'contentLink', 'assetsLink', 'description', 'brief', 'previousStage', 'approvedOutput'];
 const STAGE_OUTPUT_FIELDS = ['deliverableUrl', 'publishedUrl', 'revisions'];
 const pick = (source, keys) => Object.fromEntries(keys.filter((k) => source[k] !== undefined).map((k) => [k, source[k]]));
 // Steps can arrive as Mongoose documents, whose own keys are internals rather than fields.

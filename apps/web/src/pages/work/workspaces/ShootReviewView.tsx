@@ -225,7 +225,7 @@ export const ShootReviewView: React.FC<ShootReviewViewProps> = ({
             )}
             <div>
               <span className="text-[11px] font-bold text-ui-ink">
-                Creative Head Review
+                {readOnly ? 'Approved footage' : 'Creative Head Review'}
               </span>
               <h2 className="text-sm font-bold text-ui-ink truncate max-w-md">
                 {workItemTitle}

@@ -278,18 +278,18 @@ export const ReviewStudioPage: React.FC = () => {
           try {
             const piece = await apiFetch<any>(`/api/content-pieces/${contentPieceId}`);
             if (piece?.workItems) {
+              // Each finished step's latest approved output (GET /api/content-pieces/:id).
               const previousWorkItems = piece.workItems.filter(
-                (w: any) => (w._id || w.id) !== workId && w.status === 'Approved'
+                (w: any) => String(w._id || w.id) !== String(workId) && w.approvedOutput
               );
               setEarlierOutputs(
                 previousWorkItems.map((w: any) => ({
                   id: w._id || w.id,
                   stageName: w.stageKey || w.title,
                   workerName: w.ownerId?.name || 'Teammate',
-                  fileUrl: w.deliverableUrl,
-                  contentUrl: w.contentUrl,
-                  textContent: w.finalText || w.textContent,
-                  updatedAt: w.updatedAt,
+                  fileUrl: w.approvedOutput.items?.[0]?.url,
+                  textContent: w.approvedOutput.text || undefined,
+                  updatedAt: w.approvedAt,
                 }))
               );
             }

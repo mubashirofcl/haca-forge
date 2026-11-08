@@ -58,6 +58,8 @@ const NO_SUBMISSION_TO_REVIEW =
   'This step has no submission to review yet. It can be approved or sent back once the owner submits their work.';
 
 interface WorkItemDetail {
+  /** Phase 6: this step's latest approved output (files and links). */
+  approvedOutput?: { version?: number | null; items: Array<{ url: string; name?: string | null; kind?: 'upload' | 'drive' | 'link' }> } | null;
   /** Phase 6: the viewer may reopen this finished review step now. */
   canReopen?: boolean;
   /** Phase 6: earlier steps being redone that this step is paused for. */
@@ -1674,21 +1676,13 @@ export const WorkDetailPage: React.FC = () => {
 
               <div>
                 <span className="text-[13px] font-medium text-ui-muted block mb-1">
-                  Worker Output Link
+                  Approved output{item.approvedOutput?.version ? ` (version ${item.approvedOutput.version})` : ''}
                 </span>
-                {item.deliverableUrl ? (
-                  <a
-                    href={item.deliverableUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-4 rounded-ui-card bg-white/60 flex items-center justify-between gap-2 text-xs text-ui-ink font-semibold hover:underline underline-offset-4 min-w-0"
-                  >
-                    <span className="truncate max-w-md">{item.deliverableUrl}</span>
-                    <ExternalLink className="w-4 h-4 shrink-0 text-ui-muted" aria-hidden="true" />
-                  </a>
+                {item.approvedOutput?.items?.length ? (
+                  <AssetLinks items={item.approvedOutput.items} testId="approved-output" />
                 ) : (
-                  <div className="p-4 rounded-ui-card bg-white/60 text-xs text-ui-muted italic">
-                    No output link submitted yet.
+                  <div className="p-4 rounded-ui-card bg-white/60 text-xs text-ui-muted italic" data-testid="approved-output-none">
+                    Not approved yet.
                   </div>
                 )}
               </div>

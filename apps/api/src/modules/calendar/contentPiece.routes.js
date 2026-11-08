@@ -13,6 +13,9 @@ router.get(
   contentPieceController.listPieces
 );
 
+// One piece with its steps' approved outputs; access is checked inside (Phase 3 rules).
+router.get('/:id', contentPieceController.getPiece);
+
 router.post(
   '/recommend-owners',
   requireAnyPermission('calendar.plan', 'assignment.override'),

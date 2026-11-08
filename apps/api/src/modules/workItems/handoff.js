@@ -35,7 +35,7 @@ export function outputItems(submission) {
   return items;
 }
 
-function plainText(document) {
+export function plainText(document) {
   if (!document) return '';
   if (typeof document.plainText === 'string' && document.plainText.trim()) return document.plainText.trim();
   const html = typeof document.htmlSnapshot === 'string' ? document.htmlSnapshot : '';

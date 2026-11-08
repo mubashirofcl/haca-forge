@@ -336,6 +336,14 @@ export async function getWorkItemById(id, user) {
     }
   } catch {}
 
+  // Work Detail shows the step's approved output, not its latest submitted link (Phase 6).
+  if (['Approved', 'Published'].includes(result.status)) {
+    const approved = await approvedOutputOf(result);
+    result.approvedOutput = approved ? { version: approved.version, items: outputItems(approved) } : null;
+  } else {
+    result.approvedOutput = null;
+  }
+
   // A finished non-postable Design step is handed over: its approved files, with download,
   // for the SM manager, creative head and admin.
   if (['sm_manager', 'creative_head', 'admin'].includes(normalizeRole(user?.role))) {
@@ -693,8 +701,9 @@ import { ContentPiece } from '../calendar/contentPiece.model.js';
 import { CalendarPlan } from '../calendar/plan.model.js';
 import { isPostableWorkType } from '@mmp/shared';
 import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
-import { buildHandoff, buildHandover } from './handoff.js';
+import { buildHandoff, buildHandover, outputItems } from './handoff.js';
 import { canReopen } from './reopen.js';
+import { approvedOutputOf } from './access.js';
 
 /** Same rule as the WorkItem isOverdue virtual, which .lean() results do not carry. */
 function isPastDeadline(deadline, status) {

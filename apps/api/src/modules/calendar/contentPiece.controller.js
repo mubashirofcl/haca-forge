@@ -104,3 +104,12 @@ export async function changeDeadline(req, res, next) {
     next(err);
   }
 }
+
+export async function getPiece(req, res, next) {
+  try {
+    const { getContentPieceForViewer } = await import('./contentPiece.read.js');
+    res.json(await getContentPieceForViewer(req.params.id, req.user));
+  } catch (err) {
+    next(err);
+  }
+}
