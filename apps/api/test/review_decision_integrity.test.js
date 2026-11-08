@@ -756,7 +756,7 @@ describe('Reopening a finished step', () => {
     expect((await approve(old)).status).toBe(409);
   });
 
-  it('later steps are left exactly as they were', async () => {
+  it('later unfinished steps keep their status but pause (Phase 6)', async () => {
     const pieceId = new mongoose.Types.ObjectId();
     const w = await makeStep('Design', 'Approved', { contentPieceId: pieceId, stageOrder: 1 });
     const next = await makeStep('Post', 'In Progress', { contentPieceId: pieceId, stageOrder: 2, reviewRequired: false, isLocked: false, unlockedAt: new Date() });
@@ -764,7 +764,10 @@ describe('Reopening a finished step', () => {
     expect((await move(w, 'head', 'In Progress')).status).toBe(200);
     expect((await call('get', `/api/work/${next._id}`, 'head')).status).toBe(200);
     const after = await WorkItem.findById(next._id).lean();
-    expect({ status: after.status, isLocked: after.isLocked, unlockedAt: after.unlockedAt }).toEqual({ status: before.status, isLocked: before.isLocked, unlockedAt: before.unlockedAt });
+    // Same status and unlock time; locked and marked paused until the reopened step is approved again.
+    expect({ status: after.status, unlockedAt: after.unlockedAt }).toEqual({ status: before.status, unlockedAt: before.unlockedAt });
+    expect(after.isLocked).toBe(true);
+    expect(after.pausedBy.map(String)).toEqual([String(w._id)]);
   });
 });
 

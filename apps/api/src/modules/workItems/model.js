@@ -74,6 +74,8 @@ const workItemSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    // Reopened earlier steps this step is paused for (Phase 6). Empty when not paused.
+    pausedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'WorkItem' }],
     // Written by the poster when the Post step is marked posted (Phase 5d).
     postCaption: { type: String, default: '', trim: true },
     postHashtags: { type: String, default: '', trim: true },
@@ -159,7 +161,7 @@ const workItemSchema = new mongoose.Schema(
       {
         kind: {
           type: String,
-          enum: ['blocked', 'pending'],
+          enum: ['blocked', 'pending', 'paused'],
           required: true,
         },
         startedAt: {
@@ -210,7 +212,7 @@ const workItemSchema = new mongoose.Schema(
           {
             kind: {
               type: String,
-              enum: ['blocked', 'pending'],
+              enum: ['blocked', 'pending', 'paused'],
             },
             startedAt: Date,
             endedAt: Date,

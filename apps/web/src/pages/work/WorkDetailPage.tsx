@@ -58,6 +58,10 @@ const NO_SUBMISSION_TO_REVIEW =
   'This step has no submission to review yet. It can be approved or sent back once the owner submits their work.';
 
 interface WorkItemDetail {
+  /** Phase 6: the viewer may reopen this finished review step now. */
+  canReopen?: boolean;
+  /** Phase 6: earlier steps being redone that this step is paused for. */
+  pausedBy?: string[];
   /** Approved files of a finished non-postable Design step (sm_manager, creative_head and admin only). */
   handover?: {
     approvedAt?: string | null;
@@ -352,6 +356,17 @@ export const WorkDetailPage: React.FC = () => {
     } catch (err: any) {
       alert(err.message || 'Transition failed');
     }
+  };
+
+  // Reopens a finished review step; unfinished later steps pause until it is approved again.
+  const handleReopen = async () => {
+    if (!item) return;
+    const reason = window.prompt(
+      'Reopen this step? Later steps that are not finished will pause until it is approved again. Reason (optional):',
+      ''
+    );
+    if (reason === null) return;
+    await handleTransition('In Progress', { comment: reason.trim() || 'Reopened for changes' });
   };
 
   // Resolves the blocker record and returns the step to its status before it was blocked.
@@ -742,6 +757,12 @@ export const WorkDetailPage: React.FC = () => {
           blockerReason={item.blockerReason}
         />
 
+        {item.pausedBy && item.pausedBy.length > 0 && (
+          <div className="mt-3 p-3 rounded-xl status-tint status-waiting text-xs font-semibold" role="status" data-testid="step-paused">
+            Paused: an earlier step is being redone. This step continues when it is approved again.
+          </div>
+        )}
+
         {/* Action Triggers Bar (Driven strictly by getAvailableActions) */}
         <div className="pt-3 border-t border-ui-line flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -920,6 +941,13 @@ export const WorkDetailPage: React.FC = () => {
               >
                 <HelpCircle className="w-3.5 h-3.5" />
                 Request help
+              </button>
+            )}
+
+            {item.canReopen && (
+              <button onClick={handleReopen} className="ui-btn ui-btn-secondary h-11 gap-1.5" data-testid="reopen-step">
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reopen step
               </button>
             )}
 

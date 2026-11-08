@@ -242,6 +242,8 @@ export async function getWorkItemById(id, user) {
     result.pieceStages = await withRecordedStepTimes(siblingStages);
     // The latest approved outputs of the finished steps before this one (Phase 5).
     result.handoff = await buildHandoff(result, siblingStages);
+    // Whether this viewer may reopen this step now (Phase 6).
+    result.canReopen = canReopen(user, result, siblingStages);
 
     if (result.stageOrder > 1) {
       const prevStage = siblingStages.find((s) => s.stageOrder === result.stageOrder - 1);
@@ -692,6 +694,7 @@ import { CalendarPlan } from '../calendar/plan.model.js';
 import { isPostableWorkType } from '@mmp/shared';
 import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
 import { buildHandoff, buildHandover } from './handoff.js';
+import { canReopen } from './reopen.js';
 
 /** Same rule as the WorkItem isOverdue virtual, which .lean() results do not carry. */
 function isPastDeadline(deadline, status) {

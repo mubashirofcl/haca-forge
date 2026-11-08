@@ -4,6 +4,7 @@ import { MediaItem } from '../media/model.js';
 import { logActivity } from '../activity/service.js';
 import { createNotification } from '../notifications/service.js';
 import { logger } from '../../lib/logger.js';
+import { assertNotPaused } from '../workItems/reopen.js';
 
 /**
  * The one set of rules for a review decision: approve, request revision, shoot review
@@ -105,6 +106,8 @@ export async function getRequiredClips(workItemId) {
  */
 export async function assertDecisionAllowed({ user, workItem, submissionId = null, decision = 'approve' }) {
   assertReviewer(user, workItem, decision);
+  // Paused while an earlier step is redone: no decision until it resumes.
+  assertNotPaused(workItem);
 
   if (['Approved', 'Published'].includes(workItem.status)) {
     throw decisionError(409, 'ALREADY_DECIDED', 'This step has already been approved. No further decision is needed.');

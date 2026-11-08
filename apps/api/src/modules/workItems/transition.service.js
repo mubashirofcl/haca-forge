@@ -8,6 +8,7 @@ import { recordRoundSubmission } from './rounds.js';
 import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
 import { isHandoverStep, notifyHandoverReady } from './handoff.js';
 import { recordBlocker, resolveActiveBlockers } from '../blockers/lifecycle.js';
+import { assertCanReopen, assertNotPaused, isPaused, pauseLaterSteps, resumePausedSteps } from './reopen.js';
 
 export const ALLOWED_TRANSITIONS = {
   'Not Started': ['In Progress', 'Blocked'],
@@ -123,6 +124,12 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
     error.statusCode = 403;
     error.code = 'FORBIDDEN_REOPEN';
     throw error;
+  }
+  // Only a finished review step, and never once the deliverable is posted or handed over.
+  if (isReopen) await assertCanReopen(workItem);
+  // A paused step is not decided until every earlier step it waits on is approved again.
+  if (isPaused(workItem) && (options.reviewDecision || toStatus === 'Approved' || toStatus === 'Published' || isReviewerRevision)) {
+    assertNotPaused(workItem);
   }
 
   // Requesting a revision follows the same reviewer rule as every other decision path.
@@ -443,6 +450,9 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
     await resolveActiveBlockers(workItem._id, user._id || userId, comment || 'Resolved by status change');
   }
 
+  // Reopened: unfinished later steps pause until this step is approved again.
+  if (isReopen) await pauseLaterSteps(workItem);
+
   // The status is saved. For a review decision, nothing after this point can fail it:
   // the decision stands, and a failure here is logged. A missed unlock is repaired by
   // reconcileContentPieceStageLocks the next time the step is opened.
@@ -491,6 +501,8 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
 
     // If stage approved / completed, unlock next unskipped stage
     if (toStatus === 'Approved' || toStatus === 'Published') {
+      // Approved again: the steps it paused resume (if nothing else still holds them).
+      if (toStatus === 'Approved') await resumePausedSteps(workItem);
       await unlockNextStage(workItem);
     }
 
