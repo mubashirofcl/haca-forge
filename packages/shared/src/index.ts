@@ -3439,15 +3439,22 @@ export function workerOnTime(labelSets: StepTimeLabel[][]): {
   onTime: number;
   total: number;
   rate: number | null;
+  /** Judged steps done late (same base as `rate`, so rate + lateRate = 100). */
+  late: number;
+  lateRate: number | null;
+  /** Every step labelled "Done N days late", including those delayed by an earlier step. */
+  doneLateCount: number;
   delayedByEarlier: number;
   delayedText: string;
 } {
   let onTime = 0;
   let total = 0;
   let delayedByEarlier = 0;
+  let doneLateCount = 0;
   for (const labels of labelSets) {
     const judged = hasTimeLabel(labels, "done_on_time") || hasTimeLabel(labels, "done_late");
     if (!judged) continue;
+    if (hasTimeLabel(labels, "done_late")) doneLateCount += 1;
     if (hasTimeLabel(labels, "late_earlier_step")) {
       delayedByEarlier += 1;
       continue;
@@ -3455,10 +3462,14 @@ export function workerOnTime(labelSets: StepTimeLabel[][]): {
     total += 1;
     if (hasTimeLabel(labels, "done_on_time")) onTime += 1;
   }
+  const rate = total ? Math.round((onTime / total) * 100) : null;
   return {
     onTime,
     total,
-    rate: total ? Math.round((onTime / total) * 100) : null,
+    rate,
+    late: total - onTime,
+    lateRate: rate === null ? null : 100 - rate,
+    doneLateCount,
     delayedByEarlier,
     delayedText: `${delayedByEarlier} ${delayedByEarlier === 1 ? "step" : "steps"} delayed by earlier steps`,
   };
@@ -3551,4 +3562,161 @@ export function projectTimeLabel(
   }
   const past = istDayDiff(opts.now ?? new Date(), piece.postingDate);
   return past !== null && past > 0 ? { kind: "overdue", text: formatOverdue(past), days: past } : null;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 8: profile KPIs. Each person's own figures only (no team averages, rankings or
+// comparisons with others). Built on the Phase 7 label and KPI helpers above.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ProfilePeriodKind = "month" | "3months" | "custom";
+
+export interface ProfilePeriod {
+  kind: ProfilePeriodKind;
+  /** Inclusive IST calendar days, 'YYYY-MM-DD'. */
+  from: string;
+  to: string;
+  label: string;
+}
+
+const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const keyToDay = (key: string) => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10))) / 86400000;
+const dayToKey = (n: number) => new Date(n * 86400000).toISOString().slice(0, 10);
+const monthStartKey = (key: string, back = 0) => {
+  const y = Number(key.slice(0, 4));
+  const m = Number(key.slice(5, 7)) - 1 - back;
+  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+};
+const monthEndKey = (key: string) => {
+  const y = Number(key.slice(0, 4));
+  const m = Number(key.slice(5, 7));
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+};
+
+/**
+ * The profile period (Phase 8), in IST calendar days: this month, the last 3 months
+ * (this month and the two before), or a custom range. A bad custom range falls back to
+ * this month. Steps belong to it by their due date.
+ */
+export function resolveProfilePeriod(
+  kind?: string | null,
+  opts: { from?: string | null; to?: string | null; now?: string | Date | number } = {}
+): ProfilePeriod {
+  const today = istDateKey(opts.now ?? new Date()) as string;
+  if (kind === "custom" && opts.from && opts.to && DAY_KEY_RE.test(opts.from) && DAY_KEY_RE.test(opts.to) && opts.from <= opts.to) {
+    return { kind: "custom", from: opts.from, to: opts.to, label: `${opts.from} to ${opts.to}` };
+  }
+  if (kind === "3months") {
+    const from = monthStartKey(today, 2);
+    const to = monthEndKey(today);
+    return { kind: "3months", from, to, label: `Last 3 months (${from.slice(0, 7)} to ${to.slice(0, 7)})` };
+  }
+  return { kind: "month", from: monthStartKey(today), to: monthEndKey(today), label: `This month (${today.slice(0, 7)})` };
+}
+
+/** The period just before, of the same kind and length (for the neutral "Last period" figure). */
+export function previousProfilePeriod(period: ProfilePeriod): ProfilePeriod {
+  if (period.kind === "month") {
+    const from = monthStartKey(period.from, 1);
+    return { kind: "month", from, to: monthEndKey(from), label: `Previous month (${from.slice(0, 7)})` };
+  }
+  if (period.kind === "3months") {
+    const from = monthStartKey(period.from, 3);
+    const to = monthEndKey(monthStartKey(period.from, 1));
+    return { kind: "3months", from, to, label: `Previous 3 months (${from.slice(0, 7)} to ${to.slice(0, 7)})` };
+  }
+  const length = keyToDay(period.to) - keyToDay(period.from) + 1;
+  const to = dayToKey(keyToDay(period.from) - 1);
+  const from = dayToKey(keyToDay(period.from) - length);
+  return { kind: "custom", from, to, label: `${from} to ${to}` };
+}
+
+/** Whether a moment falls on an IST day inside the period. */
+export function inProfilePeriod(value: string | Date | number | null | undefined, period: ProfilePeriod): boolean {
+  const key = istDateKey(value);
+  return !!key && key >= period.from && key <= period.to;
+}
+
+/**
+ * Review-step figures (Phase 8): review steps only (Post excluded), counted once they have a
+ * decision (finished, or sent back at least once).
+ * - changesRequestedRate: reviewed steps with at least one change request ÷ reviewed steps
+ * - reworkRounds: total revision rounds; reworkRate: revision rounds ÷ reviewed steps
+ */
+export function reviewStats(
+  steps: Array<TimedStep & { changesRequested?: boolean }>
+): {
+  reviewed: number;
+  withChangeRequest: number;
+  changesRequestedRate: number | null;
+  reworkRounds: number;
+  reworkRate: number | null;
+} {
+  let reviewed = 0;
+  let withChangeRequest = 0;
+  let reworkRounds = 0;
+  for (const step of steps || []) {
+    if (!step || step.isSkipped || step.stageKey === "Post") continue;
+    const sentBack =
+      Boolean(step.changesRequested) ||
+      (step.revisions || 0) > 0 ||
+      (step.rounds || []).some((r) => r && r.decision === "changes_requested");
+    if (!isFinishedStepStatus(step.status) && !sentBack) continue;
+    reviewed += 1;
+    if (sentBack) withChangeRequest += 1;
+    reworkRounds += Math.max(step.revisions || 0, sentBack ? 1 : 0);
+  }
+  return {
+    reviewed,
+    withChangeRequest,
+    changesRequestedRate: reviewed ? Math.round((withChangeRequest / reviewed) * 100) : null,
+    reworkRounds,
+    reworkRate: reviewed ? Math.round((reworkRounds / reviewed) * 100) / 100 : null,
+  };
+}
+
+/**
+ * A reviewer's decisions (Phase 8): submissions they approved or sent back. Approval wait is
+ * submission to decision, averaged over decisions that have both times.
+ */
+export function reviewerStats(
+  decisions: Array<{ status?: string | null; submittedAt?: DateLike; reviewedAt?: DateLike }>
+): { reviews: number; approvals: number; changesRequested: number; avgWaitMs: number | null; waitBasedOn: number } {
+  let approvals = 0;
+  let changesRequested = 0;
+  let waitTotal = 0;
+  let waitBasedOn = 0;
+  for (const d of decisions || []) {
+    if (d?.status === "approved") approvals += 1;
+    else if (d?.status === "changes_requested") changesRequested += 1;
+    else continue;
+    if (d.submittedAt && d.reviewedAt) {
+      const ms = new Date(d.reviewedAt as string).getTime() - new Date(d.submittedAt as string).getTime();
+      if (!isNaN(ms) && ms >= 0) {
+        waitTotal += ms;
+        waitBasedOn += 1;
+      }
+    }
+  }
+  return {
+    reviews: approvals + changesRequested,
+    approvals,
+    changesRequested,
+    avgWaitMs: waitBasedOn ? Math.round(waitTotal / waitBasedOn) : null,
+    waitBasedOn,
+  };
+}
+
+/** The team review queue: how many are waiting and the oldest wait (from its latest submission). */
+export function reviewQueueAge(
+  waiting: Array<{ submittedAt?: DateLike }>,
+  now: DateLike = new Date()
+): { waiting: number; oldestMs: number | null; oldestSubmittedAt: Date | null } {
+  const times = (waiting || [])
+    .map((w) => (w?.submittedAt ? new Date(w.submittedAt as string).getTime() : NaN))
+    .filter((t) => !isNaN(t));
+  if (!times.length) return { waiting: (waiting || []).length, oldestMs: null, oldestSubmittedAt: null };
+  const oldest = Math.min(...times);
+  return { waiting: (waiting || []).length, oldestMs: Math.max(0, new Date(now as string).getTime() - oldest), oldestSubmittedAt: new Date(oldest) };
 }
