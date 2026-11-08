@@ -1,6 +1,45 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after Phase 5):** 1546 passing, 0 failing: API 1264 (53 files), web 282 (37 files). Typecheck 0 errors; web build clean.
+**Current test count (after Phase 6):** 1601 passing, 0 failing: API 1312 (58 files), web 289 (40 files). Typecheck 0 errors; web build clean.
+
+## Phase 6: Small fixes (Status: COMPLETE; committed locally, not pushed)
+
+Eight commits, each gated in the working tree (typecheck, web build, all tests): 6a `3d544e5`, 6b `dd87c5f`, 6c `2cbec11`, 6d `ea23f19`, 6e `b6e9096`, 6f `47dc987`, 6g `3cd4726`, and this entry.
+
+- 6a, tests and repo:
+  - The flaky TeamMemberRouteBoundaries test: "other roles still get the page" for `/reports` and `/workload` timed out at the default 1s while the lazy page modules compiled on first render. The test now loads those modules once up front and waits up to 5s.
+  - The API tests set test-only JWT secrets in `apps/api/vitest.config.js`, so a fresh checkout with no `.env` passes. Real env values are never overridden.
+  - `.gitignore` anchors the uploads rule to `/uploads/` and `/apps/api/uploads/`.
+- 6b, blockers:
+  - One path for blocking: a move to Blocked (from any screen) creates a Blocker record with the status it was in (`statusBefore`) and opens a blocked interval; leaving Blocked resolves the record.
+  - Resolving returns the step to its status before the blocker (an explicit resume status is still honoured) and closes the interval.
+  - The step owner, sm_manager and admin can resolve: "Resolve Blocker" on My Work and "Resolve blocker" on Work Detail; both resolve the record. The Issues page resume select defaults to the previous status.
+- 6c, reopening:
+  - "Reopen step" on Work Detail for creative_head and admin, on finished review steps only, never on their own step. Refused once the deliverable is posted, or a non-postable design is handed over (409 `DELIVERABLE_DELIVERED`).
+  - On reopen, every unfinished later step is paused (`pausedBy`): it keeps its status, start time and rounds, is locked, and a started step gets a `paused` interval that work time subtracts like a blocked one. A step awaiting review is paused too; review decisions on it are refused (409 `STEP_PAUSED`) until it resumes.
+  - A paused step resumes at its exact previous status when every earlier step that paused it is approved again. Owners are notified on pause (`step_paused`) and resume (`step_resumed`).
+- 6d, outputs:
+  - `GET /api/content-pieces/:id` with Phase 3 access (the same 404 to a team member not on the piece), each visible finished step with its latest approved output. Review Studio's Outputs tab reads it.
+  - Work Detail's output section shows the step's approved output, not the latest submission. A participant's read-only Shoot view is headed "Approved footage".
+- 6e, plans and publishing:
+  - A plan can be deleted until any of its steps starts (left Not Started, has a start time, or has a submission). Deleting removes its unstarted steps and rows; after that, 409 `PLAN_HAS_STARTED_WORK`. Existing orphaned records are untouched. Delete Plan shows only while nothing has started.
+  - Marking a Post step posted validates the content piece first: an invalid piece is a 400 `CONTENT_PIECE_INVALID` with nothing changed. It was a 500 after the step had already been saved as Published.
+- 6f, screens and messages:
+  - An executive opening My Work by URL is redirected to /dashboard.
+  - The error fallback no longer mentions "diagnostics".
+  - Attachment-only chat messages notify members ("<name> sent an attachment"). The notification needed text and failed silently; chat notification failures are now logged.
+  - An unknown role in an admin role change is a 400 `INVALID_ROLE`, not a 500.
+  - Performance tab work time read `netWorkTimeMs`, which the shared calculator does not return, so it was always 0. It now uses `submittedWorkTimeMs` in `@mmp/shared` (submitted rounds only), which the team digest uses too.
+- 6g: test counts and outdated statuses in CONTEXT.md, WORKSPACES.md and this file.
+- Routine decisions made: the owner gets `resolve_blocker`; the Issues page defaults to "previous status"; blocking by transition now creates a record; `createBlocker` opens an interval; `canReopen` is computed by the API; `approvedOutput` is an output field under the viewer rules; the content-piece GET returns the piece directly; plan delete returns 409 and removes only steps still unstarted at delete time; chat notification text for attachments and shared items.
+- Tests updated for the approved rules: the actions test (owner now gets `resolve_blocker`), the review-integrity test (later steps keep their status but pause), the old reopen test, and the plan-delete test (an approved row with no started steps is now deletable).
+- Browser test, 40 of 40, on a disposable database (`marketing_portal_uicheck`, dropped afterwards):
+  - Blockers: the owner blocks, a record is created remembering In Progress, Resolve Blocker on My Work returns the step to In Progress and the record to Resolved with the interval closed. On Work Detail the creative head sees no resolve button, a non-participant gets 404, and the SM manager resolves.
+  - Reopening: SM manager and step owner see no Reopen step; the creative head reopens; later steps pause, keeping status and start time, with the paused notice and a notification; after resubmission and approval they resume exactly, with the notice gone and a resume notification. Admin sees Reopen step. A posted deliverable shows no button and the API refuses with 409.
+  - Plans: a plan with a started step shows no Delete Plan and the API refuses with 409, leaving it intact; a plan with nothing started is deleted from the UI with its row and steps.
+  - No page errors or 5xx.
+- Clean-worktree gate: a fresh worktree of HEAD, `npm ci`, no `.env` and no secrets on the command line or in the environment; the API tests ran on the vitest config's test-only secrets. (Phase 5's clean gate needed secrets passed on the command line because the tests then read them only from `.env`; 6a removed that need.) The worktree was removed afterwards.
+- Real database (`marketing_portal`) unchanged against the Phase 6 snapshot: same collection counts and the same latest work-item update. The fixtures only read demo users from it.
 
 ## Phase 5: Asset handoff and Drive links (Status: COMPLETE; committed locally, not pushed)
 
