@@ -1,11 +1,11 @@
 # HACA Marketing OS — Master Project Context
 
-**Current as of:** 8 November 2026 (after Phase 6)  
+**Current as of:** 8 November 2026 (after Phase 7)  
 **Repository:** HACA Marketing OS (`haca-forge`)  
 **Technology Stack:** Node 22 LTS, Express 5 (ESM), React 18, Vite 6, TypeScript, Tailwind CSS, MongoDB (Mongoose), Socket.io, BullMQ (Redis).  
-**Test Suite Status:** **1601 tests passing across 98 test files (0 failures)**  
-- `@mmp/api`: 1312 tests passed across 58 test files  
-- `@mmp/web`: 289 tests passed across 40 test files  
+**Test Suite Status:** **1639 tests passing across 105 test files (0 failures)**  
+- `@mmp/api`: 1341 tests passed across 63 test files  
+- `@mmp/web`: 298 tests passed across 42 test files  
 - The API tests set their own test-only JWT secrets (`apps/api/vitest.config.js`), so a fresh checkout passes with no `.env`.  
 
 ---
@@ -88,6 +88,8 @@
 - **Recorded Timestamps:** `unlockedAt`, `assignedAt`, `startedAt`, `submittedAt`, `decisionAt`, `changesRequestedAt`, `resubmittedAt`, `approvedAt`, `postedAt`, plus paused interval logs (`blocked`, `pending`, and `paused` for a later step held while an earlier step is reopened).
 - **Measures (Display-Only):**
   - Waiting to start: `startedAt` minus `unlockedAt`.
+  - Time labels (Phase 7, computed only; dates compared in Asia/Kolkata, so a step due on a day is on time until 11:59 PM IST): Overdue (unlocked, unfinished, past its due date), Waiting: earlier step late (locked and past due; never Overdue), Done N days late / Done on time (by the first submission; a Post step by its posting), Late: earlier step (unlocked after its own due date), Blocked N days (active blocker). Project labels: Overdue (publish date passed, not posted or handed over) and Completed late. Shared in `@mmp/shared` (`stepTimeLabels`, `projectTimeLabel`).
+  - Worker on-time rate leaves out "Late: earlier step" steps and shows "N steps delayed by earlier steps".
   - Work time: round submission minus round start, minus blocked, pending and paused periods. Reports, the team digest and the Performance tab count submitted rounds only (`submittedWorkTimeMs` in `@mmp/shared`).
   - Approval wait: decision time minus submission time.
   - Late by: calendar days between submission date and step due date.
@@ -159,7 +161,7 @@ Seeded via `apps/api/scripts/reset-and-seed.js`:
 | 19 | Phase 4: uploads and sockets | **Done** | `phase4a_upload_safety.test.js` and Phase 4 tests |
 | 20 | Phase 5: asset handoff, Drive links, caption on Post | **Done** | Phase 5 tests; 30/30 browser checks |
 | 21 | Phase 6: blockers, reopening, plan delete, small fixes | **Done** | Phase 6 tests; see docs/PROGRESS.md |
-| 22 | Reports, overdue and KPI work | **Not started** | Next phases, after their prompts |
+| 22 | Phase 7: live reports, overdue and lateness labels, project KPIs | **Done** | Phase 7 tests; 49/49 browser checks; see docs/PROGRESS.md |
 
 ---
 

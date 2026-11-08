@@ -1,6 +1,45 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after Phase 6):** 1601 passing, 0 failing: API 1312 (58 files), web 289 (40 files). Typecheck 0 errors; web build clean.
+**Current test count (after Phase 7):** 1639 passing, 0 failing: API 1341 (63 files), web 298 (42 files). Typecheck 0 errors; web build clean.
+
+## Phase 7: Reports, overdue and KPI (Status: COMPLETE; committed locally, not pushed)
+
+Eight commits, each gated in the working tree (typecheck, web build, all tests): 7a `71f6a57`, 7b `745fcbd`, 7c `4afd138`, 7d `c49212f`, 7e `20885c6`, 7f `3a07bf3`, 7g `f3ac77a`, and this entry.
+
+- 7a, shared rules in `@mmp/shared` (used by the API and web):
+  - Dates compare by calendar day in Asia/Kolkata (`istDateKey`, `istDayDiff`, `istWeekKey`); `overdueDays` now uses them, so results no longer depend on the server or browser timezone.
+  - `stepTimeLabels`: Overdue (unlocked, unfinished, today IST past the due date), Waiting: earlier step late (locked and past due; a locked step is never Overdue), Done N days late / Done on time (first submission, else a Post step's posting; 11:59 PM IST is on time), Late: earlier step (unlocked after its own due date, kept after it is finished), Blocked N days (active blocker).
+  - `workerOnTime` leaves out "Late: earlier step" steps from count and total and reports "N steps delayed by earlier steps".
+  - `projectDelivery` and `projectTimeLabel`: Overdue and Completed late, by publish date; a non-postable design is handed over when its Design step is approved.
+  - KPIs: `stepElapsedWork` (submitted rounds minus blocked and paused time; older steps from history, marked partial), `ratingAverage` (3-rating minimum, else "Collecting baseline"), first-pass helpers (review steps only, Post excluded).
+- 7b, retired report jobs:
+  - weekly_report and month_end_report log "retired" and do nothing; they are no longer default rules; their records stay untouched.
+  - The worker removes their repeat schedules from the BullMQ queue at startup and registers only the 4 reminder rules.
+  - Startup never deletes or edits rule records: it only inserts missing defaults (it also used to bump `updatedAt` on every start).
+- 7c, live reports API: `GET /api/reports/{overview,overdue,production,quality,projects}` and `GET /api/reports/projects/:id`.
+  - Filters: month by publish date (IST; everything, including the step lists, follows it), calendar, step type.
+  - Team-level only: owner names appear on list rows, sorted by due date; nothing is grouped, counted or sorted by person.
+  - One rating per step, on the latest approved submission. A posted Post step without a posting time uses its piece's published time.
+  - Older steps' times are read from the activity log and submissions (`workItems/history.js`), read only.
+  - Team members get 403 on reports and 404 on a Project KPI page; the executive reads them.
+- 7d, Reports page: the 5 reports with Recharts charts, CSV per table (built from the same columns as the screen), a print layout (`/reports/print`) for Save as PDF, and the read-only Project KPI page. No automation, scheduling, HTML preview or placeholder figures. The nav item is "Reports".
+- 7e, removed: report definitions, generation, scheduled reports, HTML export, the old report aliases and the automation API (`/api/automation` list, toggle, run). Their routes return 404. `reports/service.js` and the automation controller, service and routes are deleted. Startup no longer upserts report definitions; the 4 records stay untouched.
+- 7f, labels across the app: Work Items (Overdue / Done late / Blocked filter), My Work, Work Detail (owner and leadership only), Tracker (step labels, project label, Done late filter) and the profile Work tab.
+- 7g, profiles: header Overdue counts open steps labelled Overdue; on-time rate by the new rule with the delayed note ("No data" instead of 100% when nothing is judged); Overview open overdue and blocked counts; Performance on-time card. Workers see only their own profile.
+- Decisions applied: A (everything follows the publish-date month), B (retired jobs; schedules removed; rule records never deleted; report definitions untouched), C (automation API removed), D (locked steps never Overdue; "Waiting: earlier step late"; worker on-time excludes "Late: earlier step"; project figures unchanged).
+- Routine decisions: Blocked N days uses the earliest active blocker record (an active record counts even if the step's status is not Blocked, per "has an active blocker"); the project on-time KPI counts every finished step and shows the delayed count beside it; first-pass also counts a step as not first-pass if any submission was sent back; Work Detail labels are hidden from other participants; dashboard (`/api/dashboard`) unchanged.
+- Tests updated for the approved rules: tests of the removed routes now check the 404s or the live reports; the automation runner tests call the runner directly; the rule-list tests no longer expect the retired rules.
+- Gate note: one 7d gate run failed only because the machine slept mid-run (a test step crossed its 15 s timeout and the 1-hour test tokens expired); it was re-run clean on the committed state (295 web, 1354 API) before 7e. One 7f run collided with a second run I had started by mistake on the same test database; the re-run alone passed.
+- Browser test, 49 of 49, on a disposable database (dropped afterwards), at desktop and phone width (390 px):
+  - All 5 reports with their charts drawn; Overview delivered 2 (one post, one handover); the locked Post step is not in the overdue list; the delayed Shoot step shows "Late: earlier step"; Quality average from one rating per step; root cause chart.
+  - CSV download whose rows match the on-screen table exactly; print layout with fixed-size charts and every table, saved as PDF.
+  - Project KPI page from the Projects report: four KPI cards, the delayed note, step rows with owner names and hours.
+  - Tracker labels, project label and Done late filter; profile on-time with "1 step delayed by earlier steps", own Overview counts and Work-tab labels; a worker cannot open someone else's profile.
+  - Team member: Reports and Project KPI page show not found (API 403 and 404). Executive reads reports with nothing to edit or generate.
+  - Phone: every report and the Project KPI page fit the width, tables become row cards, charts draw at the phone width.
+  - No page errors or 5xx.
+- Clean-worktree gate: a fresh worktree of HEAD, `npm ci`, no `.env` and no secrets on the command line or in the environment; removed afterwards.
+- Real database (`marketing_portal`): no writes from this phase (the Step 1 survey was read only). Against the Phase 6 snapshot it shows the user's own dev-app activity on 8 Nov: 7 logins (SM manager, admin, creative head), 8 report generations through the old routes still loaded in the running dev server, one work-item update ("Sample reels - Post"), and a plan calendar move at 15:18 UTC that touched 17 work items and sent 16 notifications. All of it happened before this phase's browser fixture was built, through the dev server, which this work never used.
 
 ## Phase 6: Small fixes (Status: COMPLETE; committed locally, not pushed)
 
