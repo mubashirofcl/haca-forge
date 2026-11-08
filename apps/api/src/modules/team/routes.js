@@ -61,6 +61,10 @@ router.get('/:id', requireProfileAccess, teamController.getBaseProfile);
 router.get('/:id/overview', requireProfileAccess, teamController.getOverview);
 router.get('/:id/work', requireProfileAccess, teamController.getWork);
 router.get('/:id/performance', requireProfileAccess, teamController.getPerformance);
+// Phase 8: profile KPIs for a period (same access as the profile) and the downloadable
+// report (admin, creative_head and executive only; enforced in the service).
+router.get('/:id/kpis', requireProfileAccess, teamController.getKpis);
+router.get('/:id/report', requireProfileAccess, teamController.getReport);
 router.get('/:id/ratings', requireProfileAccess, teamController.getRatings);
 router.get('/:id/activity', requireProfileAccess, teamController.getActivity);
 router.get('/:id/changes', notFoundForWorkers, requirePermission('team.profile.view'), teamController.getChanges);

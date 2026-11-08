@@ -7,6 +7,7 @@ import { Rating } from '../submissions/model.js';
 import { ActivityEvent } from '../activity/model.js';
 import { PersonChangeAudit } from './audit.model.js';
 import { evaluateSteps } from '../workItems/timeLabels.js';
+import { oneRatingPerStep } from '../submissions/ratingsPerStep.js';
 import { Session } from '../auth/session.model.js';
 import { logActivity } from '../activity/service.js';
 import { getRatingsSummary } from '../submissions/service.js';
@@ -19,6 +20,9 @@ import {
   submittedWorkTimeMs,
   hasTimeLabel,
   workerOnTime,
+  ratingAverage,
+  isFirstPassApproval,
+  isFirstPassCandidate,
   ROLE_KEYS,
 } from '@mmp/shared';
 
@@ -267,13 +271,12 @@ export async function getPersonBaseProfile(targetPersonId, actor) {
   const onTimeRate = onTime.rate;
 
   // Ratings calculation with minimum 3-rating visibility threshold
-  const ratings = await Rating.find({ workerId: person._id }).lean();
-  let averageRating = null;
-  const ratingCount = ratings.length;
-  if (ratingCount >= 3) {
-    const totalScore = ratings.reduce((sum, r) => sum + (r.score || 0), 0);
-    averageRating = Number((totalScore / ratingCount).toFixed(1));
-  }
+  // Phase 8: one rating per step (on its latest approved submission), 3-rating minimum.
+  const ratedStepIds = [...openItems, ...completedItems].map((it) => it._id);
+  const perStep = await oneRatingPerStep(ratedStepIds);
+  const ratingSummary = ratingAverage([...perStep.values()].map((r) => r.score));
+  const averageRating = ratingSummary.average;
+  const ratingCount = ratingSummary.count;
 
   // Executive privacy redaction: hide email, phone, whatsapp
   const isSelf = String(actor._id || actor.id || actor.userId) === String(targetPersonId);
@@ -615,22 +618,23 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
   const prevStart = new Date(currentStart.getTime() - days * 86400000);
   const prevEnd = new Date(currentStart);
 
-  // Retrieve completed items in current window
-  const currentCompleted = await WorkItem.find({
-    ownerId: targetPersonId,
-    status: { $in: ['Approved', 'Published'] },
-    updatedAt: { $gte: currentStart, $lte: currentEnd },
-  }).lean();
-
-  // Retrieve completed items in previous window
-  const prevCompleted = await WorkItem.find({
-    ownerId: targetPersonId,
-    status: { $in: ['Approved', 'Published'] },
-    updatedAt: { $gte: prevStart, $lte: prevEnd },
-  }).lean();
+  // Phase 8: completed in a window by when the step was finished (approval, or posting for
+  // Post; stored or from history), not by updatedAt.
+  const finishedSteps = await WorkItem.find({ ownerId: targetPersonId, status: { $in: ['Approved', 'Published'] } }).lean();
+  const windowFacts = await evaluateSteps(finishedSteps, { now, withElapsed: false });
+  const finishedOn = (it) => {
+    const f = windowFacts.get(String(it._id));
+    if (it.stageKey === 'Post') return it.postedAt || f?.history?.postedAt || f?.firstSubmitted || null;
+    return it.approvedAt || f?.history?.approvedAt || f?.firstSubmitted || null;
+  };
+  const inWindow = (it, start, end) => {
+    const at = finishedOn(it);
+    return !!at && new Date(at) >= start && new Date(at) <= end;
+  };
+  const currentCompleted = finishedSteps.filter((it) => inWindow(it, currentStart, currentEnd));
+  const prevCompleted = finishedSteps.filter((it) => inWindow(it, prevStart, prevEnd));
 
   // Phase 7: on-time by the shared labels; steps delayed by an earlier step are left out.
-  const windowFacts = await evaluateSteps([...currentCompleted, ...prevCompleted], { now, withElapsed: false });
   const windowLabels = (it) => windowFacts.get(String(it._id))?.labels || [];
 
   const calculateWindowStats = (items) => {
@@ -643,7 +647,7 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
         delayedByEarlier: 0,
         delayedText: workerOnTime([]).delayedText,
         avgDaysLate: 0,
-        firstPassApprovalRate: 100,
+        firstPassApprovalRate: null,
         avgRevisions: 0,
         avgWorkTimeMs: 0,
         avgWorkTimeFormatted: '—',
@@ -661,6 +665,7 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
     let totalLateDays = 0;
     let lateItemsCount = 0;
     let firstPassCount = 0;
+    let firstPassBase = 0;
     let totalRevisions = 0;
     let totalWorkTimeMs = 0;
     let workTimeItemsCount = 0;
@@ -684,9 +689,10 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
         lateItemsCount++;
       }
 
-      // First-pass approval
-      if ((it.revisions || 0) === 0) {
-        firstPassCount++;
+      // First-pass approval (Phase 8: review steps only; Post is never counted)
+      if (isFirstPassCandidate(it)) {
+        firstPassBase++;
+        if (isFirstPassApproval(it, { changesRequested: windowFacts.get(String(it._id))?.changesRequested })) firstPassCount++;
       }
       totalRevisions += it.revisions || 0;
 
@@ -758,7 +764,8 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
       delayedByEarlier: onTime.delayedByEarlier,
       delayedText: onTime.delayedText,
       avgDaysLate: lateItemsCount > 0 ? Number((totalLateDays / lateItemsCount).toFixed(1)) : 0,
-      firstPassApprovalRate: Math.round((firstPassCount / items.length) * 100),
+      firstPassApprovalRate: firstPassBase ? Math.round((firstPassCount / firstPassBase) * 100) : null,
+      firstPassBase,
       avgRevisions: Number((totalRevisions / items.length).toFixed(1)),
       avgWorkTimeMs: avgWorkTime,
       avgWorkTimeFormatted: avgWorkTime > 0 ? formatDuration(avgWorkTime) : '—',
@@ -796,14 +803,6 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
     });
   }
 
-  // Revision flags summary
-  const revisionFlags = {
-    total: currentStats.avgRevisions * currentStats.completedCount,
-    creativeDirection: 0,
-    technicalExecution: 0,
-    brandGuidelines: 0,
-    copyMistakes: 0,
-  };
 
   return {
     period: {
@@ -816,10 +815,12 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
       completedCountDelta: currentStats.completedCount - prevStats.completedCount,
       onTimeRateDelta:
         currentStats.onTimeRate === null || prevStats.onTimeRate === null ? null : currentStats.onTimeRate - prevStats.onTimeRate,
-      firstPassRateDelta: currentStats.firstPassApprovalRate - prevStats.firstPassApprovalRate,
+      firstPassRateDelta:
+        currentStats.firstPassApprovalRate === null || prevStats.firstPassApprovalRate === null
+          ? null
+          : currentStats.firstPassApprovalRate - prevStats.firstPassApprovalRate,
     },
     monthlyOutputTrend,
-    revisionFlags,
   };
 }
 
@@ -867,8 +868,9 @@ export async function getPersonChanges(targetPersonId, actor) {
     throw error;
   }
 
+  // Contact fields (the actor's email) only for admin (Phase 8).
   const logs = await PersonChangeAudit.find({ personId: targetPersonId })
-    .populate('actorId', 'name role email')
+    .populate('actorId', actorRole === 'admin' ? 'name role email' : 'name role')
     .sort({ createdAt: -1 })
     .lean();
 

@@ -354,11 +354,23 @@ describe('Team Directory and Worker Profile API Suite', () => {
         version: 1,
         document: { htmlSnapshot: 'doc2' },
       });
+      // Phase 8: one rating per step, so the third rating is on a third step.
+      const workItem3 = await WorkItem.create({
+        title: 'TP Test Third Step',
+        contentPieceId: testPiece._id,
+        departmentId: dept._id,
+        ownerId: worker1._id,
+        stageKey: 'Content',
+        workType: 'Reel',
+        status: 'Approved',
+        deadline: new Date(Date.now() + 3 * 86400000),
+        estimatedEffortHrs: 4,
+      });
       const sub3 = await Submission.create({
-        workItemId: workItem1._id,
+        workItemId: workItem3._id,
         stageKey: 'Content',
         kind: 'document',
-        version: 2,
+        version: 1,
         document: { htmlSnapshot: 'doc3' },
       });
 
@@ -383,7 +395,7 @@ describe('Team Directory and Worker Profile API Suite', () => {
         },
         {
           submissionId: sub3._id,
-          workItemId: workItem1._id,
+          workItemId: workItem3._id,
           stageKey: 'Content',
           workerId: worker1._id,
           raterId: creativeHead._id,

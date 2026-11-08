@@ -19,7 +19,7 @@ import {
 } from '@mmp/shared';
 import { ContentPiece } from '../calendar/contentPiece.model.js';
 import { WorkItem } from '../workItems/model.js';
-import { Rating, Submission } from '../submissions/model.js';
+import { oneRatingPerStep } from '../submissions/ratingsPerStep.js';
 import { RevisionFlag } from '../feedback/model.js';
 import { evaluateSteps } from '../workItems/timeLabels.js';
 
@@ -43,35 +43,6 @@ const calendarOf = (piece) => piece.calendar || 'sm';
 const calendarName = (key) => getCalendarDefinition(key)?.name || key;
 const ownerName = (step) => (step.ownerId && typeof step.ownerId === 'object' ? step.ownerId.name || null : null);
 const iso = (d) => (d ? new Date(d).toISOString() : null);
-
-/** One rating per step: the one on its latest approved submission, else its latest rating. */
-async function oneRatingPerStep(stepIds) {
-  const result = new Map();
-  if (!stepIds.length) return result;
-  const [approved, ratings] = await Promise.all([
-    Submission.find({ workItemId: { $in: stepIds }, status: 'approved', version: { $gt: 0 } }).select('workItemId version').lean(),
-    Rating.find({ workItemId: { $in: stepIds } }).select('workItemId submissionId score createdAt').lean(),
-  ]);
-  const latestApproved = new Map();
-  for (const s of approved) {
-    const key = String(s.workItemId);
-    if (!latestApproved.has(key) || s.version > latestApproved.get(key).version) latestApproved.set(key, s);
-  }
-  const byStep = new Map();
-  for (const r of ratings) {
-    const key = String(r.workItemId);
-    if (!byStep.has(key)) byStep.set(key, []);
-    byStep.get(key).push(r);
-  }
-  for (const [key, list] of byStep) {
-    const target = latestApproved.get(key);
-    const onApproved = target ? list.find((r) => String(r.submissionId) === String(target._id)) : null;
-    const latest = [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
-    const chosen = onApproved || latest;
-    if (chosen && typeof chosen.score === 'number') result.set(key, chosen.score);
-  }
-  return result;
-}
 
 /** Pieces, steps and every computed fact the reports need. */
 async function loadPieces(pieceFilter, { now }) {
@@ -125,7 +96,7 @@ async function loadPieces(pieceFilter, { now }) {
         elapsed: f.elapsed || null,
         blocker: f.blocker || null,
         changesRequested: Boolean(f.changesRequested),
-        rating: ratings.has(String(s._id)) ? ratings.get(String(s._id)) : null,
+        rating: ratings.get(String(s._id))?.score ?? null,
       };
     });
     rows.push({ piece, delivery, label, steps: stepRows });

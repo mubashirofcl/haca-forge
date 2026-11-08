@@ -197,6 +197,10 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
       deadline: new Date(),
     });
 
+    // Phase 8: one rating per step, so each rated version below gets its own step.
+    const extraStep = (owner, title) =>
+      WorkItem.create({ title, workType: 'Reel', status: 'Approved', stageKey: 'Script', stageOrder: 1, departmentId: deptId, profileId: profId, ownerId: owner, deadline: new Date() });
+
     // Seed Submissions and Ratings for WorkerFew
     const subFew1 = await Submission.create({
       workItemId: testWorkItemFew._id,
@@ -218,8 +222,9 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
       createdAt: new Date(),
     });
 
+    const testWorkItemFew2 = await extraStep(workerFewUser._id, 'WS4 Test Few Deliverable 2');
     const subFew2 = await Submission.create({
-      workItemId: testWorkItemFew._id,
+      workItemId: testWorkItemFew2._id,
       stageKey: 'Script',
       version: 2,
       kind: 'document',
@@ -228,7 +233,7 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
     });
     await Rating.create({
       submissionId: subFew2._id,
-      workItemId: testWorkItemFew._id,
+      workItemId: testWorkItemFew2._id,
       stageKey: 'Script',
       workerId: workerFewUser._id,
       raterId: creativeHeadUser._id,
@@ -261,8 +266,9 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
     });
 
     // Rating 2: 15 days ago (score 4)
+    const testWorkItemA2 = await extraStep(workerAUser._id, 'WS4 Test Script Deliverable 2');
     const subA2 = await Submission.create({
-      workItemId: testWorkItemA._id,
+      workItemId: testWorkItemA2._id,
       stageKey: 'Script',
       version: 2,
       kind: 'document',
@@ -271,7 +277,7 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
     });
     testRating2 = await Rating.create({
       submissionId: subA2._id,
-      workItemId: testWorkItemA._id,
+      workItemId: testWorkItemA2._id,
       stageKey: 'Script',
       workerId: workerAUser._id,
       raterId: creativeHeadUser._id,
@@ -282,8 +288,9 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
     });
 
     // Rating 3: 40 days ago (score 3)
+    const testWorkItemA3 = await extraStep(workerAUser._id, 'WS4 Test Script Deliverable 3');
     const subA3 = await Submission.create({
-      workItemId: testWorkItemA._id,
+      workItemId: testWorkItemA3._id,
       stageKey: 'Script',
       version: 3,
       kind: 'document',
@@ -292,7 +299,7 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
     });
     testRating3 = await Rating.create({
       submissionId: subA3._id,
-      workItemId: testWorkItemA._id,
+      workItemId: testWorkItemA3._id,
       stageKey: 'Script',
       workerId: workerAUser._id,
       raterId: creativeHeadUser._id,
@@ -303,8 +310,9 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
     });
 
     // Rating 4: 100 days ago (score 4)
+    const testWorkItemA4 = await extraStep(workerAUser._id, 'WS4 Test Script Deliverable 4');
     const subA4 = await Submission.create({
-      workItemId: testWorkItemA._id,
+      workItemId: testWorkItemA4._id,
       stageKey: 'Script',
       version: 4,
       kind: 'document',
@@ -313,7 +321,7 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
     });
     testRatingOld = await Rating.create({
       submissionId: subA4._id,
-      workItemId: testWorkItemA._id,
+      workItemId: testWorkItemA4._id,
       stageKey: 'Script',
       workerId: workerAUser._id,
       raterId: creativeHeadUser._id,

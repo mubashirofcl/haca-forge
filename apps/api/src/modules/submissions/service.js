@@ -1014,11 +1014,16 @@ export async function getRatingsSummary(personId, user) {
     throw err;
   }
 
-  const ratings = await Rating.find({ workerId: targetIdStr })
+  const allRatings = await Rating.find({ workerId: targetIdStr })
     .sort({ createdAt: -1 })
     .populate('raterId', 'name role')
     .populate('editedLog.editedBy', 'name role')
     .populate('workItemId', 'title stageKey');
+
+  // Phase 8: one rating per step (the one on its latest approved submission).
+  const { oneRatingPerStep } = await import('./ratingsPerStep.js');
+  const chosen = await oneRatingPerStep([...new Set(allRatings.map((r) => String(r.workItemId?._id || r.workItemId)))]);
+  const ratings = allRatings.filter((r) => String(chosen.get(String(r.workItemId?._id || r.workItemId))?._id) === String(r._id));
 
   const count = ratings.length;
 
@@ -1092,8 +1097,10 @@ export async function getRatingsSummary(personId, user) {
     stepGroups[step].push(r.score);
   }
 
+  // Phase 8: a step type's average is shown only from 3 rated steps.
   const averagePerStepType = {};
   for (const [step, scores] of Object.entries(stepGroups)) {
+    if (scores.length < 3) continue;
     averagePerStepType[step] = Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2));
   }
 

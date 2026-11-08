@@ -1,4 +1,5 @@
 import * as teamService from './service.js';
+import { getProfileKpis, getProfileReport } from './profileKpis.js';
 
 export async function getDirectory(req, res, next) {
   try {
@@ -117,3 +118,19 @@ export async function forceLogoutHandler(req, res, next) {
   }
 }
 
+
+export async function getKpis(req, res, next) {
+  try {
+    res.json({ success: true, data: await getProfileKpis(req.params.id, req.user, req.query) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getReport(req, res, next) {
+  try {
+    res.json({ success: true, data: await getProfileReport(req.params.id, req.user, req.query) });
+  } catch (err) {
+    next(err);
+  }
+}
