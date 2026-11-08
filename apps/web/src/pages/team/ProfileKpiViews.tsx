@@ -92,7 +92,7 @@ const EmptyNote: React.FC<{ show: boolean; text: string }> = ({ show, text }) =>
 export const WorkerCharts: React.FC<{ worker: WorkerKpis; print?: boolean }> = ({ worker, print }) => {
   const c = worker.charts;
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className={`grid gap-4 ${print ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
       <ChartBox title="Monthly trend: steps completed and on-time rate (by finish date)" print={print} testId="chart-monthly-trend">
         <LineChart data={c.monthlyTrend}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--ui-line)" />
@@ -149,7 +149,7 @@ export const WorkerCharts: React.FC<{ worker: WorkerKpis; print?: boolean }> = (
 };
 
 export const ReviewerCharts: React.FC<{ ch: ReviewerKpis; print?: boolean }> = ({ ch, print }) => (
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div className={`grid gap-4 ${print ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
     <ChartBox title="Reviews per week" print={print} testId="chart-reviews-per-week">
       <LineChart data={ch.charts.reviewsPerWeek.map((w) => ({ ...w, label: w.week.slice(5) }))}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--ui-line)" />
@@ -168,7 +168,7 @@ export const ReviewerCharts: React.FC<{ ch: ReviewerKpis; print?: boolean }> = (
         <Bar dataKey="count" name="Ratings" fill={CHART_COLORS.a} isAnimationActive={!print} />
       </BarChart>
     </ChartBox>
-    <div className="lg:col-span-2">
+    <div className={print ? '' : 'lg:col-span-2'}>
       <ChartBox title="Root causes used" print={print} testId="chart-root-causes-used">
         <BarChart data={ch.charts.rootCausesUsed} layout="vertical" margin={{ left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--ui-line)" />

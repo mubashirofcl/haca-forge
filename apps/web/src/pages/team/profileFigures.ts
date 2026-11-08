@@ -112,7 +112,7 @@ export function workerFigureRows(w: WorkerKpis): FigureRow[] {
     },
     { key: 'late', label: 'Late submission rate', value: fmtPct(c.late.rate), basis: `${c.late.late} of ${c.late.total} late; ${c.late.doneLateCount} done late in all`, last: lastText(fmtPct(lp.lateRate)) },
     { key: 'changesRequested', label: 'Changes requested rate', value: fmtPct(c.changesRequested.rate), basis: `${c.changesRequested.withChangeRequest} of ${c.changesRequested.reviewed} reviewed steps`, last: lastText(fmtPct(lp.changesRequestedRate)) },
-    { key: 'rework', label: 'Rework', value: `${c.rework.rounds} revision rounds`, basis: ratio(c.rework.rate), last: lastText(ratio(lp.reworkRate)) },
+    { key: 'rework', label: 'Rework', value: `${c.rework.rounds} revision ${c.rework.rounds === 1 ? 'round' : 'rounds'}`, basis: ratio(c.rework.rate), last: lastText(ratio(lp.reworkRate)) },
     { key: 'firstPass', label: c.firstPass.label, value: fmtPct(c.firstPass.rate), basis: `${c.firstPass.approvedFirstTime} of ${c.firstPass.total} review steps; Post not counted`, last: lastText(fmtPct(lp.firstPassRate)) },
     { key: 'rating', label: 'Average rating', value: c.rating.text, basis: `${c.rating.count} rated steps (one rating per step; needs 3)`, last: lastText(lp.ratingText) },
     {
