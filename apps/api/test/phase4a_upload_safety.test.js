@@ -389,11 +389,11 @@ describe('Phase 4a: upload safety', () => {
         deadline: new Date(Date.now() + 2 * 86400000),
         estimatedEffortHrs: 1,
       });
+      // Phase 7: reports are JSON only (no HTML report); the topic comes back as plain text.
       const res = await request(app).get('/api/reports/view/weekly_marketing').set('Authorization', `Bearer ${adminToken}`);
-      expect(res.status).toBe(200);
-      const html = res.body.report.html;
-      expect(html).toContain(`&lt;img src=x onerror=alert(1)&gt;${salt}`);
-      expect(html).not.toContain('<img src=x');
+      expect(res.status).toBe(404);
+      const html = await request(app).get('/api/reports/export?format=html').set('Authorization', `Bearer ${adminToken}`);
+      expect(html.status).toBe(404);
     });
   });
 });

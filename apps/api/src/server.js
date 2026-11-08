@@ -47,14 +47,12 @@ import assignmentRoutes from "./modules/assignment/routes.js";
 import * as assignmentController from "./modules/assignment/controller.js";
 import { feedbackRouter, revisionsRouter } from "./modules/feedback/routes.js";
 import blockerRoutes from "./modules/blockers/routes.js";
-import automationRoutes from "./modules/automation/routes.js";
 import teamRoutes from "./modules/team/routes.js";
 import submissionRoutes, { attachWorkItemSubmissionRoutes } from "./modules/submissions/routes.js";
 import clipsRouter, { attachWorkItemMediaRoutes } from "./modules/media/routes.js";
 import { chatRouter } from "./modules/chat/routes.js";
 import { setupChatSocket, registerChatSocketIO } from "./modules/chat/socket.js";
 import { ensureAutomationRules } from "./modules/automation/runner.js";
-import { ensureReportDefinitions } from "./modules/reports/service.js";
 import { ensureBaselineUsers } from "./modules/people/baselineUsers.js";
 import { authenticate } from "./middleware/auth.js";
 import { setSocketServer } from "./lib/socketHub.js";
@@ -226,8 +224,6 @@ app.use("/api/workload", authenticate, assignmentController.getTeamWorkload);
 app.use("/api/feedback", feedbackRouter);
 app.use("/api/revisions", revisionsRouter);
 app.use("/api/blockers", blockerRoutes);
-app.use("/api/automation/rules", automationRoutes);
-app.use("/api/automation", automationRoutes);
 app.use("/api/chat", chatRouter);
 app.use("/chat", chatRouter);
 
@@ -252,7 +248,6 @@ export async function startServer() {
   await ensureBaselineUsers();
   await initQueues();
   await ensureAutomationRules();
-  await ensureReportDefinitions();
   initDomainEventListeners(io);
 
   return listenWithRetry();

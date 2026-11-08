@@ -16,7 +16,6 @@ import { FeedbackEntry, RevisionFlag } from '../src/modules/feedback/model.js';
 import { ReportDefinition } from '../src/modules/reports/model.js';
 import { AutomationRule } from '../src/modules/automation/model.js';
 import { ensureAutomationRules, executeAutomationRule } from '../src/modules/automation/runner.js';
-import { ensureReportDefinitions } from '../src/modules/reports/service.js';
 import { connectDB } from '../src/config/db.js';
 
 
@@ -132,8 +131,7 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
     });
     execToken = makeToken(execUser);
 
-    // Initialize report definitions and automation rules
-    await ensureReportDefinitions();
+    // Initialize automation rules (report definitions were removed in Phase 7)
     await ensureAutomationRules();
   });
 
@@ -512,69 +510,11 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
   // =========================================================================
   // TASK 2: FOUR SAVED REPORTS & RECIPIENTS CONFIGURATION
   // =========================================================================
-  describe('3. Four Saved Report Definitions & Recipients Management', () => {
-    it('GET /api/reports/definitions -> lists the four canonical reports', async () => {
-      const res = await request(app)
-        .get('/api/reports/definitions')
-        .set('Authorization', `Bearer ${execToken}`);
-
-      expect(res.status).toBe(200);
-      const defs = res.body.definitions;
-      expect(defs.length).toBeGreaterThanOrEqual(4);
-
-      const keys = defs.map((d) => d.reportKey);
-      expect(keys).toContain('weekly_marketing');
-      expect(keys).toContain('monthly_scorecard');
-      expect(keys).toContain('creative_production');
-      expect(keys).toContain('team_performance');
-    });
-
-    it('Generate Now: allowed for creative_head and admin; forbidden for executive', async () => {
-      // Executive attempts generate -> 403 Forbidden
-      const execGenRes = await request(app)
-        .post('/api/reports/definitions/weekly_marketing/generate')
-        .set('Authorization', `Bearer ${execToken}`)
-        .send({});
-      expect(execGenRes.status).toBe(403);
-
-      // Creative Head generates -> 200 OK
-      const headGenRes = await request(app)
-        .post('/api/reports/definitions/weekly_marketing/generate')
-        .set('Authorization', `Bearer ${headToken}`)
-        .send({ sendEmail: false });
-      expect(headGenRes.status).toBe(200);
-      expect(headGenRes.body.report).toBeDefined();
-    });
-
-    it('Monthly Scorecard has no targets (reports planned vs published, on-time rate, revision rate)', async () => {
-      const res = await request(app)
-        .get('/api/reports/view/monthly_scorecard')
-        .set('Authorization', `Bearer ${headToken}`);
-
-      expect(res.status).toBe(200);
-      const summary = res.body.report.summary;
-      expect(summary).toHaveProperty('plannedCount');
-      expect(summary).toHaveProperty('publishedCount');
-      expect(summary).toHaveProperty('onTimeRate');
-      expect(summary).toHaveProperty('revisionRate');
-      expect(summary).toHaveProperty('avgTurnaroundHours');
-      expect(summary.targets).toBeUndefined();
-    });
-
-    it('PATCH /api/reports/definitions/:key -> updates report recipients with emails or people IDs', async () => {
-      const patchRes = await request(app)
-        .patch('/api/reports/definitions/weekly_marketing')
-        .set('Authorization', `Bearer ${headToken}`)
-        .send({
-          recipients: ['custom.executive@demo.haca.local', headUser._id.toString()],
-        });
-
-      if (patchRes.status !== 200) {
-        console.error('PATCH DEFINITION FAILED:', patchRes.status, patchRes.body);
-      }
-      expect(patchRes.status).toBe(200);
-      const def = patchRes.body.definition || patchRes.body.data;
-      expect(def.recipients).toContain('custom.executive@demo.haca.local');
+  describe('3. Reports (Phase 7: live only; saved definitions removed)', () => {
+    it('the executive reads the live reports; definitions and Generate Now are gone', async () => {
+      expect((await request(app).get('/api/reports/overview').set('Authorization', `Bearer ${execToken}`)).status).toBe(200);
+      expect((await request(app).get('/api/reports/definitions').set('Authorization', `Bearer ${execToken}`)).status).toBe(404);
+      expect((await request(app).post('/api/reports/definitions/weekly_marketing/generate').set('Authorization', `Bearer ${headToken}`).send({})).status).toBe(404);
     });
   });
 
@@ -582,19 +522,10 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
   // TASK 3: AUTOMATION RULES (6 SCHEDULED RULES & UI LAST RUN)
   // =========================================================================
   describe('4. Six Marketing OS Automation Rules & Dispatcher', () => {
-    it('GET /api/automation/rules -> lists all 6 rules with status and schedules', async () => {
-      const res = await request(app)
-        .get('/api/automation/rules')
-        .set('Authorization', `Bearer ${headToken}`);
-
-      expect(res.status).toBe(200);
-      const rules = res.body.rules || res.body.data;
-      // Phase 7: the two report-email rules were retired; the 4 reminder rules remain.
-      const keys = rules.map((r) => r.ruleKey);
-      expect(keys).toContain('overdue_escalation');
-      expect(keys).toContain('todo_escalation');
-      expect(keys).toContain('blocker_dependency_alert');
-      expect(keys).toContain('revision_pattern_flag');
+    it('the 4 reminder rules exist; the automation API was removed in Phase 7', async () => {
+      const keys = (await AutomationRule.find({}).lean()).map((r) => r.ruleKey);
+      for (const key of ['overdue_escalation', 'todo_escalation', 'blocker_dependency_alert', 'revision_pattern_flag']) expect(keys).toContain(key);
+      expect((await request(app).get('/api/automation/rules').set('Authorization', `Bearer ${headToken}`)).status).toBe(404);
     });
 
     it('executes overdue_escalation rule and updates lastRun timestamp in database', async () => {
@@ -615,20 +546,14 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
       expect(rule.lastRunStatus).toBe('success');
     });
 
-    it('PATCH /api/automation/rules/:id/toggle -> toggles rule active state', async () => {
+    it('PATCH /api/automation/rules/:id/toggle -> 404 (removed in Phase 7)', async () => {
       const rule = await AutomationRule.findOne({ ruleKey: 'todo_escalation' });
-      const currentActive = rule.active;
-
-      const toggleRes = await request(app)
+      const res = await request(app)
         .patch(`/api/automation/rules/${rule._id}/toggle`)
         .set('Authorization', `Bearer ${headToken}`)
-        .send({ active: !currentActive });
-
-      expect(toggleRes.status).toBe(200);
-      const updatedActive = toggleRes.body.rule ? toggleRes.body.rule.active : toggleRes.body.data.active;
-      expect(updatedActive).toBe(!currentActive);
-      // A live reminder rule now: put it back as it was.
-      await AutomationRule.updateOne({ _id: rule._id }, { $set: { active: currentActive } });
+        .send({ active: false });
+      expect(res.status).toBe(404);
+      expect((await AutomationRule.findById(rule._id).lean()).active).toBe(rule.active);
     });
   });
 
@@ -662,10 +587,11 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
       const deptRes = await request(app).get('/api/departments').set('Authorization', `Bearer ${adminToken}`);
       expect(deptRes.status).toBe(200);
 
+      // Phase 7: the automation API was removed.
       const rulesRes = await request(app).get('/api/automation/rules').set('Authorization', `Bearer ${adminToken}`);
-      expect(rulesRes.status).toBe(200);
+      expect(rulesRes.status).toBe(404);
 
-      const reportsRes = await request(app).get('/api/reports/definitions').set('Authorization', `Bearer ${adminToken}`);
+      const reportsRes = await request(app).get('/api/reports/overview').set('Authorization', `Bearer ${adminToken}`);
       expect(reportsRes.status).toBe(200);
 
       const dashRes = await request(app).get('/api/dashboard/overview').set('Authorization', `Bearer ${adminToken}`);
@@ -685,7 +611,7 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
       const trackerRes = await request(app).get('/api/content-pieces').set('Authorization', `Bearer ${headToken}`);
       expect(trackerRes.status).toBe(200);
 
-      const reportsRes = await request(app).get('/api/reports/definitions').set('Authorization', `Bearer ${headToken}`);
+      const reportsRes = await request(app).get('/api/reports/overview').set('Authorization', `Bearer ${headToken}`);
       expect(reportsRes.status).toBe(200);
     });
 
@@ -702,7 +628,7 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
       const trackerRes = await request(app).get('/api/content-pieces').set('Authorization', `Bearer ${smToken}`);
       expect(trackerRes.status).toBe(200);
 
-      const reportsRes = await request(app).get('/api/reports/definitions').set('Authorization', `Bearer ${smToken}`);
+      const reportsRes = await request(app).get('/api/reports/overview').set('Authorization', `Bearer ${smToken}`);
       expect(reportsRes.status).toBe(200);
     });
 
@@ -727,7 +653,7 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
       const plansRes = await request(app).get('/api/calendar-plans').set('Authorization', `Bearer ${execToken}`);
       expect(plansRes.status).toBe(200);
 
-      const reportsRes = await request(app).get('/api/reports/definitions').set('Authorization', `Bearer ${execToken}`);
+      const reportsRes = await request(app).get('/api/reports/overview').set('Authorization', `Bearer ${execToken}`);
       expect(reportsRes.status).toBe(200);
 
       const trackerRes = await request(app).get('/api/content-pieces').set('Authorization', `Bearer ${execToken}`);

@@ -12,7 +12,6 @@ import { Notification } from '../src/modules/notifications/model.js';
 import { AutomationRule } from '../src/modules/automation/model.js';
 import { ReportDefinition } from '../src/modules/reports/model.js';
 import { ensureAutomationRules, executeAutomationRule } from '../src/modules/automation/runner.js';
-import { ensureReportDefinitions, generateReport } from '../src/modules/reports/service.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../src/config/env.js';
 
@@ -146,7 +145,6 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
 
     // Seed standard rules and reports
     await ensureAutomationRules();
-    await ensureReportDefinitions();
   });
 
   afterAll(async () => {
@@ -163,52 +161,38 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
   });
 
   describe('1. Automation Rules API & Runner', () => {
-    it('GET /api/automation/rules returns the 4 reminder rules (report emails retired in Phase 7)', async () => {
-      const res = await request(app)
-        .get('/api/automation/rules')
-        .set('Authorization', `Bearer ${adminToken}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.rules).toBeDefined();
-      const ruleKeys = res.body.rules.map((r) => r.ruleKey);
-      expect(ruleKeys).toContain('overdue_escalation');
-      expect(ruleKeys).toContain('todo_escalation');
-      expect(ruleKeys).toContain('blocker_dependency_alert');
-      expect(ruleKeys).toContain('revision_pattern_flag');
-    });
-
-    it('PATCH /api/automation/rules/:id/toggle pauses and resumes a rule', async () => {
-      const rule = await AutomationRule.findOne({ ruleKey: 'overdue_escalation' });
-      expect(rule.active).toBe(true);
-
-      // Pause rule
-      const pauseRes = await request(app)
-        .patch(`/api/automation/rules/${rule._id}/toggle`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ active: false });
-
-      expect(pauseRes.status).toBe(200);
-      expect(pauseRes.body.rule.active).toBe(false);
-
-      // Resume rule
-      const resumeRes = await request(app)
-        .patch(`/api/automation/rules/${rule._id}/toggle`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ active: true });
-
-      expect(resumeRes.status).toBe(200);
-      expect(resumeRes.body.rule.active).toBe(true);
+    it('Phase 7: the removed report and automation routes return 404', async () => {
+      const routes = [
+        ['get', '/api/reports/definitions'],
+        ['get', '/api/reports/definitions/weekly_marketing'],
+        ['patch', '/api/reports/definitions/weekly_marketing'],
+        ['post', '/api/reports/definitions/weekly_marketing/generate'],
+        ['post', '/api/reports/weekly_marketing/generate'],
+        ['get', '/api/reports/view/weekly_marketing'],
+        ['get', '/api/reports/department'],
+        ['get', '/api/reports/team'],
+        ['get', '/api/reports/content'],
+        ['get', '/api/reports/bottlenecks'],
+        ['get', '/api/reports/scorecard'],
+        ['get', '/api/reports/export?format=html'],
+        ['get', '/api/reports/scheduled'],
+        ['post', '/api/reports/scheduled'],
+        ['delete', `/api/reports/scheduled/${new mongoose.Types.ObjectId()}`],
+        ['get', '/api/automation/rules'],
+        ['get', '/api/automation'],
+        ['patch', `/api/automation/rules/${new mongoose.Types.ObjectId()}/toggle`],
+        ['post', `/api/automation/rules/${new mongoose.Types.ObjectId()}/run`],
+      ];
+      for (const [method, url] of routes) {
+        const res = await request(app)[method](url).set('Authorization', `Bearer ${adminToken}`).send({});
+        expect([url, res.status]).toEqual([url, 404]);
+      }
     });
 
     it('Executes overdue_escalation rule: dispatches owner warning and SM Manager escalation', async () => {
       const rule = await AutomationRule.findOne({ ruleKey: 'overdue_escalation' });
 
-      const res = await request(app)
-        .post(`/api/automation/rules/${rule._id}/run`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ force: true });
-
-      expect(res.status).toBe(200);
+      const res = { body: { result: await executeAutomationRule(rule.ruleKey, null, { force: true }) } };
       expect(res.body.result.status).toBe('success');
       expect(res.body.result.ownerNotified).toBeGreaterThanOrEqual(1);
       expect(res.body.result.leadEscalated).toBeGreaterThanOrEqual(1);
@@ -230,12 +214,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
       expect(leadNotif.type).toBe('alert');
 
       // Assert Idempotency: re-running immediately does NOT duplicate notifications
-      const rerunRes = await request(app)
-        .post(`/api/automation/rules/${rule._id}/run`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ force: true });
-
-      expect(rerunRes.status).toBe(200);
+      const rerunRes = { body: { result: await executeAutomationRule(rule.ruleKey, null, { force: true }) } };
       expect(rerunRes.body.result.ownerNotified).toBe(0); // Deduplicated
       expect(rerunRes.body.result.leadEscalated).toBe(0); // Deduplicated
     });
@@ -243,12 +222,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
     it('Executes todo_escalation rule: flags stagnant items without status change', async () => {
       const rule = await AutomationRule.findOne({ ruleKey: 'todo_escalation' });
 
-      const res = await request(app)
-        .post(`/api/automation/rules/${rule._id}/run`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ force: true });
-
-      expect(res.status).toBe(200);
+      const res = { body: { result: await executeAutomationRule(rule.ruleKey, null, { force: true }) } };
       expect(res.body.result.status).toBe('success');
       expect(res.body.result.notifiedCount).toBeGreaterThanOrEqual(1);
 
@@ -274,12 +248,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
 
       const rule = await AutomationRule.findOne({ ruleKey: 'blocker_dependency_alert' });
 
-      const res = await request(app)
-        .post(`/api/automation/rules/${rule._id}/run`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ force: true });
-
-      expect(res.status).toBe(200);
+      const res = { body: { result: await executeAutomationRule(rule.ruleKey, null, { force: true }) } };
       expect(res.body.result.status).toBe('success');
       expect(res.body.result.remindedCount).toBeGreaterThanOrEqual(1);
 
@@ -292,100 +261,11 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
     });
   });
 
-  describe('2. Report Definitions API & Generation', () => {
-    it('GET /api/reports/definitions returns the 4 standard report definitions', async () => {
-      const res = await request(app)
-        .get('/api/reports/definitions')
-        .set('Authorization', `Bearer ${leadToken}`);
-
+  describe('2. Reports (Phase 7: live only)', () => {
+    it('the live overview report answers for the creative head', async () => {
+      const res = await request(app).get('/api/reports/overview').set('Authorization', `Bearer ${headToken}`);
       expect(res.status).toBe(200);
-      expect(res.body.definitions).toBeDefined();
-      expect(res.body.definitions.length).toBe(4);
-
-      const reportKeys = res.body.definitions.map((d) => d.reportKey);
-      expect(reportKeys).toContain('weekly_marketing');
-      expect(reportKeys).toContain('monthly_scorecard');
-      expect(reportKeys).toContain('creative_production');
-      expect(reportKeys).toContain('team_performance');
-    });
-
-    it('Generates Weekly Creative Report on demand via POST /api/reports/definitions/:key/generate', async () => {
-      const res = await request(app)
-        .post('/api/reports/definitions/weekly_marketing/generate')
-        .set('Authorization', `Bearer ${headToken}`)
-        .send({ sendEmail: false });
-
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.report).toBeDefined();
-      expect(res.body.report.reportKey).toBe('weekly_marketing');
-      expect(res.body.report.summary.totalWorkItems).toBeGreaterThanOrEqual(2);
-      expect(res.body.report.tables.length).toBeGreaterThanOrEqual(2);
-      expect(res.body.report.html).toContain('Weekly Creative Report');
-
-      // Verify ReportDefinition record updated with lastGeneratedAt
-      const def = await ReportDefinition.findOne({ reportKey: 'weekly_marketing' });
-      expect(def.lastGeneratedAt).toBeTruthy();
-      expect(def.lastGeneratedSummary).toBeTruthy();
-    });
-
-    it('Generates Monthly Performance Scorecard with deliverable throughput and HTML preview', async () => {
-      const res = await request(app)
-        .post('/api/reports/definitions/monthly_scorecard/generate')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({});
-
-      expect(res.status).toBe(200);
-      expect(res.body.report.reportKey).toBe('monthly_scorecard');
-      expect(res.body.report.summary.totalDeliverables).toBeGreaterThanOrEqual(2);
-      expect(res.body.report.html).toContain('Monthly Performance Scorecard');
-    });
-
-    it('Refuses report generation for SM Manager with 403 Forbidden', async () => {
-      const res = await request(app)
-        .post('/api/reports/definitions/creative_production/generate')
-        .set('Authorization', `Bearer ${leadToken}`)
-        .send({});
-
-      expect(res.status).toBe(403);
-    });
-
-    it('Generates Creative Production Report with work type throughput (Creative Head)', async () => {
-      const res = await request(app)
-        .post('/api/reports/definitions/creative_production/generate')
-        .set('Authorization', `Bearer ${headToken}`)
-        .send({});
-
-      expect(res.status).toBe(200);
-      expect(res.body.report.reportKey).toBe('creative_production');
-      expect(res.body.report.summary.totalDeliverables).toBeGreaterThanOrEqual(2);
-      expect(res.body.report.tables[0].columns).toContain('Work Type');
-    });
-
-    it('Generates Team Performance Digest as team-level totals, with no per-person rows', async () => {
-      const res = await request(app)
-        .post('/api/reports/definitions/team_performance/generate')
-        .set('Authorization', `Bearer ${headToken}`)
-        .send({});
-
-      expect(res.status).toBe(200);
-      expect(res.body.report.reportKey).toBe('team_performance');
-      expect(res.body.report.tables[0].title).toBe('Team Totals');
-      expect(res.body.report.tables[0].columns).toEqual(['Figure', 'Value', 'Based on']);
-      expect(res.body.report.tables[0].columns).not.toContain('Team Member');
-      // Workload has no reliable calculation yet, so no band is shown.
-      const workload = res.body.report.tables[0].rows.find((r) => r[0] === 'Workload');
-      expect(workload[1]).toBe('Not available yet');
-    });
-
-    it('GET /api/reports/view/:key returns interactive live report', async () => {
-      const res = await request(app)
-        .get('/api/reports/view/weekly_marketing')
-        .set('Authorization', `Bearer ${leadToken}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.report.reportKey).toBe('weekly_marketing');
+      expect(res.body.data.cards).toBeDefined();
     });
   });
 });

@@ -1011,7 +1011,7 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
       expect(piecesRes.status).toBe(200);
 
       const reportsRes = await request(app)
-        .get('/api/reports/view/monthly_scorecard')
+        .get('/api/reports/overview')
         .set('Authorization', `Bearer ${execToken}`);
       expect(reportsRes.status).toBe(200);
 

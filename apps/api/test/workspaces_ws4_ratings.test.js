@@ -8,7 +8,6 @@ import { connectDB } from '../src/config/db.js';
 import { Person } from '../src/modules/people/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { Submission, Rating } from '../src/modules/submissions/model.js';
-import { ensureReportDefinitions } from '../src/modules/reports/service.js';
 
 describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
   let adminUser, creativeHeadUser, smManagerUser, executiveUser, workerAUser, workerBUser, workerUnratedUser, workerFewUser;
@@ -19,7 +18,6 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
 
   beforeAll(async () => {
     await connectDB();
-    await ensureReportDefinitions();
 
     const deptDoc = await mongoose.connection.db.collection('departments').findOne({});
     const profileDoc = await mongoose.connection.db.collection('profiles').findOne({});
@@ -589,39 +587,14 @@ describe('Workspaces WS4: Ratings in Profiles, Guardrails, and Reports', () => {
       }
     });
 
-    it('Creative Production Report provides aggregated quality metrics without personal ranking', async () => {
-      const res = await request(app)
-        .get('/api/reports/view/creative_production')
-        .set('Authorization', `Bearer ${headToken}`);
-
+    it('the Quality report gives team-level figures without personal ranking', async () => {
+      const res = await request(app).get('/api/reports/quality').set('Authorization', `Bearer ${headToken}`);
       expect(res.status).toBe(200);
-      expect(res.body.report).toBeDefined();
-      const report = res.body.report;
-      expect(report.summary).toBeDefined();
-      expect(report.summary.teamAverageRating).toBeDefined();
-      expect(report.summary.averageRatingPerStepType).toBeDefined();
-
-      // Check tables: must contain aggregated stage table, but no personal ranking table
-      const tableTitles = report.tables.map(t => t.title);
-      expect(tableTitles).toContain('Quality Ratings by Step Type (Aggregated Baseline)');
-      expect(tableTitles.some(t => /leaderboard|rank|per-person/i.test(t))).toBe(false);
-    });
-
-    it('Team Performance Digest provides aggregated quality metrics without personal ranking', async () => {
-      const res = await request(app)
-        .get('/api/reports/view/team_performance')
-        .set('Authorization', `Bearer ${headToken}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.report).toBeDefined();
-      const report = res.body.report;
-      expect(report.summary).toBeDefined();
-      expect(report.summary.teamAverageQualityRating).toBeDefined();
-      expect(report.summary.averageRatingPerStepType).toBeDefined();
-
-      const tableTitles = report.tables.map(t => t.title);
-      expect(tableTitles).toContain('Stage Quality Ratings (Aggregated Baseline)');
-      expect(tableTitles.some(t => /leaderboard|rank|worker rating comparison/i.test(t))).toBe(false);
+      const report = res.body.data;
+      expect(report.ratingDistribution).toHaveLength(5);
+      expect(report.rating.text).toBeDefined();
+      expect(report.firstPass.label).toBe('Reviewed steps approved first time');
+      expect(Object.keys(report).some((k) => /leaderboard|rank|person|worker/i.test(k))).toBe(false);
     });
   });
 });

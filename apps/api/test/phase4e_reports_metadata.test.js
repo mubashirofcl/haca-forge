@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { formatDuration } from '@mmp/shared';
 import { app } from '../src/server.js';
 import { env } from '../src/config/env.js';
 import { Person } from '../src/modules/people/model.js';
@@ -13,7 +12,6 @@ import { WorkItem } from '../src/modules/workItems/model.js';
 import { Submission, Rating } from '../src/modules/submissions/model.js';
 import { Blocker } from '../src/modules/blockers/model.js';
 import { MediaItem } from '../src/modules/media/model.js';
-import { resolveReportRecipients } from '../src/modules/reports/service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOADS = path.resolve(__dirname, '../uploads');
@@ -110,110 +108,18 @@ describe('Phase 4e: reports and upload metadata', () => {
     await Person.deleteMany({ _id: { $in: Object.values(people).map((p) => p._id) } });
   });
 
-  describe('team performance digest', () => {
-    let report;
-    const row = (figure) => report.tables[0].rows.find((r) => r[0] === figure);
-
-    beforeAll(async () => {
-      const res = await request(app).get(`/api/reports/view/team_performance?departmentId=${dept}`).set('Authorization', `Bearer ${headToken}`);
-      expect(res.status).toBe(200);
-      report = res.body.report;
-    });
-
-    it('has team-level totals only, with no per-person rows', () => {
-      expect(report.tables.map((t) => t.title)).toEqual(['Team Totals', 'Stage Quality Ratings (Aggregated Baseline)']);
-      expect(report.tables[0].columns).toEqual(['Figure', 'Value', 'Based on']);
-      const text = JSON.stringify(report);
-      for (const p of Object.values(people)) expect(text).not.toContain(p.name);
-      expect(text).not.toMatch(/Team Member|Contributor Performance/);
-    });
-
-    it('on-time rate counts only finished steps with a recorded submit or post time', () => {
-      expect(row('On-time rate')[1]).toBe('67%');
-      expect(row('On-time rate')[2]).toMatch(/^Based on 3 of 8 steps/);
-    });
-
-    it('average work time counts submitted rounds only', () => {
-      expect(row('Average work time')[1]).toBe(formatDuration(Math.round((2 * HOUR + 1 * HOUR + 1 * HOUR) / 3)));
-      expect(row('Average work time')[2]).toMatch(/^Based on 3 of 8 steps/);
-    });
-
-    it('average approval wait counts decided submissions only', () => {
-      expect(row('Average approval wait')[1]).toBe(formatDuration(2 * HOUR));
-      expect(row('Average approval wait')[2]).toMatch(/^Based on 2 of 8 steps/);
-    });
-
-    it('team rating uses one rating per step, from its latest approved submission', () => {
-      expect(row('Team average rating')[1]).toBe('4.00 ★');
-      expect(row('Team average rating')[2]).toMatch(/Based on 3 rated steps/);
-      expect(report.summary.teamAverageQualityRating).toBe('4.00 ★');
-    });
-
-    it('a step type with fewer than 3 ratings has no average yet', () => {
-      const edit = report.tables[1].rows.find((r) => r[0] === 'Edit');
-      expect(edit).toEqual(['Edit', 2, 'Not available yet']);
-    });
-
-    it('shows Not available yet where there is no reliable calculation', () => {
-      expect(row('Revisions per piece')[1]).toBe('Not available yet');
-      expect(row('Workload')[1]).toBe('Not available yet');
-      expect(JSON.stringify(report)).not.toMatch(/92%|96%|1\.2 revisions/);
-    });
-
-    it('a team with fewer than 3 rated steps has no average yet', async () => {
-      const res = await request(app).get(`/api/reports/view/team_performance?departmentId=${fewRatingsDept}`).set('Authorization', `Bearer ${headToken}`);
-      expect(res.body.report.summary.teamAverageQualityRating).toBe('Not available yet');
-    });
-
-    it('/individual routes are gone, with or without a user id', async () => {
-      for (const p of ['/api/reports/individual', `/api/reports/individual/${people.worker._id}`]) {
+  describe('removed reports (Phase 7)', () => {
+    it('the digest, weekly report, HTML export and /individual routes are gone', async () => {
+      for (const p of [
+        `/api/reports/view/team_performance?departmentId=${dept}`,
+        `/api/reports/view/weekly_marketing?departmentId=${dept}`,
+        '/api/reports/export?report=weekly_marketing&format=html',
+        '/api/reports/individual',
+        `/api/reports/individual/${people.worker._id}`,
+      ]) {
         const res = await request(app).get(p).set('Authorization', `Bearer ${headToken}`);
-        expect(res.status).toBe(404);
+        expect([p, res.status]).toEqual([p, 404]);
       }
-    });
-  });
-
-  describe('weekly report', () => {
-    it('lists only blockers on the work items the report covers', async () => {
-      const res = await request(app).get(`/api/reports/view/weekly_marketing?departmentId=${dept}`).set('Authorization', `Bearer ${headToken}`);
-      const blockers = res.body.report.tables.find((t) => /Blockers/.test(t.title)).rows.map((r) => r[0]);
-      expect(blockers).toContain(`P4e upcoming ${salt}`);
-      expect(blockers).not.toContain(`P4e other ${salt}`);
-    });
-
-    it('format=html, report and month do not drop rows', async () => {
-      const plain = await request(app).get(`/api/reports/view/weekly_marketing?departmentId=${dept}`).set('Authorization', `Bearer ${headToken}`);
-      const withMonth = await request(app).get(`/api/reports/view/weekly_marketing?departmentId=${dept}&month=2026-11`).set('Authorization', `Bearer ${headToken}`);
-      expect(withMonth.body.report.summary.totalWorkItems).toBe(plain.body.report.summary.totalWorkItems);
-      expect(plain.body.report.summary.totalWorkItems).toBeGreaterThan(0);
-      const html = await request(app).get(`/api/reports/export?report=weekly_marketing&format=html&departmentId=${dept}&month=2026-11`).set('Authorization', `Bearer ${headToken}`);
-      expect(html.status).toBe(200);
-      expect(html.text).toContain(`P4e upcoming ${salt}`);
-    });
-  });
-
-  describe('report email recipients', () => {
-    it('keeps only registered emails of active users', async () => {
-      const out = await resolveReportRecipients([
-        String(people.worker._id),
-        people.head.email.toUpperCase(),
-        people.inactive.email,
-        String(people.inactive._id),
-        'outsider@example.com',
-        'creative_head@hacaforge.com',
-        '',
-        42,
-      ]);
-      expect(out).toContain(people.worker.email);
-      expect(out).toContain(people.head.email);
-      expect(out).not.toContain(people.inactive.email);
-      expect(out).not.toContain('outsider@example.com');
-      expect(out).not.toContain('creative_head@hacaforge.com');
-    });
-
-    it('a role reaches every active user with it, once each', async () => {
-      const out = await resolveReportRecipients(['creative_head', 'creative_head', people.head.email]);
-      expect(out.filter((e) => e === people.head.email)).toHaveLength(1);
     });
   });
 

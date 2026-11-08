@@ -7,7 +7,6 @@ import { Person } from '../src/modules/people/model.js';
 import { Department } from '../src/modules/departments/model.js';
 import { Profile } from '../src/modules/referenceData/profile.model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
-import { ensureReportDefinitions } from '../src/modules/reports/service.js';
 import { env } from '../src/config/env.js';
 
 const makeToken = (user) =>
@@ -78,7 +77,6 @@ describe('SCOPE RESET R1 Verification Suite', () => {
     adminToken = makeToken(adminUser);
     leadToken = makeToken(leadUser);
 
-    await ensureReportDefinitions();
   });
 
   afterAll(async () => {
@@ -240,22 +238,11 @@ describe('SCOPE RESET R1 Verification Suite', () => {
       expect(res.body.data.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('GET /api/reports/definitions succeeds and returns 4 canonical reports', async () => {
-      const res = await request(app)
-        .get('/api/reports/definitions')
-        .set('Authorization', `Bearer ${adminToken}`);
-
+    it('GET /api/reports/overview succeeds (live reports; definitions removed in Phase 7)', async () => {
+      const res = await request(app).get('/api/reports/overview').set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
-      expect(res.body.definitions).toBeDefined();
-      expect(res.body.definitions.length).toBe(4);
-
-      const keys = res.body.definitions.map((d) => d.reportKey);
-      expect(keys).toContain('weekly_marketing');
-      expect(keys).toContain('monthly_scorecard');
-      expect(keys).toContain('creative_production');
-      expect(keys).toContain('team_performance');
-      expect(keys).not.toContain('lead_funnel_cpl');
-      expect(keys).not.toContain('campaign_deepdive');
+      const gone = await request(app).get('/api/reports/definitions').set('Authorization', `Bearer ${adminToken}`);
+      expect(gone.status).toBe(404);
     });
   });
 });

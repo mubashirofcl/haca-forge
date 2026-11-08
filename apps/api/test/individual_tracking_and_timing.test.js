@@ -378,19 +378,14 @@ describe('INDIVIDUAL TRACKING AND TIMING SUITE', () => {
   });
 
   describe('4. Anti-ranking verification in reports', () => {
-    it('team performance digest shows team-level totals, with no per-person rows', async () => {
-      const reportRes = await request(app)
-        .post('/api/reports/team_performance/generate')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({});
-
-      expect(reportRes.status).toBe(200);
-      const report = reportRes.body.report || reportRes.body.data;
-      expect(report.tables[0].title).toBe('Team Totals');
-      expect(report.tables[0].columns).toEqual(['Figure', 'Value', 'Based on']);
+    it('live reports show team-level figures, with no per-person rows', async () => {
       const people = await Person.find({ role: { $in: ['team_member', 'sm_manager'] } }).select('name').lean();
-      const firstColumn = report.tables.flatMap((t) => t.rows.map((r) => String(r[0])));
-      for (const p of people) expect(firstColumn).not.toContain(p.name);
+      for (const name of ['overview', 'production', 'quality', 'projects']) {
+        const res = await request(app).get(`/api/reports/${name}`).set('Authorization', `Bearer ${adminToken}`);
+        expect(res.status).toBe(200);
+        const text = JSON.stringify(res.body.data);
+        for (const p of people) if (p.name) expect(text).not.toContain(`"${p.name}"`);
+      }
     });
   });
 });

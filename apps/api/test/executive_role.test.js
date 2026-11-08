@@ -272,25 +272,16 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('GET /api/reports/definitions -> 200', async () => {
-      const res = await request(app)
-        .get('/api/reports/definitions')
-        .set('Authorization', `Bearer ${execToken}`);
-      expect(res.status).toBe(200);
+    it('GET /api/reports/overview and /projects -> 200 (live reports, read only)', async () => {
+      for (const url of ['/api/reports/overview', '/api/reports/projects']) {
+        const res = await request(app).get(url).set('Authorization', `Bearer ${execToken}`);
+        expect(res.status).toBe(200);
+      }
     });
 
-    it('GET /api/reports/view/weekly_marketing -> 200', async () => {
-      const res = await request(app)
-        .get('/api/reports/view/weekly_marketing')
-        .set('Authorization', `Bearer ${execToken}`);
-      expect(res.status).toBe(200);
-    });
-
-    it('GET /api/automation/rules -> 200', async () => {
-      const res = await request(app)
-        .get('/api/automation/rules')
-        .set('Authorization', `Bearer ${execToken}`);
-      expect(res.status).toBe(200);
+    it('GET /api/automation/rules -> 404 (removed in Phase 7)', async () => {
+      const res = await request(app).get('/api/automation/rules').set('Authorization', `Bearer ${execToken}`);
+      expect(res.status).toBe(404);
     });
 
     it('GET /api/people -> 200', async () => {
@@ -446,20 +437,20 @@ describe('Phase Executive: Fifth Role (Company Management)', () => {
       expect(res.status).toBe(403);
     });
 
-    it('POST /api/reports/definitions/:key/generate -> 403', async () => {
+    it('POST /api/reports/definitions/:key/generate -> 404 (removed in Phase 7; reports are read only)', async () => {
       const res = await request(app)
         .post('/api/reports/definitions/weekly_marketing/generate')
         .set('Authorization', `Bearer ${execToken}`)
         .send({ sendEmail: false });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
-    it('POST /api/automation/rules/:id/run -> 403', async () => {
+    it('POST /api/automation/rules/:id/run -> 404 (removed in Phase 7)', async () => {
       const res = await request(app)
         .post(`/api/automation/rules/${testRule._id}/run`)
         .set('Authorization', `Bearer ${execToken}`)
         .send({ force: true });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
 

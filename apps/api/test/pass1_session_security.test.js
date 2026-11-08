@@ -9,7 +9,6 @@ import { Department } from "../src/modules/departments/model.js";
 import { Profile } from "../src/modules/referenceData/profile.model.js";
 import { WorkItem } from "../src/modules/workItems/model.js";
 import { ReportDefinition } from "../src/modules/reports/model.js";
-import { ensureReportDefinitions } from "../src/modules/reports/service.js";
 import { env } from "../src/config/env.js";
 
 const makeToken = (user) =>
@@ -120,7 +119,6 @@ describe("Pass 1: Session and Security Test Suite", () => {
     leadToken = makeToken(leadUser);
     memberToken = makeToken(memberUser);
 
-    await ensureReportDefinitions();
   });
 
   // ---------------------------------------------------------------------------
@@ -201,47 +199,22 @@ describe("Pass 1: Session and Security Test Suite", () => {
   // ---------------------------------------------------------------------------
   // A5: Report Generate Now: Head and Admin only (Team lead gets 403)
   // ---------------------------------------------------------------------------
-  describe("A5: Reports Generate Now Permissions across All 5 Roles", () => {
-    it("Admin is allowed to Generate Now (200)", async () => {
-      const res = await request(app)
-        .post("/api/reports/definitions/creative_production/generate")
-        .set("Authorization", `Bearer ${adminToken}`)
-        .send({});
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
+  describe("A5: Reports are read only (Phase 7): Generate Now was removed", () => {
+    it("the live reports answer for every role except team members", async () => {
+      for (const [token, status] of [[adminToken, 200], [headToken, 200], [leadToken, 200], [execToken, 200], [memberToken, 403]]) {
+        const res = await request(app).get("/api/reports/overview").set("Authorization", `Bearer ${token}`);
+        expect(res.status).toBe(status);
+      }
     });
 
-    it("Creative Head is allowed to Generate Now (200)", async () => {
-      const res = await request(app)
-        .post("/api/reports/definitions/creative_production/generate")
-        .set("Authorization", `Bearer ${headToken}`)
-        .send({});
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-    });
-
-    it("SM Manager gets 403 Forbidden on Generate Now", async () => {
-      const res = await request(app)
-        .post("/api/reports/definitions/creative_production/generate")
-        .set("Authorization", `Bearer ${leadToken}`)
-        .send({});
-      expect(res.status).toBe(403);
-    });
-
-    it("Executive gets 403 Forbidden on Generate Now", async () => {
-      const res = await request(app)
-        .post("/api/reports/definitions/creative_production/generate")
-        .set("Authorization", `Bearer ${execToken}`)
-        .send({});
-      expect(res.status).toBe(403);
-    });
-
-    it("Team Member gets 403 Forbidden on Generate Now", async () => {
-      const res = await request(app)
-        .post("/api/reports/definitions/creative_production/generate")
-        .set("Authorization", `Bearer ${memberToken}`)
-        .send({});
-      expect(res.status).toBe(403);
+    it("Generate Now is gone for everyone", async () => {
+      for (const token of [adminToken, headToken, leadToken, execToken]) {
+        const res = await request(app)
+          .post("/api/reports/definitions/creative_production/generate")
+          .set("Authorization", `Bearer ${token}`)
+          .send({});
+        expect(res.status).toBe(404);
+      }
     });
   });
 
