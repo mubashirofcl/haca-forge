@@ -375,7 +375,7 @@ describe('PLAN LIST FIXES: Unit, API, Database Repair & Text Scan Suite', () => 
       expect(event.metadata.code).toBe(plan.code);
     });
 
-    it('blocks deleting a plan that has approved rows', async () => {
+    it('Phase 6: a plan with approved rows but no started steps can be deleted', async () => {
       const plan = await CalendarPlan.create({
         code: 'PF-2026-11-005',
         title: 'Plan with Approved Row',
@@ -399,9 +399,9 @@ describe('PLAN LIST FIXES: Unit, API, Database Repair & Text Scan Suite', () => 
         .delete(`/api/calendar-plans/${plan._id}`)
         .set('Authorization', `Bearer ${smToken}`);
 
-      expect(res.status).toBe(400);
-      const errorObj = res.body.error || res.body;
-      expect(errorObj.message).toContain('Only Draft plans with no approved rows can be deleted');
+      expect(res.status).toBe(200);
+      expect(await CalendarPlan.findById(plan._id)).toBeNull();
+      expect(await ContentPiece.countDocuments({ planId: plan._id })).toBe(0);
 
       await ContentPiece.deleteMany({ planId: plan._id });
       await CalendarPlan.findByIdAndDelete(plan._id);

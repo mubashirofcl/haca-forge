@@ -107,6 +107,8 @@ interface CalendarPlan {
   approvedById?: { _id: string; name: string; email: string };
   rowCount: number;
   approvedRowCount: number;
+  /** Phase 6: any generated step has started; the plan can no longer be deleted. */
+  hasStartedWork?: boolean;
   submittedRowCount: number;
   changesRequestedRowCount: number;
   draftRowCount: number;
@@ -687,11 +689,11 @@ export const PlansTab: React.FC<PlansTabProps> = ({
     }
   };
 
-  // Delete Draft Plan
+  // Delete a plan whose steps have not started (Phase 6)
   const handleDeletePlan = async (planId: string) => {
     if (
       !confirm(
-        'Are you sure you want to delete this Draft plan? All draft rows will be removed. This action cannot be undone.'
+        'Delete this plan? Its rows and any steps not started yet will be removed. This cannot be undone.'
       )
     ) {
       return;
@@ -1147,12 +1149,11 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                       </button>
                     )}
                     {isSMManager &&
-                      selectedPlan.status === 'Draft' &&
-                      (!selectedPlan.approvedRowCount || selectedPlan.approvedRowCount === 0) && (
+                      selectedPlan.hasStartedWork === false && (
                         <button
                           onClick={() => handleDeletePlan(selectedPlan._id)}
-                          title="Delete Draft Plan"
-                          aria-label="Delete Draft Plan"
+                          title="Delete Plan"
+                          aria-label="Delete Plan"
                           className="ui-icon-btn hover:text-ui-ink"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

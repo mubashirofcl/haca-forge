@@ -345,6 +345,30 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
     }
   }
 
+  // Publishing also updates the content piece (step 8, after this step is saved). Validate that
+  // update first, so an invalid piece is a 400 with nothing changed, not a 500 with the step
+  // already marked Published (Phase 6).
+  if (toStatus === 'Published' && workItem.contentPieceId) {
+    const { ContentPiece } = await import('../calendar/contentPiece.model.js');
+    const piece = await ContentPiece.findById(workItem.contentPieceId);
+    if (piece) {
+      piece.publishedAt = now;
+      piece.liveUrl = (typeof publishedUrl === 'string' && publishedUrl.trim()) || workItem.publishedUrl || piece.liveUrl;
+      try {
+        await piece.validate();
+      } catch (validationError) {
+        const fields = Object.keys(validationError?.errors || {});
+        const error = new Error(
+          `This content piece has invalid details${fields.length ? ` (${fields.join(', ')})` : ''}. Fix them before marking it as posted.`
+        );
+        error.statusCode = 400;
+        error.code = 'CONTENT_PIECE_INVALID';
+        error.details = { fields };
+        throw error;
+      }
+    }
+  }
+
   // 7. Revision Counter: increment on revision request or when restarting work after feedback & notify owner
   if (
     ((fromStatus === 'Feedback' || fromStatus === 'Pending') && toStatus === 'In Progress') ||

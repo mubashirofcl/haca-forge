@@ -320,10 +320,12 @@ export async function getPlanById(id, user) {
   }
 
   const stats = computePlanRowStats(rows, plan);
+  const work = await planWorkState(rows.map((r) => r._id));
 
   return {
     ...plan,
     ...stats,
+    hasStartedWork: work.started > 0,
     rows,
   };
 }
@@ -1209,6 +1211,25 @@ export async function reviewPlan(id, reviewData, user) {
 /**
  * Delete a Draft calendar plan that has no approved rows
  */
+/** A step that has not started: never moved on from Not Started, no start time, no submission. */
+const UNSTARTED_STEP = { status: 'Not Started', startedAt: null };
+
+/**
+ * The steps generated for a plan's rows, and how many of them have started (Phase 6).
+ * A step has started once it left Not Started, has a start time, or has any submission.
+ */
+export async function planWorkState(pieceIds) {
+  if (!pieceIds.length) return { ids: [], started: 0 };
+  const steps = await WorkItem.find({ contentPieceId: { $in: pieceIds } }).select('_id status startedAt').lean();
+  const ids = steps.map((s) => s._id);
+  let started = steps.filter((s) => s.status !== 'Not Started' || s.startedAt).length;
+  if (!started && ids.length) {
+    const { Submission } = await import('../submissions/model.js');
+    started = await Submission.countDocuments({ workItemId: { $in: ids } });
+  }
+  return { ids, started };
+}
+
 export async function deletePlan(id, user) {
   const userRole = normalizeRole(user.role);
   if (userRole !== 'admin' && userRole !== 'sm_manager') {
@@ -1225,18 +1246,21 @@ export async function deletePlan(id, user) {
     throw error;
   }
 
-  const rows = await ContentPiece.find({ planId: plan._id }).lean();
-  const derivedStatus = derivePlanStatus(rows, plan.submittedAt);
-  const approvedRows = rows.filter((r) => r.rowStatus === 'approved');
-
-  if (derivedStatus !== 'Draft' || approvedRows.length > 0) {
-    const error = new Error('Only Draft plans with no approved rows can be deleted.');
-    error.statusCode = 400;
-    error.code = 'CANNOT_DELETE_NON_DRAFT_PLAN';
+  const rows = await ContentPiece.find({ planId: plan._id }).select('_id').lean();
+  const pieceIds = rows.map((r) => r._id);
+  const work = await planWorkState(pieceIds);
+  if (work.started > 0) {
+    const error = new Error('This plan has work that has already started, so it cannot be deleted.');
+    error.statusCode = 409;
+    error.code = 'PLAN_HAS_STARTED_WORK';
     throw error;
   }
 
-  // Delete all rows belonging to the plan
+  // Nothing has started: remove the plan's unstarted steps, then its rows, then the plan.
+  // Only steps still unstarted are matched, so a step that starts meanwhile is never removed.
+  const removedSteps = work.ids.length
+    ? (await WorkItem.deleteMany({ _id: { $in: work.ids }, ...UNSTARTED_STEP })).deletedCount
+    : 0;
   await ContentPiece.deleteMany({ planId: plan._id });
   await CalendarPlan.findByIdAndDelete(plan._id);
 
@@ -1249,6 +1273,7 @@ export async function deletePlan(id, user) {
       code: plan.code,
       title: plan.title,
       deletedRowsCount: rows.length,
+      deletedWorkItemsCount: removedSteps,
     },
   });
 
