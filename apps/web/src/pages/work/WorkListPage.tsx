@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
-import { OverdueChip } from '../../components/OverdueChip';
+import { TimeLabelChips, type TimeLabel } from '../../components/TimeLabelChips';
+import { hasTimeLabel } from '@mmp/shared';
 import { statusClass, statusTone } from '../../lib/statusTone';
 import {
   WORK_TYPES,
@@ -28,6 +29,8 @@ interface WorkItemRow {
   priority?: string;
   revisions: number;
   isOverdue?: boolean;
+  /** Phase 7: computed time labels (Overdue, Done late, Blocked, ...). */
+  timeLabels?: TimeLabel[];
   stageKey?: string | null;
   stageOrder?: number | null;
   reviewRequired?: boolean;
@@ -53,7 +56,8 @@ export const WorkListPage: React.FC = () => {
   // Filters
   const [statusFilter, setStatusFilter] = useState('all');
   const [workTypeFilter, setWorkTypeFilter] = useState('all');
-  const [isOverdueOnly, setIsOverdueOnly] = useState(false);
+  // Phase 7: Overdue, Done late or Blocked, by the computed time labels.
+  const [labelFilter, setLabelFilter] = useState<'all' | 'overdue' | 'done_late' | 'blocked'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
@@ -63,7 +67,7 @@ export const WorkListPage: React.FC = () => {
       const queryParams = new URLSearchParams();
       if (statusFilter !== 'all') queryParams.append('status', statusFilter);
       if (workTypeFilter !== 'all') queryParams.append('workType', workTypeFilter);
-      if (isOverdueOnly) queryParams.append('isOverdue', 'true');
+      if (labelFilter !== 'all') queryParams.append('timeLabel', labelFilter);
       if (searchTerm.trim()) queryParams.append('search', searchTerm.trim());
 
       // Pass allWork=true so team members can see items across their brand
@@ -80,7 +84,7 @@ export const WorkListPage: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [statusFilter, workTypeFilter, isOverdueOnly]);
+  }, [statusFilter, workTypeFilter, labelFilter]);
 
   const priorityTone = (p?: string) =>
     p === 'High' ? 'status-blocked' : p === 'Medium' ? 'status-waiting' : 'status-not-started';
@@ -156,15 +160,31 @@ export const WorkListPage: React.FC = () => {
               </select>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsOverdueOnly(!isOverdueOnly)}
-              aria-pressed={isOverdueOnly}
-              className={`ui-btn h-11 ${isOverdueOnly ? 'ui-btn-primary' : 'ui-btn-secondary'}`}
-            >
-              <AlertTriangle className="w-4 h-4" aria-hidden="true" />
-              Overdue only
-            </button>
+            <div className="flex flex-col gap-1" role="group" aria-label="Time label filter">
+              <span className="text-xs font-semibold text-ui-muted flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+                Show
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  ['all', 'All'],
+                  ['overdue', 'Overdue'],
+                  ['done_late', 'Done late'],
+                  ['blocked', 'Blocked'],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setLabelFilter(value)}
+                    aria-pressed={labelFilter === value}
+                    className={`ui-btn h-11 ${labelFilter === value ? 'ui-btn-primary' : 'ui-btn-secondary'}`}
+                    data-testid={`work-filter-${value}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col gap-1 w-full sm:w-64">
@@ -218,10 +238,6 @@ export const WorkListPage: React.FC = () => {
               </thead>
               <tbody className="text-ui-text">
                 {items.map((it) => {
-                  const isPast = new Date(it.deadline) < new Date();
-                  const isTerm = it.status === 'Approved' || it.status === 'Published';
-                  const isOverdue = isPast && !isTerm;
-
                   return (
                     <tr
                       key={it._id}
@@ -245,7 +261,7 @@ export const WorkListPage: React.FC = () => {
 
                       <td className="py-4 px-5 align-middle whitespace-nowrap">
                         <div className="text-ui-ink font-medium">{formatDeadline(it.deadline)}</div>
-                        {isOverdue && <OverdueChip deadline={it.deadline} className="mt-1.5" />}
+                        <TimeLabelChips labels={it.timeLabels} showOnTime={false} className="mt-1.5" />
                       </td>
 
                       <td className="py-4 px-5 align-middle">
@@ -283,9 +299,7 @@ export const WorkListPage: React.FC = () => {
       ) : (
         <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map((it) => {
-            const isPast = new Date(it.deadline) < new Date();
-            const isTerm = it.status === 'Approved' || it.status === 'Published';
-            const isOverdue = isPast && !isTerm;
+            const isOverdue = hasTimeLabel(it.timeLabels as never, 'overdue');
 
             return (
               <li key={it._id}>
@@ -311,7 +325,7 @@ export const WorkListPage: React.FC = () => {
                       <span>Due {formatDeadline(it.deadline)}</span>
                       <span className="font-medium text-ui-ink">{it.ownerId?.name || 'Unassigned'}</span>
                     </span>
-                    {isOverdue && <OverdueChip deadline={it.deadline} className="mt-2" />}
+                    <TimeLabelChips labels={it.timeLabels} showOnTime={false} className="mt-2" />
                   </span>
                 </button>
               </li>

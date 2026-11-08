@@ -6,6 +6,7 @@ import { WorkItem } from '../workItems/model.js';
 import { Rating } from '../submissions/model.js';
 import { ActivityEvent } from '../activity/model.js';
 import { PersonChangeAudit } from './audit.model.js';
+import { evaluateSteps } from '../workItems/timeLabels.js';
 import { Session } from '../auth/session.model.js';
 import { logActivity } from '../activity/service.js';
 import { getRatingsSummary } from '../submissions/service.js';
@@ -530,9 +531,11 @@ export async function getPersonWork(targetPersonId, actor, query = {}) {
     .lean();
 
   const now = new Date();
+  const facts = await evaluateSteps(items, { now, withElapsed: false });
   const formattedItems = items.map((it) => {
     const measures = calculateIndividualWorkMeasures(it, now);
     return {
+      timeLabels: facts.get(String(it._id))?.labels || [],
       _id: it._id,
       title: it.title || it.contentPieceId?.title || it.contentPieceId?.topic || 'Deliverable',
       stageKey: it.stageKey || it.workType || 'Stage',

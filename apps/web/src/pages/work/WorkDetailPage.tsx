@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
-import { OverdueChip } from '../../components/OverdueChip';
+import { TimeLabelChips, type TimeLabel } from '../../components/TimeLabelChips';
+import { hasTimeLabel } from '@mmp/shared';
 import { statusClass, statusTone } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -58,6 +59,8 @@ const NO_SUBMISSION_TO_REVIEW =
   'This step has no submission to review yet. It can be approved or sent back once the owner submits their work.';
 
 interface WorkItemDetail {
+  /** Phase 7: computed time labels (owner and leadership only). */
+  timeLabels?: TimeLabel[];
   /** Phase 6: this step's latest approved output (files and links). */
   approvedOutput?: { version?: number | null; items: Array<{ url: string; name?: string | null; kind?: 'upload' | 'drive' | 'link' }> } | null;
   /** Phase 6: the viewer may reopen this finished review step now. */
@@ -618,9 +621,8 @@ export const WorkDetailPage: React.FC = () => {
     );
   }
 
-  const isPastDeadline = new Date(item.deadline) < new Date();
-  const isTerminal = item.status === 'Approved' || item.status === 'Published';
-  const isOverdue = isPastDeadline && !isTerminal;
+  // Phase 7: the shared Overdue label (unlocked, unfinished, past the due date in IST).
+  const isOverdue = hasTimeLabel(item.timeLabels as never, 'overdue');
   const measures = calculateIndividualWorkMeasures(item);
 
   // Central Role & Action Computation via shared getAvailableActions
@@ -712,9 +714,7 @@ export const WorkDetailPage: React.FC = () => {
               {isUnderReview ? 'Waiting for approval' : isReworkRequested ? 'Changes requested' : getStepStatusLabel(item.status)}
             </span>
 
-            {isOverdue && (
-              <OverdueChip deadline={item.deadline} className="px-2.5 py-0.5" />
-            )}
+            <TimeLabelChips labels={item.timeLabels} />
           </div>
 
           <h1 className="text-[26px] sm:text-[32px] leading-tight font-extrabold tracking-[-0.02em] text-ui-ink mt-2 break-words">

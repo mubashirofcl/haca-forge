@@ -147,23 +147,31 @@ export async function listWorkItems(filters = {}, user) {
     query.stageKey = filters.stageKey;
   }
 
-  // Dynamic Overdue filter
-  if (filters.isOverdue === 'true' || filters.isOverdue === true) {
+  // Overdue (Phase 7: the shared label, so locked steps are never overdue). The query
+  // narrows to past-deadline unfinished steps; the label decides.
+  const wantOverdue = filters.isOverdue === 'true' || filters.isOverdue === true || filters.timeLabel === 'overdue';
+  if (wantOverdue) {
     query.deadline = { $lt: new Date() };
     query.status = { $nin: ['Approved', 'Published'] };
   }
+  if (filters.timeLabel === 'done_late') query.status = { $in: ['Approved', 'Published'] };
 
   if (filters.search) {
     const regex = new RegExp(filters.search, 'i');
     query.$or = [{ title: regex }, { description: regex }];
   }
 
-  const items = await WorkItem.find(query)
+  const docs = await WorkItem.find(query)
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole')
     .sort({ deadline: 1, createdAt: -1 });
 
-  return items;
+  // Phase 7: each item carries its computed time labels; Overdue, Done late and Blocked
+  // filters use them.
+  const items = docs.map((doc) => doc.toJSON());
+  await attachTimeLabels(items);
+  const labelFilter = wantOverdue ? 'overdue' : ['done_late', 'blocked'].includes(filters.timeLabel) ? filters.timeLabel : null;
+  return labelFilter ? items.filter((it) => hasTimeLabel(it.timeLabels, labelFilter)) : items;
 }
 
 /**
@@ -343,6 +351,10 @@ export async function getWorkItemById(id, user) {
   } else {
     result.approvedOutput = null;
   }
+
+  // Phase 7: computed time labels (Overdue, Done late, Late: earlier step, Blocked, ...).
+  // The viewer rules keep them for the owner and leadership only.
+  await attachTimeLabels([result]);
 
   // A finished non-postable Design step is handed over: its approved files, with download,
   // for the SM manager, creative head and admin.
@@ -678,6 +690,8 @@ export async function getMyWork(user) {
   const totalRevisions = rawItems.reduce((acc, it) => acc + (it.revisions || 0), 0);
   const avgRevisions = rawItems.length > 0 ? Number((totalRevisions / rawItems.length).toFixed(1)) : 0;
 
+  await attachTimeLabels([...overdue, ...today, ...thisWeek, ...upcoming, ...completed.slice(0, 15)]);
+
   return {
     overdue,
     today,
@@ -704,6 +718,8 @@ import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
 import { buildHandoff, buildHandover, outputItems } from './handoff.js';
 import { canReopen } from './reopen.js';
 import { approvedOutputOf } from './access.js';
+import { attachTimeLabels } from './timeLabels.js';
+import { hasTimeLabel } from '@mmp/shared';
 
 /** Same rule as the WorkItem isOverdue virtual, which .lean() results do not carry. */
 function isPastDeadline(deadline, status) {

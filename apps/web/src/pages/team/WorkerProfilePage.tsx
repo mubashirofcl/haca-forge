@@ -33,6 +33,7 @@ import {
 import { apiFetch } from '../../lib/api';
 import { statusClass, statusTone, roleClass, bandClass } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
+import { TimeLabelChips } from '../../components/TimeLabelChips';
 import { Avatar } from '../../components/Avatar';
 import { AvatarCropModal } from '../../components/AvatarCropModal';
 import { AdminAccountActions } from './AdminAccountActions';
@@ -1093,11 +1094,7 @@ export const WorkerProfilePage: React.FC = () => {
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white/70 text-ui-ink">
                             Calendar: {item.calendar}
                           </span>
-                          {item.measures?.isLate && (
-                            <span className="status-chip status-blocked text-[11px] font-semibold px-1.5 py-0.5">
-                              Late by {item.measures.lateByFormatted}
-                            </span>
-                          )}
+                          <TimeLabelChips labels={item.timeLabels} />
                         </div>
                         <h4 className="text-sm font-bold text-slate-900 mt-1">{item.title}</h4>
                       </div>

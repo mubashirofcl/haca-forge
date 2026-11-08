@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
-import { OverdueChip } from '../../components/OverdueChip';
+import { TimeLabelChips, type TimeLabel } from '../../components/TimeLabelChips';
+import { hasTimeLabel } from '@mmp/shared';
 import { statusClass, statusTone } from '../../lib/statusTone';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useAuth } from '../../context/AuthContext';
@@ -47,6 +48,8 @@ import {
 } from 'lucide-react';
 
 interface WorkItemSummary {
+  /** Phase 7: computed time labels. */
+  timeLabels?: TimeLabel[];
   _id: string;
   title: string;
   workType: WorkType;
@@ -439,9 +442,9 @@ export const MyWorkPage: React.FC = () => {
       );
     }
 
-    const isPastDeadline = new Date(item.dueDate || item.deadline) < new Date();
+    // Phase 7: the shared Overdue label (unlocked, unfinished, past the due date in IST).
+    const isActuallyOverdue = hasTimeLabel(item.timeLabels as never, 'overdue');
     const isTerminal = item.status === 'Approved' || item.status === 'Published';
-    const isActuallyOverdue = isPastDeadline && !isTerminal;
 
     // The latest version decides: a resubmitted step is under review, even after earlier revisions.
     const latestStatus = (item as any).latestSubmissionStatus as string | null | undefined;
@@ -721,9 +724,7 @@ export const MyWorkPage: React.FC = () => {
             <span className={isActuallyOverdue ? 'text-ui-ink font-semibold' : 'text-ui-text'}>
               Due: {new Date(item.dueDate || item.deadline).toLocaleDateString()}
             </span>
-            {isActuallyOverdue && (
-              <OverdueChip deadline={item.dueDate || item.deadline} className="ml-1" />
-            )}
+            <TimeLabelChips labels={item.timeLabels} className="ml-1" />
             {item.estimatedEffortHrs && (
               <span className="text-[10px] text-ui-muted ml-1">
                 ({item.estimatedEffortHrs}h effort)

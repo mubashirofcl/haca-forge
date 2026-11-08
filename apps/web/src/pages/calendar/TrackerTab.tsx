@@ -1,3 +1,4 @@
+import { TimeLabelChips, type TimeLabel } from '../../components/TimeLabelChips';
 import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../../lib/api';
 import { statusClass, statusTone } from '../../lib/statusTone';
@@ -33,6 +34,8 @@ interface StageSummary {
   recommendedOwnerId?: { _id: string; name: string; email: string };
   deliverableUrl?: string;
   publishedUrl?: string;
+  /** Phase 7: computed time labels. */
+  timeLabels?: TimeLabel[];
 }
 
 interface ContentPieceTrackerRow {
@@ -60,6 +63,10 @@ interface ContentPieceTrackerRow {
   hasWaitingApproval: boolean;
   hasBlocked: boolean;
   hasOverdue: boolean;
+  /** Phase 7: a step done late, or the project completed late. */
+  hasDoneLate?: boolean;
+  /** Phase 7: Overdue or Completed late for the project as a whole. */
+  projectLabel?: { kind: string; text: string; days: number } | null;
 }
 
 interface AssignRecommendation {
@@ -94,6 +101,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
   const [filterWaitingApproval, setFilterWaitingApproval] = useState(false);
   const [filterOverdue, setFilterOverdue] = useState(false);
   const [filterBlocked, setFilterBlocked] = useState(false);
+  const [filterDoneLate, setFilterDoneLate] = useState(false);
 
   // Assign Modal State
   const [selectedPieceForAssign, setSelectedPieceForAssign] = useState<ContentPieceTrackerRow | null>(null);
@@ -131,6 +139,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
       if (filterWaitingApproval) params.set('waitingApproval', 'true');
       if (filterOverdue) params.set('overdue', 'true');
       if (filterBlocked) params.set('blocked', 'true');
+      if (filterDoneLate) params.set('doneLate', 'true');
       if (selectedCalendar && selectedCalendar !== 'all') params.set('calendar', selectedCalendar);
 
       const res = await apiFetch<{ data: ContentPieceTrackerRow[] }>(`/api/content-pieces?${params.toString()}`);
@@ -152,6 +161,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
     filterWaitingApproval,
     filterOverdue,
     filterBlocked,
+    filterDoneLate,
     selectedCalendar,
   ]);
 
@@ -367,6 +377,17 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
             >
               Blocked
             </button>
+
+            <button
+              onClick={() => setFilterDoneLate(!filterDoneLate)}
+              aria-pressed={filterDoneLate}
+              data-testid="tracker-filter-done-late"
+              className={`h-11 px-4 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${
+                filterDoneLate ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
+              }`}
+            >
+              Done late
+            </button>
           </div>
         </div>
 
@@ -496,6 +517,14 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                         >
                           {piece.topic}
                         </button>
+                        {piece.projectLabel && (
+                          <span
+                            className={`status-chip ${piece.projectLabel.kind === 'overdue' ? 'status-blocked' : 'status-changes'} text-[10px] font-semibold mt-1 inline-flex`}
+                            data-testid="tracker-project-label"
+                          >
+                            {piece.projectLabel.kind === 'overdue' ? `Project ${piece.projectLabel.text.toLowerCase()}` : piece.projectLabel.text}
+                          </span>
+                        )}
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="text-[10px] font-mono text-ui-ink bg-white/70 px-1 py-0.2 rounded">
                             {piece.contentType}
@@ -550,6 +579,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                                   <span className={`status-chip ${style} text-[9px] font-bold px-1.5 py-0.5`}>
                                     {st.status}
                                   </span>
+                                  <TimeLabelChips labels={st.timeLabels} showOnTime={false} />
 
                                   <div className="text-[10px] text-ui-muted truncate" title={st.ownerId?.name || 'Needs owner'}>
                                     {st.ownerId ? (

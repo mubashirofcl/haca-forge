@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { evaluateSteps } from '../workItems/timeLabels.js';
+import { hasTimeLabel, projectDelivery, projectTimeLabel } from '@mmp/shared';
 import { ContentPiece } from './contentPiece.model.js';
 import { WorkItem } from '../workItems/model.js';
 import { Person } from '../people/model.js';
@@ -215,8 +217,21 @@ export async function listContentPieces(filters = {}, user) {
     };
   });
 
+  // Phase 7: computed time labels per step, the project label, and label-based filters
+  // (a locked step is never Overdue; dates compared in IST).
+  const facts = await evaluateSteps(results.flatMap((p) => p.stages), { now, withElapsed: false });
+  for (const p of results) {
+    for (const s of p.stages) s.timeLabels = facts.get(String(s._id))?.labels || [];
+    const delivery = projectDelivery(p, stagesByPiece[String(p._id)] || p.stages);
+    p.projectLabel = projectTimeLabel(p, delivery, { now });
+    p.hasOverdue = p.stages.some((s) => hasTimeLabel(s.timeLabels, 'overdue')) || p.projectLabel?.kind === 'overdue';
+    p.hasDoneLate = p.stages.some((s) => hasTimeLabel(s.timeLabels, 'done_late')) || p.projectLabel?.kind === 'completed_late';
+    p.hasBlocked = p.hasBlocked || p.stages.some((s) => hasTimeLabel(s.timeLabels, 'blocked'));
+  }
+
   // Apply stage-level filters if requested
   return results.filter((p) => {
+    if (filters.doneLate && !p.hasDoneLate) return false;
     if (filters.needsOwner && !p.hasNeedsOwner) return false;
     if (filters.waitingApproval && !p.hasWaitingApproval) return false;
     if (filters.blocked && !p.hasBlocked) return false;
