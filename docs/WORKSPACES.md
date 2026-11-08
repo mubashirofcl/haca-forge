@@ -3,8 +3,8 @@
 **Document Version:** 3.0.0  
 **Status:** Canonical Source of Truth  
 **Codebase:** `haca-forge` (Monorepo: `@mmp/shared`, `@mmp/api`, `@mmp/web`)  
-**Current System State:** **100% Green** (692/692 tests passing across 51 test files; 0 TypeScript errors; 0 build errors; zero new third-party dependencies)  
-**Current Date:** 3 November 2026  
+**Current System State:** 1601/1601 tests passing across 98 test files (API 1312 in 58 files, web 289 in 40 files); 0 TypeScript errors; clean web build (after Phase 6)  
+**Current Date:** 8 November 2026  
 
 ---
 
@@ -180,7 +180,7 @@ Every creative stage in a pipeline produces a typed submission within a speciali
 3. **Spoken Duration Estimator:** Evaluates word count against a spoken speech baseline of $130\text{ WPM}$ with instant compliance chips for $15\text{s}$, $30\text{s}$, $60\text{s}$, and $90\text{s}$ targets.
 4. **Hook Length Checker:** Inspects the first 1–2 sentences / 3 seconds of spoken audio and flags opening lines exceeding 12 words.
 5. **Auto Shot List Extractor:** Converts rows from the `Visual` column into an ordered, numbered shot checklist for the Videographer with one click.
-6. **Captions & Hashtag Generator:** Metadata box with live character limit meters for Instagram ($2,200$) and LinkedIn ($3,000$).
+6. **No caption box (Phase 5d):** Script and Content submit the document, a Drive link, or both. Caption and hashtags are written by the poster on the Post step.
 7. **Malayalam Typographic Fidelity:** Zero-ligature corruption using Google Fonts (**Manjari** / **Gayathri**) for Malayalam Unicode (`U+0D00` to `U+0D7F`).
 8. **Teleprompter Mode:** Fullscreen scrolling prompter with variable scroll speed, font resizing, and reverse mirror toggle.
 9. **Native File Exchange:** Direct `.docx` file import and clean `.docx`/`.txt` export without third-party cloud services.
@@ -326,7 +326,7 @@ Every creative stage in a pipeline produces a typed submission within a speciali
 
 #### Exact Features & Utilities:
 1. **Pre-Publish Master Bundle:** Downloads the final verified video master or graphic files in full production fidelity.
-2. **Metadata Exporters:** "Copy Caption" and "Copy Hashtags" buttons pulling directly from the approved script.
+2. **Caption and hashtags (Phase 5d):** Written here by the poster (caption required to post, hashtags optional), with Instagram ($2,200$) and LinkedIn ($3,000$) counters and Copy buttons. Saved on the Post step when it is marked posted; the content piece is validated first.
 3. **Platform Checklist:** Verifies account tags, cover frames, audio attribution, and bio links.
 4. **Live URL Verification:** Captures the public live URL and exact timestamp, automatically moving the deliverable into terminal `Posted` state.
 
@@ -560,24 +560,24 @@ Relative to the target publish date ($F$):
 
 # 10. Verification Status & Test Metrics
 
-### Monorepo Test Summary (100% Green)
+### Monorepo Test Summary (after Phase 6)
 ```
-Test Suites:  51 passed (51 total across monorepo)
-Tests:        692 passed (692 total across monorepo)
+Test Suites:  98 passed (98 total across monorepo)
+Tests:        1601 passed (1601 total across monorepo)
 Failures:     0
 TypeScript:   0 errors across all workspaces (npm run typecheck)
-Vite Build:   Clean production bundle built in 12.93s (npm run build)
+Vite Build:   Clean production bundle (npm run build)
 ```
 
 ### Breakdown by Workspace
 * **`@mmp/shared`:** Typings, deliverable enums, backward offsets, Zod schemas compiled cleanly via `tsup`.
-* **`@mmp/api` (Backend):** **583 passed tests across 35 test suites**, including:
+* **`@mmp/api` (Backend):** **1312 passed tests across 58 test files**, including:
   - `test/phone_otp_profile.test.js` (9 tests covering 6-digit SMS OTP generation, expiry, rate limiting, and email lock).
   - `test/team_profile_api.test.js` (16 tests covering Team Directory, Worker Profile tabs, and RBAC).
   - `test/profile_and_settings.test.js` (34 tests covering strict schemas, avatar upload/delete, sessions, and password security).
   - `test/chat_system.test.js` & `test/chat_share_polish.test.js` (50 tests covering chat channels, DMs, socket events, and share-to-chat).
   - `test/individual_tracking_and_timing.test.js` & `test/step_deadlines_plan_form.test.js`.
-* **`@mmp/web` (Frontend):** **109 passed tests across 16 test suites**, including:
+* **`@mmp/web` (Frontend):** **289 passed tests across 40 test files**, including:
   - `src/pages/team/__tests__/TeamProfileSuite.test.tsx` (Team Directory, Worker Profile, craftsmanship metrics).
   - `src/pages/work/workspaces/__tests__/ShootWorkspaceSuite.test.tsx` (13 tests verifying clip gallery, phone uploads, and per-clip feedback).
   - `src/pages/work/workspaces/__tests__/Workspaces.test.tsx` (8 tests verifying Shoot, Edit, Design, and Post workspaces).

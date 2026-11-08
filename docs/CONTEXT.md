@@ -1,11 +1,12 @@
 # HACA Marketing OS — Master Project Context
 
-**Current as of:** 3 November 2026  
+**Current as of:** 8 November 2026 (after Phase 6)  
 **Repository:** HACA Marketing OS (`haca-forge`)  
 **Technology Stack:** Node 22 LTS, Express 5 (ESM), React 18, Vite 6, TypeScript, Tailwind CSS, MongoDB (Mongoose), Socket.io, BullMQ (Redis).  
-**Test Suite Status:** **692 tests passing across 51 test files (100% green, 0 failures)**  
-- `@mmp/api`: 583 tests passed across 35 test files  
-- `@mmp/web`: 109 tests passed across 16 test files  
+**Test Suite Status:** **1601 tests passing across 98 test files (0 failures)**  
+- `@mmp/api`: 1312 tests passed across 58 test files  
+- `@mmp/web`: 289 tests passed across 40 test files  
+- The API tests set their own test-only JWT secrets (`apps/api/vitest.config.js`), so a fresh checkout passes with no `.env`.  
 
 ---
 
@@ -84,20 +85,20 @@
 - **Autofill Suggestions:** Suggests workers by matching step preference, workload under 85%, fewest revisions in 90 days, earliest availability.
 
 ### 4.4 Individual Timing & Tracking
-- **Recorded Timestamps:** `unlockedAt`, `assignedAt`, `startedAt`, `submittedAt`, `decisionAt`, `changesRequestedAt`, `resubmittedAt`, `approvedAt`, `postedAt`, plus paused interval logs (`Blocked` and `Pending`).
+- **Recorded Timestamps:** `unlockedAt`, `assignedAt`, `startedAt`, `submittedAt`, `decisionAt`, `changesRequestedAt`, `resubmittedAt`, `approvedAt`, `postedAt`, plus paused interval logs (`blocked`, `pending`, and `paused` for a later step held while an earlier step is reopened).
 - **Measures (Display-Only):**
   - Waiting to start: `startedAt` minus `unlockedAt`.
-  - Work time: round submission minus round start, minus blocked/pending periods.
+  - Work time: round submission minus round start, minus blocked, pending and paused periods. Reports, the team digest and the Performance tab count submitted rounds only (`submittedWorkTimeMs` in `@mmp/shared`).
   - Approval wait: decision time minus submission time.
   - Late by: calendar days between submission date and step due date.
 - Workers see only their own step's due date and elapsed work time since their own click on "Start".
 
 ### 4.5 Role Workspaces
-- **Writing Studio (Content / Script):** Word-style rich editor (Tiptap), two-column Visual/Audio table, duration estimator, teleprompter, caption & hashtag tools, shot list generator, .docx export/import.
+- **Writing Studio (Content / Script):** Word-style rich editor (Tiptap), two-column Visual/Audio table, duration estimator, teleprompter, shot list generator, .docx export/import.
 - **Review Studio (Creative Head):** Centralized review queue. Media viewers with second-pinned video comments, coordinate-pinned image comments, 1–5 star mandatory approval rating, and 7-category revision root causes.
 - **Shoot Workspace (Videographer):** Clip-by-clip upload with pause/resume, individual clip review ("Approve Clip" / "Reshoot Needed"), and WhatsApp-style per-clip discussion thread.
 - **Edit / Design Workspaces:** Media upload with size guides, aspect ratio checks, approved copy side-by-side view, and revision checklist.
-- **Post Workspace:** One-click caption/hashtag copy, asset download, platform checklist, live link and post timestamp recording.
+- **Post Workspace:** Caption (required to post) and hashtags written on the Post step, with copy buttons; download of the approved final assets; platform checklist, live link and post timestamp recording.
 
 ### 4.6 Team Directory & Profile
 - **Team Directory (`/team`):** Operating status, workload percentage and band, 'Right Now' deliverable, and active counts (in progress, waiting for approval, late). Whitelist sorting: `name`, `department`, `jobRole`, `load`.
@@ -133,7 +134,7 @@ Seeded via `apps/api/scripts/reset-and-seed.js`:
 
 ---
 
-## 6. Verification Status Checklist (All Complete)
+## 6. Verification Status Checklist
 
 | # | Item | Status | Verified Evidence |
 |---|---|---|---|
@@ -153,6 +154,12 @@ Seeded via `apps/api/scripts/reset-and-seed.js`:
 | 14 | Team Directory & Worker Profile (`/team`, `/team/:id`) | **Done** | `team_profile_api.test.js` passing |
 | 15 | Mandatory `/welcome` gate removal | **Done** | Direct entry to `/my-work` or `/dashboard` |
 | 16 | Edit Profile Modal & Mobile OTP Verification | **Done** | `phone_otp_profile.test.js` 9/9 passing |
+| 17 | Approval integrity (approved version, review decisions) | **Done** | `review_decision_integrity.test.js` |
+| 18 | Phase 3: access boundaries (participants, 404 to non-participants) | **Done** | Phase 3 tests; see docs/PROGRESS.md |
+| 19 | Phase 4: uploads and sockets | **Done** | `phase4a_upload_safety.test.js` and Phase 4 tests |
+| 20 | Phase 5: asset handoff, Drive links, caption on Post | **Done** | Phase 5 tests; 30/30 browser checks |
+| 21 | Phase 6: blockers, reopening, plan delete, small fixes | **Done** | Phase 6 tests; see docs/PROGRESS.md |
+| 22 | Reports, overdue and KPI work | **Not started** | Next phases, after their prompts |
 
 ---
 

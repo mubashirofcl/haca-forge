@@ -783,7 +783,7 @@ Rollback point before this pass: commit `642a5df` (UI-1 + UI-2).
 - `TrackerTab.tsx` and `PlansTab.tsx` internals (uppercase labels, purple accents, native selects) were out of scope.
 - Capacity-band colours on the dashboard workload section are still emerald / amber / rose.
 
-## UI Retheme UI-2: Shared Components (Status: COMPLETE, awaiting approval for UI-3)
+## UI Retheme UI-2: Shared Components (Status: COMPLETE; approved, UI-3 built on it)
 
 Decisions applied: Plus Jakarta Sans for page content (header, its flyouts and the sidebar keep the system font); sidebar recoloured only; one shared CSS class set for statuses and roles (no new React component).
 
@@ -824,7 +824,7 @@ Decisions applied: Plus Jakarta Sans for page content (header, its flyouts and t
 - Recharts colours, KPI strip, eyebrow labels, Dashboard panel grouping, My Work card borders by status.
 - Workspaces (Writing Studio, Review Studio, media) apart from the Writing Studio status chip.
 
-## UI Retheme UI-1: Foundation (Status: COMPLETE, awaiting approval for UI-2)
+## UI Retheme UI-1: Foundation (Status: COMPLETE; approved, UI-2 built on it)
 
 Visual-only. Reference: cool grey-blue canvas, frosted panels, near-white cards, near-black active states.
 
