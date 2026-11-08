@@ -6,6 +6,7 @@ import { statusClass, statusTone } from '../../lib/statusTone';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useAuth } from '../../context/AuthContext';
 import { ResumableUploadTask } from '../../lib/uploadManager';
+import { resolveStepBlocker } from '../../lib/blockers';
 import {
   BLOCKER_REASONS,
   getAvailableActions,
@@ -807,6 +808,24 @@ export const MyWorkPage: React.FC = () => {
                     >
                       <Ban className="w-3 h-3" />
                       Mark blocked
+                    </button>
+                  )}
+
+                  {actions.includes('resolve_blocker') && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await resolveStepBlocker(item._id);
+                          await fetchMyWork();
+                        } catch (err: any) {
+                          alert(err.message || 'Could not resolve the blocker');
+                        }
+                      }}
+                      className="ui-btn ui-btn-primary h-11 px-4"
+                      title="Resolve blocker"
+                    >
+                      <CheckCircle2 className="w-3 h-3" />
+                      Resolve Blocker
                     </button>
                   )}
 

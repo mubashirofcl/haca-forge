@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import { PipelineStepper, type PipelineStageItem } from '../../components/PipelineStepper';
 import { AssetLinks } from '../../components/AssetLinks';
+import { resolveStepBlocker } from '../../lib/blockers';
 
 const NO_SUBMISSION_TO_REVIEW =
   'This step has no submission to review yet. It can be approved or sent back once the owner submits their work.';
@@ -350,6 +351,17 @@ export const WorkDetailPage: React.FC = () => {
       await fetchItemData();
     } catch (err: any) {
       alert(err.message || 'Transition failed');
+    }
+  };
+
+  // Resolves the blocker record and returns the step to its status before it was blocked.
+  const handleResolveBlocker = async () => {
+    if (!item) return;
+    try {
+      await resolveStepBlocker(item._id);
+      await fetchItemData();
+    } catch (err: any) {
+      alert(err.message || 'Could not resolve the blocker');
     }
   };
 
@@ -913,7 +925,7 @@ export const WorkDetailPage: React.FC = () => {
 
             {actions.includes('resolve_blocker') && (
               <button
-                onClick={() => handleTransition('In Progress')}
+                onClick={handleResolveBlocker}
                 className="ui-btn ui-btn-primary h-11 gap-1.5"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />

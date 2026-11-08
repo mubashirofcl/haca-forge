@@ -1150,7 +1150,8 @@ export type BlockerCreateInput = z.infer<typeof blockerCreateSchema>;
 
 export const blockerResolveSchema = z.object({
   resolutionNotes: z.string().optional(),
-  resumeStatus: z.enum(WORK_ITEM_STATUSES).default("In Progress"),
+  // Left out: the step returns to the status it had before it was blocked.
+  resumeStatus: z.enum(WORK_ITEM_STATUSES).optional(),
 });
 export type BlockerResolveInput = z.infer<typeof blockerResolveSchema>;
 
@@ -1679,6 +1680,8 @@ export function getAvailableActions(
       actions.push("mark_blocked");
       actions.push("request_help");
     } else if (status === "Blocked") {
+      // The owner resolves their own blocker (the API allows owner, sm_manager and admin).
+      actions.push("resolve_blocker");
       actions.push("request_help");
     } else if (status === "Approved" && stageKey === "Post") {
       actions.push("mark_as_posted");
@@ -1705,7 +1708,7 @@ export function getAvailableActions(
       actions.push("skip_step");
     }
 
-    if (status === "Blocked") {
+    if (status === "Blocked" && !actions.includes("resolve_blocker")) {
       actions.push("resolve_blocker");
     }
 

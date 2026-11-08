@@ -7,6 +7,7 @@ import { logger } from '../../lib/logger.js';
 import { recordRoundSubmission } from './rounds.js';
 import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
 import { isHandoverStep, notifyHandoverReady } from './handoff.js';
+import { recordBlocker, resolveActiveBlockers } from '../blockers/lifecycle.js';
 
 export const ALLOWED_TRANSITIONS = {
   'Not Started': ['In Progress', 'Blocked'],
@@ -428,6 +429,19 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
 
   workItem.status = toStatus;
   await workItem.save();
+
+  // Blocking always leaves a blocker record (remembering the status before), and leaving
+  // Blocked closes it, whichever screen did it.
+  if (toStatus === 'Blocked') {
+    await recordBlocker(workItem, {
+      reason: blockerReason,
+      notes: blockerNote || '',
+      blockedById: user._id || userId,
+      statusBefore: fromStatus,
+    });
+  } else if (fromStatus === 'Blocked') {
+    await resolveActiveBlockers(workItem._id, user._id || userId, comment || 'Resolved by status change');
+  }
 
   // The status is saved. For a review decision, nothing after this point can fail it:
   // the decision stands, and a failure here is logged. A missed unlock is repaired by

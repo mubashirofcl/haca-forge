@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import { Blocker } from './model.js';
+import { recordBlocker, openBlockedInterval, closeIntervals, statusAfterBlocker } from './lifecycle.js';
 import { WorkItem } from '../workItems/model.js';
 import { Person } from '../people/model.js';
 import { logActivity } from '../activity/service.js';
@@ -55,12 +57,6 @@ export async function createBlocker(data, user) {
     await assertOwnerCanLeaveReview(workItem);
   }
 
-  // Deactivate any previous active blockers for this item
-  await Blocker.updateMany(
-    { workItemId, status: 'Active' },
-    { $set: { status: 'Resolved', resolvedAt: new Date(), resolutionNotes: 'Replaced by new blocker' } }
-  );
-
   let dependencyPerson = null;
   if (dependencyOwnerId) {
     dependencyPerson = await Person.findById(dependencyOwnerId);
@@ -73,22 +69,24 @@ export async function createBlocker(data, user) {
 
   const fromStatus = workItem.status;
 
-  // Create active Blocker record
-  const blocker = await Blocker.create({
-    workItemId,
-    blockedById: blockerPerson?._id || user._id,
+  // Active blocker record, remembering the status to return to (an earlier one is replaced)
+  const blocker = await recordBlocker(workItem, {
     reason,
     notes: notes.trim(),
     dependencyOwnerId: dependencyPerson?._id || null,
-    status: 'Active',
-    blockedAt: new Date(),
-    lastNotifiedAt: dependencyPerson ? new Date() : null,
+    blockedById: blockerPerson?._id || user._id,
+    statusBefore: fromStatus,
   });
+  if (dependencyPerson) {
+    blocker.lastNotifiedAt = new Date();
+    await blocker.save();
+  }
 
-  // Update WorkItem state
+  // Update WorkItem state; blocked time is paused, not counted as work time
   workItem.status = 'Blocked';
   workItem.blockerReason = reason;
   workItem.blockerNote = notes.trim();
+  openBlockedInterval(workItem, { reason, note: notes.trim() });
   await workItem.save();
 
   // Log ActivityEvent
@@ -160,7 +158,7 @@ export async function createBlocker(data, user) {
  * Resolve an active blocker and restore work item status
  */
 export async function resolveBlocker(blockerId, data = {}, user) {
-  const { resolutionNotes = '', resumeStatus = 'In Progress' } = data;
+  const { resolutionNotes = '', resumeStatus } = data;
 
   const blocker = await Blocker.findById(blockerId);
   if (!blocker) {
@@ -184,14 +182,18 @@ export async function resolveBlocker(blockerId, data = {}, user) {
   blocker.resolutionNotes = resolutionNotes.trim();
   await blocker.save();
 
-  // Restore WorkItem
+  // Restore WorkItem: back to the status it had before it was blocked (unless an explicit,
+  // valid resume status was chosen), with its blocked interval closed.
   const workItem = await WorkItem.findById(blocker.workItemId);
-  if (workItem) {
+  const resumedTo = statusAfterBlocker(blocker, resumeStatus);
+  if (workItem && workItem.status === 'Blocked') {
     const fromStatus = workItem.status;
-    workItem.status = resumeStatus;
+    workItem.status = resumedTo;
     workItem.blockerReason = null;
     workItem.blockerNote = '';
+    closeIntervals(workItem, ['blocked']);
     await workItem.save();
+    const resumeStatus = resumedTo;
 
     // Log ActivityEvent
     await logActivity({
@@ -311,9 +313,19 @@ export async function listBlockers(filters = {}, user) {
     query.reason = filters.reason;
   }
 
+  if (filters.workItemId && mongoose.isValidObjectId(filters.workItemId)) {
+    query.workItemId = new mongoose.Types.ObjectId(filters.workItemId);
+  }
+
   // A team_member sees only blockers on deliverables they participate in.
   if (isTeamMember(user)) {
-    query.workItemId = { $in: await participantWorkItemIds(user) };
+    const allowed = await participantWorkItemIds(user);
+    if (query.workItemId) {
+      const wanted = String(query.workItemId);
+      query.workItemId = { $in: allowed.filter((id) => String(id) === wanted) };
+    } else {
+      query.workItemId = { $in: allowed };
+    }
   }
 
   const blockers = await Blocker.find(query)

@@ -52,6 +52,11 @@ const blockerSchema = new mongoose.Schema(
       ref: 'Person',
       default: null,
     },
+    // The step's status when it was blocked; resolving returns it there (Phase 6).
+    statusBefore: {
+      type: String,
+      default: null,
+    },
     resolutionNotes: {
       type: String,
       default: '',

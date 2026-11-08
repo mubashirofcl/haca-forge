@@ -153,7 +153,8 @@ export const IssuesBlockersPage: React.FC = () => {
   // Resolve Blocker Modal
   const [resolvingBlocker, setResolvingBlocker] = useState<BlockerItem | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState('');
-  const [resumeStatus, setResumeStatus] = useState('In Progress');
+  // '' means: back to the status the step had before it was blocked.
+  const [resumeStatus, setResumeStatus] = useState('');
   const [isResolving, setIsResolving] = useState(false);
 
   // Classify Root Cause Modal
@@ -252,7 +253,7 @@ export const IssuesBlockersPage: React.FC = () => {
         method: 'PATCH',
         body: JSON.stringify({
           resolutionNotes: resolutionNotes.trim(),
-          resumeStatus,
+          ...(resumeStatus ? { resumeStatus } : {}),
         }),
       });
 
@@ -858,6 +859,7 @@ export const IssuesBlockersPage: React.FC = () => {
                   onChange={(e) => setResumeStatus(e.target.value)}
                   className="ui-select w-full"
                 >
+                  <option value="">Back to its status before the blocker</option>
                   <option value="In Progress">In Progress</option>
                   <option value="Feedback">Feedback</option>
                   <option value="Not Started">Not Started</option>

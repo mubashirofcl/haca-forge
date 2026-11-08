@@ -74,10 +74,11 @@ describe('Work Actions, Authorization, and Wording Suite', () => {
         expect(res.actions).toEqual(['mark_as_posted', 'mark_blocked', 'request_help']);
       });
 
-      it('returns [request_help] for owner in Blocked status', () => {
+      it('returns [resolve_blocker, request_help] for owner in Blocked status', () => {
         const item = { ownerId: writerId, status: 'Blocked', stageKey: 'Content' };
         const res = getAvailableActions(writerUser, item);
-        expect(res.actions).toEqual(['request_help']);
+        // Phase 6: the step owner resolves their own blocker (the API allows owner, sm_manager, admin).
+        expect(res.actions).toEqual(['resolve_blocker', 'request_help']);
       });
 
       it('returns empty array [] for owner when stage is locked or Pending or Approved or Published', () => {
