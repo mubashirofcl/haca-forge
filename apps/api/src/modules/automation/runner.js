@@ -6,22 +6,11 @@ import { FeedbackEntry, RevisionFlag } from '../feedback/model.js';
 import { Notification } from '../notifications/model.js';
 import { ActivityEvent } from '../activity/model.js';
 import { enqueueEmail } from '../../lib/queue.js';
-import { generateReport } from '../reports/service.js';
+import { isRetiredJob, runRetiredJob } from '../jobs/retired.js';
 import { logger } from '../../lib/logger.js';
 
-// Default 7 Automation Rules seed data
+// Default reminder rules (Phase 7: the two report-email rules were retired)
 export const DEFAULT_AUTOMATION_RULES = [
-  {
-    ruleKey: 'month_end_report',
-    name: 'Month-End Performance Scorecard',
-    description: 'Automatically compiles and dispatches the Monthly Performance Scorecard to Marketing Head and Admin at 23:59 on the final day of each month.',
-    trigger: 'cron',
-    schedule: 'Last day of month 23:59',
-    cronExpression: '59 23 28-31 * *',
-    action: 'Generate and distribute Monthly Performance Scorecard report',
-    active: true,
-    config: { reportKey: 'monthly_scorecard', sendEmail: true },
-  },
   {
     ruleKey: 'overdue_escalation',
     name: 'Overdue Task Escalation',
@@ -66,30 +55,21 @@ export const DEFAULT_AUTOMATION_RULES = [
     active: true,
     config: { thresholdRound: 4 },
   },
-  {
-    ruleKey: 'weekly_report',
-    name: 'Weekly Creative Executive Digest',
-    description: 'Generates the comprehensive Weekly Creative Report every Monday at 08:00 AM, detailing planned vs completed output, department throughput, and open blockers.',
-    trigger: 'cron',
-    schedule: 'Mondays at 08:00 AM',
-    cronExpression: '0 8 * * 1',
-    action: 'Generate and email Weekly Creative Report to leadership',
-    active: true,
-    config: { reportKey: 'weekly_marketing', sendEmail: true },
-  },
 ];
 
 /**
- * Ensures standard 7 Automation Rules exist in the database.
+ * Ensures the default reminder rules exist in the database.
  */
 export async function ensureAutomationRules() {
-  const validKeys = DEFAULT_AUTOMATION_RULES.map((r) => r.ruleKey);
-  await AutomationRule.deleteMany({ ruleKey: { $nin: validKeys } });
+  // Inserts missing default rules only. Never deletes or edits a rule record (Phase 7):
+  // the retired report rules' records stay in the database untouched.
+  // timestamps: false, so an existing record's updatedAt is not touched either.
   for (const rule of DEFAULT_AUTOMATION_RULES) {
-    await AutomationRule.findOneAndUpdate(
+    const now = new Date();
+    await AutomationRule.updateOne(
       { ruleKey: rule.ruleKey },
-      { $setOnInsert: rule },
-      { upsert: true, new: true }
+      { $setOnInsert: { ...rule, createdAt: now, updatedAt: now } },
+      { upsert: true, timestamps: false }
     );
   }
 }
@@ -99,6 +79,8 @@ export async function ensureAutomationRules() {
  * Guaranteed idempotency: prevents spamming duplicate notifications within deduplication window.
  */
 export async function executeAutomationRule(ruleKey, user = null, options = {}) {
+  // Retired report rules (Phase 7): log and do nothing; their records are not touched.
+  if (isRetiredJob(ruleKey)) return runRetiredJob(ruleKey);
   await ensureAutomationRules();
   const rule = await AutomationRule.findOne({ ruleKey });
   if (!rule) {
@@ -121,9 +103,6 @@ export async function executeAutomationRule(ruleKey, user = null, options = {}) 
   try {
     let result;
     switch (ruleKey) {
-      case 'month_end_report':
-        result = await runMonthEndReportRule(rule, user);
-        break;
       case 'overdue_escalation':
         result = await runOverdueEscalationRule(rule, user);
         break;
@@ -135,9 +114,6 @@ export async function executeAutomationRule(ruleKey, user = null, options = {}) 
         break;
       case 'revision_pattern_flag':
         result = await runRevisionPatternFlagRule(rule, user);
-        break;
-      case 'weekly_report':
-        result = await runWeeklyReportRule(rule, user);
         break;
       default:
         throw new Error(`No runner implemented for ruleKey: ${ruleKey}`);
@@ -189,23 +165,6 @@ export async function executeAutomationRule(ruleKey, user = null, options = {}) 
 // -------------------------------------------------------------
 // Individual Automation Rule Handlers
 // -------------------------------------------------------------
-
-/**
- * 1. Month-End Report Rule
- */
-async function runMonthEndReportRule(rule, user) {
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const report = await generateReport('monthly_scorecard', { month: currentMonth }, user, {
-    sendEmail: rule.config?.sendEmail ?? true,
-    recipients: rule.config?.recipients || ['creative_head@hacaforge.com'],
-  });
-
-  return {
-    summary: `Generated Monthly Performance Scorecard for ${currentMonth}`,
-    affectedCount: 1,
-    reportKey: report.reportKey,
-  };
-}
 
 /**
  * 2. Overdue Escalation Rule
@@ -517,18 +476,3 @@ async function runRevisionPatternFlagRule(rule, user) {
   };
 }
 
-/**
- * 6. Weekly Report Rule
- */
-async function runWeeklyReportRule(rule, user) {
-  const report = await generateReport('weekly_marketing', {}, user, {
-    sendEmail: rule.config?.sendEmail ?? true,
-    recipients: rule.config?.recipients || ['creative_head@hacaforge.com'],
-  });
-
-  return {
-    summary: `Generated Weekly Creative Report successfully.`,
-    affectedCount: 1,
-    reportKey: report.reportKey,
-  };
-}

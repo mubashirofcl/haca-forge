@@ -589,15 +589,12 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
 
       expect(res.status).toBe(200);
       const rules = res.body.rules || res.body.data;
-      expect(rules.length).toBe(6);
-
+      // Phase 7: the two report-email rules were retired; the 4 reminder rules remain.
       const keys = rules.map((r) => r.ruleKey);
-      expect(keys).toContain('month_end_report');
       expect(keys).toContain('overdue_escalation');
       expect(keys).toContain('todo_escalation');
       expect(keys).toContain('blocker_dependency_alert');
       expect(keys).toContain('revision_pattern_flag');
-      expect(keys).toContain('weekly_report');
     });
 
     it('executes overdue_escalation rule and updates lastRun timestamp in database', async () => {
@@ -619,7 +616,7 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
     });
 
     it('PATCH /api/automation/rules/:id/toggle -> toggles rule active state', async () => {
-      const rule = await AutomationRule.findOne({ ruleKey: 'weekly_report' });
+      const rule = await AutomationRule.findOne({ ruleKey: 'todo_escalation' });
       const currentActive = rule.active;
 
       const toggleRes = await request(app)
@@ -630,6 +627,8 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
       expect(toggleRes.status).toBe(200);
       const updatedActive = toggleRes.body.rule ? toggleRes.body.rule.active : toggleRes.body.data.active;
       expect(updatedActive).toBe(!currentActive);
+      // A live reminder rule now: put it back as it was.
+      await AutomationRule.updateOne({ _id: rule._id }, { $set: { active: currentActive } });
     });
   });
 

@@ -1,5 +1,6 @@
 import { logger } from '../../lib/logger.js';
 import { executeAutomationRule } from '../automation/runner.js';
+import { runRetiredJob } from './retired.js';
 
 /**
  * BullMQ Job Processors for HACA Marketing OS
@@ -21,14 +22,14 @@ export async function runBlockerAlertsJob(job) {
   return executeAutomationRule('blocker_dependency_alert', null);
 }
 
+/** Retired in Phase 7: logs and does nothing. */
 export async function runWeeklyReportJob(job) {
-  logger.info({ jobId: job?.id }, '[BullMQ] Running Weekly Creative Report Automation Rule');
-  return executeAutomationRule('weekly_report', null);
+  return runRetiredJob(job?.name || 'weekly_report');
 }
 
+/** Retired in Phase 7: logs and does nothing. */
 export async function runMonthEndReportJob(job) {
-  logger.info({ jobId: job?.id }, '[BullMQ] Running Month-End Scorecard Automation Rule');
-  return executeAutomationRule('month_end_report', null);
+  return runRetiredJob(job?.name || 'month_end_report');
 }
 
 export async function runRevisionPatternFlagJob(job) {

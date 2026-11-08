@@ -163,22 +163,18 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
   });
 
   describe('1. Automation Rules API & Runner', () => {
-    it('GET /api/automation/rules returns the 6 standard automation rules', async () => {
+    it('GET /api/automation/rules returns the 4 reminder rules (report emails retired in Phase 7)', async () => {
       const res = await request(app)
         .get('/api/automation/rules')
         .set('Authorization', `Bearer ${adminToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.rules).toBeDefined();
-      expect(res.body.rules.length).toBe(6);
-
       const ruleKeys = res.body.rules.map((r) => r.ruleKey);
-      expect(ruleKeys).toContain('month_end_report');
       expect(ruleKeys).toContain('overdue_escalation');
       expect(ruleKeys).toContain('todo_escalation');
       expect(ruleKeys).toContain('blocker_dependency_alert');
       expect(ruleKeys).toContain('revision_pattern_flag');
-      expect(ruleKeys).toContain('weekly_report');
     });
 
     it('PATCH /api/automation/rules/:id/toggle pauses and resumes a rule', async () => {

@@ -17,6 +17,7 @@ import {
   runWeeklyReportJob,
   runMonthEndReportJob,
 } from './modules/jobs/processors.js';
+import { removeRetiredSchedules } from './modules/jobs/retired.js';
 import { fileURLToPath } from 'url';
 
 let emailWorker = null;
@@ -86,8 +87,15 @@ export async function startWorker() {
       { connection, concurrency: 2 }
     );
 
-    // Register repeatable jobs in BullMQ for all 6 Marketing OS automation rules
+    // Register repeatable jobs in BullMQ for the 4 reminder rules. The retired report
+    // schedules (weekly_report, month_end_report) are removed from the queue first.
     if (scheduledJobsQueue) {
+      try {
+        await removeRetiredSchedules(scheduledJobsQueue);
+      } catch (err) {
+        logger.warn({ err: err.message }, 'Could not remove retired report schedules');
+      }
+
       // 1. Overdue escalation: every 15 minutes
       await scheduledJobsQueue.add(
         'overdue_escalation',
@@ -128,27 +136,7 @@ export async function startWorker() {
         }
       );
 
-      // 5. Weekly creative report: every Monday at 08:00
-      await scheduledJobsQueue.add(
-        'weekly_report',
-        {},
-        {
-          repeat: { pattern: '0 8 * * 1' },
-          removeOnComplete: true,
-        }
-      );
-
-      // 6. Month-end performance scorecard: 23:59 on last day of month
-      await scheduledJobsQueue.add(
-        'month_end_report',
-        {},
-        {
-          repeat: { pattern: '59 23 28-31 * *' },
-          removeOnComplete: true,
-        }
-      );
-
-      logger.info('BullMQ repeatable jobs registered for 6 automation rules');
+      logger.info('BullMQ repeatable jobs registered for 4 reminder rules');
     }
   } else {
     logger.info('Running in lightweight standalone worker mode (in-memory interval scheduler)');
