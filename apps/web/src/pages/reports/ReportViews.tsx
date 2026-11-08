@@ -115,9 +115,10 @@ interface ViewProps<T> {
 }
 
 const COLORS = { a: 'rgb(var(--ui-blue-rgb))', b: 'rgb(var(--ui-ink-rgb))', c: 'rgb(var(--ui-coral-rgb))' };
+export const CHART_COLORS = COLORS;
 
 /** A chart at full width on screen, at a fixed size in the print layout. */
-const ChartBox: React.FC<{ title: string; print?: boolean; children: React.ReactElement; testId?: string }> = ({ title, print, children, testId }) => (
+export const ChartBox: React.FC<{ title: string; print?: boolean; children: React.ReactElement; testId?: string }> = ({ title, print, children, testId }) => (
   <figure className="glass-card p-4 sm:p-5 min-w-0 report-chart" data-testid={testId}>
     <figcaption className="text-sm font-semibold text-ui-ink mb-3">{title}</figcaption>
     {print ? (
@@ -133,6 +134,7 @@ const ChartBox: React.FC<{ title: string; print?: boolean; children: React.React
 );
 
 const axis = { tick: { fontSize: 11, fill: 'rgb(var(--ui-muted-rgb))' }, stroke: 'rgb(var(--ui-muted-rgb))' };
+export const CHART_AXIS = axis;
 
 export function ReportTable<Row>({
   title,

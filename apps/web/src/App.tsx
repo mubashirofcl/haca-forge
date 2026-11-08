@@ -82,6 +82,9 @@ const ReportsPage = React.lazy(() =>
 const ReportPrintPage = React.lazy(() =>
   import('./pages/reports/ReportPrintPage').then((m) => ({ default: m.ReportPrintPage }))
 );
+const ProfileReportPage = React.lazy(() =>
+  import('./pages/team/ProfileReportPage').then((m) => ({ default: m.ProfileReportPage }))
+);
 const ProjectKpiPage = React.lazy(() =>
   import('./pages/reports/ProjectKpiPage').then((m) => ({ default: m.ProjectKpiPage }))
 );
@@ -345,6 +348,15 @@ export const App: React.FC = () => {
                       <Layout>
                         <TeamDirectoryPage />
                       </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Phase 8: a person's report, print layout (admin, creative_head, executive; the API enforces it). */}
+                <Route
+                  path="/team/:id/report"
+                  element={
+                    <ProtectedRoute>
+                      <ProfileReportPage />
                     </ProtectedRoute>
                   }
                 />

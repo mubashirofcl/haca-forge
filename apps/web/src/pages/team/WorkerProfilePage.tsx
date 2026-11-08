@@ -37,6 +37,8 @@ import { TimeLabelChips } from '../../components/TimeLabelChips';
 import { Avatar } from '../../components/Avatar';
 import { AvatarCropModal } from '../../components/AvatarCropModal';
 import { AdminAccountActions } from './AdminAccountActions';
+import { DownloadReport, PeriodPicker, ReviewerCards, ReviewerCharts, WorkerCards, WorkerCharts, type PeriodChoice } from './ProfileKpiViews';
+import { profileQuery, type ProfileKpiData } from './profileFigures';
 import {
   ROLE_LABELS,
   JOB_ROLES,
@@ -69,8 +71,12 @@ export const WorkerProfilePage: React.FC = () => {
 
   // Tabs
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'work' | 'performance' | 'ratings' | 'activity' | 'changes'
+    'overview' | 'work' | 'performance' | 'ratings' | 'activity' | 'changes' | 'reviews'
   >('overview');
+
+  // Phase 8: the person's own KPIs for a period (this month, last 3 months, custom).
+  const [kpiChoice, setKpiChoice] = useState<PeriodChoice>({ period: 'month' });
+  const [kpiData, setKpiData] = useState<ProfileKpiData | null>(null);
 
   // Tab Data States
   const [overviewData, setOverviewData] = useState<any>(null);
@@ -176,6 +182,18 @@ export const WorkerProfilePage: React.FC = () => {
     fetchBaseProfile();
   }, [targetId]);
 
+  // Phase 8: profile KPIs (cards, charts, review section) for the chosen period.
+  useEffect(() => {
+    if (!targetId || !profile) return;
+    let alive = true;
+    apiFetch<{ success: boolean; data: ProfileKpiData }>(`/api/team/${targetId}/kpis?${profileQuery(kpiChoice)}`)
+      .then((res) => alive && setKpiData(res.data && res.data.period ? res.data : null))
+      .catch(() => alive && setKpiData(null));
+    return () => {
+      alive = false;
+    };
+  }, [targetId, profile, kpiChoice]);
+
   // Load Tab specific data
   useEffect(() => {
     if (!targetId || !profile) return;
@@ -272,6 +290,10 @@ export const WorkerProfilePage: React.FC = () => {
       availableTabs.push({ id: 'changes', label: 'Changes Log' });
     }
   } else if (isSmOrCreativeRole) {
+    // Phase 8: an SM manager or Creative Head who owns production steps gets the worker tabs
+    // too, and a Creative Head's own review work is on the Reviews tab (when visible).
+    if (kpiData?.worker) availableTabs.push({ id: 'work', label: 'Work' }, { id: 'performance', label: 'Performance' });
+    if (kpiData?.creativeHead) availableTabs.push({ id: 'reviews', label: 'Reviews' });
     availableTabs.push({ id: 'activity', label: 'Activity' });
   }
 
@@ -936,6 +958,29 @@ export const WorkerProfilePage: React.FC = () => {
       {/* TAB 1: OVERVIEW */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Phase 8: KPI cards for the chosen period; the person's own figures only */}
+          <section className="glass-panel rounded-ui-panel p-5 space-y-4" data-testid="profile-kpis">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-ui-ink">Work figures</h3>
+                <p className="text-xs text-ui-muted mt-1">
+                  {kpiData ? `${kpiData.period.label}. ` : ''}Steps count by their due date (IST). For coaching only; nothing is compared with anyone else.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <PeriodPicker value={kpiChoice} onChange={setKpiChoice} />
+                {kpiData?.canDownload && (
+                  <DownloadReport targetId={targetId as string} choice={kpiChoice} personName={profile.name} />
+                )}
+              </div>
+            </div>
+            {kpiData?.worker ? (
+              <WorkerCards worker={kpiData.worker} />
+            ) : (
+              <p className="text-xs text-ui-muted">{kpiData ? 'No production steps assigned.' : 'Loading figures…'}</p>
+            )}
+          </section>
+
           {/* Phase 7: open overdue and blocked steps, by the shared labels */}
           {overviewData?.timeSummary && (
             <div className="grid grid-cols-2 gap-3" data-testid="profile-time-summary">
@@ -1189,6 +1234,13 @@ export const WorkerProfilePage: React.FC = () => {
       {/* TAB 3: PERFORMANCE */}
       {activeTab === 'performance' && (
         <div className="space-y-6">
+          {/* Phase 8: charts for the chosen period (period picker on the Overview tab) */}
+          {kpiData?.worker && (
+            <section className="space-y-3" data-testid="profile-charts">
+              <p className="text-xs text-ui-muted">{kpiData.period.label}. The monthly trend counts steps by their finish date.</p>
+              <WorkerCharts worker={kpiData.worker} />
+            </section>
+          )}
           {/* Craft Metrics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="glass-card p-4 space-y-1" data-testid="performance-on-time">
@@ -1214,7 +1266,9 @@ export const WorkerProfilePage: React.FC = () => {
                 First-Pass Approval Rate
               </span>
               <span className="text-2xl font-black text-ui-ink">
-                {performanceData?.current?.firstPassApprovalRate || 100}%
+                {performanceData?.current?.firstPassApprovalRate === null || performanceData?.current?.firstPassApprovalRate === undefined
+                  ? 'No data'
+                  : `${performanceData.current.firstPassApprovalRate}%`}
               </span>
               <span className="text-[11px] text-ui-muted block">
                 Approved in Round 1
@@ -1292,6 +1346,18 @@ export const WorkerProfilePage: React.FC = () => {
               speed scorecards, and peer comparisons are strictly prohibited.
             </span>
           </div>
+        </div>
+      )}
+
+      {/* Phase 8: Creative Head review work (admin, executive, and the Creative Head on their own profile) */}
+      {activeTab === 'reviews' && kpiData?.creativeHead && (
+        <div className="space-y-6" data-testid="profile-reviews">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
+            <p className="text-xs text-ui-muted">{kpiData.period.label}. Reviews count by decision date (IST).</p>
+            <PeriodPicker value={kpiChoice} onChange={setKpiChoice} />
+          </div>
+          <ReviewerCards ch={kpiData.creativeHead} />
+          <ReviewerCharts ch={kpiData.creativeHead} />
         </div>
       )}
 

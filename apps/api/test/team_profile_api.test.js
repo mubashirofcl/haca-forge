@@ -169,7 +169,14 @@ describe('Team Directory and Worker Profile API Suite', () => {
       deadline: new Date(Date.now() - 86400000), // Late
       estimatedEffortHrs: 4,
       startedAt: new Date(Date.now() - 86400000),
-      submittedAt: new Date(Date.now() - 1800000),
+      // 30 minutes ago, but never before this week's Monday 00:00 (local), so the step still
+      // counts in this week's load when the suite runs just after midnight on a Monday.
+      submittedAt: (() => {
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() + ((weekStart.getDay() === 0 ? -6 : 1) - weekStart.getDay()));
+        weekStart.setHours(0, 0, 0, 0);
+        return new Date(Math.max(Date.now() - 1800000, weekStart.getTime() + 60000));
+      })(),
     });
   });
 
