@@ -2631,10 +2631,12 @@ export function toMidnightDate(d: string | Date): Date {
   return date;
 }
 
-/** Whole calendar days past a deadline (0 if it falls today or later). Same date-only count as "Late by". */
+/**
+ * Whole calendar days past a deadline (0 if it falls today or later), comparing dates in
+ * Asia/Kolkata (Phase 7), so the result does not depend on the server or browser timezone.
+ */
 export function overdueDays(deadline: string | Date, now: string | Date = new Date()): number {
-  const diff = toMidnightDate(now).getTime() - toMidnightDate(deadline).getTime();
-  return Math.max(0, Math.round(diff / (24 * 60 * 60 * 1000)));
+  return Math.max(0, istDayDiff(now, deadline) ?? 0);
 }
 
 export function formatOverdue(days: number): string {
@@ -3248,4 +3250,279 @@ export function matchGridOwner(raw: unknown, people: GridOwnerCandidate[]): Grid
   if (hits.length === 1) return { ok: true, id: String(hits[0]._id), name: hits[0].name };
   if (hits.length > 1) return { ok: false, ambiguous: true, error: `More than one active person is named "${s}". Pick the owner from the list.` };
   return { ok: false, error: `No active person is named exactly "${s}".` };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 7: time labels and project KPIs. Computed only, from stored dates; dates are
+// compared by calendar day in Asia/Kolkata, so a step due on a day is on time until
+// 11:59 PM IST that day.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type DateLike = string | Date | number | null | undefined;
+
+const IST_DATE_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** 'YYYY-MM-DD' of a moment in Asia/Kolkata, or null for a missing or invalid date. */
+export function istDateKey(value: DateLike): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return IST_DATE_FORMAT.format(d);
+}
+
+const dayNumber = (key: string) =>
+  Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10))) / 86400000;
+
+/** Calendar days from `earlier` to `later`, by IST date (positive when `later` is a later day). */
+export function istDayDiff(later: DateLike, earlier: DateLike): number | null {
+  const a = istDateKey(later);
+  const b = istDateKey(earlier);
+  if (!a || !b) return null;
+  return Math.round(dayNumber(a) - dayNumber(b));
+}
+
+/** The Monday ('YYYY-MM-DD') of the IST week a moment falls in. */
+export function istWeekKey(value: DateLike): string | null {
+  const key = istDateKey(value);
+  if (!key) return null;
+  const n = dayNumber(key);
+  const weekday = (new Date(n * 86400000).getUTCDay() + 6) % 7; // Monday = 0
+  return new Date((n - weekday) * 86400000).toISOString().slice(0, 10);
+}
+
+/** Minimum number of ratings before an average is shown. */
+export const MIN_RATINGS = 3;
+export const COLLECTING_BASELINE = "Collecting baseline";
+
+export interface TimedStep {
+  status?: string | null;
+  stageKey?: string | null;
+  isLocked?: boolean | null;
+  isSkipped?: boolean | null;
+  reviewRequired?: boolean | null;
+  dueDate?: DateLike;
+  deadline?: DateLike;
+  unlockedAt?: DateLike;
+  startedAt?: DateLike;
+  submittedAt?: DateLike;
+  approvedAt?: DateLike;
+  postedAt?: DateLike;
+  revisions?: number | null;
+  rounds?: Array<{ startedAt?: DateLike; submittedAt?: DateLike; decision?: string | null; intervals?: unknown[] }> | null;
+  intervals?: unknown[] | null;
+}
+
+export const isFinishedStepStatus = (status?: string | null) => status === "Approved" || status === "Published";
+
+export function stepDueDate(step: TimedStep): DateLike {
+  return step.dueDate || step.deadline || null;
+}
+
+/**
+ * When the step was first handed in: a Post step's posting time, otherwise the first
+ * round's submit time, otherwise the stored first submission.
+ */
+export function firstSubmittedAt(step: TimedStep): Date | null {
+  const raw = step.stageKey === "Post" ? step.postedAt : step.rounds?.[0]?.submittedAt || step.submittedAt;
+  if (!raw) return null;
+  const d = new Date(raw as string | Date | number);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+export type StepTimeLabelKind =
+  | "overdue"
+  | "done_late"
+  | "done_on_time"
+  | "late_earlier_step"
+  | "waiting_earlier_step_late"
+  | "blocked";
+
+export interface StepTimeLabel {
+  kind: StepTimeLabelKind;
+  text: string;
+  days?: number;
+}
+
+const dayWord = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
+
+/**
+ * The computed time labels of one step (Phase 7). A list, because a step can be both
+ * "Late: earlier step" and "Done N days late", or Overdue and Blocked.
+ * - Overdue: unlocked, not finished, today (IST) past the due date. A locked step is
+ *   never Overdue; past its due date it is "Waiting: earlier step late".
+ * - Done late / Done on time: finished, by the first submission's IST date.
+ * - Late: earlier step: unlocked after its own due date (kept after it is finished).
+ * - Blocked N days: an active blocker since `blockedSince`.
+ * `firstSubmitted` overrides the stored first submission (older steps filled from history).
+ */
+export function stepTimeLabels(
+  step: TimedStep,
+  opts: { now?: DateLike; blockedSince?: DateLike; firstSubmitted?: DateLike } = {}
+): StepTimeLabel[] {
+  if (!step || step.isSkipped) return [];
+  const now = opts.now ?? new Date();
+  const due = stepDueDate(step);
+  const labels: StepTimeLabel[] = [];
+  const finished = isFinishedStepStatus(step.status);
+
+  if (finished) {
+    const first = opts.firstSubmitted ?? firstSubmittedAt(step);
+    const late = due && first ? istDayDiff(first, due) : null;
+    if (late !== null) {
+      labels.push(
+        late > 0
+          ? { kind: "done_late", text: `Done ${dayWord(late)} late`, days: late }
+          : { kind: "done_on_time", text: "Done on time" }
+      );
+    }
+  } else if (step.isLocked) {
+    const past = due ? istDayDiff(now, due) : null;
+    if (past !== null && past > 0) labels.push({ kind: "waiting_earlier_step_late", text: "Waiting: earlier step late" });
+  } else {
+    const past = due ? istDayDiff(now, due) : null;
+    if (past !== null && past > 0) labels.push({ kind: "overdue", text: formatOverdue(past), days: past });
+  }
+
+  if (!step.isLocked && step.unlockedAt && due) {
+    const unlockedLate = istDayDiff(step.unlockedAt, due);
+    if (unlockedLate !== null && unlockedLate > 0) labels.push({ kind: "late_earlier_step", text: "Late: earlier step" });
+  }
+
+  if (opts.blockedSince && !finished) {
+    const days = Math.max(0, istDayDiff(now, opts.blockedSince) ?? 0);
+    labels.push({ kind: "blocked", text: days === 0 ? "Blocked today" : `Blocked ${dayWord(days)}`, days });
+  }
+  return labels;
+}
+
+export const hasTimeLabel = (labels: StepTimeLabel[] | null | undefined, kind: StepTimeLabelKind) =>
+  Array.isArray(labels) && labels.some((l) => l.kind === kind);
+
+/**
+ * Worker on-time rate (Phase 7): finished steps judged Done on time or Done late. Steps that
+ * unlocked after their own due date ("Late: earlier step") are left out of both the count
+ * and the total, and reported as `delayedByEarlier`.
+ */
+export function workerOnTime(labelSets: StepTimeLabel[][]): {
+  onTime: number;
+  total: number;
+  rate: number | null;
+  delayedByEarlier: number;
+  delayedText: string;
+} {
+  let onTime = 0;
+  let total = 0;
+  let delayedByEarlier = 0;
+  for (const labels of labelSets) {
+    const judged = hasTimeLabel(labels, "done_on_time") || hasTimeLabel(labels, "done_late");
+    if (!judged) continue;
+    if (hasTimeLabel(labels, "late_earlier_step")) {
+      delayedByEarlier += 1;
+      continue;
+    }
+    total += 1;
+    if (hasTimeLabel(labels, "done_on_time")) onTime += 1;
+  }
+  return {
+    onTime,
+    total,
+    rate: total ? Math.round((onTime / total) * 100) : null,
+    delayedByEarlier,
+    delayedText: `${delayedByEarlier} ${delayedByEarlier === 1 ? "step" : "steps"} delayed by earlier steps`,
+  };
+}
+
+/** A step approved without any changes requested. */
+export function isFirstPassApproval(step: TimedStep, opts: { changesRequested?: boolean } = {}): boolean {
+  if (opts.changesRequested) return false;
+  if ((step.revisions || 0) > 0) return false;
+  return !(step.rounds || []).some((r) => r && r.decision === "changes_requested");
+}
+
+/** Counted for first-pass approval: finished review steps; Post is never counted. */
+export const isFirstPassCandidate = (step: TimedStep) =>
+  !step.isSkipped && step.stageKey !== "Post" && isFinishedStepStatus(step.status);
+
+/**
+ * Elapsed work time of one step: submitted rounds only, minus blocked and paused time
+ * (submittedWorkTimeMs). An older step without rounds falls back to its start and first
+ * submission from history, which has no interval record, so it is marked `fromHistory`.
+ */
+export function stepElapsedWork(
+  step: TimedStep,
+  history: { startedAt?: DateLike; firstSubmittedAt?: DateLike } = {}
+): { ms: number; fromHistory: boolean } | null {
+  const measured = submittedWorkTimeMs(step as WorkItemTimestamps);
+  if (measured !== null && measured !== undefined) return { ms: Math.max(0, measured), fromHistory: false };
+  const start = history.startedAt ? new Date(history.startedAt as string).getTime() : NaN;
+  const end = history.firstSubmittedAt ? new Date(history.firstSubmittedAt as string).getTime() : NaN;
+  if (!isNaN(start) && !isNaN(end) && end >= start) return { ms: end - start, fromHistory: true };
+  return null;
+}
+
+/** Average of one rating per step, or "Collecting baseline" under MIN_RATINGS. */
+export function ratingAverage(scores: number[]): { count: number; average: number | null; text: string } {
+  const valid = scores.filter((n) => typeof n === "number" && n >= 1 && n <= 5);
+  if (valid.length < MIN_RATINGS) return { count: valid.length, average: null, text: COLLECTING_BASELINE };
+  const average = Math.round((valid.reduce((a, b) => a + b, 0) / valid.length) * 10) / 10;
+  return { count: valid.length, average, text: average.toFixed(1) };
+}
+
+export interface ProjectPieceInput {
+  contentType?: string | null;
+  postingDate?: DateLike;
+  publishedAt?: DateLike;
+  hasPostStage?: boolean | null;
+}
+
+/**
+ * When a project was delivered: a posted Post step (its posting time, else the piece's
+ * published time, else `postedFromHistory`), or, for a non-postable design, the approval
+ * of its Design step (handover).
+ */
+export function projectDelivery(
+  piece: ProjectPieceInput,
+  steps: TimedStep[],
+  opts: { postedFromHistory?: DateLike; approvedFromHistory?: DateLike } = {}
+): { delivered: boolean; deliveredAt: Date | null; via: "post" | "handover" | null } {
+  const live = (steps || []).filter((s) => !s.isSkipped);
+  const post = live.find((s) => s.stageKey === "Post");
+  const design = live.find((s) => s.stageKey === "Design");
+  const asDate = (v: DateLike) => (v ? new Date(v as string) : null);
+  if (post) {
+    if (post.status !== "Published") return { delivered: false, deliveredAt: null, via: null };
+    return { delivered: true, deliveredAt: asDate(post.postedAt || piece.publishedAt || opts.postedFromHistory), via: "post" };
+  }
+  const nonPostable = piece.hasPostStage === false || (piece.contentType ? !isPostableWorkType(piece.contentType) : false);
+  if (design && nonPostable) {
+    if (!isFinishedStepStatus(design.status)) return { delivered: false, deliveredAt: null, via: null };
+    return { delivered: true, deliveredAt: asDate(design.approvedAt || opts.approvedFromHistory), via: "handover" };
+  }
+  return { delivered: false, deliveredAt: null, via: null };
+}
+
+export type ProjectLabelKind = "overdue" | "completed_late";
+
+/**
+ * Project labels: Overdue (publish date passed, not posted or handed over) and Completed
+ * late (posted or handed over after the publish date), by IST date, whatever the cause.
+ */
+export function projectTimeLabel(
+  piece: ProjectPieceInput,
+  delivery: { delivered: boolean; deliveredAt: Date | null },
+  opts: { now?: DateLike } = {}
+): { kind: ProjectLabelKind; text: string; days: number } | null {
+  if (!piece.postingDate) return null;
+  if (delivery.delivered) {
+    const late = delivery.deliveredAt ? istDayDiff(delivery.deliveredAt, piece.postingDate) : null;
+    return late !== null && late > 0 ? { kind: "completed_late", text: `Completed ${dayWord(late)} late`, days: late } : null;
+  }
+  const past = istDayDiff(opts.now ?? new Date(), piece.postingDate);
+  return past !== null && past > 0 ? { kind: "overdue", text: formatOverdue(past), days: past } : null;
 }
