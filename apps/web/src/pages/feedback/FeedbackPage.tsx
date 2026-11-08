@@ -640,8 +640,7 @@ export const FeedbackPage: React.FC = () => {
                           )}
                         </div>
                         <p className="text-xs font-semibold">
-                          Deliverable reached {activeThread.flag.revisionsCount} revisions (baseline average was{' '}
-                          {activeThread.flag.baselineAvg}).
+                          Reached round {activeThread.flag.revisionsCount + 1} ({activeThread.flag.revisionsCount} change requests).
                         </p>
                         {activeThread.flag.rootCause ? (
                           <div className="mt-2 text-xs text-ui-text bg-white/80 p-2.5 rounded-xl">

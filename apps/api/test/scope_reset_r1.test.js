@@ -101,7 +101,7 @@ describe('SCOPE RESET R1 Verification Suite', () => {
           ownerId: memberUser._id.toString(),
           deadline: new Date(Date.now() + 86400000 * 2).toISOString(),
           estimatedEffortHrs: 5,
-          priority: 'High',
+          priority: 'Urgent',
           description: 'A campaign-free deliverable',
         });
 
@@ -133,7 +133,7 @@ describe('SCOPE RESET R1 Verification Suite', () => {
           workType: 'Ad Creative',
           deadline: new Date(Date.now() + 86400000 * 3).toISOString(),
           estimatedEffortHrs: 4,
-          priority: 'Medium',
+          priority: 'Normal',
         });
 
       expect(res.status).toBe(201);
@@ -152,7 +152,7 @@ describe('SCOPE RESET R1 Verification Suite', () => {
           workType: 'Reel',
           deadline: new Date(Date.now() + 86400000 * 3).toISOString(),
           estimatedEffortHrs: 4,
-          priority: 'Medium',
+          priority: 'Normal',
           ownerId: null,
         });
 

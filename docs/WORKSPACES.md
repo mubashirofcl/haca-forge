@@ -3,7 +3,7 @@
 **Document Version:** 3.0.0  
 **Status:** Canonical Source of Truth  
 **Codebase:** `haca-forge` (Monorepo: `@mmp/shared`, `@mmp/api`, `@mmp/web`)  
-**Current System State:** 1639/1639 tests passing across 105 test files (API 1341 in 63 files, web 298 in 42 files); 0 TypeScript errors; clean web build (after Phase 7)  
+**Current System State:** 1653/1653 tests passing across 106 test files (API 1353 in 64 files, web 300 in 42 files); 0 TypeScript errors; clean web build (after the Phase 7 close-out)  
 **Current Date:** 8 November 2026  
 
 ---
@@ -511,10 +511,10 @@ Relative to the target publish date ($F$):
 
 ### 7.3 Background Reminders (worker jobs; no screen)
 4 rules run in the background worker (Phase 7 removed them from the Reports page and removed the automation API):
-1. Overdue escalation: the step owner, then one manager (the department's SM manager or creative head, else an SM manager) after 4 hours.
+1. Overdue notice: once a step is overdue by the IST day rule (from the day after its due date; locked steps skipped), the owner is notified once and one SM manager (the step's department's, else any) once the same day. No hour-based escalation, no repeats.
 2. Idle step: open steps with no status change for 3+ days.
 3. Blocker dependency reminders to the dependency owner.
-4. Revision pattern flag: flags steps at round 4+ and escalates unclassified flags to creative heads and admins after 48 hours.
+4. Revision pattern flag: flags a step when it reaches round 4 and alerts creative heads and admins when a flag stays unclassified for 48 hours. No comparison with a worker's own average. The Dashboard lists flags by project and step.
 The scheduled report emails (weekly report, month-end scorecard) were retired in Phase 7: their jobs log "retired" and do nothing, and their queue schedules are removed at startup.
 
 ### 7.4 Live Reports (`/reports`)
@@ -562,10 +562,10 @@ CSV per table (the same cells as the screen) and a print layout (`/reports/print
 
 # 10. Verification Status & Test Metrics
 
-### Monorepo Test Summary (after Phase 7)
+### Monorepo Test Summary (after the Phase 7 close-out)
 ```
-Test Suites:  105 passed (105 total across monorepo)
-Tests:        1639 passed (1639 total across monorepo)
+Test Suites:  106 passed (106 total across monorepo)
+Tests:        1653 passed (1653 total across monorepo)
 Failures:     0
 TypeScript:   0 errors across all workspaces (npm run typecheck)
 Vite Build:   Clean production bundle (npm run build)
@@ -573,13 +573,13 @@ Vite Build:   Clean production bundle (npm run build)
 
 ### Breakdown by Workspace
 * **`@mmp/shared`:** Typings, deliverable enums, backward offsets, Zod schemas compiled cleanly via `tsup`.
-* **`@mmp/api` (Backend):** **1341 passed tests across 63 test files**, including:
+* **`@mmp/api` (Backend):** **1353 passed tests across 64 test files**, including:
   - `test/phone_otp_profile.test.js` (9 tests covering 6-digit SMS OTP generation, expiry, rate limiting, and email lock).
   - `test/team_profile_api.test.js` (16 tests covering Team Directory, Worker Profile tabs, and RBAC).
   - `test/profile_and_settings.test.js` (34 tests covering strict schemas, avatar upload/delete, sessions, and password security).
   - `test/chat_system.test.js` & `test/chat_share_polish.test.js` (50 tests covering chat channels, DMs, socket events, and share-to-chat).
   - `test/individual_tracking_and_timing.test.js` & `test/step_deadlines_plan_form.test.js`.
-* **`@mmp/web` (Frontend):** **298 passed tests across 42 test files**, including:
+* **`@mmp/web` (Frontend):** **300 passed tests across 42 test files**, including:
   - `src/pages/team/__tests__/TeamProfileSuite.test.tsx` (Team Directory, Worker Profile, craftsmanship metrics).
   - `src/pages/work/workspaces/__tests__/ShootWorkspaceSuite.test.tsx` (13 tests verifying clip gallery, phone uploads, and per-clip feedback).
   - `src/pages/work/workspaces/__tests__/Workspaces.test.tsx` (8 tests verifying Shoot, Edit, Design, and Post workspaces).

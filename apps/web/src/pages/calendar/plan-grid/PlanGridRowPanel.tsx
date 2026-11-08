@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Trash2, CheckCircle2, MessageSquare, Send, AlertTriangle } from 'lucide-react';
-import { formatGridDate, getPipelineForContent, parseGridDate, type StageKey } from '@mmp/shared';
+import { PRIORITIES, formatGridDate, getPipelineForContent, normalizePriority, parseGridDate, type StageKey } from '@mmp/shared';
 import { apiFetch } from '../../../lib/api';
 import { useDialogFocus } from '../../../lib/useDialogFocus';
 import {
@@ -24,7 +24,6 @@ const ROW_STATUS: Record<string, { tone: string; label: string }> = {
   changes_requested: { tone: 'status-changes', label: 'Changes requested' },
   approved: { tone: 'status-approved', label: 'Approved' },
 };
-const PRIORITIES = ['Normal', 'Urgent', 'High', 'Medium', 'Low'];
 
 interface Props {
   line: GridLine;
@@ -108,7 +107,8 @@ export const PlanGridRowPanel: React.FC<Props> = ({
       remarks: d.remarks !== undefined ? String(d.remarks) : row?.remarks ?? '',
       programOrEvent: row?.programOrEvent ?? '',
       referenceLink: row?.referenceLink ?? '',
-      priority: row?.priority || 'Normal',
+      // An older stored value (Low, Medium, High) shows as Normal and is only sent if changed.
+      priority: normalizePriority(row?.priority),
       sourceVideoLink: row?.sourceVideoLink ?? '',
       needsScript: row ? row.needsScript : true,
       needsShoot: row ? row.needsShoot : true,
@@ -415,7 +415,7 @@ export const PlanGridRowPanel: React.FC<Props> = ({
             ), err('remarks'))}
             <div className="grid grid-cols-2 gap-3">
               {field('row-priority', 'Priority', (
-                <select id="row-priority" className="ui-select h-11 w-full" value={form.priority} disabled={!editable} onChange={(e) => set('priority', e.target.value)}>
+                <select id="row-priority" className="ui-select h-11 w-full" value={form.priority} disabled={!editable} onChange={(e) => set('priority', normalizePriority(e.target.value))}>
                   {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               ), err('priority'))}

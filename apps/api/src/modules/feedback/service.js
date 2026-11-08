@@ -3,7 +3,8 @@ import { WorkItem } from '../workItems/model.js';
 import { Person } from '../people/model.js';
 import { logActivity } from '../activity/service.js';
 import { createNotification } from '../notifications/service.js';
-import { calculateMemberWorkloadMetrics } from '../assignment/service.js';
+/** A step is flagged when it reaches this review round (Phase 7 close-out). */
+export const REVISION_FLAG_ROUND = 4;
 import { resolveScope } from '../../lib/scope.js';
 import { CANONICAL_REVISION_ROOT_CAUSES, normalizeRole } from '@mmp/shared';
 import { isTeamMember, requireParticipant } from '../workItems/access.js';
@@ -286,23 +287,16 @@ export async function checkAndCreateRevisionFlag(workItem, actor = null) {
     return flag;
   }
 
-  // Get owner baseline revisions
-  let baselineAvg = 1.0;
-  try {
-    const metrics = await calculateMemberWorkloadMetrics(ownerId);
-    baselineAvg = metrics.avgRevisions || 1.0;
-  } catch (err) {
-    baselineAvg = 1.0;
-  }
-
-  const shouldFlag = currentRevisions >= 4 || currentRevisions > baselineAvg + 1;
+  // Phase 7 close-out: flag a step when it reaches round 4 (three change requests, so the
+  // fourth version is due). There is no comparison with the worker's own average.
+  const round = Math.max(currentRevisions + 1, Array.isArray(workItem.rounds) ? workItem.rounds.length : 0);
+  const shouldFlag = round >= REVISION_FLAG_ROUND;
 
   if (shouldFlag) {
     flag = await RevisionFlag.create({
       workItemId: workItem._id,
       ownerId,
       revisionsCount: currentRevisions,
-      baselineAvg,
       isFlagged: true,
       flaggedAt: new Date(),
     });
@@ -320,11 +314,8 @@ export async function checkAndCreateRevisionFlag(workItem, actor = null) {
       action: 'revision.flagged',
       metadata: {
         revisionsCount: currentRevisions,
-        baselineAvg,
-        reason:
-          currentRevisions >= 4
-            ? `Revisions reached ${currentRevisions} (>= 4 ceiling)`
-            : `Revisions (${currentRevisions}) exceeded baseline (${baselineAvg}) + 1`,
+        round,
+        reason: `Reached round ${round} (${currentRevisions} change requests)`,
       },
     });
 
@@ -341,9 +332,9 @@ export async function checkAndCreateRevisionFlag(workItem, actor = null) {
         recipient: recipient._id,
         type: 'revision.flagged',
         title: `Revision Flag Triggered: ${workItem.title}`,
-        message: `Deliverable "${workItem.title}" reached ${currentRevisions} revisions (baseline: ${baselineAvg}). Root cause classification required.`,
+        message: `"${workItem.title}" reached round ${round} (${currentRevisions} change requests). Root cause classification required.`,
         link: `/feedback`,
-        metadata: { workItemId: workItem._id, revisionsCount: currentRevisions, baselineAvg },
+        metadata: { workItemId: workItem._id, revisionsCount: currentRevisions, round },
       });
     }
 

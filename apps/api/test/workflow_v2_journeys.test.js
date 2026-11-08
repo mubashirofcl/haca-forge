@@ -984,11 +984,10 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
       });
       expect(ownerNotif).toBeDefined();
 
-      // SM Manager received overdue escalation
+      // An SM manager is notified once the same day (Phase 7 close-out: no hour-based escalation)
       const smOverdueNotif = await Notification.findOne({
-        recipient: smManagerUser._id,
         'metadata.workItemId': overdueItem._id,
-        'metadata.type': 'overdue_lead_escalation',
+        'metadata.type': 'overdue_manager',
       });
       expect(smOverdueNotif).toBeDefined();
     });

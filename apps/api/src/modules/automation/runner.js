@@ -8,19 +8,20 @@ import { ActivityEvent } from '../activity/model.js';
 import { enqueueEmail } from '../../lib/queue.js';
 import { isRetiredJob, runRetiredJob } from '../jobs/retired.js';
 import { logger } from '../../lib/logger.js';
+import { hasTimeLabel, istDateKey, overdueDays, stepTimeLabels } from '@mmp/shared';
 
 // Default reminder rules (Phase 7: the two report-email rules were retired)
 export const DEFAULT_AUTOMATION_RULES = [
   {
     ruleKey: 'overdue_escalation',
     name: 'Overdue Task Escalation',
-    description: 'Continuously audits tasks past their deadline. Pings owner immediately; escalates to SM Manager after 4 hours overdue.',
+    description: 'Notifies the owner once when a step becomes overdue (from the day after its due date, IST), and one SM manager the same day. Locked steps are skipped.',
     trigger: 'scheduled',
     schedule: 'Hourly check',
     cronExpression: '0 * * * *',
-    action: 'Dispatch owner reminder and SM Manager escalation for overdue work items',
+    action: 'Notify the owner and one SM manager once when a step becomes overdue',
     active: true,
-    config: { leadEscalationHours: 4 },
+    config: {},
   },
   {
     ruleKey: 'todo_escalation',
@@ -167,124 +168,98 @@ export async function executeAutomationRule(ruleKey, user = null, options = {}) 
 // -------------------------------------------------------------
 
 /**
- * 2. Overdue Escalation Rule
- * Escalates to task owner immediately; escalates to SM Manager if overdue > leadEscalationHours.
+ * 2. Overdue notice (Phase 7 close-out).
+ * A step is overdue by the shared IST calendar-day rule: from the day after its due date,
+ * unlocked and unfinished. Locked steps ("Waiting: earlier step late") are skipped.
+ * The owner is notified once when the step becomes overdue, and on the same day one SM
+ * manager (the step's department's, else any active one). No hour-based escalation and no
+ * repeats: each notice is sent once per due date (a changed due date can make it due again).
  */
 async function runOverdueEscalationRule(rule, user) {
-  const leadEscalationHours = rule.config?.leadEscalationHours || 4;
   const now = new Date();
 
-  // Find all work items that are past deadline and not finished
-  const overdueItems = await WorkItem.find({
+  // Past-deadline candidates; the shared label decides.
+  const candidates = await WorkItem.find({
     deadline: { $lt: now },
     status: { $nin: ['Approved', 'Published'] },
+    isLocked: { $ne: true },
+    isSkipped: { $ne: true },
   })
-    .populate('ownerId', 'name email role departmentId')
-    .populate('departmentId', 'name code')
+    .populate('ownerId', 'name email role departmentId status')
     .lean();
+  const overdueItems = candidates.filter((item) => hasTimeLabel(stepTimeLabels(item, { now }), 'overdue'));
 
   let ownerNotified = 0;
-  let leadEscalated = 0;
+  let managerNotified = 0;
+  let anySmManager;
 
   for (const item of overdueItems) {
-    const hoursOverdue = Math.max(1, Math.round((now - new Date(item.deadline)) / (1000 * 60 * 60)));
+    const dueDay = istDateKey(item.dueDate || item.deadline);
+    const days = overdueDays(item.dueDate || item.deadline, now);
     const owner = item.ownerId;
+    const once = (recipient, type) =>
+      Notification.exists({ recipient, 'metadata.workItemId': item._id, 'metadata.type': type, 'metadata.dueDay': dueDay });
 
-    if (owner?._id) {
-      // Idempotency check: don't notify same owner for same deliverable within past 12 hours
-      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
-      const existingOwnerNotification = await Notification.findOne({
+    if (owner?._id && !(await once(owner._id, 'overdue_owner'))) {
+      await Notification.create({
         recipient: owner._id,
-        'metadata.workItemId': item._id,
-        'metadata.type': 'overdue_owner',
-        createdAt: { $gte: twelveHoursAgo },
+        title: `Overdue: ${item.title}`,
+        message: `"${item.title}" was due ${dueDay} (IST) and is now overdue.`,
+        type: 'warning',
+        link: `/work/${item._id}`,
+        metadata: { workItemId: item._id, type: 'overdue_owner', dueDay, daysOverdue: days },
       });
+      if (owner.email) {
+        await enqueueEmail({
+          to: owner.email,
+          subject: `Overdue: ${item.title}`,
+          text: `Hello ${owner.name},
 
-      if (!existingOwnerNotification) {
-        // Dispatch in-app notification
-        await Notification.create({
-          recipient: owner._id,
-          title: `Task Overdue: ${item.title}`,
-          message: `Your task "${item.title}" was due ${new Date(item.deadline).toLocaleDateString()} and is overdue by ${hoursOverdue} hours.`,
-          type: 'warning',
-          link: `/work/${item._id}`,
-          metadata: {
-            workItemId: item._id,
-            type: 'overdue_owner',
-            hoursOverdue,
-          },
+"${item.title}" was due ${dueDay} (IST) and is now overdue. Please update it in HACA Marketing OS.
+
+Link: /work/${item._id}`,
         });
-
-        // Dispatch email
-        if (owner.email) {
-          await enqueueEmail({
-            to: owner.email,
-            subject: `[Action Required] Task Overdue: ${item.title}`,
-            text: `Hello ${owner.name},\n\nYour task "${item.title}" is currently overdue by ${hoursOverdue} hours (deadline was ${new Date(item.deadline).toLocaleDateString()}). Please update its status in HACA Marketing OS.\n\nLink: http://localhost:5173/work/${item._id}`,
-          });
-        }
-        ownerNotified++;
       }
+      ownerNotified++;
     }
 
-    // SM Manager Escalation if overdue > leadEscalationHours
-    if (hoursOverdue >= leadEscalationHours && item.departmentId?._id) {
-      // Find SM Manager or Creative Head (check department first, then organization-wide SM Manager)
-      let smManager = await Person.findOne({
-        departmentId: item.departmentId._id,
-        role: { $in: ['sm_manager', 'creative_head'] },
-        status: { $ne: 'suspended' },
-      }).lean();
+    // One SM manager: the step's department's, else any active SM manager.
+    let manager = item.departmentId
+      ? await Person.findOne({ departmentId: item.departmentId, role: 'sm_manager', status: 'active' }).sort({ createdAt: 1 }).lean()
+      : null;
+    if (!manager) {
+      if (anySmManager === undefined) anySmManager = await Person.findOne({ role: 'sm_manager', status: 'active' }).sort({ createdAt: 1 }).lean();
+      manager = anySmManager;
+    }
+    if (manager?._id && String(manager._id) !== String(owner?._id) && !(await once(manager._id, 'overdue_manager'))) {
+      await Notification.create({
+        recipient: manager._id,
+        title: `Overdue: ${item.title}`,
+        message: `"${item.title}" (${owner?.name || 'unassigned'}) was due ${dueDay} (IST) and is now overdue.`,
+        type: 'alert',
+        link: `/work/${item._id}`,
+        metadata: { workItemId: item._id, type: 'overdue_manager', dueDay, daysOverdue: days },
+      });
+      if (manager.email) {
+        await enqueueEmail({
+          to: manager.email,
+          subject: `Overdue: ${item.title}`,
+          text: `Hello ${manager.name},
 
-      if (!smManager) {
-        smManager = await Person.findOne({
-          role: 'sm_manager',
-          status: { $ne: 'suspended' },
-        }).lean();
-      }
+"${item.title}" (${owner?.name || 'unassigned'}) was due ${dueDay} (IST) and is now overdue.
 
-      if (smManager?._id && String(smManager._id) !== String(owner?._id)) {
-        // Idempotency check: don't escalate same item to same manager within 24 hours
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        const existingLeadEscalation = await Notification.findOne({
-          recipient: smManager._id,
-          'metadata.workItemId': item._id,
-          'metadata.type': 'overdue_lead_escalation',
-          createdAt: { $gte: twentyFourHoursAgo },
+Link: /work/${item._id}`,
         });
-
-        if (!existingLeadEscalation) {
-          await Notification.create({
-            recipient: smManager._id,
-            title: `[Escalation] Task Overdue > ${leadEscalationHours}h: ${item.title}`,
-            message: `Task "${item.title}" assigned to ${owner?.name || 'team member'} is overdue by ${hoursOverdue} hours. Immediate supervisory review required.`,
-            type: 'alert',
-            link: `/work/${item._id}`,
-            metadata: {
-              workItemId: item._id,
-              type: 'overdue_lead_escalation',
-              hoursOverdue,
-            },
-          });
-
-          if (smManager.email) {
-            await enqueueEmail({
-              to: smManager.email,
-              subject: `[Escalation Alert] Task Overdue > ${leadEscalationHours}h: ${item.title}`,
-              text: `Hello ${smManager.name},\n\nTask "${item.title}" assigned to ${owner?.name || 'team member'} is past due by ${hoursOverdue} hours without resolution. Please check in on this task.\n\nLink: http://localhost:5173/work/${item._id}`,
-            });
-          }
-          leadEscalated++;
-        }
       }
+      managerNotified++;
     }
   }
 
   return {
-    summary: `Audited ${overdueItems.length} overdue tasks: notified ${ownerNotified} owners, escalated ${leadEscalated} to SM Managers.`,
+    summary: `Checked ${overdueItems.length} overdue steps: notified ${ownerNotified} owners and ${managerNotified} SM managers (once each).`,
     affectedCount: overdueItems.length,
     ownerNotified,
-    leadEscalated,
+    managerNotified,
   };
 }
 

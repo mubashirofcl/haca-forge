@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { CalendarPlan } from './plan.model.js';
+import { parsePriorityInput } from '@mmp/shared';
 import { ContentPiece } from './contentPiece.model.js';
 import { WorkItem } from '../workItems/model.js';
 import { Person } from '../people/model.js';
@@ -402,7 +403,7 @@ export async function createPlan(data, user) {
         programOrEvent: r.programOrEvent || '',
         brief: r.brief || '',
         referenceLink: r.referenceLink || '',
-        priority: r.priority || 'Normal',
+        priority: priorityInput(r.priority),
         postingOwnerId: r.postingOwnerId || null,
         needsScript,
         needsShoot,
@@ -605,7 +606,7 @@ export async function addRowsToPlan(id, rows, user) {
       programOrEvent: r.programOrEvent || '',
       brief: derivedBrief,
       referenceLink: r.referenceLink || '',
-      priority: r.priority || 'Normal',
+      priority: priorityInput(r.priority),
       postingOwnerId,
       needsScript,
       needsShoot,
@@ -660,7 +661,8 @@ export async function updateRow(planId, rowId, updates, user) {
   if (updates.programOrEvent !== undefined) piece.programOrEvent = updates.programOrEvent;
   if (updates.brief !== undefined) piece.brief = updates.brief;
   if (updates.referenceLink !== undefined) piece.referenceLink = updates.referenceLink;
-  if (updates.priority) piece.priority = updates.priority;
+  // Normal or Urgent only; resending a row's stored older value leaves it unchanged.
+  if (updates.priority !== undefined && updates.priority !== piece.priority) piece.priority = priorityInput(updates.priority);
   if (updates.postingOwnerId !== undefined) piece.postingOwnerId = updates.postingOwnerId;
   if (updates.sourceVideoLink !== undefined) piece.sourceVideoLink = updates.sourceVideoLink;
   if (updates.stagePlan !== undefined) piece.stagePlan = updates.stagePlan;
@@ -691,6 +693,18 @@ export async function updateRow(planId, rowId, updates, user) {
 /**
  * Delete a specific row (only if not approved)
  */
+/** A row's priority from input: Normal (default) or Urgent; anything else is a 400. */
+function priorityInput(value) {
+  const parsed = parsePriorityInput(value);
+  if (parsed === null) {
+    const error = new Error('Priority must be Normal or Urgent.');
+    error.statusCode = 400;
+    error.code = 'INVALID_PRIORITY';
+    throw error;
+  }
+  return parsed || 'Normal';
+}
+
 export async function deleteRow(planId, rowId, user) {
   const plan = await CalendarPlan.findById(planId);
   if (!plan) {

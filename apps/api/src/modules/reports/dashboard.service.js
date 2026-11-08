@@ -322,10 +322,16 @@ export async function getDashboardOverview(filters = {}, user) {
     return elapsedHrs > 48;
   }).length;
 
+  // Phase 7 close-out: flags are listed by project and step (owner name on the row only;
+  // never grouped, counted or sorted by person).
   const activeFlags = await RevisionFlag.find({ isFlagged: true })
-    .populate('workItemId', 'title workType')
-    .populate('ownerId', 'name email')
+    .populate({ path: 'workItemId', select: 'title workType stageKey stageOrder contentPieceId', populate: { path: 'contentPieceId', select: 'topic' } })
+    .populate('ownerId', 'name')
     .lean();
+  const flagProject = (f) => f.workItemId?.contentPieceId?.topic || f.workItemId?.title || 'Deliverable';
+  activeFlags.sort(
+    (a, b) => flagProject(a).localeCompare(flagProject(b)) || (a.workItemId?.stageOrder || 0) - (b.workItemId?.stageOrder || 0)
+  );
 
   const escalatedFlagsCount = activeFlags.filter(
     (f) =>
@@ -350,8 +356,10 @@ export async function getDashboardOverview(filters = {}, user) {
     revisionFlags: activeFlags.map((f) => ({
       _id: f._id,
       workItemId: f.workItemId?._id,
+      project: flagProject(f),
+      stepType: f.workItemId?.stageKey || f.workItemId?.workType || 'Step',
       deliverableTitle: f.workItemId?.title || 'Deliverable',
-      ownerName: f.ownerId?.name || 'Worker',
+      ownerName: f.ownerId?.name || null,
       revisionsCount: f.revisionsCount,
       rootCause: f.rootCause,
       isEscalated: f.isEscalated,

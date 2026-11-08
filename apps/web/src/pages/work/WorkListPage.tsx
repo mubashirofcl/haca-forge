@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { TimeLabelChips, type TimeLabel } from '../../components/TimeLabelChips';
-import { hasTimeLabel } from '@mmp/shared';
+import { hasTimeLabel, normalizePriority } from '@mmp/shared';
 import { statusClass, statusTone } from '../../lib/statusTone';
 import {
   WORK_TYPES,
@@ -86,8 +86,8 @@ export const WorkListPage: React.FC = () => {
     fetchData();
   }, [statusFilter, workTypeFilter, labelFilter]);
 
-  const priorityTone = (p?: string) =>
-    p === 'High' ? 'status-blocked' : p === 'Medium' ? 'status-waiting' : 'status-not-started';
+  // Normal or Urgent; older stored values (Low, Medium, High) show as Normal.
+  const priorityTone = (p?: string) => (normalizePriority(p) === 'Urgent' ? 'status-blocked' : 'status-not-started');
 
   const viewToggle = (mode: 'table' | 'grid', label: string, Icon: typeof TableIcon) => (
     <button
@@ -266,7 +266,7 @@ export const WorkListPage: React.FC = () => {
 
                       <td className="py-4 px-5 align-middle">
                         {it.priority && (
-                          <span className={`status-chip ${priorityTone(it.priority)} text-[11px]`}>{it.priority}</span>
+                          <span className={`status-chip ${priorityTone(it.priority)} text-[11px]`} data-testid="priority-chip">{normalizePriority(it.priority)}</span>
                         )}
                       </td>
 

@@ -6,7 +6,7 @@ import {
   CALENDAR_KEYS,
   WORK_TYPES,
   WORK_ITEM_STATUSES,
-  PRIORITIES,
+  STORED_PRIORITIES,
   BLOCKER_REASONS,
 } from '@mmp/shared';
 
@@ -60,7 +60,8 @@ const workItemSchema = new mongoose.Schema(
     },
     priority: {
       type: String,
-      enum: PRIORITIES,
+      // Input accepts Normal and Urgent only (the API schema); older stored values stay valid.
+      enum: STORED_PRIORITIES,
       default: 'Normal',
       index: true,
     },

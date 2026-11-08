@@ -630,9 +630,6 @@ export const IssuesBlockersPage: React.FC = () => {
                         <strong className="text-sm font-semibold text-ui-ink tabular-nums">
                           {f.revisionsCount} revs
                         </strong>
-                        <span className="text-[10px] text-ui-muted block">
-                          (Baseline: {f.baselineAvg})
-                        </span>
                       </div>
                     </div>
 
@@ -911,7 +908,7 @@ export const IssuesBlockersPage: React.FC = () => {
                 <span className="text-[10px] text-ui-muted font-semibold block">Deliverable:</span>
                 <strong className="text-slate-900">{classifyingFlag.workItemId?.title}</strong>
                 <span className="text-ui-muted text-[11px] block mt-0.5">
-                  Revisions: {classifyingFlag.revisionsCount} (baseline: {classifyingFlag.baselineAvg})
+                  Revisions: {classifyingFlag.revisionsCount}
                 </span>
               </div>
 

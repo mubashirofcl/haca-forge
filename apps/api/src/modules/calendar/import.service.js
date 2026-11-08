@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { parsePriorityInput } from '@mmp/shared';
 import {
   WORK_TYPES,
   normalizeWorkType,
@@ -476,6 +477,9 @@ export async function validateImportRows(rawRows) {
     } else {
       errors.push('Posting Date is required');
     }
+    if (parsePriorityInput(raw.priority) === null) {
+      errors.push(`Priority must be Normal or Urgent (got "${String(raw.priority).trim()}")`);
+    }
 
     // 3. Content Type validation
     const rawType = typeof raw.contentType === 'string' ? raw.contentType.trim() : String(raw.contentType || '').trim();
@@ -688,7 +692,7 @@ export async function validateImportRows(rawRows) {
       programOrEvent: typeof raw.programOrEvent === 'string' ? raw.programOrEvent.trim() : '',
       brief: typeof raw.brief === 'string' ? raw.brief.trim() : '',
       referenceLink: typeof raw.referenceLink === 'string' ? raw.referenceLink.trim() : '',
-      priority: typeof raw.priority === 'string' && raw.priority.trim() ? raw.priority.trim() : 'Normal',
+      priority: parsePriorityInput(raw.priority) || 'Normal',
       postingOwnerId,
       postingOwnerName,
       isPostingOwnerSuggested,

@@ -137,8 +137,10 @@ interface DashboardData {
     revisionFlags?: {
       _id: string;
       workItemId: string;
+      project?: string;
+      stepType?: string;
       deliverableTitle: string;
-      ownerName: string;
+      ownerName: string | null;
       revisionsCount: number;
       rootCause?: string;
       isEscalated?: boolean;
@@ -774,6 +776,42 @@ export const TeamDashboardPage: React.FC = () => {
                     ))}
                   </div>
                 )}
+
+                {/* Phase 7 close-out: revision flags by project and step (never by person). */}
+                <div className="pt-2" data-testid="dashboard-revision-flags">
+                  <h3 className="text-[13px] font-semibold text-ui-text mb-2">
+                    Revision flags (round 4 or later){' '}
+                    <span className="text-ui-muted font-normal">({(data.issues.revisionFlags || []).length})</span>
+                  </h3>
+                  {(data.issues.revisionFlags || []).length === 0 ? (
+                    <div className="glass-card text-center py-4 text-[13px] text-ui-muted">No steps flagged.</div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {(data.issues.revisionFlags || []).map((flag) => (
+                        <li key={flag._id}>
+                          <button
+                            type="button"
+                            onClick={() => navigate(flag.workItemId ? `/work/${flag.workItemId}` : '/feedback')}
+                            className={`p-3 w-full text-left space-y-1 ${row}`}
+                            data-testid="dashboard-flag-row"
+                          >
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-ui-text min-w-0 truncate">
+                                {flag.project || flag.deliverableTitle} · {flag.stepType || 'Step'}
+                              </span>
+                              <span className={`status-chip ${flag.rootCause ? 'status-approved' : 'status-changes'} text-[11px] font-semibold px-2 py-0.5 shrink-0`}>
+                                {flag.rootCause || 'Unclassified'}
+                              </span>
+                            </span>
+                            <span className="text-xs text-ui-muted block">
+                              {flag.revisionsCount} change requests{flag.ownerName ? ` · ${flag.ownerName}` : ''}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             </section>
 

@@ -62,7 +62,7 @@ export async function createWorkItem(data, user) {
     deadline: data.deadline,
     estimatedEffortHrs: data.estimatedEffortHrs || 4,
     status: data.status || 'Not Started',
-    priority: data.priority || 'Medium',
+    priority: data.priority || 'Normal',
     description: desc,
     deliverableUrl: data.deliverableUrl || '',
     publishedUrl: data.publishedUrl || '',
@@ -165,6 +165,8 @@ export async function listWorkItems(filters = {}, user) {
     .populate('departmentId', 'name code')
     .populate('ownerId', 'name email role jobRole')
     .sort({ deadline: 1, createdAt: -1 });
+  // Urgent first, then by due date (Phase 7 close-out).
+  docs.sort(compareUrgentThenDue);
 
   // Phase 7: each item carries its computed time labels; Overdue, Done late and Blocked
   // filters use them.
@@ -691,6 +693,8 @@ export async function getMyWork(user) {
   const avgRevisions = rawItems.length > 0 ? Number((totalRevisions / rawItems.length).toFixed(1)) : 0;
 
   await attachTimeLabels([...overdue, ...today, ...thisWeek, ...upcoming, ...completed.slice(0, 15)]);
+  // Urgent first, then by due date, within each group (Phase 7 close-out).
+  for (const group of [overdue, today, thisWeek, upcoming]) group.sort(compareUrgentThenDue);
 
   return {
     overdue,
@@ -719,7 +723,7 @@ import { buildHandoff, buildHandover, outputItems } from './handoff.js';
 import { canReopen } from './reopen.js';
 import { approvedOutputOf } from './access.js';
 import { attachTimeLabels } from './timeLabels.js';
-import { hasTimeLabel } from '@mmp/shared';
+import { hasTimeLabel, compareUrgentThenDue } from '@mmp/shared';
 
 /** Same rule as the WorkItem isOverdue virtual, which .lean() results do not carry. */
 function isPastDeadline(deadline, status) {

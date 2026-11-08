@@ -1,6 +1,26 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after Phase 7):** 1639 passing, 0 failing: API 1341 (63 files), web 298 (42 files). Typecheck 0 errors; web build clean.
+**Current test count (after the Phase 7 close-out):** 1653 passing, 0 failing: API 1353 (64 files), web 300 (42 files). Typecheck 0 errors; web build clean.
+
+## Phase 7 close-out: reminders and priority (Status: COMPLETE; committed locally, not pushed)
+
+One commit, gated in the working tree (typecheck, web build, all tests).
+
+- Overdue notice (`overdue_escalation`):
+  - Uses the shared IST calendar-day rule: a step is overdue from the day after its due date. Locked steps ("Waiting: earlier step late") are skipped.
+  - The owner is notified once when the step becomes overdue, and one SM manager (the step's department's, else any active one) once the same day. Each notice is sent once per due date (a moved due date can make it due again).
+  - The 4-hour escalation, the creative-head escalation path and the repeat notices are removed. Notification types: `overdue_owner`, `overdue_manager`.
+- Revision flag:
+  - A step is flagged when it reaches round 4 (three change requests), on the review decision and by the scheduled check; the 48-hour unclassified alert to creative heads and admins is kept.
+  - The comparison with the worker's own average is removed (the "baseline" figures are gone from the Feedback and Issues pages too).
+  - The Dashboard lists flags by project and step (owner name on the row only), sorted by project, never grouped, counted or sorted by person.
+- Priority:
+  - Only Normal and Urgent are accepted: the API schemas, Edit details, plan grid row panel, plan rows and the Excel upload (which reports "Priority must be Normal or Urgent").
+  - Default Normal on every creation path, including direct work items (which defaulted to Medium).
+  - Existing Low, Medium and High records are left unchanged in the database and shown as Normal (they were shown as-is, and High counted as Urgent). The database models still accept those stored values, so old records keep saving; the forms send a priority only when it is changed.
+  - My Work (within each group) and Work Items sort Urgent first, then by due date.
+- Tests updated for the approved rules: the overdue test fixture is now overdue by a day, not 6 hours; the overdue test checks `managerNotified` and `overdue_manager`; tests that sent High or Medium through the API now send Urgent or Normal.
+- Real database: no writes and no migration; the only access was the read-only snapshot comparison.
 
 ## Phase 7: Reports, overdue and KPI (Status: COMPLETE; committed locally, not pushed)
 

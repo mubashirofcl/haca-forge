@@ -1,11 +1,11 @@
 # HACA Marketing OS — Master Project Context
 
-**Current as of:** 8 November 2026 (after Phase 7)  
+**Current as of:** 8 November 2026 (after the Phase 7 close-out)  
 **Repository:** HACA Marketing OS (`haca-forge`)  
 **Technology Stack:** Node 22 LTS, Express 5 (ESM), React 18, Vite 6, TypeScript, Tailwind CSS, MongoDB (Mongoose), Socket.io, BullMQ (Redis).  
-**Test Suite Status:** **1639 tests passing across 105 test files (0 failures)**  
-- `@mmp/api`: 1341 tests passed across 63 test files  
-- `@mmp/web`: 298 tests passed across 42 test files  
+**Test Suite Status:** **1653 tests passing across 106 test files (0 failures)**  
+- `@mmp/api`: 1353 tests passed across 64 test files  
+- `@mmp/web`: 300 tests passed across 42 test files  
 - The API tests set their own test-only JWT secrets (`apps/api/vitest.config.js`), so a fresh checkout passes with no `.env`.  
 
 ---
@@ -90,6 +90,7 @@
   - Waiting to start: `startedAt` minus `unlockedAt`.
   - Time labels (Phase 7, computed only; dates compared in Asia/Kolkata, so a step due on a day is on time until 11:59 PM IST): Overdue (unlocked, unfinished, past its due date), Waiting: earlier step late (locked and past due; never Overdue), Done N days late / Done on time (by the first submission; a Post step by its posting), Late: earlier step (unlocked after its own due date), Blocked N days (active blocker). Project labels: Overdue (publish date passed, not posted or handed over) and Completed late. Shared in `@mmp/shared` (`stepTimeLabels`, `projectTimeLabel`).
   - Worker on-time rate leaves out "Late: earlier step" steps and shows "N steps delayed by earlier steps".
+  - Priority is Normal or Urgent only (default Normal). Older stored Low, Medium and High stay unchanged in the database and show as Normal. My Work and Work Items sort Urgent first, then by due date.
   - Work time: round submission minus round start, minus blocked, pending and paused periods. Reports, the team digest and the Performance tab count submitted rounds only (`submittedWorkTimeMs` in `@mmp/shared`).
   - Approval wait: decision time minus submission time.
   - Late by: calendar days between submission date and step due date.

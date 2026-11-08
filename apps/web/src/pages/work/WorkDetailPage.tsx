@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   WORK_TYPES,
   PRIORITIES,
+  normalizePriority,
   BLOCKER_REASONS,
   RATING_TAGS,
   CANONICAL_REVISION_ROOT_CAUSES,
@@ -324,7 +325,7 @@ export const WorkDetailPage: React.FC = () => {
 
       setEditTitle(res.data.title);
       setEditWorkType(res.data.workType);
-      setEditPriority(res.data.priority);
+      setEditPriority(normalizePriority(res.data.priority));
       setEditEffort(res.data.estimatedEffortHrs || 4);
       setEditDeadline(res.data.deadline ? res.data.deadline.slice(0, 10) : '');
       setEditDescription(res.data.description || res.data.brief?.description || '');
@@ -554,7 +555,8 @@ export const WorkDetailPage: React.FC = () => {
         body: JSON.stringify({
           title: editTitle,
           workType: editWorkType,
-          priority: editPriority,
+          // Sent only when changed, so an older stored value (shown as Normal) is left as it is.
+          ...(editPriority !== normalizePriority(item.priority) ? { priority: editPriority } : {}),
           estimatedEffortHrs: Number(editEffort),
           deadline: editDeadline,
           description: editDescription,
@@ -694,12 +696,12 @@ export const WorkDetailPage: React.FC = () => {
             </span>
             <span
               className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                item.priority === 'Urgent'
+                normalizePriority(item.priority) === 'Urgent'
                   ? 'status-chip status-changes'
                   : 'bg-white/70 text-ui-text'
               }`}
             >
-              {item.priority} Priority
+              {normalizePriority(item.priority)} Priority
             </span>
 
             <span

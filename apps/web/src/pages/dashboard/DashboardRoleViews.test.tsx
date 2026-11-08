@@ -210,6 +210,38 @@ describe('TeamDashboardPage Role Views & Scope Reset R4 Specifications', () => {
     });
   });
 
+  it('lists revision flags by project and step; the owner shows on the row only', async () => {
+    mockUser = { _id: 'u-head', name: 'Creative Head User', role: 'creative_head' };
+    const flagged = {
+      ...mockDashboardData,
+      issues: {
+        ...mockDashboardData.issues,
+        revisionFlags: [
+          { _id: 'f1', workItemId: 'w1', project: 'Alpha launch', stepType: 'Shoot', deliverableTitle: 'Alpha - Shoot', ownerName: 'Asha', revisionsCount: 3, flaggedAt: new Date().toISOString() },
+          { _id: 'f2', workItemId: 'w2', project: 'Zeta promo', stepType: 'Edit', deliverableTitle: 'Zeta - Edit', ownerName: 'Asha', revisionsCount: 4, rootCause: 'Technical error', flaggedAt: new Date().toISOString() },
+        ],
+      },
+    };
+    vi.spyOn(apiModule, 'apiFetch').mockImplementation(async (url: string) =>
+      (url.includes('/api/dashboard/overview') ? { data: flagged } : { data: [] }) as any
+    );
+    render(
+      <MemoryRouter>
+        <TeamDashboardPage />
+      </MemoryRouter>
+    );
+    const rows = await screen.findAllByTestId('dashboard-flag-row', {}, { timeout: 5000 });
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Alpha launch · Shoot'),
+      expect.stringContaining('Zeta promo · Edit'),
+    ]);
+    expect(rows[0]).toHaveTextContent('Unclassified');
+    expect(rows[1]).toHaveTextContent('Technical error');
+    // No per-person grouping or totals: the owner appears once per row and nowhere else in the list.
+    expect(screen.getByTestId('dashboard-revision-flags').textContent?.match(/Asha/g)).toHaveLength(2);
+    expect(screen.getByTestId('dashboard-revision-flags')).not.toHaveTextContent(/by person|per person|baseline/i);
+  });
+
   it('team_member is redirected to My Work immediately', async () => {
     mockUser = { _id: 'u-member', name: 'Member Worker', role: 'team_member' };
     render(

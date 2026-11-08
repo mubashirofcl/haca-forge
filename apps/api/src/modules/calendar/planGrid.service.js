@@ -28,6 +28,7 @@ import {
   parseGridDate,
   parseGridType,
   matchGridOwner,
+  parsePriorityInput,
 } from '@mmp/shared';
 import { CalendarPlan } from './plan.model.js';
 import { ContentPiece } from './contentPiece.model.js';
@@ -55,7 +56,6 @@ const STAGE_BY_OWNER_FIELD = Object.fromEntries(Object.entries(OWNER_FIELD_BY_ST
 /** Workflow columns: filled by the system, never written from the grid. */
 export const READ_ONLY_FIELDS = PLAN_GRID_COLUMNS.filter((c) => !c.editable).map((c) => c.key);
 
-const PRIORITIES = ['Normal', 'Urgent', 'High', 'Medium', 'Low'];
 const PLAN_EDIT_ROLES = ['sm_manager', 'admin'];
 
 function httpError(status, code, message, extra = {}) {
@@ -423,8 +423,12 @@ export function parseGridRowInput(cells, existing, people, { month } = {}) {
 
   const publishTime = str(pick('publishTime', existing?.postingTime || '18:00')) || '18:00';
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(publishTime)) addError('publishTime', 'Use 24-hour time, e.g. 18:00.');
-  const priority = str(pick('priority', existing?.priority || 'Normal')) || 'Normal';
-  if (!PRIORITIES.includes(priority)) addError('priority', `Priority must be one of ${PRIORITIES.join(', ')}.`);
+  // Normal or Urgent only. A row whose stored older value (Low, Medium, High) is not being
+  // changed keeps it unchanged.
+  const rawPriority = str(pick('priority', existing?.priority || 'Normal')) || 'Normal';
+  const parsedPriority = parsePriorityInput(rawPriority);
+  const priority = existing && rawPriority === existing.priority ? rawPriority : parsedPriority || rawPriority;
+  if (!(existing && rawPriority === existing.priority) && !parsedPriority) addError('priority', 'Priority must be Normal or Urgent.');
 
   return {
     errors,

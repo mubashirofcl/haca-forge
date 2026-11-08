@@ -121,7 +121,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
       departmentId: deptDesign._id,
       ownerId: memberUser._id,
       status: 'In Progress',
-      deadline: new Date(Date.now() - 6 * 3600000),
+      deadline: new Date(Date.now() - 2 * 86400000), // overdue by IST day (Phase 7 close-out)
       estimatedEffortHrs: 6,
     });
 
@@ -195,7 +195,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
       const res = { body: { result: await executeAutomationRule(rule.ruleKey, null, { force: true }) } };
       expect(res.body.result.status).toBe('success');
       expect(res.body.result.ownerNotified).toBeGreaterThanOrEqual(1);
-      expect(res.body.result.leadEscalated).toBeGreaterThanOrEqual(1);
+      expect(res.body.result.managerNotified).toBeGreaterThanOrEqual(1);
 
       // Verify owner received notification
       const ownerNotif = await Notification.findOne({
@@ -216,7 +216,7 @@ describe('Phase 7: Automation Rules, Reports & Notifications (Screen 14)', () =>
       // Assert Idempotency: re-running immediately does NOT duplicate notifications
       const rerunRes = { body: { result: await executeAutomationRule(rule.ruleKey, null, { force: true }) } };
       expect(rerunRes.body.result.ownerNotified).toBe(0); // Deduplicated
-      expect(rerunRes.body.result.leadEscalated).toBe(0); // Deduplicated
+      expect(rerunRes.body.result.managerNotified).toBe(0); // Sent once only
     });
 
     it('Executes todo_escalation rule: flags stagnant items without status change', async () => {

@@ -444,20 +444,46 @@ export function getCalendarDefinition(key?: string | null): CalendarDefinition {
 
 
 export const CANONICAL_PRIORITIES = ["Normal", "Urgent"] as const;
-export const PRIORITIES = [
-  "Normal",
-  "Urgent",
-  "Low",
-  "Medium",
-  "High",
-] as const;
+/** The only priorities accepted anywhere (Phase 7 close-out). */
+export const PRIORITIES = CANONICAL_PRIORITIES;
 export type Priority = (typeof PRIORITIES)[number];
+/**
+ * Older values that may still be stored. They are never accepted as input and are shown
+ * as Normal; records that have them are left unchanged in the database.
+ */
+export const LEGACY_PRIORITIES = ["Low", "Medium", "High"] as const;
+/** What a stored record may hold: the two priorities plus the legacy values. */
+export const STORED_PRIORITIES = [...PRIORITIES, ...LEGACY_PRIORITIES] as const;
 
-export function normalizePriority(p?: string | null): "Normal" | "Urgent" {
-  if (!p) return "Normal";
-  const lower = p.toLowerCase();
-  if (lower === "urgent" || lower === "high") return "Urgent";
-  return "Normal";
+/** How a stored priority is shown and sorted: Urgent, otherwise Normal (Low, Medium, High included). */
+export function normalizePriority(p?: string | null): Priority {
+  return typeof p === "string" && p.trim().toLowerCase() === "urgent" ? "Urgent" : "Normal";
+}
+
+/**
+ * A priority from input: "Normal" or "Urgent" (any case); empty gives undefined; anything
+ * else, including Low, Medium and High, gives null (invalid).
+ */
+export function parsePriorityInput(value: unknown): Priority | undefined | null {
+  if (value === undefined || value === null || (typeof value === "string" && !value.trim())) return undefined;
+  if (typeof value !== "string") return null;
+  const v = value.trim().toLowerCase();
+  if (v === "normal") return "Normal";
+  if (v === "urgent") return "Urgent";
+  return null;
+}
+
+/** Urgent first, then by due date (earliest first; no date last). */
+export function compareUrgentThenDue(
+  a: { priority?: string | null; dueDate?: string | Date | null; deadline?: string | Date | null },
+  b: { priority?: string | null; dueDate?: string | Date | null; deadline?: string | Date | null }
+): number {
+  const ua = normalizePriority(a.priority) === "Urgent" ? 0 : 1;
+  const ub = normalizePriority(b.priority) === "Urgent" ? 0 : 1;
+  if (ua !== ub) return ua - ub;
+  const da = a.dueDate || a.deadline ? new Date((a.dueDate || a.deadline) as string).getTime() : Infinity;
+  const db = b.dueDate || b.deadline ? new Date((b.dueDate || b.deadline) as string).getTime() : Infinity;
+  return da - db;
 }
 
 export const CANONICAL_BLOCKER_REASONS = [

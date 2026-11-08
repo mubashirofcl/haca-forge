@@ -69,3 +69,25 @@ describe('Work Items', () => {
     await waitFor(() => expect(calls.some((u) => u.includes('timeLabel=blocked'))).toBe(true));
   });
 });
+
+describe('Priority (Phase 7 close-out)', () => {
+  it('shows only Normal and Urgent; an older stored value shows as Normal', async () => {
+    const { apiFetch } = await import('../lib/api');
+    vi.mocked(apiFetch).mockImplementationOnce(async () => ({
+      data: [
+        { _id: 'p1', title: 'Old high', workType: 'Reel', deadline: '2026-11-20T00:00:00.000Z', estimatedEffortHrs: 1, status: 'In Progress', revisions: 0, priority: 'High' },
+        { _id: 'p2', title: 'Urgent one', workType: 'Reel', deadline: '2026-11-21T00:00:00.000Z', estimatedEffortHrs: 1, status: 'In Progress', revisions: 0, priority: 'Urgent' },
+      ],
+    }) as never);
+    render(
+      <MemoryRouter>
+        <WorkListPage />
+      </MemoryRouter>
+    );
+    const chips = await screen.findAllByTestId('priority-chip');
+    const texts = chips.map((c) => c.textContent);
+    expect(texts).toContain('Normal');
+    expect(texts).toContain('Urgent');
+    expect(texts.some((t) => /High|Medium|Low/.test(t || ''))).toBe(false);
+  });
+});

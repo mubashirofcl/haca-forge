@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { TimeLabelChips, type TimeLabel } from '../../components/TimeLabelChips';
-import { hasTimeLabel } from '@mmp/shared';
+import { hasTimeLabel, normalizePriority } from '@mmp/shared';
 import { statusClass, statusTone } from '../../lib/statusTone';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useAuth } from '../../context/AuthContext';
@@ -474,14 +474,11 @@ export const MyWorkPage: React.FC = () => {
               </span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                  item.priority === 'High' || item.priority === 'Urgent'
-                    ? 'status-tint status-changes'
-                    : item.priority === 'Medium'
-                    ? 'status-tint status-in-progress'
-                    : 'bg-white/70 text-ui-text'
+                  normalizePriority(item.priority) === 'Urgent' ? 'status-tint status-changes' : 'bg-white/70 text-ui-text'
                 }`}
+                data-testid="priority-chip"
               >
-                {item.priority}
+                {normalizePriority(item.priority)}
               </span>
             </div>
 
