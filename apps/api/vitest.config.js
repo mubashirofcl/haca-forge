@@ -22,6 +22,10 @@ export default defineConfig({
     env: {
       NODE_ENV: 'test',
       MONGODB_URI: 'mongodb://127.0.0.1:27017/marketing_portal_test',
+      // Test-only signing secrets, so a fresh checkout runs without a .env. They sign tokens
+      // for the test database only and are never used anywhere else.
+      JWT_SECRET: 'test-only-jwt-secret-not-for-any-real-environment-0001',
+      JWT_REFRESH_SECRET: 'test-only-refresh-secret-not-for-any-real-environment-0001',
     },
   },
 });

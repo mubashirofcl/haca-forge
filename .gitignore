@@ -51,7 +51,8 @@ Docs/USERS_AND_PASSWORDS.md
 
 # Large media files
 *.mp4
-uploads/
-apps/api/uploads/
+# Uploaded files only. Anchored, so the source folder apps/api/src/modules/uploads/ is not ignored.
+/uploads/
+/apps/api/uploads/
 
 

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 
 let currentRole = 'team_member';
@@ -45,6 +45,20 @@ const visit = (path: string) => {
   return render(<App />);
 };
 
+// These routes are lazy-loaded. The first render of each page used to compile its module
+// inside the test, which under a busy full-suite run could take longer than the default 1s
+// wait and fail "other roles still get the page". Load the modules once up front so every
+// render resolves from the cache; the longer waits below are a safety margin only.
+beforeAll(async () => {
+  await Promise.all([
+    import('../pages/reports/ReportsPage'),
+    import('../pages/workload/TeamWorkloadPage'),
+    import('../pages/feedback/FeedbackPage'),
+    import('../pages/issues/IssuesBlockersPage'),
+  ]);
+}, 30000);
+const WAIT = { timeout: 5000 };
+
 beforeEach(() => {
   apiCalls.length = 0;
 });
@@ -55,7 +69,7 @@ describe('team_member route boundaries', () => {
     it(`${path}: team_member gets the not-found state and no page data is requested`, async () => {
       currentRole = 'team_member';
       visit(path);
-      expect(await screen.findByRole('heading', { name: /page not found/i })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: /page not found/i }, WAIT)).toBeInTheDocument();
       expect(screen.queryByRole('heading', { level: 1, name: heading })).not.toBeInTheDocument();
       // The page never mounted, so none of its counts or lists were fetched.
       expect(apiCalls.filter((u) => !u.startsWith('/api/auth'))).toEqual([]);
@@ -66,7 +80,7 @@ describe('team_member route boundaries', () => {
       currentRole = 'sm_manager';
       visit(path);
       // The page mounted and asked for its own data (the stub data shape is not the point here).
-      await waitFor(() => expect(apiCalls.filter((u) => !u.startsWith('/api/auth')).length).toBeGreaterThan(0));
+      await waitFor(() => expect(apiCalls.filter((u) => !u.startsWith('/api/auth')).length).toBeGreaterThan(0), WAIT);
       expect(screen.queryByRole('heading', { name: /page not found/i })).not.toBeInTheDocument();
     });
   }
