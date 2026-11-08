@@ -15,6 +15,8 @@ import {
   formatDuration,
   normalizeRole,
   ROLE_LABELS,
+  submittedWorkTimeMs,
+  ROLE_KEYS,
 } from '@mmp/shared';
 
 /**
@@ -663,16 +665,18 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
       }
       totalRevisions += it.revisions || 0;
 
-      // Work time
-      if (m.netWorkTimeMs > 0) {
-        totalWorkTimeMs += m.netWorkTimeMs;
+      // Work time: the shared work time over submitted rounds only, as in the team digest
+      // (the calculator has no netWorkTimeMs, so this used to always be 0).
+      const workTimeMs = submittedWorkTimeMs(it);
+      if (workTimeMs > 0) {
+        totalWorkTimeMs += workTimeMs;
         workTimeItemsCount++;
 
         const type = it.stageKey || it.workType || 'Stage';
         if (!workByTypeMap[type]) {
           workByTypeMap[type] = { totalMs: 0, count: 0 };
         }
-        workByTypeMap[type].totalMs += m.netWorkTimeMs;
+        workByTypeMap[type].totalMs += workTimeMs;
         workByTypeMap[type].count += 1;
       }
 
@@ -882,6 +886,14 @@ export async function updatePersonDetails(targetPersonId, updates, actor) {
     const error = new Error('Forbidden: Insufficient privileges to update person details');
     error.code = 'FORBIDDEN';
     error.statusCode = 403;
+    throw error;
+  }
+
+  // An unknown role is the caller's mistake: 400, not the schema's 500 (Phase 6).
+  if (updates.role !== undefined && !ROLE_KEYS.includes(updates.role)) {
+    const error = new Error(`Unknown role. Use one of: ${ROLE_KEYS.join(', ')}.`);
+    error.code = 'INVALID_ROLE';
+    error.statusCode = 400;
     throw error;
   }
 

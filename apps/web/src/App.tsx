@@ -158,7 +158,8 @@ export const App: React.FC = () => {
                 <Route
                   path="/my-work"
                   element={
-                    <ProtectedRoute>
+                    // Executives have no work queue: My Work by URL goes to the dashboard (Phase 6).
+                    <ProtectedRoute redirectRoles={{ executive: '/dashboard' }}>
                       <Layout>
                         <MyWorkPage />
                       </Layout>

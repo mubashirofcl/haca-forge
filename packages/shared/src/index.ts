@@ -2819,6 +2819,22 @@ export function calculateIndividualWorkMeasures(
   };
 }
 
+/**
+ * Work time over submitted rounds only (Phase 6): the same figure the team digest and the
+ * Performance tab use, so a round still being worked on never counts. A step without rounds
+ * counts once it has both a start and a submit time. Null when nothing has been submitted.
+ */
+export function submittedWorkTimeMs(item: WorkItemTimestamps): number | null {
+  const rounds = Array.isArray(item.rounds) ? item.rounds : [];
+  if (rounds.length) {
+    const submitted = rounds.filter((r) => r && r.startedAt && r.submittedAt);
+    if (!submitted.length) return null;
+    return calculateIndividualWorkMeasures({ ...item, rounds: submitted }).workTimeMs;
+  }
+  if (item.startedAt && item.submittedAt) return calculateIndividualWorkMeasures(item).workTimeMs;
+  return null;
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Excel-style plan grid: month periods, column map and paste parsing.

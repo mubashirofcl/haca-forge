@@ -7,12 +7,15 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredPermission?: PermissionKey;
   allowedRoles?: UserRole[];
+  /** Roles sent elsewhere instead of shown this page, e.g. { executive: '/dashboard' }. */
+  redirectRoles?: Partial<Record<UserRole, string>>;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requiredPermission,
   allowedRoles,
+  redirectRoles,
 }) => {
   const { user, isAuthenticated, isLoading, hasPermission } = useAuth();
   const location = useLocation();
@@ -30,6 +33,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  const redirectTo = redirectRoles?.[user.role];
+  if (redirectTo) {
+    return <Navigate to={redirectTo} replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role) && user.role !== 'admin') {

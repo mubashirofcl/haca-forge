@@ -1313,6 +1313,20 @@ export async function searchChatMessages(userId, { query = '', channelId = null 
 }
 
 /**
+ * The notification text for a chat message (Phase 6). A message with only attachments or a
+ * shared item has no text, and a notification needs some, so it says what was sent.
+ */
+function notificationText(message, senderName) {
+  const text = (message.content || '').trim();
+  if (text) return text.slice(0, 150);
+  const count = Array.isArray(message.attachments) ? message.attachments.length : 0;
+  if (count > 1) return `${senderName} sent ${count} attachments`;
+  if (count === 1) return `${senderName} sent an attachment`;
+  if (message.sharedMedia) return `${senderName} shared ${message.sharedMedia.title || 'an item'}`;
+  return `${senderName} sent a message`;
+}
+
+/**
  * Helper to dispatch in-app notifications for new chat messages.
  */
 async function notifyChannelMembers(channel, message, sender) {
@@ -1347,9 +1361,14 @@ async function notifyChannelMembers(channel, message, sender) {
       recipient: recipient._id,
       type: 'chat_message',
       title: isMentioned ? `${senderName} mentioned you in ${channelLabel}` : `New message from ${senderName}`,
-      message: message.content.slice(0, 150),
+      message: notificationText(message, senderName),
       link: `/chat/${channel._id}?m=${message._id}`,
       metadata: { channelId: channel._id, messageId: message._id },
-    }).catch(() => {});
+    }).catch((err) => {
+      logger.warn(
+        { err: err?.message, channelId: String(channel._id), messageId: String(message._id), recipient: String(recipient._id) },
+        'Failed to create chat notification'
+      );
+    });
   }
 }

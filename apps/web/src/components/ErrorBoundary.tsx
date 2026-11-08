@@ -49,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             <h2 className="text-xl font-bold text-white mb-2">Something went wrong</h2>
             <p className="text-sm text-slate-400 mb-6">
-              An unexpected error occurred while rendering this view. Our error diagnostics have logged the details.
+              This page couldn't be shown because of an unexpected error. Reload the page, or return home and try again.
             </p>
             {this.state.error?.message && (
               <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-3 text-xs text-red-300 font-mono text-left mb-6 overflow-x-auto max-h-32">

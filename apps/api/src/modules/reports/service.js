@@ -622,7 +622,7 @@ const NOT_AVAILABLE = 'Not available yet';
 const MIN_RATINGS = 3; // Same rule as worker ratings: no average until 3 ratings exist.
 
 async function generateTeamPerformanceReport(filters, scope, user) {
-  const { calculateIndividualWorkMeasures, formatDuration } = await import('@mmp/shared');
+  const { calculateIndividualWorkMeasures, formatDuration, submittedWorkTimeMs } = await import('@mmp/shared');
   const contributors = await Person.countDocuments({
     $or: [{ status: 'active' }, { active: true }],
     role: { $in: ['team_member', 'sm_manager'] },
@@ -644,14 +644,7 @@ async function generateTeamPerformanceReport(filters, scope, user) {
   // Work time: shared work time over submitted rounds only, so a live round never counts.
   const workTimes = [];
   for (const w of steps) {
-    const rounds = Array.isArray(w.rounds) ? w.rounds : [];
-    let measured = null;
-    if (rounds.length) {
-      const submitted = rounds.filter((r) => r.startedAt && r.submittedAt);
-      if (submitted.length) measured = calculateIndividualWorkMeasures({ ...w, rounds: submitted }).workTimeMs;
-    } else if (w.startedAt && w.submittedAt) {
-      measured = calculateIndividualWorkMeasures(w).workTimeMs;
-    }
+    const measured = submittedWorkTimeMs(w);
     if (measured != null) workTimes.push(measured);
   }
 
