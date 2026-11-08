@@ -17,6 +17,8 @@ import {
   normalizeRole,
   ROLE_LABELS,
   submittedWorkTimeMs,
+  hasTimeLabel,
+  workerOnTime,
   ROLE_KEYS,
 } from '@mmp/shared';
 
@@ -247,7 +249,6 @@ export async function getPersonBaseProfile(targetPersonId, actor) {
 
   const inProgress = openItems.filter((it) => it.status === 'In Progress').length;
   const waitingApproval = openItems.filter((it) => it.status === 'Feedback').length;
-  const late = openItems.filter((it) => it.deadline && new Date(it.deadline) < now).length;
 
   // Completed steps for on-time rate
   const completedItems = await WorkItem.find({
@@ -255,15 +256,15 @@ export async function getPersonBaseProfile(targetPersonId, actor) {
     status: { $in: ['Approved', 'Published'] },
   }).lean();
 
-  let onTimeRate = 100;
-  if (completedItems.length > 0) {
-    const onTimeCount = completedItems.filter((it) => {
-      if (!it.deadline) return true;
-      const finishDate = it.postedAt || it.submittedAt || it.updatedAt;
-      return new Date(finishDate) <= new Date(it.deadline);
-    }).length;
-    onTimeRate = Math.round((onTimeCount / completedItems.length) * 100);
-  }
+  // Phase 7: the shared time labels. Late = open steps labelled Overdue (a locked step is
+  // never overdue); on-time leaves out steps delayed by an earlier step.
+  const facts = await evaluateSteps([...openItems, ...completedItems], { now, withElapsed: false });
+  const labelsOf = (it) => facts.get(String(it._id))?.labels || [];
+  const late = openItems.filter((it) => hasTimeLabel(labelsOf(it), 'overdue')).length;
+  const blockedCount = openItems.filter((it) => hasTimeLabel(labelsOf(it), 'blocked')).length;
+  const onTime = workerOnTime(completedItems.map(labelsOf));
+
+  const onTimeRate = onTime.rate;
 
   // Ratings calculation with minimum 3-rating visibility threshold
   const ratings = await Rating.find({ workerId: person._id }).lean();
@@ -303,7 +304,12 @@ export async function getPersonBaseProfile(targetPersonId, actor) {
       inProgressCount: inProgress,
       waitingApprovalCount: waitingApproval,
       lateCount: late,
+      blockedCount,
       onTimeRate,
+      onTimeCount: onTime.onTime,
+      onTimeTotal: onTime.total,
+      delayedByEarlier: onTime.delayedByEarlier,
+      delayedText: onTime.delayedText,
       averageRating,
       ratingCount,
     },
@@ -470,9 +476,18 @@ export async function getPersonOverview(targetPersonId, actor, query = {}) {
     };
   }
 
+  // Phase 7: open overdue and blocked steps (shared labels).
+  const openForLabels = allAssigned.filter((it) => !['Approved', 'Published'].includes(it.status));
+  const openFacts = await evaluateSteps(openForLabels, { now, withElapsed: false });
+  const timeSummary = {
+    openOverdue: openForLabels.filter((it) => hasTimeLabel(openFacts.get(String(it._id))?.labels, 'overdue')).length,
+    blocked: openForLabels.filter((it) => hasTimeLabel(openFacts.get(String(it._id))?.labels, 'blocked')).length,
+  };
+
   return {
     rightNow,
     nextUp,
+    timeSummary,
     loadTrend,
     workByType,
     workByCalendar,
@@ -614,11 +629,19 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
     updatedAt: { $gte: prevStart, $lte: prevEnd },
   }).lean();
 
+  // Phase 7: on-time by the shared labels; steps delayed by an earlier step are left out.
+  const windowFacts = await evaluateSteps([...currentCompleted, ...prevCompleted], { now, withElapsed: false });
+  const windowLabels = (it) => windowFacts.get(String(it._id))?.labels || [];
+
   const calculateWindowStats = (items) => {
     if (items.length === 0) {
       return {
         completedCount: 0,
-        onTimeRate: 100,
+        onTimeRate: null,
+        onTimeCount: 0,
+        onTimeTotal: 0,
+        delayedByEarlier: 0,
+        delayedText: workerOnTime([]).delayedText,
         avgDaysLate: 0,
         firstPassApprovalRate: 100,
         avgRevisions: 0,
@@ -635,7 +658,6 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
       };
     }
 
-    let onTimeCount = 0;
     let totalLateDays = 0;
     let lateItemsCount = 0;
     let firstPassCount = 0;
@@ -654,11 +676,11 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
     items.forEach((it) => {
       const m = calculateIndividualWorkMeasures(it, now);
 
-      // On-time check
-      if (!m.isLate) {
-        onTimeCount++;
-      } else {
-        totalLateDays += m.lateByDays || 0;
+      // Days late, for steps judged on time or late (not those delayed by an earlier step).
+      const labels = windowLabels(it);
+      const lateLabel = labels.find((l) => l.kind === 'done_late');
+      if (lateLabel && !hasTimeLabel(labels, 'late_earlier_step')) {
+        totalLateDays += lateLabel.days || 0;
         lateItemsCount++;
       }
 
@@ -722,6 +744,7 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
       };
     });
 
+    const onTime = workerOnTime(items.map(windowLabels));
     const avgWorkTime = workTimeItemsCount > 0 ? Math.round(totalWorkTimeMs / workTimeItemsCount) : 0;
     const avgWaitStart = waitToStartCount > 0 ? Math.round(totalWaitToStartMs / waitToStartCount) : 0;
     const avgAppWait = approvalWaitCount > 0 ? Math.round(totalApprovalWaitMs / approvalWaitCount) : 0;
@@ -729,7 +752,11 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
 
     return {
       completedCount: items.length,
-      onTimeRate: Math.round((onTimeCount / items.length) * 100),
+      onTimeRate: onTime.rate,
+      onTimeCount: onTime.onTime,
+      onTimeTotal: onTime.total,
+      delayedByEarlier: onTime.delayedByEarlier,
+      delayedText: onTime.delayedText,
       avgDaysLate: lateItemsCount > 0 ? Number((totalLateDays / lateItemsCount).toFixed(1)) : 0,
       firstPassApprovalRate: Math.round((firstPassCount / items.length) * 100),
       avgRevisions: Number((totalRevisions / items.length).toFixed(1)),
@@ -787,7 +814,8 @@ export async function getPersonPerformance(targetPersonId, actor, query = {}) {
     current: currentStats,
     deltas: {
       completedCountDelta: currentStats.completedCount - prevStats.completedCount,
-      onTimeRateDelta: currentStats.onTimeRate - prevStats.onTimeRate,
+      onTimeRateDelta:
+        currentStats.onTimeRate === null || prevStats.onTimeRate === null ? null : currentStats.onTimeRate - prevStats.onTimeRate,
       firstPassRateDelta: currentStats.firstPassApprovalRate - prevStats.firstPassApprovalRate,
     },
     monthlyOutputTrend,

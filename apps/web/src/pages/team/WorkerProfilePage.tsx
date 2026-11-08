@@ -849,9 +849,9 @@ export const WorkerProfilePage: React.FC = () => {
         {/* Late */}
         <div className="p-4 sm:p-5 bg-ui-card space-y-1">
           <span className="text-[13px] font-medium text-ui-muted block">
-            Late Deliverables
+            Overdue
           </span>
-          <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
+          <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums" data-testid="profile-overdue-count">
             {profile.kpis?.lateCount || 0}
           </span>
         </div>
@@ -861,9 +861,14 @@ export const WorkerProfilePage: React.FC = () => {
           <span className="text-[13px] font-medium text-ui-muted block">
             On-Time Rate
           </span>
-          <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums">
-            {profile.kpis?.onTimeRate || 100}%
+          <span className="text-[24px] leading-8 font-semibold text-ui-ink tabular-nums" data-testid="profile-on-time">
+            {profile.kpis?.onTimeRate === null || profile.kpis?.onTimeRate === undefined ? 'No data' : `${profile.kpis.onTimeRate}%`}
           </span>
+          {!!profile.kpis?.delayedByEarlier && (
+            <span className="text-[11px] text-ui-muted block" data-testid="profile-delayed">
+              {profile.kpis.delayedText}
+            </span>
+          )}
         </div>
 
         {/* Average Rating (Shown only if >= 3 ratings) */}
@@ -931,6 +936,19 @@ export const WorkerProfilePage: React.FC = () => {
       {/* TAB 1: OVERVIEW */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Phase 7: open overdue and blocked steps, by the shared labels */}
+          {overviewData?.timeSummary && (
+            <div className="grid grid-cols-2 gap-3" data-testid="profile-time-summary">
+              <div className="glass-card p-4">
+                <span className="text-[13px] font-medium text-ui-muted block">Open overdue</span>
+                <span className="text-2xl font-black text-ui-ink tabular-nums" data-testid="profile-open-overdue">{overviewData.timeSummary.openOverdue}</span>
+              </div>
+              <div className="glass-card p-4">
+                <span className="text-[13px] font-medium text-ui-muted block">Blocked</span>
+                <span className="text-2xl font-black text-ui-ink tabular-nums" data-testid="profile-blocked">{overviewData.timeSummary.blocked}</span>
+              </div>
+            </div>
+          )}
           {/* Operational summary for leadership roles */}
           {overviewData?.operationalSummary && (
             <div className="p-4 rounded-2xl bg-white/70 border border-ui-line space-y-2">
@@ -1173,6 +1191,24 @@ export const WorkerProfilePage: React.FC = () => {
         <div className="space-y-6">
           {/* Craft Metrics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="glass-card p-4 space-y-1" data-testid="performance-on-time">
+              <span className="text-[10px] font-black text-ui-muted block">On-Time Rate</span>
+              <span className="text-2xl font-black text-ui-ink">
+                {performanceData?.current?.onTimeRate === null || performanceData?.current?.onTimeRate === undefined
+                  ? 'No data'
+                  : `${performanceData.current.onTimeRate}%`}
+              </span>
+              <span className="text-[11px] text-ui-muted block">
+                {performanceData?.current?.onTimeTotal
+                  ? `${performanceData.current.onTimeCount} of ${performanceData.current.onTimeTotal} steps by their due date (IST)`
+                  : 'First submissions by the due date (IST)'}
+              </span>
+              {!!performanceData?.current?.delayedByEarlier && (
+                <span className="text-[11px] text-ui-muted block" data-testid="performance-delayed">
+                  {performanceData.current.delayedText}
+                </span>
+              )}
+            </div>
             <div className="glass-card p-4 space-y-1">
               <span className="text-[10px] font-black text-ui-muted block">
                 First-Pass Approval Rate
