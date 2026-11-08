@@ -374,9 +374,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, focusMode = false }) =
           },
           {
             id: 'reports',
-            label: 'Reports and Automation',
+            label: 'Reports',
             path: '/reports',
-            description: '4 Report definitions & automation rules',
+            description: 'Live reports: overdue, production, quality, projects',
             icon: BarChart3,
             show: true,
             activeMatcher: (p: string) => p.startsWith('/reports'),
@@ -486,7 +486,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, focusMode = false }) =
       { id: 'feedback', icon: FileText, label: 'Feedback and Revisions', path: '/feedback', active: location.pathname.startsWith('/feedback') },
       { id: 'workload', icon: Users, label: 'Team Workload', path: '/workload', active: location.pathname.startsWith('/workload') },
       { id: 'issues', icon: AlertCircle, label: 'Issues and Blockers', path: '/issues', active: location.pathname.startsWith('/issues') },
-      { id: 'reports', icon: BarChart3, label: 'Reports and Automation', path: '/reports', active: location.pathname.startsWith('/reports') },
+      { id: 'reports', icon: BarChart3, label: 'Reports', path: '/reports', active: location.pathname.startsWith('/reports') },
       { id: 'team', icon: Users, label: 'Team Directory', path: '/team', active: location.pathname.startsWith('/team') || location.pathname.startsWith('/people') || location.pathname.startsWith('/admin/users') },
     ];
 

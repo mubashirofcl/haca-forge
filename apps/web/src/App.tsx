@@ -79,6 +79,12 @@ const IssuesBlockersPage = React.lazy(() =>
 const ReportsPage = React.lazy(() =>
   import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
+const ReportPrintPage = React.lazy(() =>
+  import('./pages/reports/ReportPrintPage').then((m) => ({ default: m.ReportPrintPage }))
+);
+const ProjectKpiPage = React.lazy(() =>
+  import('./pages/reports/ProjectKpiPage').then((m) => ({ default: m.ProjectKpiPage }))
+);
 const SettingsPage = React.lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
@@ -387,7 +393,7 @@ export const App: React.FC = () => {
                   }
                 />
 
-                {/* Screen 14: Reports and Automation (Phase 7) */}
+                {/* Screen 14: Reports (Phase 7: live reports, print layout, Project KPI page) */}
                 <Route
                   path="/reports"
                   element={
@@ -395,6 +401,28 @@ export const App: React.FC = () => {
                       <Layout>
                         <RoleBoundary hiddenFor={TEAM_MEMBER_HIDDEN}>
                           <ReportsPage />
+                        </RoleBoundary>
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/reports/print"
+                  element={
+                    <ProtectedRoute>
+                      <RoleBoundary hiddenFor={TEAM_MEMBER_HIDDEN}>
+                        <ReportPrintPage />
+                      </RoleBoundary>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/reports/projects/:id"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <RoleBoundary hiddenFor={TEAM_MEMBER_HIDDEN}>
+                          <ProjectKpiPage />
                         </RoleBoundary>
                       </Layout>
                     </ProtectedRoute>

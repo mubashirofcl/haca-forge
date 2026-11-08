@@ -1047,3 +1047,26 @@ input[type='range'].ui-range::-webkit-slider-runnable-track {
     animation: none;
   }
 }
+
+/* Phase 7: report print layout (Print or save as PDF). Charts are drawn at a fixed size there. */
+.report-print .glass-card {
+  background: #ffffff;
+  box-shadow: none;
+  border: 1px solid #d9dde5;
+  backdrop-filter: none;
+}
+@media print {
+  .report-print {
+    padding: 0 !important;
+  }
+  .report-print .report-chart,
+  .report-print .report-table tr,
+  .report-print .glass-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .report-print .space-y-4 > * + * {
+    margin-top: 10px;
+  }
+}
+

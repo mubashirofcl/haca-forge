@@ -1,9 +1,8 @@
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { safeUrl } from '../lib/safeUrl';
 import { MediaCardPlayer } from '../pages/chat/MediaCardPlayer';
-import { ReportsPage } from '../pages/reports/ReportsPage';
 
 vi.mock('../lib/api', () => ({ apiFetch: vi.fn() }));
 vi.mock('../context/AuthContext', () => ({
@@ -13,7 +12,6 @@ vi.mock('../context/GlobalFilterContext', () => ({
   useGlobalFilter: () => ({ filters: { month: '2026-11', departmentId: 'all' } }),
 }));
 
-import { apiFetch } from '../lib/api';
 
 describe('safeUrl', () => {
   it('keeps http(s) links and paths on this site', () => {
@@ -56,28 +54,5 @@ describe('MediaCardPlayer with unsafe links', () => {
   it('keeps a safe download link', () => {
     render(<MediaCardPlayer card={{ ...card, downloadUrl: '/uploads/a.png', previewUrl: '/uploads/a.png', thumbnailUrl: '' } as any} />);
     expect(screen.getByTitle('Download asset')).toHaveAttribute('href', '/uploads/a.png');
-  });
-});
-
-describe('Reports preview', () => {
-  beforeEach(() => {
-    vi.mocked(apiFetch).mockReset();
-    vi.mocked(apiFetch).mockImplementation(async (url: string) => {
-      if (url.startsWith('/api/reports/definitions/weekly_marketing/generate')) {
-        return { success: true, report: { reportKey: 'weekly_marketing', title: 'Weekly', html: '<p>Report</p>', summary: {}, tables: [] } } as any;
-      }
-      if (url.startsWith('/api/reports/definitions')) {
-        return { definitions: [{ _id: 'd1', reportKey: 'weekly_marketing', name: 'Weekly Creative Report', cadence: 'Weekly', scheduleDisplay: 'Mondays', description: 'd', recipients: [] }] } as any;
-      }
-      if (url.startsWith('/api/automation/rules')) return { rules: [] } as any;
-      return {} as any;
-    });
-  });
-
-  it('shows report HTML in a sandboxed frame', async () => {
-    render(<ReportsPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /generate now/i }));
-    const frame = await waitFor(() => screen.getByTitle('Report HTML Preview'));
-    expect(frame).toHaveAttribute('sandbox', '');
   });
 });
