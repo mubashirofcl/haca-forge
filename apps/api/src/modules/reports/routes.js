@@ -20,12 +20,25 @@ import {
   getScheduledReportsHandler,
   deleteScheduledReportHandler,
 } from "./controller.js";
+import { liveReportHandler, projectKpiHandler } from "./live.controller.js";
 
 const router = express.Router();
 
 // All report routes require authentication and report.view or portal.view permission
 router.use(authenticate);
+
+// Phase 7: a project's KPI page. Registered before the report permission check so that a
+// team member gets the same 404 as a project that does not exist.
+router.get("/projects/:id", projectKpiHandler);
+
 router.use(requireAnyPermission("report.view", "portal.view"));
+
+// Phase 7: live reports, computed on request (filters: month, calendar, stepType).
+router.get("/overview", liveReportHandler("overview"));
+router.get("/overdue", liveReportHandler("overdue"));
+router.get("/production", liveReportHandler("production"));
+router.get("/quality", liveReportHandler("quality"));
+router.get("/projects", liveReportHandler("projects"));
 
 // -------------------------------------------------------------
 // Phase 7: 6 Marketing OS Report Definitions Endpoints
