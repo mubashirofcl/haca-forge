@@ -1,11 +1,11 @@
 # HACA Marketing OS — Master Project Context
 
-**Current as of:** 8 November 2026 (after the Phase 7 close-out)  
+**Current as of:** 9 November 2026 (after Phase 8)  
 **Repository:** HACA Marketing OS (`haca-forge`)  
 **Technology Stack:** Node 22 LTS, Express 5 (ESM), React 18, Vite 6, TypeScript, Tailwind CSS, MongoDB (Mongoose), Socket.io, BullMQ (Redis).  
-**Test Suite Status:** **1653 tests passing across 106 test files (0 failures)**  
-- `@mmp/api`: 1353 tests passed across 64 test files  
-- `@mmp/web`: 300 tests passed across 42 test files  
+**Test Suite Status:** **1690 tests passing across 109 test files (0 failures)**  
+- `@mmp/api`: 1384 tests passed across 66 test files  
+- `@mmp/web`: 306 tests passed across 43 test files  
 - The API tests set their own test-only JWT secrets (`apps/api/vitest.config.js`), so a fresh checkout passes with no `.env`.  
 
 ---
@@ -163,6 +163,7 @@ Seeded via `apps/api/scripts/reset-and-seed.js`:
 | 20 | Phase 5: asset handoff, Drive links, caption on Post | **Done** | Phase 5 tests; 30/30 browser checks |
 | 21 | Phase 6: blockers, reopening, plan delete, small fixes | **Done** | Phase 6 tests; see docs/PROGRESS.md |
 | 22 | Phase 7: live reports, overdue and lateness labels, project KPIs | **Done** | Phase 7 tests; 49/49 browser checks; see docs/PROGRESS.md |
+| 23 | Phase 8: worker and Creative Head profile KPIs, profile report (PDF, CSV) | **Done** | Phase 8 tests; 41/41 browser checks; see docs/PROGRESS.md |
 
 ---
 

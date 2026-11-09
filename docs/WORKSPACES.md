@@ -3,7 +3,7 @@
 **Document Version:** 3.0.0  
 **Status:** Canonical Source of Truth  
 **Codebase:** `haca-forge` (Monorepo: `@mmp/shared`, `@mmp/api`, `@mmp/web`)  
-**Current System State:** 1653/1653 tests passing across 106 test files (API 1353 in 64 files, web 300 in 42 files); 0 TypeScript errors; clean web build (after the Phase 7 close-out)  
+**Current System State:** 1690/1690 tests passing across 109 test files (API 1384 in 66 files, web 306 in 43 files); 0 TypeScript errors; clean web build (after Phase 8)  
 **Current Date:** 8 November 2026  
 
 ---
@@ -562,10 +562,10 @@ CSV per table (the same cells as the screen) and a print layout (`/reports/print
 
 # 10. Verification Status & Test Metrics
 
-### Monorepo Test Summary (after the Phase 7 close-out)
+### Monorepo Test Summary (after Phase 8)
 ```
-Test Suites:  106 passed (106 total across monorepo)
-Tests:        1653 passed (1653 total across monorepo)
+Test Suites:  109 passed (109 total across monorepo)
+Tests:        1690 passed (1690 total across monorepo)
 Failures:     0
 TypeScript:   0 errors across all workspaces (npm run typecheck)
 Vite Build:   Clean production bundle (npm run build)
@@ -573,13 +573,13 @@ Vite Build:   Clean production bundle (npm run build)
 
 ### Breakdown by Workspace
 * **`@mmp/shared`:** Typings, deliverable enums, backward offsets, Zod schemas compiled cleanly via `tsup`.
-* **`@mmp/api` (Backend):** **1353 passed tests across 64 test files**, including:
+* **`@mmp/api` (Backend):** **1384 passed tests across 66 test files**, including:
   - `test/phone_otp_profile.test.js` (9 tests covering 6-digit SMS OTP generation, expiry, rate limiting, and email lock).
   - `test/team_profile_api.test.js` (16 tests covering Team Directory, Worker Profile tabs, and RBAC).
   - `test/profile_and_settings.test.js` (34 tests covering strict schemas, avatar upload/delete, sessions, and password security).
   - `test/chat_system.test.js` & `test/chat_share_polish.test.js` (50 tests covering chat channels, DMs, socket events, and share-to-chat).
   - `test/individual_tracking_and_timing.test.js` & `test/step_deadlines_plan_form.test.js`.
-* **`@mmp/web` (Frontend):** **300 passed tests across 42 test files**, including:
+* **`@mmp/web` (Frontend):** **306 passed tests across 43 test files**, including:
   - `src/pages/team/__tests__/TeamProfileSuite.test.tsx` (Team Directory, Worker Profile, craftsmanship metrics).
   - `src/pages/work/workspaces/__tests__/ShootWorkspaceSuite.test.tsx` (13 tests verifying clip gallery, phone uploads, and per-clip feedback).
   - `src/pages/work/workspaces/__tests__/Workspaces.test.tsx` (8 tests verifying Shoot, Edit, Design, and Post workspaces).

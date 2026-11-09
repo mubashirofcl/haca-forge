@@ -1,6 +1,24 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after the Phase 7 close-out):** 1653 passing, 0 failing: API 1353 (64 files), web 300 (42 files). Typecheck 0 errors; web build clean.
+**Current test count (after Phase 8):** 1690 passing, 0 failing: API 1384 (66 files), web 306 (43 files). Typecheck 0 errors; web build clean.
+
+## Phase 8: Worker and Creative Head profile KPIs (Status: COMPLETE; committed locally, not pushed)
+
+Five commits, each gated in the working tree (typecheck, web build, all tests): 8a `83f0988`, 8b `8b96687`, 8c `39e14b4`, 8d `7d76e9a`, and this entry.
+
+- 8a, shared helpers in `@mmp/shared`: the profile period (this month, last 3 months, custom; IST days; steps belong by due date) and the previous period; `reviewStats` (changes-requested rate, rework); `workerOnTime` also returns the late rate and done-late count; `reviewerStats` (approvals vs changes requested, average wait from submission to decision) and `reviewQueueAge`.
+- 8b, API:
+  - `GET /api/team/:id/kpis`, read only, same access as the profile. One person's own figures: assigned, completed, in progress, open overdue, blocked; on-time (Late: earlier step excluded, with the delayed note); late rate and done-late count; changes requested; rework; first-pass (Post excluded); average rating (one per step, 3 minimum); elapsed work time total and by step type (history marked partial); the same person's last-period figures; charts (monthly trend by finish date, ratings, root causes, step types, calendars).
+  - Creative Head section (admin, executive, the Creative Head on their own profile): reviews, approvals, changes requested, average approval wait, "Oldest item in the team review queue", plan approvals, charts (reviews per week, ratings given, root causes used). Counts submission decisions only; "N earlier approvals have no review record and are not counted." when such approvals exist.
+  - `GET /api/team/:id/report`: the same plus the step list; admin, creative_head and executive only (others 403; a team member on someone else's profile 404). Neither returns contact details.
+  - Fixes: header average rating and the Ratings tab use one rating per step (step-type averages only from 3); Performance counts completed steps by finish date and first-pass without Post (no data is "No data", not 100%); the placeholder revisionFlags block is removed; the Changes Log stays admin and creative_head only and returns the actor's email to admin only.
+- 8c, web: Overview period picker and 12 KPI cards (each with what it is based on, and "Last period: …" as plain text: no colour, arrows or better/worse wording); Performance charts; a Reviews tab on Creative Head profiles (and Work/Performance when they own steps); "Download report" for admin, creative_head and executive: a print layout (`/team/:id/report`) for PDF and two CSVs (figures, steps) built from the same rows as the cards.
+- 8d: the print layout shows one chart per row (they overlapped two to a row); "1 revision round".
+- Decisions applied: A (period by due date; monthly trend by finish date), B (submission decisions only, with the legacy note), C (last period kept, neutral). Changes Log admin and creative_head only; queue label as requested.
+- Tests updated for the approved rules: older rating fixtures rated one step several times; each rated version now has its own step (one rating per step). The 8-week load-trend fixture no longer falls into last week when the suite runs in the first half hour of a Monday (it failed once at 00:09 IST on 9 Nov).
+- Browser test, 41 of 41, on a disposable database (dropped afterwards), desktop and 390 px phone width: worker profile cards, period picker, Performance charts; Creative Head Reviews tab with cards, legacy note and charts; CSV (every card value in the CSV, no contact details) and PDF (figures, charts, steps, review section; charts do not overlap) downloads; each role: admin, creative_head (own Reviews, download), executive (no contact details on screen or in the report, read only), sm_manager (KPIs, no download, report refused, no Reviews tab on a Creative Head), team_member (own profile with the transparency banner, no download, others not found); phone layouts fit the width with stacked cards; no page errors or 5xx.
+- Clean-worktree gate: a fresh worktree of HEAD, `npm ci`, no `.env` and no secrets on the command line or in the environment; removed afterwards.
+- Real database: no writes; read-only survey and checks only. Since the Phase 7 close-out the only change is one Creative Head login through the dev app at 18:00 UTC on 8 Nov (Chrome on Windows).
 
 ## Phase 7 close-out: reminders and priority (Status: COMPLETE; committed locally, not pushed)
 
