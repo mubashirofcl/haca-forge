@@ -1,10 +1,15 @@
-import type { PlanGridColumn, PlanGridColumnKey, StageKey } from '@mmp/shared';
+import type { PlanGridColumn, PlanGridColumnKey, RowWorkflow, StageKey } from '@mmp/shared';
 
 /** One row as returned by GET /api/calendar-plans/grid (see planGrid.service.js toGridRow). */
 export interface GridRow {
   rowId: string;
   rowStatus: 'draft' | 'submitted' | 'changes_requested' | 'approved';
   editable: boolean;
+  /** Static Post / Carousel Post: false = Design only. */
+  needsContent?: boolean;
+  /** Row workflow read from the stored flags; null for types with a fixed step list. */
+  workflow?: RowWorkflow | null;
+  contentDoneDate?: string;
   /** False once any of the row's steps has started; delete is then refused (409). */
   deletable?: boolean;
   postingDate: string;

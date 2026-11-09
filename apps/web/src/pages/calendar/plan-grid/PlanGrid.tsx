@@ -10,6 +10,11 @@ import {
   parseClipboardTsv,
   parseGridDate,
   pastedRowsToCells,
+  parseWorkflow,
+  defaultWorkflowFor,
+  workflowFlags,
+  workflowOptionsFor,
+  ROW_WORKFLOW_LABELS,
   type PlanGridColumnKey,
   type StageKey,
 } from '@mmp/shared';
@@ -20,7 +25,7 @@ import { PlanGridRowPanel } from './PlanGridRowPanel';
 import { PlanGridConfirmDialog } from './PlanGridConfirmDialog';
 import { PlanGridPasteDialog } from './PlanGridPasteDialog';
 import { useMediaQuery } from './useMediaQuery';
-import { OWNER_FIELD_BY_STAGE, PLANNING_COLUMNS, PROGRESS_COLUMNS, STAGE_LABEL, type PlanCol, type PlanColGroup } from './columns';
+import { OWNER_FIELD_BY_STAGE, PLANNING_COLUMNS, PROGRESS_COLUMNS, STAGE_LABEL, stageForColumn, type PlanCol, type PlanColGroup } from './columns';
 import { STATUS_STAGE, rowCanBeDeleted, type GridCellInput, type GridData, type GridLine, type GridRow, type GridRowResult, type GridSaveResponse } from './types';
 
 const ROW_STATUS: Record<string, { tone: string; label: string }> = {
@@ -37,12 +42,31 @@ const isBlank = (l: GridLine) =>
   !l.saved && Object.values(l.draft).every((v) => v === undefined || (typeof v === 'object' && v !== null ? !Object.keys(v as object).length : String(v).trim() === ''));
 const withTrailingBlank = (lines: GridLine[]) => (lines.length && isBlank(lines[lines.length - 1]) ? lines : [...lines, newLine()]);
 
-/** Steps a line has: from the saved row, or worked out from the typed type (new reels default to Script + Shoot). */
+/** Type as the server will read it ("Poster" typed by hand means Static Post). */
+function typeOf(line: GridLine): string {
+  const type = line.draft.type !== undefined ? String(line.draft.type || '').trim() : line.saved?.type || '';
+  return type === 'Poster' && line.draft.type !== undefined && !line.draft.typeExact ? 'Static Post' : type;
+}
+
+/** Workflow a line has: the typed choice, else the saved one, else the type's default. */
+function workflowOf(line: GridLine): string | null {
+  const type = typeOf(line);
+  if (line.draft.workflow !== undefined) {
+    const r = parseWorkflow(type, line.draft.workflow);
+    if (r.ok) return r.value || defaultWorkflowFor(type);
+  }
+  if (line.saved && line.draft.type === undefined) return line.saved.workflow ?? null;
+  return defaultWorkflowFor(type);
+}
+
+/** Steps a line has: from the saved row, or worked out from the typed type and workflow (defaults: Full / With content). */
 function stagesOf(line: GridLine): StageKey[] | null {
-  if (line.saved) return line.saved.stages;
-  const type = String(line.draft.type || '').trim();
+  if (line.saved && line.draft.type === undefined && line.draft.workflow === undefined) return line.saved.stages;
+  const type = typeOf(line);
   if (!type) return null;
-  return getPipelineForContent({ contentType: type === 'Poster' && !line.draft.typeExact ? 'Static Post' : type, needsScript: true, needsShoot: true }).stages as StageKey[];
+  const w = workflowOf(line);
+  const flags = w ? workflowFlags(w as keyof typeof ROW_WORKFLOW_LABELS) : { needsScript: true, needsShoot: true, needsContent: true };
+  return getPipelineForContent({ contentType: type, ...flags }).stages as StageKey[];
 }
 
 /** What is missing for a saved row's steps (Content/Design included): owner or deadline. */
@@ -592,17 +616,20 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
 
   const renderPlanning = (line: GridLine, idx: number, col: PlanCol) => {
     const key = col.key;
-    const stage = col.stage;
     const stages = stagesOf(line);
+    // Script / Content: reels show Script, design rows show their Content step.
+    const stage = stageForColumn(col, stages);
     const id = `cell-${line.key}-${key}`;
     const label = `${col.header}, row ${idx + 1}${line.saved ? `, ${line.saved.topic}` : ''}`;
     const locked = !canEdit || (line.saved ? !line.saved.editable : false);
     const err =
       col.kind === 'owner' && stage
-        ? errorFor(line, OWNER_FIELD_BY_STAGE[stage], `${OWNER_FIELD_BY_STAGE[stage]}Id`)
+        ? errorFor(line, ...new Set([OWNER_FIELD_BY_STAGE[stage], `${OWNER_FIELD_BY_STAGE[stage]}Id`, String(col.key), `${col.key}Id`]))
         : col.kind === 'deadline' && stage
           ? errorFor(line, `deadline.${stage}`)
-          : errorFor(line, key);
+          : col.kind === 'workflow'
+            ? errorFor(line, 'workflow', 'sourceVideoLink')
+            : errorFor(line, key);
     const errNode = err ? (
       <span id={`${id}-err`} className="block mt-0.5 px-1 text-[11px] leading-snug text-ui-ink whitespace-normal">
         <span aria-hidden="true">⚠ </span>
@@ -625,7 +652,16 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
     if (stage && stages && !stages.includes(stage)) {
       return (
         <span className="block px-2 text-sm text-ui-muted">
-          N/A<span className="sr-only">{`: ${col.header} does not apply to this row`}</span>
+          Not needed<span className="sr-only">{`: this row's workflow has no ${STAGE_LABEL[stage]} step`}</span>
+        </span>
+      );
+    }
+    const typeNow = typeOf(line);
+    const workflowChoices = workflowOptionsFor(typeNow);
+    if (col.kind === 'workflow' && !workflowChoices.length) {
+      return (
+        <span className="block px-2 text-sm text-ui-muted" title={typeNow ? `${typeNow} has fixed steps` : 'Choose a type first'}>
+          –<span className="sr-only">{typeNow ? `: ${typeNow} has fixed steps` : ': choose a type first'}</span>
         </span>
       );
     }
@@ -634,6 +670,8 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
     if (locked) {
       let text = '';
       if (col.kind === 'deadline' && stage) text = line.saved?.stepDeadlines[stage] ? formatGridDate(line.saved.stepDeadlines[stage]!) : '';
+      else if (col.kind === 'workflow') text = ROW_WORKFLOW_LABELS[workflowOf(line) as keyof typeof ROW_WORKFLOW_LABELS] || '';
+      else if (col.kind === 'owner' && stage) text = String((line.saved as unknown as Record<string, unknown> | null)?.[OWNER_FIELD_BY_STAGE[stage]] || '');
       else if (col.kind === 'date') text = line.saved ? formatGridDate(line.saved.postingDate) : textOf(line, key);
       else text = textOf(line, key);
       return (
@@ -703,6 +741,20 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
       );
     }
 
+    if (col.kind === 'workflow') {
+      const current = workflowOf(line) || '';
+      return (
+        <>
+          <select {...common} className={`ui-select h-11 w-full${invalidCls}`} value={current} onChange={(e) => commit(line, { workflow: e.target.value })}>
+            {workflowChoices.map((w) => (
+              <option key={w} value={w}>{ROW_WORKFLOW_LABELS[w]}</option>
+            ))}
+          </select>
+          {errNode}
+        </>
+      );
+    }
+
     if (col.kind === 'owner' && stage) {
       const field = OWNER_FIELD_BY_STAGE[stage];
       const draftId = line.draft[`${field}Id`];
@@ -755,9 +807,12 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
   const renderProgress = (line: GridLine, col: PlanCol) => {
     const row = line.saved;
     if (!row) return <span className="text-ui-muted" aria-hidden="true">–</span>;
-    const stage = STATUS_STAGE[col.key as PlanGridColumnKey];
-    if (stage && !row.stages.includes(stage)) return <span className="text-sm text-ui-muted">N/A</span>;
-    const raw = (row as unknown as Record<string, unknown>)[col.key];
+    const ownStage = STATUS_STAGE[col.key as PlanGridColumnKey];
+    const stage = stageForColumn({ stage: ownStage, altStage: col.altStage }, row.stages);
+    if (stage && !row.stages.includes(stage)) return <span className="text-sm text-ui-muted">Not needed</span>;
+    // Script / Content: a design row shows its Content step's status and done date here.
+    const valueKey = stage && ownStage && stage !== ownStage ? col.key.replace(/^script/, 'content') : col.key;
+    const raw = (row as unknown as Record<string, unknown>)[valueKey];
     if (col.key.endsWith('Status')) {
       const s = String(raw || '');
       if (!s) return <span className="text-sm text-ui-muted">Not started</span>;

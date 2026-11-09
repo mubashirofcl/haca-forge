@@ -3,7 +3,7 @@
  * plan grid's row panel, so there is one rule set. The server applies the same offsets
  * (STAGE_DUE_OFFSETS / calculateStageDueDate) and validation (validatePlanAndRows) on save.
  */
-import { isPostableWorkType, normalizeWorkType } from '@mmp/shared';
+import { DESIGN_WORKFLOW_TYPES, isPostableWorkType, normalizeWorkType, sourceVideoLinkError } from '@mmp/shared';
 
 export type StepKey = 'Content' | 'Script' | 'Design' | 'Shoot' | 'Edit' | 'Post';
 
@@ -48,7 +48,7 @@ export function calculateDueDateString(baseDateStr: string, offsetDays: number):
 }
 
 /** The steps a row has and their offsets from the posting date (same as STAGE_DUE_OFFSETS). */
-export function getExpectedStepDefs(type: string, needsScript: boolean, needsShoot: boolean): { stageKey: StepKey; offset: number }[] {
+export function getExpectedStepDefs(type: string, needsScript: boolean, needsShoot: boolean, needsContent = true): { stageKey: StepKey; offset: number }[] {
   const norm = normalizeWorkType(type || 'Reel A');
   const postable = isPostableWorkType(norm);
   if (norm.toLowerCase() === 'reel') {
@@ -59,8 +59,10 @@ export function getExpectedStepDefs(type: string, needsScript: boolean, needsSho
     list.push({ stageKey: 'Post', offset: 0 });
     return list;
   }
+  // Design only (Static Post / Carousel Post): no Content step; Design keeps its offset.
+  const designOnly = !needsContent && (DESIGN_WORKFLOW_TYPES as readonly string[]).includes(norm);
   const list: { stageKey: StepKey; offset: number }[] = [
-    { stageKey: 'Content', offset: 5 },
+    ...(designOnly ? [] : [{ stageKey: 'Content' as StepKey, offset: 5 }]),
     { stageKey: 'Design', offset: 2 },
   ];
   if (postable) list.push({ stageKey: 'Post', offset: 0 });
@@ -71,8 +73,8 @@ const autoDue = (postDate: string, stageKey: StepKey, offset: number) =>
   stageKey === 'Post' ? postDate : calculateDueDateString(postDate, offset);
 
 /** Initial steps before the server's suggestions arrive (first person with the work preference). */
-export function buildDefaultSteps(type: string, needsScript: boolean, needsShoot: boolean, postDate: string, members: StepMember[]): StepLineState[] {
-  return getExpectedStepDefs(type, needsScript, needsShoot).map((d) => {
+export function buildDefaultSteps(type: string, needsScript: boolean, needsShoot: boolean, postDate: string, members: StepMember[], needsContent = true): StepLineState[] {
+  return getExpectedStepDefs(type, needsScript, needsShoot, needsContent).map((d) => {
     const best = members.find((m) => m.workPreferences?.includes(d.stageKey));
     return {
       stageKey: d.stageKey,
@@ -98,9 +100,9 @@ export function applyPostingDateChange(steps: StepLineState[], newDate: string):
 }
 
 /** Type or reel steps changed: keep what the user set for steps that remain, add new steps with defaults. */
-export function applyTypeChange(prev: StepLineState[], type: string, needsScript: boolean, needsShoot: boolean, postDate: string, members: StepMember[]): StepLineState[] {
+export function applyTypeChange(prev: StepLineState[], type: string, needsScript: boolean, needsShoot: boolean, postDate: string, members: StepMember[], needsContent = true): StepLineState[] {
   const prevMap = new Map(prev.map((s) => [s.stageKey, s]));
-  return getExpectedStepDefs(type, needsScript, needsShoot).map((d) => {
+  return getExpectedStepDefs(type, needsScript, needsShoot, needsContent).map((d) => {
     const existing = prevMap.get(d.stageKey);
     if (existing) {
       return {
@@ -109,7 +111,7 @@ export function applyTypeChange(prev: StepLineState[], type: string, needsScript
         dueDate: d.stageKey === 'Post' ? postDate : existing.dueDateSource === 'manual' ? existing.dueDate : calculateDueDateString(postDate, d.offset),
       };
     }
-    return buildDefaultSteps(type, needsScript, needsShoot, postDate, members).find((s) => s.stageKey === d.stageKey)!;
+    return buildDefaultSteps(type, needsScript, needsShoot, postDate, members, needsContent).find((s) => s.stageKey === d.stageKey)!;
   });
 }
 
@@ -199,8 +201,8 @@ export function validateRowSteps({
     }
   }
 
-  if (isReel && !needsShoot && !sourceVideoLink.trim()) {
-    errors.sourceVideoLink = 'Source video link is required when Reel does not need a shoot.';
-  }
+  // Edit only: an app upload or a Google Drive / Docs link (the same rule as the API).
+  const linkError = isReel && !needsShoot ? sourceVideoLinkError('edit_only', sourceVideoLink) : null;
+  if (linkError) errors.sourceVideoLink = linkError;
   return { errors, warnings };
 }

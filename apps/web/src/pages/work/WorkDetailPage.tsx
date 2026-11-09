@@ -55,11 +55,16 @@ import {
 import { PipelineStepper, type PipelineStageItem } from '../../components/PipelineStepper';
 import { AssetLinks } from '../../components/AssetLinks';
 import { resolveStepBlocker } from '../../lib/blockers';
+import { FromPlanCard, type FromPlan } from './FromPlanCard';
 
 const NO_SUBMISSION_TO_REVIEW =
   'This step has no submission to review yet. It can be approved or sent back once the owner submits their work.';
 
 interface WorkItemDetail {
+  /** The row's type and workflow, e.g. "Reel · Edit only". */
+  workflowLabel?: string | null;
+  /** A step with no earlier step: the row's brief (and Edit only source video). */
+  fromPlan?: FromPlan | null;
   /** Phase 7: computed time labels (owner and leadership only). */
   timeLabels?: TimeLabel[];
   /** Phase 6: this step's latest approved output (files and links). */
@@ -691,8 +696,8 @@ export const WorkDetailPage: React.FC = () => {
           </button>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/70 text-ui-text">
-              {item.workType}
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/70 text-ui-text" data-testid="workflow-label">
+              {item.workflowLabel || item.workType}
             </span>
             <span
               className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
@@ -1341,6 +1346,7 @@ export const WorkDetailPage: React.FC = () => {
           {/* Tab 1: Details */}
           {activeTab === 'brief' && (
             <div className="glass-card p-5 sm:p-6 space-y-6">
+              <FromPlanCard fromPlan={item.fromPlan} />
               {item.stageKey && (
                 <div className="p-4 rounded-ui-card bg-white/60 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">

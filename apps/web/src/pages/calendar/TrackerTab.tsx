@@ -45,6 +45,8 @@ interface ContentPieceTrackerRow {
   topic: string;
   calendar?: CalendarKey;
   contentType: string;
+  /** e.g. "Reel · Edit only" (just the type for types with fixed steps). */
+  workflowLabel?: string;
   pipeline: string;
   needsScript: boolean;
   needsShoot: boolean;
@@ -527,7 +529,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                         )}
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="text-[10px] font-mono text-ui-ink bg-white/70 px-1 py-0.2 rounded">
-                            {piece.contentType}
+                            {piece.workflowLabel || piece.contentType}
                           </span>
                           <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-white/80 text-ui-text">
                             <span className={`cal-dot cal-${cal.key}`} />
@@ -1018,7 +1020,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                 </span>
                 <h3 className="text-base font-extrabold text-slate-900">{selectedTimelinePiece.topic}</h3>
                 <p className="text-xs text-ui-muted">
-                  {selectedTimelinePiece.contentType} • Posting Date:{' '}
+                  {selectedTimelinePiece.workflowLabel || selectedTimelinePiece.contentType} • Posting Date:{' '}
                   {new Date(selectedTimelinePiece.postingDate).toLocaleDateString()}
                 </p>
               </div>

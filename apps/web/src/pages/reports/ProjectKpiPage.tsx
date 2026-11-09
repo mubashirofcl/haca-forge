@@ -28,6 +28,7 @@ interface KpiData {
     topic: string;
     calendarName: string;
     contentType: string;
+    workflowLabel?: string;
     publishDate: string | null;
     label: { kind: string; text: string } | null;
     delivered: boolean;
@@ -76,7 +77,7 @@ export const ProjectKpiPage: React.FC = () => {
         <div>
           <h1 className="text-[26px] sm:text-[30px] leading-tight font-extrabold text-ui-ink break-words">{project.topic}</h1>
           <p className="text-sm text-ui-muted mt-1">
-            {project.calendarName} · {project.contentType} · Publish date {fmtDate(project.publishDate) || 'not set'}
+            {project.calendarName} · {project.workflowLabel || project.contentType} · Publish date {fmtDate(project.publishDate) || 'not set'}
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5" data-testid="project-label">
             <span className={`status-chip ${project.label?.kind === 'overdue' ? 'status-blocked' : project.label ? 'status-changes' : project.delivered ? 'status-approved' : 'status-in-progress'} text-[11px] font-semibold`}>

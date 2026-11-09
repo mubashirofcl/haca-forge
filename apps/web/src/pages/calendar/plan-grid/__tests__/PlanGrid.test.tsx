@@ -92,12 +92,14 @@ beforeEach(() => {
 });
 
 describe('1. Default planning view and hidden Progress view', () => {
-  it('shows the planning columns in order, without Content/Design owners or status columns', async () => {
+  it('shows the planning columns in order: Workflow next to Type, one Script / Content group, no status columns', async () => {
     await renderGrid();
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent || '');
-    const expected = ['Posting Date', 'Topic', 'Type', 'Brief', 'Script Owner', 'Script Deadline', 'Shoot Owner', 'Shoot Deadline', 'Edit Owner', 'Edit Deadline', 'Posting Owner', 'Posting Deadline', 'Content Link', 'Remarks'];
+    const expected = ['Posting Date', 'Topic', 'Type', 'Workflow', 'Brief', 'Script / Content Owner', 'Script / Content Deadline', 'Shoot Owner', 'Shoot Deadline', 'Edit Owner', 'Edit Deadline', 'Posting Owner', 'Posting Deadline', 'Content Link', 'Remarks'];
     expect(PLANNING_COLUMNS.map((c) => c.header)).toEqual(expected);
-    const positions = expected.map((h) => headers.indexOf(h));
+    // A header with help reads "Header: help" (the help is screen-reader text).
+    const positions = expected.map((h) => headers.findIndex((x) => x === h || x.startsWith(`${h}:`)));
+    expect(screen.getByRole('columnheader', { name: 'Script / Content' })).toBeInTheDocument();
     expect(positions.every((p) => p >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     for (const gone of ['Publish Time', 'Content Owner', 'Design Owner', 'Script Status', 'Approval Status', 'Turnaround (Days)']) expect(headers).not.toContain(gone);
@@ -119,10 +121,19 @@ describe('1. Default planning view and hidden Progress view', () => {
     expect(screen.getByRole('columnheader', { name: /Turnaround \(Days\).*row approval to publishing/ })).toBeInTheDocument();
   });
 
-  it('marks steps a row does not have as N/A and flags missing step details as Needs attention', async () => {
+  it('Script / Content shows Script for reels and Content for design rows; unused steps read "Not needed"', async () => {
     await renderGrid();
-    // Static post: no Script/Shoot/Edit; its Design owner is missing.
-    expect(screen.getAllByText(/Script Owner does not apply to this row/).length).toBeGreaterThan(0);
+    // Same column group: the reel's Script owner and the static post's Content owner.
+    expect(screen.getByLabelText('Script / Content Owner, row 1, Founder reel')).toHaveValue('p-writer');
+    expect(screen.getByLabelText('Script / Content Owner, row 2, Admissions post')).toHaveValue('p-writer');
+    expect(screen.getByLabelText('Script / Content Deadline, row 2, Admissions post, automatic')).toHaveValue('2031-11-11');
+    // Static post: no Shoot or Edit step, so those cells have no inputs and read "Not needed".
+    expect(screen.queryByLabelText('Shoot Owner, row 2, Admissions post')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Edit Deadline, row 2/)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/workflow has no Shoot step/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Not needed').length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText('N/A')).not.toBeInTheDocument();
+    // Its Design owner is missing.
     expect(screen.getByRole('rowheader', { name: /Row 2: Admissions post.*Needs attention: Design owner/ })).toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: /Row 1: Founder reel.*Needs attention: Shoot owner/ })).toBeInTheDocument();
   });
@@ -148,7 +159,7 @@ describe('2. Deadline calculation and manual override', () => {
     await renderGrid();
     const edit = screen.getByLabelText('Edit Deadline, row 1, Founder reel, set by you');
     expect(edit).toHaveValue('2031-11-10');
-    expect(screen.getByLabelText('Script Deadline, row 1, Founder reel, automatic')).toHaveValue('2031-11-04');
+    expect(screen.getByLabelText('Script / Content Deadline, row 1, Founder reel, automatic')).toHaveValue('2031-11-04');
     expect(screen.getAllByText('Set by you').length).toBeGreaterThan(0);
     fireEvent.change(edit, { target: { value: '2031-11-09' } });
     fireEvent.blur(edit);
@@ -243,7 +254,7 @@ describe('5. Add Row parity', () => {
     fireEvent.change(within(panel).getByLabelText('Type'), { target: { value: 'Reel' } });
     await waitFor(() => expect(calls.some((c) => c.url === '/api/calendar-plans/plan1/rows/autofill')).toBe(true));
     const af = calls.find((c) => c.url === '/api/calendar-plans/plan1/rows/autofill')!.body;
-    expect(af).toEqual({ type: 'Reel', postingDate: '2031-11-20', needsScript: true, needsShoot: true });
+    expect(af).toEqual({ type: 'Reel', postingDate: '2031-11-20', needsScript: true, needsShoot: true, needsContent: true });
     // Steps and automatic deadlines exactly as the Add Row form builds them.
     expect(within(panel).getByLabelText('Shoot deadline')).toHaveValue('2031-11-15');
     expect(within(panel).getByLabelText('Posting deadline')).toHaveValue('2031-11-20');
@@ -271,7 +282,11 @@ describe('5. Add Row parity', () => {
     const { errors } = validateRowSteps({ steps, postingDate: '2031-11-20', type: 'Reel', needsShoot: true, sourceVideoLink: '', members: people });
     expect(errors.Script).toBe('Script must be before Shoot deadline');
     const noShoot = validateRowSteps({ steps: buildDefaultSteps('Reel', false, false, '2031-11-20', people), postingDate: '2031-11-20', type: 'Reel', needsShoot: false, sourceVideoLink: '', members: people });
-    expect(noShoot.errors.sourceVideoLink).toMatch(/Source video link is required/);
+    expect(noShoot.errors.sourceVideoLink).toMatch(/Edit only needs a source video link/);
+    const notDrive = validateRowSteps({ steps: buildDefaultSteps('Reel', false, false, '2031-11-20', people), postingDate: '2031-11-20', type: 'Reel', needsShoot: false, sourceVideoLink: 'https://vimeo.com/1', members: people });
+    expect(notDrive.errors.sourceVideoLink).toMatch(/drive\.google\.com or docs\.google\.com/);
+    const drive = validateRowSteps({ steps: buildDefaultSteps('Reel', false, false, '2031-11-20', people), postingDate: '2031-11-20', type: 'Reel', needsShoot: false, sourceVideoLink: 'https://drive.google.com/file/d/x', members: people });
+    expect(drive.errors.sourceVideoLink).toBeUndefined();
   });
 
   it('a row typed straight into the grid saves once date, topic and type are filled', async () => {
@@ -447,5 +462,107 @@ describe('Delete a row', () => {
   it('read-only viewers see no delete action', async () => {
     await renderGrid({ rows: [reel], permissions: { canEdit: false, canReview: false, readOnly: true } });
     expect(screen.queryByRole('button', { name: /^Delete row/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('Row workflows', () => {
+  const editOnlyReel: GridRow = {
+    ...reel, rowId: 'r5', topic: 'Edit only reel', workflow: 'edit_only', needsScript: false, needsShoot: false, stages: ['Edit', 'Post'],
+    ownerIds: { Edit: 'p-editor', Post: 'p-poster' }, sourceVideoLink: 'https://drive.google.com/file/d/x',
+  };
+  const designOnly: GridRow = {
+    ...staticRow, rowId: 'r6', topic: 'Design only post', workflow: 'design_only', needsContent: false, stages: ['Design', 'Post'],
+    ownerIds: { Design: 'p-designer', Post: 'p-poster' },
+  };
+
+  it('the grid has a Workflow dropdown with the choices for the row type; other types show none', async () => {
+    saveHandler = (body) => okResponse([{ clientKey: body.rows[0].clientKey, rowId: 'r1', status: 'saved', cellErrors: {}, warnings: [], ignoredCells: [], row: editOnlyReel }]);
+    await renderGrid({ rows: [{ ...reel, workflow: 'full' }, { ...staticRow, workflow: 'with_content' }, { ...staticRow, rowId: 'r7', topic: 'A story', type: 'Story', workflow: null }] });
+    const reelCell = screen.getByLabelText('Workflow, row 1, Founder reel');
+    expect(reelCell).toHaveValue('full');
+    expect(within(reelCell).getAllByRole('option').map((o) => o.textContent)).toEqual(['Full', 'Shoot + Edit', 'Edit only']);
+    const staticCell = screen.getByLabelText('Workflow, row 2, Admissions post');
+    expect(within(staticCell).getAllByRole('option').map((o) => o.textContent)).toEqual(['With content', 'Design only']);
+    expect(screen.queryByLabelText('Workflow, row 3, A story')).not.toBeInTheDocument();
+    expect(screen.getByText(/Story has fixed steps/)).toBeInTheDocument();
+    fireEvent.change(reelCell, { target: { value: 'edit_only' } });
+    await waitFor(() => expect(gridCalls()).toHaveLength(1));
+    expect(gridCalls()[0].body.rows[0].cells).toEqual({ workflow: 'edit_only' });
+  });
+
+  it('an Edit only reel shows "Not needed" for Script and Shoot; a Design only row for Script / Content', async () => {
+    await renderGrid({ rows: [editOnlyReel, designOnly] });
+    expect(screen.queryByLabelText('Script / Content Owner, row 1, Edit only reel')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Shoot Owner, row 1, Edit only reel')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Edit Owner, row 1, Edit only reel')).toHaveValue('p-editor');
+    expect(screen.queryByLabelText('Script / Content Owner, row 2, Design only post')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/workflow has no Script step/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/workflow has no Content step/).length).toBeGreaterThan(0);
+  });
+
+  it('a source link error shows on the Workflow cell', async () => {
+    saveHandler = (body) =>
+      okResponse([{ clientKey: body.rows[0].clientKey, rowId: 'r1', status: 'invalid', cellErrors: { sourceVideoLink: ['Edit only needs a source video link: a file uploaded here, or a Google Drive / Docs link.'] }, warnings: [], ignoredCells: [] }]);
+    await renderGrid({ rows: [{ ...reel, workflow: 'full' }] });
+    fireEvent.change(screen.getByLabelText('Workflow, row 1, Founder reel'), { target: { value: 'edit_only' } });
+    const errs = await screen.findAllByText(/Edit only needs a source video link/);
+    expect(errs.some((e) => e.closest('td'))).toBe(true);
+  });
+
+  it('approved rows show the workflow as text, with no dropdown', async () => {
+    await renderGrid({ rows: [{ ...approvedRow, workflow: 'shoot_edit', stages: ['Shoot', 'Edit', 'Post'] }] });
+    expect(screen.queryByLabelText('Workflow, row 1, Approved reel')).not.toBeInTheDocument();
+    expect(screen.getByText('Shoot + Edit')).toBeInTheDocument();
+  });
+
+  it('the row panel: Workflow next to Type replaces the reel checkboxes; Edit only asks for a Drive link; Type resets it', async () => {
+    autofillHandler = (body) => ({ stages: [] , body });
+    await renderGrid();
+    fireEvent.click(screen.getByRole('button', { name: 'Add row' }));
+    const panel = await screen.findByRole('dialog', { name: 'New row' });
+    expect(within(panel).queryByText(/Needs script|Needs shoot/)).not.toBeInTheDocument();
+    fireEvent.change(within(panel).getByLabelText('Posting date'), { target: { value: '2031-11-20' } });
+    fireEvent.change(within(panel).getByLabelText('Topic'), { target: { value: 'Cutdown' } });
+    fireEvent.change(within(panel).getByLabelText('Type'), { target: { value: 'Reel' } });
+    const wf = within(panel).getByLabelText('Workflow');
+    expect(wf).toHaveValue('full');
+    fireEvent.change(wf, { target: { value: 'edit_only' } });
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/autofill') && c.body.needsShoot === false)).toBe(true));
+    const last = [...calls].reverse().find((c) => c.url.endsWith('/autofill'))!.body;
+    expect(last).toMatchObject({ type: 'Reel', needsScript: false, needsShoot: false, needsContent: true });
+    expect(within(panel).queryByLabelText('Script owner')).not.toBeInTheDocument();
+    expect(within(panel).getByLabelText('Edit owner')).toBeInTheDocument();
+    expect(within(panel).getByText('Not needed with this workflow: Script, Shoot.')).toBeInTheDocument();
+    const source = within(panel).getByLabelText('Source video link (Google Drive or Docs)');
+    fireEvent.change(source, { target: { value: 'https://vimeo.com/1' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save row' }));
+    expect(within(panel).getByText(/drive\.google\.com or docs\.google\.com/)).toBeInTheDocument();
+    expect(gridCalls()).toHaveLength(0);
+    fireEvent.change(source, { target: { value: 'https://drive.google.com/file/d/raw' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save row' }));
+    await waitFor(() => expect(gridCalls()).toHaveLength(1));
+    expect(gridCalls()[0].body.rows[0].cells).toMatchObject({ type: 'Reel', workflow: 'edit_only', sourceVideoLink: 'https://drive.google.com/file/d/raw' });
+    expect(gridCalls()[0].body.rows[0].cells.needsScript).toBeUndefined();
+  });
+
+  it('the row panel: changing Type resets Workflow to that type\'s default', async () => {
+    await renderGrid({ rows: [editOnlyReel] });
+    fireEvent.click(screen.getByRole('button', { name: 'Row details: Edit only reel' }));
+    const panel = await screen.findByRole('dialog', { name: /Edit only reel/ });
+    expect(within(panel).getByLabelText('Workflow')).toHaveValue('edit_only');
+    fireEvent.change(within(panel).getByLabelText('Type'), { target: { value: 'Carousel Post' } });
+    expect(within(panel).getByLabelText('Workflow')).toHaveValue('with_content');
+    expect(within(panel).getByLabelText('Content owner')).toBeInTheDocument();
+    fireEvent.change(within(panel).getByLabelText('Workflow'), { target: { value: 'design_only' } });
+    expect(within(panel).queryByLabelText('Content owner')).not.toBeInTheDocument();
+    fireEvent.change(within(panel).getByLabelText('Type'), { target: { value: 'Story' } });
+    expect(within(panel).queryByLabelText('Workflow')).not.toBeInTheDocument();
+  });
+
+  it('the row panel of an approved row shows the workflow read-only', async () => {
+    await renderGrid({ rows: [{ ...approvedRow, workflow: 'full' }] });
+    fireEvent.click(screen.getByRole('button', { name: 'Row details: Approved reel' }));
+    const panel = await screen.findByRole('dialog', { name: /Approved reel/ });
+    expect(within(panel).getByLabelText('Workflow')).toBeDisabled();
   });
 });

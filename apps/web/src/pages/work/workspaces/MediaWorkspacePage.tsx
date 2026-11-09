@@ -13,6 +13,7 @@ import { PostWorkspace } from './PostWorkspace';
 import { EarlierOutputsViewer, StageOutput } from './EarlierOutputsViewer';
 import type { AssetItem } from '../../../components/AssetLinks';
 import { PostCaptionFields } from '../../../components/PostCaptionFields';
+import { FromPlanCard } from '../FromPlanCard';
 
 export const MediaWorkspacePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -518,6 +519,7 @@ export const MediaWorkspacePage: React.FC = () => {
             </div>
           )}
 
+          <FromPlanCard fromPlan={workItem.fromPlan} />
           <EarlierOutputsViewer outputs={earlierOutputs} currentStageKey={workItem.stageKey} />
         </div>
       </div>

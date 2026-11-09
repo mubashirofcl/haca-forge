@@ -1,6 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Trash2, CheckCircle2, MessageSquare, Send, AlertTriangle } from 'lucide-react';
-import { PRIORITIES, formatGridDate, getPipelineForContent, normalizePriority, parseGridDate, type StageKey } from '@mmp/shared';
+import {
+  PRIORITIES,
+  ROW_WORKFLOW_LABELS,
+  defaultWorkflowFor,
+  formatGridDate,
+  getPipelineForContent,
+  normalizePriority,
+  parseGridDate,
+  workflowFlags,
+  workflowFromFlags,
+  workflowOptionsFor,
+  type RowWorkflow,
+  type StageKey,
+} from '@mmp/shared';
 import { apiFetch } from '../../../lib/api';
 import { useDialogFocus } from '../../../lib/useDialogFocus';
 import {
@@ -52,10 +65,22 @@ const isoOf = (value: unknown, month: string) => {
   return r.ok ? r.value : '';
 };
 
+/** Step flags for a type and workflow ('' = the type has fixed steps). */
+function flagsOf(workflow: RowWorkflow | ''): { needsScript: boolean; needsShoot: boolean; needsContent: boolean } {
+  if (workflow) return workflowFlags(workflow);
+  return { needsScript: false, needsShoot: false, needsContent: true };
+}
+
+/** Every step the type can have (its fullest workflow), to list the ones this workflow does not need. */
+function allStepsOf(type: string): StageKey[] {
+  if (!type) return [];
+  return getPipelineForContent({ contentType: type, needsScript: true, needsShoot: true, needsContent: true }).stages as StageKey[];
+}
+
 /** Steps of a saved row as the Add Row form holds them. */
 function stepsFromRow(line: GridLine, people: GridPerson[]): StepLineState[] {
   const row = line.saved!;
-  const defs = getExpectedStepDefs(row.type, row.needsScript, row.needsShoot);
+  const defs = getExpectedStepDefs(row.type, row.needsScript, row.needsShoot, row.needsContent !== false);
   return row.stages.map((s) => {
     const id = row.ownerIds[s] || null;
     return {
@@ -110,31 +135,37 @@ export const PlanGridRowPanel: React.FC<Props> = ({
       // An older stored value (Low, Medium, High) shows as Normal and is only sent if changed.
       priority: normalizePriority(row?.priority),
       sourceVideoLink: row?.sourceVideoLink ?? '',
-      needsScript: row ? row.needsScript : true,
-      needsShoot: row ? row.needsShoot : true,
+      // Workflow: the saved row's (from its stored flags), else the type's default (Full / With content).
+      workflow: (row && d.type === undefined
+        ? row.workflow ?? workflowFromFlags(row.type, row) ?? ''
+        : defaultWorkflowFor(d.type !== undefined ? String(d.type) : row?.type) ?? '') as RowWorkflow | '',
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [row, d]
   );
   const initialSteps = useMemo(() => (row ? stepsFromRow(line, people) : []), [row, line, people]);
   const [form, setForm] = useState(initial);
-  const [steps, setSteps] = useState<StepLineState[]>(() =>
-    row ? initialSteps : initial.type && initial.postingDate ? buildDefaultSteps(initial.type, initial.needsScript, initial.needsShoot, initial.postingDate, people) : []
-  );
+  const [steps, setSteps] = useState<StepLineState[]>(() => {
+    if (row) return initialSteps;
+    if (!initial.type || !initial.postingDate) return [];
+    const f = flagsOf(initial.workflow);
+    return buildDefaultSteps(initial.type, f.needsScript, f.needsShoot, initial.postingDate, people, f.needsContent);
+  });
   const [showErrors, setShowErrors] = useState(false);
   const [changesComment, setChangesComment] = useState('');
   const [changesError, setChangesError] = useState<string | null>(null);
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
-  const isReel = form.type === 'Reel';
+  const flags = flagsOf(form.workflow);
+  const workflowChoices = workflowOptionsFor(form.type);
 
-  // Owner suggestions from the same endpoint the Add Row form uses (POST .../autofill).
-  const suggest = async (type: string, postingDate: string, needsScript: boolean, needsShoot: boolean) => {
+  // Owner suggestions from the same endpoint the Add Row form uses (POST .../autofill); unused steps are skipped.
+  const suggest = async (type: string, postingDate: string, workflow: RowWorkflow | '') => {
     if (!type || !postingDate || !editable) return;
     try {
       const url = planId ? `/api/calendar-plans/${planId}/rows/autofill` : '/api/calendar-plans/autofill';
       const res = await apiFetch<{ data: { stages: AutofillStage[] } }>(url, {
         method: 'POST',
-        body: JSON.stringify({ type, postingDate, needsScript, needsShoot }),
+        body: JSON.stringify({ type, postingDate, ...flagsOf(workflow) }),
       });
       if (res?.data?.stages) setSteps((prev) => applyAutofill(prev, res.data.stages));
     } catch {
@@ -142,21 +173,25 @@ export const PlanGridRowPanel: React.FC<Props> = ({
     }
   };
   useEffect(() => {
-    if (!row && initial.type && initial.postingDate) suggest(initial.type, initial.postingDate, initial.needsScript, initial.needsShoot);
+    if (!row && initial.type && initial.postingDate) suggest(initial.type, initial.postingDate, initial.workflow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const changePostingDate = (value: string) => {
     set('postingDate', value);
     if (!value) return;
-    setSteps((prev) => (prev.length ? applyPostingDateChange(prev, value) : form.type ? buildDefaultSteps(form.type, form.needsScript, form.needsShoot, value, people) : prev));
-    if (!row && form.type && !steps.length) suggest(form.type, value, form.needsScript, form.needsShoot);
+    setSteps((prev) =>
+      prev.length ? applyPostingDateChange(prev, value) : form.type ? buildDefaultSteps(form.type, flags.needsScript, flags.needsShoot, value, people, flags.needsContent) : prev
+    );
+    if (!row && form.type && !steps.length) suggest(form.type, value, form.workflow);
   };
-  const changeTypeOrSteps = (type: string, needsScript: boolean, needsShoot: boolean) => {
-    setForm((f) => ({ ...f, type, needsScript, needsShoot }));
+  /** Type or workflow changed. A new type starts at its default workflow. */
+  const changeTypeOrWorkflow = (type: string, workflow: RowWorkflow | '') => {
+    setForm((f) => ({ ...f, type, workflow }));
     if (!type) return;
-    setSteps((prev) => applyTypeChange(prev, type, needsScript, needsShoot, form.postingDate, people));
-    suggest(type, form.postingDate, needsScript, needsShoot);
+    const f = flagsOf(workflow);
+    setSteps((prev) => applyTypeChange(prev, type, f.needsScript, f.needsShoot, form.postingDate, people, f.needsContent));
+    suggest(type, form.postingDate, workflow);
   };
   const changeOwner = (stageKey: StageKey, ownerId: string) =>
     setSteps((prev) =>
@@ -176,8 +211,8 @@ export const PlanGridRowPanel: React.FC<Props> = ({
     );
 
   const validation = useMemo(
-    () => validateRowSteps({ steps, postingDate: form.postingDate, type: form.type, needsShoot: form.needsShoot, sourceVideoLink: form.sourceVideoLink, members: people }),
-    [steps, form.postingDate, form.type, form.needsShoot, form.sourceVideoLink, people]
+    () => validateRowSteps({ steps, postingDate: form.postingDate, type: form.type, needsShoot: flags.needsShoot, sourceVideoLink: form.sourceVideoLink, members: people }),
+    [steps, form.postingDate, form.type, flags.needsShoot, form.sourceVideoLink, people]
   );
   const fieldErrors: Record<string, string> = {};
   if (!form.postingDate) fieldErrors.postingDate = 'Posting date is required.';
@@ -200,10 +235,7 @@ export const PlanGridRowPanel: React.FC<Props> = ({
     (['brief', 'contentLink', 'remarks', 'programOrEvent', 'referenceLink', 'priority', 'sourceVideoLink'] as const).forEach((k) => {
       if (form[k] !== initial[k]) cells[k] = form[k];
     });
-    if (isReel) {
-      if (form.needsScript !== initial.needsScript || !row) cells.needsScript = form.needsScript ? 'Yes' : 'No';
-      if (form.needsShoot !== initial.needsShoot || !row) cells.needsShoot = form.needsShoot ? 'Yes' : 'No';
-    }
+    if (workflowChoices.length && (form.workflow !== initial.workflow || form.type !== initial.type || !row)) cells.workflow = form.workflow;
     // Steps: send what the user set; suggested owners and automatic deadlines are recalculated by the same rules on save.
     const deadlines: Partial<Record<StageKey, string>> = {};
     for (const s of steps) {
@@ -230,9 +262,8 @@ export const PlanGridRowPanel: React.FC<Props> = ({
   const status = row ? ROW_STATUS[row.rowStatus] : null;
   const reviewable = canReview && row?.rowStatus === 'submitted';
   const title = row?.topic || form.topic || 'New row';
-  const stagesNow: StageKey[] = form.type
-    ? (getPipelineForContent({ contentType: form.type, needsScript: form.needsScript, needsShoot: form.needsShoot }).stages as StageKey[])
-    : [];
+  const stagesNow: StageKey[] = form.type ? (getPipelineForContent({ contentType: form.type, ...flags }).stages as StageKey[]) : [];
+  const notNeeded = allStepsOf(form.type).filter((st) => !stagesNow.includes(st));
   const missing = steps.filter((s) => !s.ownerId || !s.dueDate).map((s) => `${STAGE_LABEL[s.stageKey]} ${!s.ownerId ? 'owner' : 'deadline'}`);
   const canSubmitRow = Boolean(onSubmitRow && editable && row && (row.rowStatus === 'draft' || row.rowStatus === 'changes_requested'));
 
@@ -315,33 +346,22 @@ export const PlanGridRowPanel: React.FC<Props> = ({
               <input id="row-topic" className="ui-input h-11 w-full" value={form.topic} readOnly={!editable} onChange={(e) => set('topic', e.target.value)} {...described('row-topic', err('topic'))} />
             ), err('topic'))}
             {field('row-type', 'Type', (
-              <select id="row-type" className="ui-select h-11 w-full" value={form.type} disabled={!editable} onChange={(e) => changeTypeOrSteps(e.target.value, form.needsScript, form.needsShoot)} {...described('row-type', err('type'))}>
+              <select id="row-type" className="ui-select h-11 w-full" value={form.type} disabled={!editable} onChange={(e) => changeTypeOrWorkflow(e.target.value, defaultWorkflowFor(e.target.value) ?? '')} {...described('row-type', err('type'))}>
                 <option value="">Choose type</option>
                 {form.type && !types.includes(form.type) && <option value={form.type}>{form.type}</option>}
                 {types.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             ), err('type'))}
-            {isReel && (
-              <fieldset className="space-y-1">
-                <legend className="text-xs font-semibold text-ui-text">Reel steps</legend>
-                {(['needsScript', 'needsShoot'] as const).map((k) => (
-                  <label key={k} className="flex items-center gap-3 min-h-[44px] text-sm text-ui-text">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 accent-ui-ink"
-                      checked={form[k]}
-                      disabled={!editable}
-                      onChange={(e) => changeTypeOrSteps(form.type, k === 'needsScript' ? e.target.checked : form.needsScript, k === 'needsShoot' ? e.target.checked : form.needsShoot)}
-                    />
-                    {k === 'needsScript' ? 'Needs script' : 'Needs shoot'}
-                  </label>
-                ))}
-                {!form.needsShoot &&
-                  field('row-source', 'Source video link (needed when there is no shoot)', (
-                    <input id="row-source" type="url" className="ui-input h-11 w-full" value={form.sourceVideoLink} readOnly={!editable} onChange={(e) => set('sourceVideoLink', e.target.value)} {...described('row-source', err('sourceVideoLink'))} />
-                  ), err('sourceVideoLink'))}
-              </fieldset>
-            )}
+            {workflowChoices.length > 0 &&
+              field('row-workflow', 'Workflow', (
+                <select id="row-workflow" className="ui-select h-11 w-full" value={form.workflow} disabled={!editable} onChange={(e) => changeTypeOrWorkflow(form.type, e.target.value as RowWorkflow)} {...described('row-workflow', err('workflow'))}>
+                  {workflowChoices.map((w) => <option key={w} value={w}>{ROW_WORKFLOW_LABELS[w]}</option>)}
+                </select>
+              ), err('workflow'))}
+            {form.workflow === 'edit_only' &&
+              field('row-source', 'Source video link (Google Drive or Docs)', (
+                <input id="row-source" type="url" className="ui-input h-11 w-full" value={form.sourceVideoLink} readOnly={!editable} placeholder="https://drive.google.com/..." onChange={(e) => set('sourceVideoLink', e.target.value)} {...described('row-source', err('sourceVideoLink'))} />
+              ), err('sourceVideoLink'))}
             {field('row-brief', 'Brief', (
               <textarea id="row-brief" className="ui-input ui-textarea w-full min-h-[88px]" value={form.brief} readOnly={!editable} onChange={(e) => set('brief', e.target.value)} {...described('row-brief', err('brief'))} />
             ), err('brief'))}
@@ -360,6 +380,9 @@ export const PlanGridRowPanel: React.FC<Props> = ({
               </p>
             )}
             {!stagesNow.length && <p className="text-sm text-ui-muted">Choose a type and posting date to see the steps.</p>}
+            {notNeeded.length > 0 && (
+              <p className="text-xs text-ui-muted">Not needed with this workflow: {notNeeded.map((st) => STAGE_LABEL[st]).join(', ')}.</p>
+            )}
             {steps.map((s) => {
               const ownerId = `row-owner-${s.stageKey}`;
               const dueId = `row-deadline-${s.stageKey}`;
