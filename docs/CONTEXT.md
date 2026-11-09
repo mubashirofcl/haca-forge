@@ -1,11 +1,11 @@
 # HACA Marketing OS — Master Project Context
 
-**Current as of:** 9 November 2026 (after Phase 9)  
+**Current as of:** 9 November 2026 (after Phase 10)  
 **Repository:** HACA Marketing OS (`haca-forge`)  
 **Technology Stack:** Node 22 LTS, Express 5 (ESM), React 18, Vite 6, TypeScript, Tailwind CSS, MongoDB (Mongoose), Socket.io, BullMQ (Redis).  
-**Test Suite Status:** **1702 tests passing across 111 test files (0 failures)**  
-- `@mmp/api`: 1393 tests passed across 67 test files  
-- `@mmp/web`: 309 tests passed across 44 test files  
+**Test Suite Status:** **1747 tests passing across 115 test files (0 failures)**  
+- `@mmp/api`: 1424 tests passed across 70 test files  
+- `@mmp/web`: 323 tests passed across 45 test files  
 - The API tests set their own test-only JWT secrets (`apps/api/vitest.config.js`), so a fresh checkout passes with no `.env`.  
 
 ---
@@ -66,6 +66,7 @@
 | `team_member` | Team Member / Worker | Works assigned steps via specialized workspaces. Sees own work (`/my-work`), own calendar items, own profile, and read-only pipeline of projects they belong to. Cannot view unauthorized projects (`HTTP 404`). |
 
 ### 4.2 Five Creative Calendars
+Display names (Phase 10): SM Calendar, Sales Calendar, Ads Calendar, Academics & Management Calendar, Other. Keys unchanged.
 1. `sm` — Social Media
 2. `sales` — Sales Team
 3. `ads` — Ads Team
@@ -73,6 +74,7 @@
 5. `other` — Other
 
 ### 4.3 Deliverables, Pipelines & Review
+- **Row workflows (Phase 10):** chosen per row until approval, stored as flags (`needsScript`, `needsShoot`, `needsContent`). Reel: Full (Script → Shoot → Edit → Post, default), Shoot + Edit (Shoot → Edit → Post) or Edit only (Edit → Post; needs a source video that is an app upload or a Google Drive / Docs link). Static Post and Carousel Post: With content (Content → Design → Post, default) or Design only (Design → Post). Other types keep fixed steps. Approval creates only the workflow's steps; deadlines use the existing offsets back from the posting date. A step with no earlier step gets "From the plan" (the row's brief; plus the source video for Edit only), worked out on read. Labels like "Reel · Edit only" show on Work Detail, Tracker and the Project KPI page.
 - **15 Supported Deliverable Types:** Reel + 14 Design Types (Static Post, Carousel Post, Story, Cover Image, Thumbnail, Meta Ads Creative, Class Announcement, Orientation Creative, Graduation Creative, Brochure, Certificate, Offer Creative, Placement Poster, Custom Request).
 - **Types that Go Live (Include Post Step):** Reel, Static Post, Carousel Post, Story.
 - **Deadlines Relative to Publish Date ($F$):**

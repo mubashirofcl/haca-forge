@@ -1,6 +1,23 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after Phase 9):** 1702 passing, 0 failing: API 1393 (67 files), web 309 (44 files). Typecheck 0 errors; web build clean.
+**Current test count (after Phase 10):** 1747 passing, 0 failing: API 1424 (70 files), web 323 (45 files). Typecheck 0 errors; web build clean.
+
+## Phase 10: Plan fixes, row delete, calendar names and row workflows (Status: COMPLETE; committed locally, not pushed)
+
+Each commit gated in the working tree (typecheck, web build, all tests).
+
+- `f4d720b` Excel upload: a file ExcelJS cannot read (broken zip, or comment links written as absolute paths by openpyxl) returns 400 `UNREADABLE_FILE` "This file couldn't be read. Download a fresh template and copy your rows into it." instead of 500; the original error is logged. Also fixes the older preview endpoint.
+- `d2999d8`, `9ab848f` Publish time removed from the plan grid row panel and the Individual Work row form (nothing read it). New rows keep the 18:00 default; edits keep the stored time. No data change.
+- `cba1979` Delete a plan row (SM Manager and Admin; others 403): unapproved rows, and approved rows while none of their steps has started (piece and unstarted steps removed, same rule as plan delete). Started work: 409 "This post has started work and can't be deleted.". Owners of removed steps notified once each; activity logged. Delete action on each deletable grid row, phone card and side panel; the confirm names the date and title.
+- `b9c444a` Calendar display names: SM Calendar, Sales Calendar, Ads Calendar, Academics & Management Calendar, Other (keys unchanged; stored plan titles unchanged).
+- `5161b7b`, `d5b2672` Row workflows:
+  - Reel: Full, Shoot + Edit, Edit only. Static Post / Carousel Post: With content, Design only. Other types unchanged. Stored as flags; new `needsContent` has no default, so existing rows are not rewritten (missing = With content). Existing rows keep their flags and show the matching workflow.
+  - Grid: Workflow dropdown next to Type; one "Script / Content" group (Script for reels, Content for design rows, also in the progress view); unused steps read "Not needed" with no inputs. Row panel: Workflow replaces the Needs script / Needs shoot checkboxes; changing Type resets it to the default. Read-only after approval.
+  - Approval creates only the workflow's steps; deadlines counted back with the existing offsets. Autofill and the save suggestion skip unused steps.
+  - Edit only needs a source video link (app upload or https drive.google.com / docs.google.com), checked on save, upload and submission.
+  - Excel: optional Workflow (dropdown: Full, Shoot + Edit, Edit only, With content, Design only; blank = default) and Source Video Link columns; invalid pairs are row errors; "Script Owner" on a design row sets the Content owner (old Content Owner column still read); How to fill updated; older templates still upload.
+  - "From the plan" on a step with no earlier step: the row's brief, plus the source video for Edit only (worked out on read). Workflow labels on Work Detail, Tracker and the Project KPI page.
+- Browser check (disposable `marketing_portal_uicheck`, test-only users and throwaway passwords; repo API on :8093 with process env overrides, web on :5301): 20/20 — all five workflows in the grid, Script / Content and "Not needed", Add row workflow choices and reset, phone width with no page scroll, renamed calendars, approval, Work Detail label and "From the plan" with the Drive link, Tracker and Project KPI labels, read-only after approval, no page errors or 5xx. Disposable DB dropped afterwards; real DB counts and latest update times unchanged.
 
 ## Phase 9: Reset the local database and seed test users (Status: COMPLETE; committed locally, not pushed)
 
