@@ -74,6 +74,11 @@ const contentPieceSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Static Post / Carousel Post: false = Design only. No default, so existing rows are not
+    // rewritten; a missing value means With content.
+    needsContent: {
+      type: Boolean,
+    },
     contentLink: {
       type: String,
       trim: true,

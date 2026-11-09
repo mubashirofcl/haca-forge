@@ -1,4 +1,4 @@
-import { isAppUploadPath, isDriveLink, isPostableWorkType } from '@mmp/shared';
+import { isAppUploadPath, isDriveLink, isPostableWorkType, workflowFromFlags, workflowLabel } from '@mmp/shared';
 import { MediaItem } from '../media/model.js';
 import { approvedOutputOf, isFinished } from './access.js';
 
@@ -107,6 +107,29 @@ export async function buildHandoff(current, siblingStages) {
   const entries = [];
   for (const step of earlier) entries.push(await entryFor(step));
   return entries;
+}
+
+/**
+ * What the plan row gives a step: the row's workflow label for every step and, for a step with
+ * no earlier step, "From the plan": the row's brief, plus the source video for Edit only reels.
+ * Worked out on each read from the stored row; nothing is saved.
+ */
+export async function buildFromPlan(contentPieceId, { isFirstStep }) {
+  const { ContentPiece } = await import('../calendar/contentPiece.model.js');
+  const piece = await ContentPiece.findById(contentPieceId)
+    .select('brief contentType needsScript needsShoot needsContent sourceVideoLink')
+    .lean();
+  if (!piece) return { workflowLabel: null, fromPlan: null };
+  const workflow = workflowFromFlags(piece.contentType, piece);
+  const label = workflowLabel(piece.contentType, piece);
+  if (!isFirstStep) return { workflowLabel: label, fromPlan: null };
+  const items = [];
+  const source = typeof piece.sourceVideoLink === 'string' ? piece.sourceVideoLink.trim() : '';
+  if (workflow === 'edit_only' && SAFE_URL.test(source)) items.push({ url: source, name: 'Source video', kind: linkKind(source) });
+  return {
+    workflowLabel: label,
+    fromPlan: { brief: (piece.brief || '').trim(), workflow, workflowLabel: label, items },
+  };
 }
 
 /** A non-postable Design step that has been approved is the end of its pipeline: hand it over. */

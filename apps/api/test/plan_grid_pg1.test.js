@@ -228,7 +228,7 @@ describe('PG-1 plan grid', () => {
       expect(d.planCreated).toBe(true);
       expect(d.plan.periodStart.slice(0, 10)).toBe('2031-11-01');
       expect(d.plan.periodEnd.slice(0, 10)).toBe('2031-11-30');
-      expect(d.counts).toMatchObject({ total: 9, saved: 4, invalid: 5 });
+      expect(d.counts).toMatchObject({ total: 9, saved: 5, invalid: 4 });
 
       const by = Object.fromEntries(d.results.map((r) => [r.clientKey, r]));
       // Workflow cells are never written; they are reported as ignored.
@@ -243,7 +243,9 @@ describe('PG-1 plan grid', () => {
       expect(by['paste-5'].cellErrors.editOwner[0]).toMatch(/No active person is named exactly "Nobody Here"/);
       expect(by['paste-6'].cellErrors.type[0]).toMatch(/Unknown type "Reelz"/);
       expect(by['paste-7'].cellErrors.editOwner[0]).toMatch(/More than one active person/);
-      expect(by['paste-8'].cellErrors.scriptOwner[0]).toMatch(/Static Post has no Script step/);
+      // Script Owner is the Script / Content column: on a design row it sets the Content owner.
+      expect(by['paste-8'].cellErrors).toEqual({});
+      expect(by['paste-8'].row).toMatchObject({ type: 'Static Post', contentOwner: 'PG1 Writer', scriptStatus: 'N/A' });
 
       // Second paste into the same month reuses the plan; a duplicate is flagged on the new row only.
       const again = await post('sm', {

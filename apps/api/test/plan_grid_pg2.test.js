@@ -94,14 +94,14 @@ describe('PG-2 plan grid', () => {
   });
 
   describe('columns', () => {
-    it('keeps the 18 Excel columns and adds Content Owner and Design Owner as optional columns', () => {
+    it('keeps the 18 Excel columns and adds Content Owner, Design Owner, Workflow and Source Video Link as optional columns', () => {
       expect(PLAN_GRID_COLUMNS).toHaveLength(18);
       expect(PLAN_GRID_DISPLAY_COLUMNS.map((c) => c.key)).toEqual([
-        'postingDate', 'topic', 'type',
+        'postingDate', 'topic', 'type', 'workflow',
         'scriptStatus', 'scriptDoneDate', 'scriptOwner', 'contentOwner',
         'shootStatus', 'shootDoneDate', 'shootOwner',
         'editStatus', 'editDoneDate', 'editOwner', 'designOwner',
-        'approvalStatus', 'approvalDate', 'publishedDate', 'postingOwner', 'turnaroundDays', 'remarks',
+        'approvalStatus', 'approvalDate', 'publishedDate', 'postingOwner', 'turnaroundDays', 'remarks', 'sourceVideoLink',
       ]);
       expect(PLAN_GRID_DISPLAY_COLUMNS.find((c) => c.key === 'turnaroundDays').help).toMatch(/row approval to publishing/);
     });
@@ -118,7 +118,7 @@ describe('PG-2 plan grid', () => {
       });
       const by = Object.fromEntries(res.body.data.results.map((r) => [r.clientKey, r]));
       expect(by.static.status).toBe('valid');
-      expect(by.reel.cellErrors.contentOwner[0]).toMatch(/A reel has no Content step/);
+      expect(by.reel.cellErrors.contentOwner[0]).toMatch(/Reel · Full has no Content step/);
     });
   });
 
@@ -136,8 +136,8 @@ describe('PG-2 plan grid', () => {
       });
       const by = Object.fromEntries(res.body.data.results.map((r) => [r.clientKey, r]));
       expect(by.default.status).toBe('valid');
-      expect(by.noscript.cellErrors.scriptOwner[0]).toMatch(/This reel has no Script step/);
-      expect(by.noshoot.cellErrors.shootOwner[0]).toMatch(/This reel has no Shoot step/);
+      expect(by.noscript.cellErrors.scriptOwner[0]).toMatch(/Reel · Shoot \+ Edit has no Script step/);
+      expect(by.noshoot.cellErrors.shootOwner[0]).toMatch(/Reel · Edit only has no Shoot step/);
     });
   });
 
@@ -165,10 +165,10 @@ describe('PG-2 plan grid', () => {
       return out;
     };
 
-    it('template has the 18 Excel columns plus Content Owner and Design Owner; the older one is still available', async () => {
+    it('template has the 18 Excel columns plus Content Owner, Design Owner, Workflow and Source Video Link; the older one is still available', async () => {
       const headers = await headersOf((await download()).body);
       expect(headers).toEqual(PLAN_TEMPLATE_HEADERS);
-      expect(headers).toHaveLength(20);
+      expect(headers).toHaveLength(22);
       expect(isNewPlanLayout(headers)).toBe(true);
       const legacy = await headersOf((await download('?layout=legacy')).body);
       expect(legacy).toHaveLength(23);

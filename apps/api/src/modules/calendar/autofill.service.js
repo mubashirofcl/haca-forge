@@ -82,6 +82,7 @@ export async function autofillRowPlan({
   postingDate,
   needsScript = false,
   needsShoot = false,
+  needsContent = true,
   currentPlanRows = [],
   context = null,
 }) {
@@ -93,6 +94,7 @@ export async function autofillRowPlan({
     contentType: normType,
     needsScript: Boolean(needsScript),
     needsShoot: Boolean(needsShoot),
+    needsContent: needsContent !== false,
   });
 
   // Calculate draft hours per person from other rows in current plan (in row order)

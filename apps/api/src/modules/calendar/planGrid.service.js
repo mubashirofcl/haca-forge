@@ -29,6 +29,12 @@ import {
   parseGridType,
   matchGridOwner,
   parsePriorityInput,
+  parseWorkflow,
+  workflowFlags,
+  workflowFromFlags,
+  workflowOptionsFor,
+  defaultWorkflowFor,
+  ROW_WORKFLOW_LABELS,
 } from '@mmp/shared';
 import { CalendarPlan } from './plan.model.js';
 import { ContentPiece } from './contentPiece.model.js';
@@ -143,6 +149,7 @@ export function toGridRow(piece, workItems = []) {
     contentType: piece.contentType,
     needsScript: piece.needsScript,
     needsShoot: piece.needsShoot,
+    needsContent: piece.needsContent,
   });
   const stages = pipelineInfo.stages;
   const wiByStage = new Map(workItems.map((w) => [w.stageKey, w]));
@@ -213,9 +220,13 @@ export function toGridRow(piece, workItems = []) {
     contentOwner: stages.includes('Content') ? ownerName('Content') : '',
     designOwner: stages.includes('Design') ? ownerName('Design') : '',
     contentStatus: stepStatus('Content', stages, piece, wiByStage.get('Content')),
+    contentDoneDate: doneDate(wiByStage.get('Content')),
     designStatus: stepStatus('Design', stages, piece, wiByStage.get('Design')),
     needsScript: Boolean(piece.needsScript),
     needsShoot: Boolean(piece.needsShoot),
+    needsContent: piece.needsContent !== false,
+    // Workflow read from the stored flags (null for types with a fixed step list).
+    workflow: workflowFromFlags(piece.contentType, piece),
     programOrEvent: piece.programOrEvent || '',
     referenceLink: piece.referenceLink || '',
     priority: piece.priority || 'Normal',
@@ -357,32 +368,57 @@ export function parseGridRowInput(cells, existing, people, { month } = {}) {
     }
   }
 
-  // Reel steps: new reels default to Script + Shoot (existing behaviour); flags are app fields.
+  // Workflow (which steps the row has), stored as flags. New rows and blank cells get the type's
+  // default (Full / With content); a changed Type resets to its default unless a workflow is given.
+  // Existing rows keep their flags. Older files may still send Needs Script / Needs Shoot.
   const isReel = type === 'Reel';
-  let needsScript = existing ? Boolean(existing.needsScript) : isReel;
-  let needsShoot = existing ? Boolean(existing.needsShoot) : isReel;
-  for (const [k, setter] of [
-    ['needsScript', (v) => (needsScript = v)],
-    ['needsShoot', (v) => (needsShoot = v)],
-  ]) {
-    if (has(cells, k)) {
-      const b = parseBool(cells[k]);
-      if (b === null) addError(k, 'Use Yes or No.');
-      else setter(b);
+  const typeChanged = Boolean(existing) && has(cells, 'type') && type !== existing.contentType;
+  const defaultFlags = workflowFlags(defaultWorkflowFor(type) || 'with_content');
+  let needsScript = existing && !typeChanged ? Boolean(existing.needsScript) : defaultFlags.needsScript;
+  let needsShoot = existing && !typeChanged ? Boolean(existing.needsShoot) : defaultFlags.needsShoot;
+  let needsContent = existing && !typeChanged ? existing.needsContent !== false : true;
+  if (has(cells, 'workflow')) {
+    const r = parseWorkflow(type, cells.workflow);
+    if (!r.ok) addError('workflow', r.error);
+    else if (type) {
+      const f = workflowFlags(r.value || defaultWorkflowFor(type) || 'with_content');
+      needsScript = f.needsScript;
+      needsShoot = f.needsShoot;
+      needsContent = f.needsContent;
+    }
+  } else {
+    for (const [k, setter] of [
+      ['needsScript', (v) => (needsScript = v)],
+      ['needsShoot', (v) => (needsShoot = v)],
+    ]) {
+      if (has(cells, k)) {
+        const b = parseBool(cells[k]);
+        if (b === null) addError(k, 'Use Yes or No.');
+        else setter(b);
+      }
     }
   }
   if (!isReel) {
     needsScript = false;
     needsShoot = false;
   }
-  const pipelineInfo = type ? getPipelineForContent({ contentType: type, needsScript, needsShoot }) : null;
+  if (!workflowOptionsFor(type).includes('design_only')) needsContent = true;
+  const pipelineInfo = type ? getPipelineForContent({ contentType: type, needsScript, needsShoot, needsContent }) : null;
   const stages = pipelineInfo?.stages || [];
+  const workflowLabelText = ROW_WORKFLOW_LABELS[workflowFromFlags(type, { needsScript, needsShoot, needsContent })] || '';
 
   // Owners (exact name). Blank = autofill later. A name on a step this row does not have is an error, not dropped.
   const owners = {};
-  for (const [field, stageKey] of Object.entries(STAGE_BY_OWNER_FIELD)) {
+  for (const [field, ownStage] of Object.entries(STAGE_BY_OWNER_FIELD)) {
     const idKey = `${field}Id`;
     if (!has(cells, field) && !has(cells, idKey)) continue;
+    // Script Owner is the "Script / Content" column: on a design row it sets the Content owner,
+    // unless the older Content Owner column is also given (that one wins).
+    let stageKey = ownStage;
+    if (field === 'scriptOwner' && pipelineInfo && !stages.includes('Script') && stages.includes('Content')) {
+      if (has(cells, 'contentOwner') || has(cells, 'contentOwnerId')) continue;
+      stageKey = 'Content';
+    }
     let r;
     if (has(cells, idKey) && str(cells[idKey]) !== '') {
       // Picked from the owner list (also how two people with the same name are told apart).
@@ -402,9 +438,9 @@ export function parseGridRowInput(cells, existing, people, { month } = {}) {
     if (pipelineInfo && !stages.includes(stageKey)) {
       addError(
         field,
-        isReel && (stageKey === 'Script' || stageKey === 'Shoot')
-          ? `This reel has no ${stageKey} step. Turn on Needs ${stageKey} in the row panel, or clear the name.`
-          : `${isReel ? 'A reel' : type} has no ${stageKey} step.`
+        workflowLabelText
+          ? `${type} · ${workflowLabelText} has no ${stageKey} step. Change Workflow, or clear the name.`
+          : `${type} has no ${stageKey} step.`
       );
       continue;
     }
@@ -448,6 +484,7 @@ export function parseGridRowInput(cells, existing, people, { month } = {}) {
       type,
       needsScript,
       needsShoot,
+      needsContent,
       pipelineInfo,
       owners,
       deadlines,
@@ -594,6 +631,7 @@ export async function saveGridRows(body = {}, user) {
           postingDate: new Date(`${draft.postingDate}T00:00:00.000Z`),
           needsScript: draft.needsScript,
           needsShoot: draft.needsShoot,
+          needsContent: draft.needsContent,
           currentPlanRows: [...existingRows, ...built.map((b) => b.doc)],
           context: autofillContext,
         })
@@ -622,6 +660,7 @@ export async function saveGridRows(body = {}, user) {
         postingOwnerId,
         needsScript: draft.needsScript,
         needsShoot: draft.needsShoot,
+        needsContent: draft.needsContent,
         sourceVideoLink: draft.sourceVideoLink,
         contentLink: draft.contentLink,
         remarks: draft.remarks,

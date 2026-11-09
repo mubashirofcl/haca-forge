@@ -242,7 +242,7 @@ export async function commitImport(req, res, next) {
 
 export async function autofillRow(req, res, next) {
   try {
-    const { type, postingDate, needsScript, needsShoot, currentPlanRows } = req.body;
+    const { type, postingDate, needsScript, needsShoot, needsContent, currentPlanRows } = req.body;
     const planId = req.params.id;
     let existingRows = currentPlanRows || [];
     if (planId && (!existingRows || existingRows.length === 0)) {
@@ -253,6 +253,7 @@ export async function autofillRow(req, res, next) {
       postingDate,
       needsScript,
       needsShoot,
+      needsContent: needsContent !== false,
       currentPlanRows: existingRows,
     });
     res.json({ data: autofillData });

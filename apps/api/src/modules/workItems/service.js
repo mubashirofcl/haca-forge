@@ -252,6 +252,9 @@ export async function getWorkItemById(id, user) {
     result.pieceStages = await withRecordedStepTimes(siblingStages);
     // The latest approved outputs of the finished steps before this one (Phase 5).
     result.handoff = await buildHandoff(result, siblingStages);
+    // The row's workflow label, and "From the plan" (brief, source video) for a step with no earlier step.
+    const isFirstStep = !siblingStages.some((s) => (s.stageOrder || 0) < (result.stageOrder || 0));
+    Object.assign(result, await buildFromPlan(result.contentPieceId, { isFirstStep }));
     // Whether this viewer may reopen this step now (Phase 6).
     result.canReopen = canReopen(user, result, siblingStages);
 
@@ -719,7 +722,7 @@ import { ContentPiece } from '../calendar/contentPiece.model.js';
 import { CalendarPlan } from '../calendar/plan.model.js';
 import { isPostableWorkType } from '@mmp/shared';
 import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
-import { buildHandoff, buildHandover, outputItems } from './handoff.js';
+import { buildFromPlan, buildHandoff, buildHandover, outputItems } from './handoff.js';
 import { canReopen } from './reopen.js';
 import { approvedOutputOf } from './access.js';
 import { attachTimeLabels } from './timeLabels.js';

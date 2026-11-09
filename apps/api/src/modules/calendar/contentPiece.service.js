@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { evaluateSteps } from '../workItems/timeLabels.js';
-import { hasTimeLabel, projectDelivery, projectTimeLabel } from '@mmp/shared';
+import { hasTimeLabel, projectDelivery, projectTimeLabel, workflowLabel } from '@mmp/shared';
 import { ContentPiece } from './contentPiece.model.js';
 import { WorkItem } from '../workItems/model.js';
 import { Person } from '../people/model.js';
@@ -202,6 +202,7 @@ export async function listContentPieces(filters = {}, user) {
 
     return {
       ...piece,
+      workflowLabel: workflowLabel(piece.contentType, piece),
       pieceStatus,
       holder,
       lateByDays: maxLateByDays,

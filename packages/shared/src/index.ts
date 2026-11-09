@@ -1318,10 +1318,13 @@ export function getPipelineForContent({
   contentType,
   needsScript,
   needsShoot,
+  needsContent,
 }: {
   contentType: string;
   needsScript?: boolean;
   needsShoot?: boolean;
+  /** Static Post / Carousel Post only: false = Design only (Design → Post). Missing = true. */
+  needsContent?: boolean;
 }): {
   pipeline: PipelineKey;
   stages: StageKey[];
@@ -1352,10 +1355,119 @@ export function getPipelineForContent({
     };
   }
   const postable = isPostableWorkType(contentType);
-  const stages: StageKey[] = postable
-    ? ["Content", "Design", "Post"]
-    : ["Content", "Design"];
+  const designOnly = needsContent === false && (DESIGN_WORKFLOW_TYPES as readonly string[]).includes(norm);
+  const stages: StageKey[] = [
+    ...(designOnly ? [] : (["Content"] as StageKey[])),
+    "Design",
+    ...(postable ? (["Post"] as StageKey[]) : []),
+  ];
   return { pipeline: "design", stages, hasPostStage: postable };
+}
+
+// ==========================================
+// Row workflows (which steps a row has)
+// ==========================================
+// Stored as the row's flags (needsScript, needsShoot, needsContent); the workflow is read from them.
+
+export const ROW_WORKFLOWS = ["full", "shoot_edit", "edit_only", "with_content", "design_only"] as const;
+export type RowWorkflow = (typeof ROW_WORKFLOWS)[number];
+
+export const ROW_WORKFLOW_LABELS: Record<RowWorkflow, string> = {
+  full: "Full",
+  shoot_edit: "Shoot + Edit",
+  edit_only: "Edit only",
+  with_content: "With content",
+  design_only: "Design only",
+};
+
+/** Types whose design rows may drop the Content step. */
+export const DESIGN_WORKFLOW_TYPES = ["Static Post", "Carousel Post"] as const;
+
+export interface RowStepFlags {
+  needsScript?: boolean | null;
+  needsShoot?: boolean | null;
+  needsContent?: boolean | null;
+}
+
+/** Workflow choices for a type, default first; empty for types with a fixed step list. */
+export function workflowOptionsFor(type: string | null | undefined): RowWorkflow[] {
+  const norm = normalizeWorkType(type || "");
+  if (norm === "Reel") return ["full", "shoot_edit", "edit_only"];
+  if ((DESIGN_WORKFLOW_TYPES as readonly string[]).includes(norm)) return ["with_content", "design_only"];
+  return [];
+}
+
+export function defaultWorkflowFor(type: string | null | undefined): RowWorkflow | null {
+  return workflowOptionsFor(type)[0] ?? null;
+}
+
+/** The stored flags for a workflow. */
+export function workflowFlags(workflow: RowWorkflow): { needsScript: boolean; needsShoot: boolean; needsContent: boolean } {
+  switch (workflow) {
+    case "full":
+      return { needsScript: true, needsShoot: true, needsContent: true };
+    case "shoot_edit":
+      return { needsScript: false, needsShoot: true, needsContent: true };
+    case "edit_only":
+      return { needsScript: false, needsShoot: false, needsContent: true };
+    case "design_only":
+      return { needsScript: false, needsShoot: false, needsContent: false };
+    default:
+      return { needsScript: false, needsShoot: false, needsContent: true };
+  }
+}
+
+/** The workflow a row's stored flags give (same rule as getPipelineForContent); null for fixed types. */
+export function workflowFromFlags(type: string | null | undefined, flags: RowStepFlags = {}): RowWorkflow | null {
+  const norm = normalizeWorkType(type || "");
+  if (norm === "Reel") {
+    if (flags.needsScript && flags.needsShoot) return "full";
+    return flags.needsShoot ? "shoot_edit" : "edit_only";
+  }
+  if ((DESIGN_WORKFLOW_TYPES as readonly string[]).includes(norm)) return flags.needsContent === false ? "design_only" : "with_content";
+  return null;
+}
+
+/** "Reel · Edit only"; just the type for types without a workflow choice. */
+export function workflowLabel(type: string | null | undefined, flags: RowStepFlags = {}): string {
+  const t = String(type || "");
+  const w = workflowFromFlags(t, flags);
+  return w ? `${t} · ${ROW_WORKFLOW_LABELS[w]}` : t;
+}
+
+const normWorkflowWord = (v: string) => v.trim().toLowerCase().replace(/[\s_+-]+/g, " ").trim();
+const WORKFLOW_BY_WORD = new Map<string, RowWorkflow>(
+  ROW_WORKFLOWS.flatMap((w) => [
+    [normWorkflowWord(w), w] as [string, RowWorkflow],
+    [normWorkflowWord(ROW_WORKFLOW_LABELS[w]), w] as [string, RowWorkflow],
+  ])
+);
+
+export type WorkflowParseResult = { ok: true; value: RowWorkflow | null } | { ok: false; error: string };
+
+/** Workflow cell for a type. Blank = the type's default (value null). A choice the type does not have is an error. */
+export function parseWorkflow(type: string | null | undefined, raw: unknown): WorkflowParseResult {
+  const text = raw === null || raw === undefined ? "" : String(raw).trim();
+  if (!text) return { ok: true, value: null };
+  const w = WORKFLOW_BY_WORD.get(normWorkflowWord(text));
+  const options = workflowOptionsFor(type);
+  const optionWords = options.map((o) => ROW_WORKFLOW_LABELS[o]).join(", ");
+  if (!w) {
+    return { ok: false, error: `Unknown workflow "${text}". Use ${optionWords || "nothing (leave it blank)"}.` };
+  }
+  if (!type) return { ok: true, value: w };
+  if (!options.length) return { ok: false, error: `${type} has no workflow choice. Leave Workflow blank.` };
+  if (!options.includes(w)) return { ok: false, error: `${type} can't use "${ROW_WORKFLOW_LABELS[w]}". Use ${optionWords}.` };
+  return { ok: true, value: w };
+}
+
+/** Edit only reels start from a source video: an app upload or a Google Drive / Docs link. Null when fine. */
+export function sourceVideoLinkError(workflow: RowWorkflow | null, link: unknown): string | null {
+  if (workflow !== "edit_only") return null;
+  const value = typeof link === "string" ? link.trim() : "";
+  if (!value) return "Edit only needs a source video link: a file uploaded here, or a Google Drive / Docs link.";
+  if (!isAllowedOutputUrl(value)) return `Source video link: ${OUTPUT_URL_ERROR}`;
+  return null;
 }
 
 // Due-date offsets (counted back in calendar days from final date F per Workflow V2)
@@ -2951,7 +3063,7 @@ export type PlanGridExcelColumnKey =
   | "remarks";
 
 /** App-only optional columns (Static/Carousel and other design rows have Content and Design steps). */
-export type PlanGridExtraColumnKey = "contentOwner" | "designOwner";
+export type PlanGridExtraColumnKey = "contentOwner" | "designOwner" | "workflow" | "sourceVideoLink";
 export type PlanGridColumnKey = PlanGridExcelColumnKey | PlanGridExtraColumnKey;
 
 export interface PlanGridColumn {
@@ -2998,6 +3110,8 @@ export const PLAN_GRID_COLUMNS: PlanGridColumn[] = [
 export const PLAN_GRID_EXTRA_COLUMNS: (PlanGridColumn & { after: PlanGridExcelColumnKey })[] = [
   { key: "contentOwner", header: "Content Owner", group: "Script", editable: true, ownerStage: "Content", optional: true, after: "scriptOwner" },
   { key: "designOwner", header: "Design Owner", group: "Edit", editable: true, ownerStage: "Design", optional: true, after: "editOwner" },
+  { key: "workflow", header: "Workflow", group: "Plan", editable: true, optional: true, after: "type", help: "Blank = Full for reels, With content for Static and Carousel posts." },
+  { key: "sourceVideoLink", header: "Source Video Link", group: "Tracking", editable: true, optional: true, after: "remarks", help: "Edit only reels: a Google Drive / Docs link to the footage." },
 ];
 
 /** Columns in on-screen order: the 18 Excel columns with the 2 optional ones placed after their anchors. */

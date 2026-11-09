@@ -12,6 +12,8 @@ import {
   PLAN_GRID_COLUMNS,
   PLAN_GRID_EXTRA_COLUMNS,
   TURNAROUND_HELP,
+  ROW_WORKFLOWS,
+  ROW_WORKFLOW_LABELS,
   isNewPlanLayout,
   planGridColumnForHeader,
   matchGridOwner,
@@ -73,17 +75,25 @@ export async function generateExcelTemplate({ layout = 'grid' } = {}) {
     cell.font = { bold: true, color: { argb: c.editable ? 'FFFFFFFF' : 'FF0B0B0D' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: c.editable ? 'FF0B0B0D' : 'FFDDE2EB' } };
     if (!c.editable) cell.note = 'Filled by the app. Leave blank; anything typed here is ignored.';
-    else if (c.optional) cell.note = 'Optional. Only for rows with this step (e.g. Static Post, Carousel Post).';
+    else if (c.optional) cell.note = c.help ? `Optional. ${c.help}` : 'Optional. Only for rows with this step (e.g. Static Post, Carousel Post).';
   });
 
   // Type dropdown: the 15 documented types; Excel words (Poster, Carousal) are also accepted when typed.
   const typeCol = allColumns.findIndex((c) => c.key === 'type') + 1;
+  const workflowCol = allColumns.findIndex((c) => c.key === 'workflow') + 1;
+  const workflowWords = ROW_WORKFLOWS.map((w) => ROW_WORKFLOW_LABELS[w]).join(',');
   for (let r = 2; r <= 300; r++) {
     sheet.getCell(r, typeCol).dataValidation = {
       type: 'list',
       allowBlank: true,
       showErrorMessage: false,
       formulae: [`"${DELIVERABLE_TYPE_KEYS.join(',')}"`],
+    };
+    sheet.getCell(r, workflowCol).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      showErrorMessage: false,
+      formulae: [`"${workflowWords}"`],
     };
   }
 
@@ -94,7 +104,9 @@ export async function generateExcelTemplate({ layout = 'grid' } = {}) {
     'Posting Date: 2 Nov, 2026 or 16/11/2026 (day/month/year). A date like 02/11/2026 is accepted only when exactly one reading falls in the plan month.',
     `Type: ${DELIVERABLE_TYPE_KEYS.join(', ')}. "Poster" typed by hand means Static Post; "Carousal" means Carousel Post.`,
     'Owners: the person\'s exact name as it appears in the app. Leave blank to let the app suggest someone.',
-    'Script/Shoot owners apply to reels only; Content/Design owners apply to design rows (Static Post, Carousel Post and the other design types).',
+    'Workflow (optional): which steps the row has. Reel: Full (Script, Shoot, Edit, Post), Shoot + Edit (Shoot, Edit, Post) or Edit only (Edit, Post). Static Post and Carousel Post: With content (Content, Design, Post) or Design only (Design, Post). Blank = Full for reels, With content for Static and Carousel posts. Other types have fixed steps; leave it blank.',
+    'Edit only reels need a Source Video Link: a Google Drive or Google Docs link (https://drive.google.com/... or https://docs.google.com/...).',
+    'Script Owner: the Script owner on reels, and the Content owner on design rows. The older Content Owner column is still read. Shoot/Edit owners apply to reels only; Design Owner applies to design rows.',
     TURNAROUND_HELP,
   ].forEach((line) => help.addRow([line]));
 

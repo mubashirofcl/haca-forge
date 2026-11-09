@@ -16,6 +16,7 @@ import {
   projectDelivery,
   projectTimeLabel,
   ratingAverage,
+  workflowLabel,
 } from '@mmp/shared';
 import { ContentPiece } from '../calendar/contentPiece.model.js';
 import { WorkItem } from '../workItems/model.js';
@@ -46,7 +47,7 @@ const iso = (d) => (d ? new Date(d).toISOString() : null);
 
 /** Pieces, steps and every computed fact the reports need. */
 async function loadPieces(pieceFilter, { now }) {
-  const pieces = await ContentPiece.find(pieceFilter).select('topic contentType calendar postingDate publishedAt hasPostStage planId').lean();
+  const pieces = await ContentPiece.find(pieceFilter).select('topic contentType calendar postingDate publishedAt hasPostStage planId needsScript needsShoot needsContent').lean();
   const pieceIds = pieces.map((p) => p._id);
   const steps = pieceIds.length
     ? await WorkItem.find({ contentPieceId: { $in: pieceIds } })
@@ -123,7 +124,7 @@ async function loadDataset(filters, { now = new Date() } = {}) {
   return { filters, now, projects, stepRows, flags: flags.filter((f) => stepIds.has(String(f.workItemId))) };
 }
 
-const projectRef = (p) => ({ id: String(p.piece._id), topic: p.piece.topic, calendar: calendarOf(p.piece), calendarName: calendarName(calendarOf(p.piece)), contentType: p.piece.contentType, publishDate: iso(p.piece.postingDate) });
+const projectRef = (p) => ({ id: String(p.piece._id), topic: p.piece.topic, calendar: calendarOf(p.piece), calendarName: calendarName(calendarOf(p.piece)), contentType: p.piece.contentType, workflowLabel: workflowLabel(p.piece.contentType, p.piece), publishDate: iso(p.piece.postingDate) });
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : null);
 const isOnTimeDelivery = (p) => p.delivery.delivered && p.label?.kind !== 'completed_late';
 const byDue = (a, b) => new Date(a.dueDate || 0) - new Date(b.dueDate || 0) || String(a.project).localeCompare(String(b.project));

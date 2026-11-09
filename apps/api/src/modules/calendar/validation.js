@@ -7,6 +7,7 @@ import {
   VALIDATION_ERROR_CODES,
   VALIDATION_WARNING_CODES,
   DEFAULT_STAGE_HOURS,
+  sourceVideoLinkError,
 } from '@mmp/shared';
 import { Person } from '../people/model.js';
 import { WorkItem } from '../workItems/model.js';
@@ -184,18 +185,18 @@ export async function validatePlanAndRows({ plan = {}, rows = [], isSubmitting =
       }
     }
 
-    // 6. Missing Source Video link (Reel without shoot)
+    // 6. Edit only reels (no shoot) need a source video: an app upload or a Google Drive / Docs
+    //    link (the Phase 5 output rule). Checked on every save and on submission.
     const isReel = deliverableType.toLowerCase() === 'reel';
-    const needsShoot = Boolean(row.needsShoot);
-    if (isReel && !needsShoot) {
-      const srcLink = (row.sourceVideoLink || '').trim();
-      if (!srcLink) {
+    if (isReel && !row.needsShoot) {
+      const linkError = sourceVideoLinkError('edit_only', row.sourceVideoLink);
+      if (linkError) {
         errors.push({
           rowNumber: rowNum,
           topic,
           field: 'sourceVideoLink',
           code: VALIDATION_ERROR_CODES.MISSING_SOURCE_VIDEO,
-          message: 'Source video link is required when Reel does not need a shoot.',
+          message: linkError,
         });
       }
     }

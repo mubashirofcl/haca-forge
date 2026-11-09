@@ -683,6 +683,7 @@ export async function updateRow(planId, rowId, updates, user) {
       contentType: normType,
       needsScript: piece.needsScript,
       needsShoot: piece.needsShoot,
+      needsContent: piece.needsContent,
     });
     piece.pipeline = pipelineInfo.pipeline;
     piece.hasPostStage = pipelineInfo.hasPostStage;
@@ -1028,6 +1029,7 @@ export async function generateStagesForApprovedRow(piece, user) {
     contentType: piece.contentType,
     needsScript: piece.needsScript,
     needsShoot: piece.needsShoot,
+    needsContent: piece.needsContent,
   });
 
   const stages = pipelineInfo.stages;
