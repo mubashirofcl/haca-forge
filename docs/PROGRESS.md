@@ -1,6 +1,26 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after Phase 8):** 1690 passing, 0 failing: API 1384 (66 files), web 306 (43 files). Typecheck 0 errors; web build clean.
+**Current test count (after Phase 9):** 1702 passing, 0 failing: API 1393 (67 files), web 309 (44 files). Typecheck 0 errors; web build clean.
+
+## Phase 9: Reset the local database and seed test users (Status: COMPLETE; committed locally, not pushed)
+
+Three commits, each gated in the working tree: 9a `b556708`, 9b `5945fc0`, and this entry.
+
+- Backups (outside the repo): `D:\haca-backups\2026-11-09_085137\` (Step 1) and `D:\haca-backups\2026-11-09_092010_pre-reset\` (just before the reset). Each has `mongodump\marketing_portal` (all 33 collections; counts checked) and `uploads\` (23 files, 179 MB). Restore: `mongorestore --uri=mongodb://127.0.0.1:27017 --drop <backup>\mongodump`.
+- 9a, code:
+  - `apps/api/scripts/reset-and-seed.js` rewritten: dry run by default; `--confirm` needs `--db-name` equal to the database in `MONGODB_URI`; refuses `NODE_ENV=production`, any non-local host and test or disposable databases. Keeps departments, automationrules, settings, counters, the admin (`ADMIN_SEED_EMAIL`) and its sessions; empties every other collection; deletes the files in `apps/api/uploads`; clears stale BullMQ jobs keeping the 4 reminder schedules; recreates Team Chat; seeds the 12 users from `SEED_PASSWORD_*` in `.env` (refuses if any is missing). Options `--uploads-dir`, `--skip-queues` (used by tests).
+  - Startup `ensureBaselineUsers` now only creates the admin when missing (from `ADMIN_SEED_PASSWORD`); it no longer rewrites users or resets passwords on every start.
+  - The 12 users' details (no passwords) are in `src/modules/people/seedUsers.js`.
+  - Every hard-coded password removed from source and docs (`baselineUsers.js`, `reset-and-seed.js`, `DB_WIPE_PLAN.md`, `PROGRESS.md`). They remain in older git history.
+  - Dev quick sign-in groups the accounts by role (Admin, Creative Head, SM Manager, Executive, Team members); the component is behind `import.meta.env.DEV`, so it is left out of production builds.
+- 9b: the password guard test no longer contains a password literal.
+- Profiles: no app code reads the `profiles` collection (the model was removed earlier; tests use a mock), so all 8 profiles were deleted. The old `priorities` records (High, Medium, Low) were deleted too.
+- Reset run (confirmed), deleted: users 62 (12 old demo accounts, 49 test accounts on chat.com including 7 test admins, 1 suspended gmail.com SM manager), sessions 257, notifications 1141, activityevents 293, channelmembers 57, submissions 51, workitems 45, contentpieces 34, assignment_overrides 28, ratings 20, mediaitems 19, submissioncomments 14, mediamessages 12, feedbackentries 9, profiles 8, calendarplans 7, chatmessages 6, reportdefinitions 4, priorities 3, channels 2, blockers 2, accessrequests 1, sharegrants 1; 23 upload files. Redis was not running, so no queue jobs to clear.
+- Kept: departments 7, automationrules 6, settings 1, the admin and its 74 sessions.
+- Created: the 12 users (roles, job roles, departments and work preferences as in CONTEXT.md section 5) and Team Chat with all 13 members.
+- Checks: each of the 12 users and the admin signs in through the dev quick sign-in and lands on the right page (team members on /my-work, others on /dashboard); quick sign-in shows all 13 grouped by role; the production build contains no quick sign-in, no demo emails and no encoded account list (test against `dist`). These sign-ins added 13 sessions.
+- Final counts: users 13, departments 7, automationrules 6, settings 1, channels 1, channelmembers 13, sessions 87 (admin 75, users 12); every other collection 0.
+- Tests: the script refuses without `--confirm` (dry run changes nothing), against a non-local URI, a test database or a mismatched `--db-name`, and when a seed password is missing; a confirmed run on a scratch database keeps config and the admin and seeds the 12 users; startup creates only a missing admin and never rewrites users; no password in the seed or startup source; quick sign-in grouping and its absence from the production build.
 
 ## Phase 8: Worker and Creative Head profile KPIs (Status: COMPLETE; committed locally, not pushed)
 

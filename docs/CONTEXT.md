@@ -1,11 +1,11 @@
 # HACA Marketing OS — Master Project Context
 
-**Current as of:** 9 November 2026 (after Phase 8)  
+**Current as of:** 9 November 2026 (after Phase 9)  
 **Repository:** HACA Marketing OS (`haca-forge`)  
 **Technology Stack:** Node 22 LTS, Express 5 (ESM), React 18, Vite 6, TypeScript, Tailwind CSS, MongoDB (Mongoose), Socket.io, BullMQ (Redis).  
-**Test Suite Status:** **1690 tests passing across 109 test files (0 failures)**  
-- `@mmp/api`: 1384 tests passed across 66 test files  
-- `@mmp/web`: 306 tests passed across 43 test files  
+**Test Suite Status:** **1702 tests passing across 111 test files (0 failures)**  
+- `@mmp/api`: 1393 tests passed across 67 test files  
+- `@mmp/web`: 309 tests passed across 44 test files  
 - The API tests set their own test-only JWT secrets (`apps/api/vitest.config.js`), so a fresh checkout passes with no `.env`.  
 
 ---
@@ -118,7 +118,8 @@
 
 ## 5. Canonical Database Seed Users
 
-Seeded via `apps/api/scripts/reset-and-seed.js`:
+Seeded only by `apps/api/scripts/reset-and-seed.js` (Phase 9: dry run by default; `--confirm --db-name=marketing_portal` on a local database only). Passwords are never in source or docs: the 12 users use `SEED_PASSWORD_<NAME>` and the admin `ADMIN_SEED_PASSWORD`, all in the git-ignored `apps/api/.env`. The app creates the admin at startup only when it is missing and never rewrites users or passwords. Dev quick sign-in reads `VITE_QUICK_LOGINS` from the git-ignored `apps/web/.env.local` and is absent from production builds.
+Work preferences: writers Content and Script; designers Design; shooter Shoot; editors Edit; poster Post; allrounder Script, Shoot and Post; Creative Head, SM manager and executive none.
 | # | Role | Job Role | Department | Email | Phone |
 |---|---|---|---|---|---|
 | 1 | `creative_head` | Creative Manager (TL) | Design | `creativehead@demo.haca.local` | 9000000001 |
