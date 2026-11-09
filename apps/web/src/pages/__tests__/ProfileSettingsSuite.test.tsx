@@ -151,6 +151,18 @@ describe('Profile & Settings Frontend Suite', () => {
         expect(screen.queryByText('View profile')).not.toBeInTheDocument();
       });
     });
+
+    it('uses the standard neutral styles: no purple, a neutral role chip, menu items for each action', () => {
+      const { container } = render(
+        <MemoryRouter>
+          <UserMenuDropdown />
+        </MemoryRouter>
+      );
+      fireEvent.click(screen.getByLabelText('User navigation menu'));
+      expect(container.innerHTML).not.toMatch(/purple/);
+      expect(screen.getByTestId('user-menu-role').className).toMatch(/status-chip status-not-started/);
+      expect(screen.getAllByRole('menuitem').map((b) => b.textContent)).toEqual(['View profile', 'Settings', 'Sign out']);
+    });
   });
 
   describe('3. ProfileView - Header Card, About Form, Work Details & 5 Role Panels', () => {
