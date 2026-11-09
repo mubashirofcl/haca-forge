@@ -303,7 +303,7 @@ describe('PLAN LIST FIXES: Unit, API, Database Repair & Text Scan Suite', () => 
 
   describe('5. Default Plan Title and Title Editing', () => {
     it('defaults title to <Calendar> <Month> <Year> when omitted', async () => {
-      expect(getDefaultPlanTitle('2027-01-01')).toBe('SM January 2027');
+      expect(getDefaultPlanTitle('2027-01-01')).toBe('SM Calendar January 2027');
 
       const res = await request(app)
         .post('/api/calendar-plans')
@@ -315,7 +315,7 @@ describe('PLAN LIST FIXES: Unit, API, Database Repair & Text Scan Suite', () => 
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.data.title).toBe('SM February 2027');
+      expect(res.body.data.title).toBe('SM Calendar February 2027');
 
       const planId = res.body.data._id;
 

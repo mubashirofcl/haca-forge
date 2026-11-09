@@ -383,7 +383,7 @@ export const CALENDARS: Record<CalendarKey, CalendarDefinition> = {
   sm: {
     id: "sm",
     key: "sm",
-    name: "SM",
+    name: "SM Calendar",
     color: "#7a6af6",
     bg: "#ede9fe",
     border: "#c4b5fd",
@@ -392,7 +392,7 @@ export const CALENDARS: Record<CalendarKey, CalendarDefinition> = {
   sales: {
     id: "sales",
     key: "sales",
-    name: "Sales Team",
+    name: "Sales Calendar",
     color: "#10b981",
     bg: "#d1fae5",
     border: "#a7f3d0",
@@ -401,7 +401,7 @@ export const CALENDARS: Record<CalendarKey, CalendarDefinition> = {
   ads: {
     id: "ads",
     key: "ads",
-    name: "Ads Team",
+    name: "Ads Calendar",
     color: "#f59e0b",
     bg: "#fef3c7",
     border: "#fde68a",
@@ -410,7 +410,7 @@ export const CALENDARS: Record<CalendarKey, CalendarDefinition> = {
   academics_management: {
     id: "academics_management",
     key: "academics_management",
-    name: "Academics and Management",
+    name: "Academics & Management Calendar",
     color: "#0284c7",
     bg: "#e0f2fe",
     border: "#bae6fd",

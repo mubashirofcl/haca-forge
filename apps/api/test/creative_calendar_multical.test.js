@@ -110,19 +110,19 @@ describe('CREATIVE CALENDAR AND MULTIPLE CALENDARS SUITE', () => {
       expect(CALENDAR_LIST).toHaveLength(5);
 
       const smDef = getCalendarDefinition('sm');
-      expect(smDef.name).toBe('SM');
+      expect(smDef.name).toBe('SM Calendar');
       expect(smDef.color).toBe('#7a6af6');
 
       const salesDef = getCalendarDefinition('sales');
-      expect(salesDef.name).toBe('Sales Team');
+      expect(salesDef.name).toBe('Sales Calendar');
       expect(salesDef.color).toBe('#10b981');
 
       const adsDef = getCalendarDefinition('ads');
-      expect(adsDef.name).toBe('Ads Team');
+      expect(adsDef.name).toBe('Ads Calendar');
       expect(adsDef.color).toBe('#f59e0b');
 
       const acDef = getCalendarDefinition('academics_management');
-      expect(acDef.name).toBe('Academics and Management');
+      expect(acDef.name).toBe('Academics & Management Calendar');
       expect(acDef.color).toBe('#0284c7');
 
       const otherDef = getCalendarDefinition('other');
@@ -132,9 +132,9 @@ describe('CREATIVE CALENDAR AND MULTIPLE CALENDARS SUITE', () => {
 
     it('getDefaultPlanTitle should generate <Calendar> <Month Year>', () => {
       const novDate = new Date('2026-11-01T00:00:00Z');
-      expect(getDefaultPlanTitle(novDate, 'sales')).toBe('Sales Team November 2026');
-      expect(getDefaultPlanTitle(novDate, 'sm')).toBe('SM November 2026');
-      expect(getDefaultPlanTitle(novDate, 'ads')).toBe('Ads Team November 2026');
+      expect(getDefaultPlanTitle(novDate, 'sales')).toBe('Sales Calendar November 2026');
+      expect(getDefaultPlanTitle(novDate, 'sm')).toBe('SM Calendar November 2026');
+      expect(getDefaultPlanTitle(novDate, 'ads')).toBe('Ads Calendar November 2026');
     });
   });
 

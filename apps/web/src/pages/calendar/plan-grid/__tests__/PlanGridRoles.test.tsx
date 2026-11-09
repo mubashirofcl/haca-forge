@@ -204,7 +204,7 @@ describe('Phone view (360px)', () => {
     await show({ permissions: { canEdit: true, canReview: false, readOnly: false }, people, rows: [{ ...base, rowStatus: 'draft' }] });
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByText(/Paste from Excel works on a tablet or computer/)).toBeInTheDocument();
-    const list = screen.getByRole('list', { name: /Rows for SM, 2031-11/ });
+    const list = screen.getByRole('list', { name: /Rows for SM Calendar, 2031-11/ });
     expect(within(list).getByText('Founder reel')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Submit for review/ })).toBeInTheDocument();
 
@@ -252,7 +252,7 @@ describe('Accessible names and cell errors', () => {
       warnings: [],
     });
     await show({ permissions: { canEdit: true, canReview: false, readOnly: false }, people, rows: [{ ...base, rowStatus: 'draft' }] });
-    expect(screen.getByRole('table', { name: 'Plan grid for SM, 2031-11' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Plan grid for SM Calendar, 2031-11' })).toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: /Row 1: Founder reel/ })).toBeInTheDocument();
     const edit = screen.getByRole('combobox', { name: 'Edit Owner, row 1, Founder reel' });
     fireEvent.change(edit, { target: { value: 'p-editor' } });
