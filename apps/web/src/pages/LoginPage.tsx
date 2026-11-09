@@ -343,15 +343,19 @@ export const LoginPage: React.FC = () => {
           </div>
         </div>
 
-        <DevQuickLogin
-          accounts={QUICK_LOGINS}
-          busy={isLoggingIn}
-          onPick={(account) => {
-            setEmail(account.email);
-            setPassword('');
-            void signIn(account.email, account.password);
-          }}
-        />
+        {/* Dev server only: DEV is false in a production build, so the component and the
+            account list are dropped from the bundle (checked by Phase9QuickLoginBuild.test). */}
+        {import.meta.env.DEV && (
+          <DevQuickLogin
+            accounts={QUICK_LOGINS}
+            busy={isLoggingIn}
+            onPick={(account) => {
+              setEmail(account.email);
+              setPassword('');
+              void signIn(account.email, account.password);
+            }}
+          />
+        )}
       </div>
 
       {/* Request Access Modal (Glassmorphic) */}

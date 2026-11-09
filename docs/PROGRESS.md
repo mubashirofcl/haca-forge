@@ -1454,13 +1454,13 @@ Visual-only. Reference: cool grey-blue canvas, frosted panels, near-white cards,
 
 ## Demo Quick-Fill Accounts Update (Status: COMPLETE)
 - **User Request:**
-  - "add - shooter@demo.haca.local : Shoot1@Test115, editor1@demo.haca.local : Edit1@Test116 , also in Demo Quick-Fill Accounts in login page"
+  - "add - shooter@demo.haca.local : [password removed], editor1@demo.haca.local : [password removed] , also in Demo Quick-Fill Accounts in login page"
 - **Implementations:**
   1. **MongoDB Verification:**
-     - Verified `shooter@demo.haca.local` (Test Shooter, role `team_member`, workPreferences `['Shoot']`) and `editor1@demo.haca.local` (Test Editor One, role `team_member`, workPreferences `['Edit']`) already exist with active status, `mustSetPassword: false`, and password hashes matching `Shoot1@Test115` and `Edit1@Test116`.
+     - Verified `shooter@demo.haca.local` (Test Shooter, role `team_member`, workPreferences `['Shoot']`) and `editor1@demo.haca.local` (Test Editor One, role `team_member`, workPreferences `['Edit']`) already exist with active status, `mustSetPassword: false`, and password hashes matching `[password removed]` and `[password removed]`.
      - Confirmed both authenticate with status 200 via `POST /api/auth/login`.
   2. **Login Page Quick-Fill Accounts (`apps/web/src/pages/LoginPage.tsx`):**
-     - Added quick-fill buttons for **Shooter (Worker)** (`shooter@demo.haca.local` : `Shoot1@Test115`) and **Editor (Worker)** (`editor1@demo.haca.local` : `Edit1@Test116`) to the 2-column quick-fill grid.
+     - Added quick-fill buttons for **Shooter (Worker)** (`shooter@demo.haca.local` : `[password removed]`) and **Editor (Worker)** (`editor1@demo.haca.local` : `[password removed]`) to the 2-column quick-fill grid.
   3. **Unit Tests Added (`apps/web/src/pages/__tests__/LoginPage.test.tsx`):**
      - Added unit test asserting Shooter and Editor buttons render in Demo Quick-Fill Accounts and correctly autofill email and password fields on click.
 - **Verification:**

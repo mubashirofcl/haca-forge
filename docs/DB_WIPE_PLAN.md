@@ -1,5 +1,7 @@
 # Database Wipe Plan: Keep Users Only
 
+> Phase 9 note: passwords are never written in docs or source. The admin uses ADMIN_SEED_PASSWORD and the 12 test users use SEED_PASSWORD_<NAME>, all in the git-ignored apps/api/.env. The reset is `apps/api/scripts/reset-and-seed.js` (dry run by default).
+
 **Target Environment:** Local Development  
 **Connected Database:** `marketing_portal`  
 **Host:** `127.0.0.1:27017` (`mongodb://127.0.0.1:27017/marketing_portal`)  
@@ -81,19 +83,19 @@ All 13 accounts in the `users` collection represent legitimate workspace actors 
 
 | Name | Email | Role | Status | Job Role | Work Preferences | Password / Invite State |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **System Administrator** | `admin@hacaforge.com` | `admin` | active | — | — | Password set (`Admin1212`) |
-| **Test Creative Head** | `creativehead@demo.haca.local` | `creative_head` | active | Creative Manager (TL) | Script, Content, Design, Edit | Password set (`Demo1234!`) |
-| **Test SM Manager** | `smmanager@demo.haca.local` | `sm_manager` | active | Social Media Manager | Post | Password set (`Demo1234!`) |
-| **Test Writer One** | `writer1@demo.haca.local` | `team_member` | active | Writer | Content, Script | Password set (`Demo1234!`) |
-| **Test Writer Two** | `writer2@demo.haca.local` | `team_member` | active | Writer | Content, Script | Password set (`Demo1234!`) |
-| **Test Designer One** | `designer1@demo.haca.local` | `team_member` | active | Designer | Design | Password set (`Demo1234!`) |
-| **Test Designer Two** | `designer2@demo.haca.local` | `team_member` | active | Designer | Design | Password set (`Demo1234!`) |
-| **Test Shooter** | `shooter@demo.haca.local` | `team_member` | active | Video Editor | Shoot | Password set (`Demo1234!`) |
-| **Test Editor One** | `editor1@demo.haca.local` | `team_member` | active | Video Editor | Edit | Password set (`Demo1234!`) |
-| **Test Editor Two** | `editor2@demo.haca.local` | `team_member` | active | Video Editor | Edit | Password set (`Demo1234!`) |
-| **Test Poster** | `poster@demo.haca.local` | `team_member` | active | Social Specialist | Post | Password set (`Demo1234!`) |
+| **System Administrator** | `admin@hacaforge.com` | `admin` | active | — | — | Password set (from git-ignored .env) |
+| **Test Creative Head** | `creativehead@demo.haca.local` | `creative_head` | active | Creative Manager (TL) | Script, Content, Design, Edit | Password set (from git-ignored .env) |
+| **Test SM Manager** | `smmanager@demo.haca.local` | `sm_manager` | active | Social Media Manager | Post | Password set (from git-ignored .env) |
+| **Test Writer One** | `writer1@demo.haca.local` | `team_member` | active | Writer | Content, Script | Password set (from git-ignored .env) |
+| **Test Writer Two** | `writer2@demo.haca.local` | `team_member` | active | Writer | Content, Script | Password set (from git-ignored .env) |
+| **Test Designer One** | `designer1@demo.haca.local` | `team_member` | active | Designer | Design | Password set (from git-ignored .env) |
+| **Test Designer Two** | `designer2@demo.haca.local` | `team_member` | active | Designer | Design | Password set (from git-ignored .env) |
+| **Test Shooter** | `shooter@demo.haca.local` | `team_member` | active | Video Editor | Shoot | Password set (from git-ignored .env) |
+| **Test Editor One** | `editor1@demo.haca.local` | `team_member` | active | Video Editor | Edit | Password set (from git-ignored .env) |
+| **Test Editor Two** | `editor2@demo.haca.local` | `team_member` | active | Video Editor | Edit | Password set (from git-ignored .env) |
+| **Test Poster** | `poster@demo.haca.local` | `team_member` | active | Social Specialist | Post | Password set (from git-ignored .env) |
 | **Test All Rounder** | `allrounder@demo.haca.local` | `team_member` | active | SEO Specialist | — | **Pending Invite / Set-Password** |
-| **Demo Executive Director** | `executive@demo.haca.local` | `executive` | active | — | — | Password set (`Demo1234!`) |
+| **Demo Executive Director** | `executive@demo.haca.local` | `executive` | active | — | — | Password set (from git-ignored .env) |
 
 #### Actions on Users:
 1. **Preserve ALL user attributes:** `_id`, `name`, `email`, `role`, `status`, `jobRole`, `departmentId`, `profileAccess`, `workPreferences`, `weeklyCapacityHours`, `reportsToIds`, `skills`, `notificationPreferences`, `passwordHash`, `mustSetPassword`, `resetPasswordTokenHash`, `resetPasswordExpiresAt`.
