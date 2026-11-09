@@ -235,6 +235,8 @@ describe('5. Add Row parity', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Save row' }));
     expect(within(panel).getByText('Posting date is required.')).toBeInTheDocument();
     expect(gridCalls()).toHaveLength(0);
+    // No publish time: nothing uses it (the server keeps its 18:00 default).
+    expect(within(panel).queryByLabelText(/publish time/i)).toBeNull();
 
     fireEvent.change(within(panel).getByLabelText('Posting date'), { target: { value: '2031-11-20' } });
     fireEvent.change(within(panel).getByLabelText('Topic'), { target: { value: 'New reel' } });
@@ -261,6 +263,7 @@ describe('5. Add Row parity', () => {
     // Only what the user set is sent; suggestions and automatic dates are recalculated by the same rules on save.
     expect(sent.cells).toMatchObject({ postingDate: '2031-11-20', topic: 'New reel', type: 'Reel', typeExact: true, deadlines: { Edit: '2031-11-17' } });
     expect(sent.cells.scriptOwnerId).toBeUndefined();
+    expect(sent.cells.publishTime).toBeUndefined();
   });
 
   it('the shared checks are the Add Row form checks', () => {

@@ -102,7 +102,6 @@ export const PlanGridRowPanel: React.FC<Props> = ({
       topic: d.topic !== undefined ? String(d.topic) : row?.topic ?? '',
       type: d.type !== undefined ? String(d.type) : row?.type ?? '',
       brief: d.brief !== undefined ? String(d.brief) : row?.brief ?? '',
-      publishTime: d.publishTime !== undefined ? String(d.publishTime) : row?.publishTime || '18:00',
       contentLink: d.contentLink !== undefined ? String(d.contentLink) : row?.contentLink ?? '',
       remarks: d.remarks !== undefined ? String(d.remarks) : row?.remarks ?? '',
       programOrEvent: row?.programOrEvent ?? '',
@@ -197,7 +196,7 @@ export const PlanGridRowPanel: React.FC<Props> = ({
       cells.type = form.type;
       cells.typeExact = true;
     }
-    (['brief', 'publishTime', 'contentLink', 'remarks', 'programOrEvent', 'referenceLink', 'priority', 'sourceVideoLink'] as const).forEach((k) => {
+    (['brief', 'contentLink', 'remarks', 'programOrEvent', 'referenceLink', 'priority', 'sourceVideoLink'] as const).forEach((k) => {
       if (form[k] !== initial[k]) cells[k] = form[k];
     });
     if (isReel) {
@@ -308,14 +307,9 @@ export const PlanGridRowPanel: React.FC<Props> = ({
 
           <fieldset className="space-y-3">
             <legend className="text-xs font-semibold text-ui-text">Plan</legend>
-            <div className="grid grid-cols-2 gap-3">
-              {field('row-date', 'Posting date', (
-                <input id="row-date" type="date" className="ui-input h-11 w-full" value={form.postingDate} readOnly={!editable} onChange={(e) => changePostingDate(e.target.value)} {...described('row-date', err('postingDate'))} />
-              ), err('postingDate'))}
-              {field('row-time', 'Publish time', (
-                <input id="row-time" type="time" className="ui-input h-11 w-full" value={form.publishTime} readOnly={!editable} onChange={(e) => set('publishTime', e.target.value)} {...described('row-time', err('publishTime'))} />
-              ), err('publishTime'))}
-            </div>
+            {field('row-date', 'Posting date', (
+              <input id="row-date" type="date" className="ui-input h-11 w-full" value={form.postingDate} readOnly={!editable} onChange={(e) => changePostingDate(e.target.value)} {...described('row-date', err('postingDate'))} />
+            ), err('postingDate'))}
             {field('row-topic', 'Topic', (
               <input id="row-topic" className="ui-input h-11 w-full" value={form.topic} readOnly={!editable} onChange={(e) => set('topic', e.target.value)} {...described('row-topic', err('topic'))} />
             ), err('topic'))}
