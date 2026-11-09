@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle2, ClipboardPaste, Download, HelpCircle, ListChecks, PanelRightOpen, Plus, Send, Upload } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ClipboardPaste, Download, HelpCircle, ListChecks, PanelRightOpen, Plus, Send, Trash2, Upload } from 'lucide-react';
 import {
   CALENDAR_LIST,
   formatGridDate,
@@ -21,7 +21,7 @@ import { PlanGridConfirmDialog } from './PlanGridConfirmDialog';
 import { PlanGridPasteDialog } from './PlanGridPasteDialog';
 import { useMediaQuery } from './useMediaQuery';
 import { OWNER_FIELD_BY_STAGE, PLANNING_COLUMNS, PROGRESS_COLUMNS, STAGE_LABEL, type PlanCol, type PlanColGroup } from './columns';
-import { STATUS_STAGE, type GridCellInput, type GridData, type GridLine, type GridRow, type GridRowResult, type GridSaveResponse } from './types';
+import { STATUS_STAGE, rowCanBeDeleted, type GridCellInput, type GridData, type GridLine, type GridRow, type GridRowResult, type GridSaveResponse } from './types';
 
 const ROW_STATUS: Record<string, { tone: string; label: string }> = {
   draft: { tone: 'status-not-started', label: 'Draft' },
@@ -64,8 +64,8 @@ function textOf(line: GridLine, key: string): string {
 }
 
 /** Frozen-column widths; narrower below 1024px so other columns can scroll into view on tablets. */
-function gridLayout(compact: boolean, withSelect: boolean) {
-  const lead = (compact ? 136 : 190) + (withSelect ? 44 : 0);
+function gridLayout(compact: boolean, withSelect: boolean, withDelete = false) {
+  const lead = (compact ? 136 : 190) + (withSelect ? 44 : 0) + (withDelete ? 44 : 0);
   const frozen = compact ? { postingDate: 146, topic: 170, type: 140 } : { postingDate: 150, topic: 240, type: 160 };
   const widthOf = (c: PlanCol) => (frozen as Record<string, number>)[c.key] ?? c.width;
   const left: Record<string, number> = { postingDate: lead, topic: lead + frozen.postingDate, type: lead + frozen.postingDate + frozen.topic };
@@ -194,11 +194,11 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
   const people = data?.people || [];
   const isPhone = useMediaQuery('(max-width: 639px)');
   const isCompact = useMediaQuery('(max-width: 1023px)');
-  const layout = useMemo(() => gridLayout(isCompact, canReview), [isCompact, canReview]);
+  const layout = useMemo(() => gridLayout(isCompact, canReview, canEdit), [isCompact, canReview, canEdit]);
   const [onlyWaiting, setOnlyWaiting] = useState<boolean | null>(null);
   const showOnlyWaiting = onlyWaiting ?? canReview;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [confirm, setConfirm] = useState<null | { kind: 'approveAll' } | { kind: 'deleteRow' }>(null);
+  const [confirm, setConfirm] = useState<null | { kind: 'approveAll' } | { kind: 'deleteRow'; key: string }>(null);
   const [reviewBusy, setReviewBusy] = useState(false);
 
   // Progress columns are only useful once rows are approved (their steps exist).
@@ -533,13 +533,14 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
     setPanelSaving(false);
     if (ok) setPanelKey(null);
   };
-  const deletePanelRowConfirmed = async () => {
-    if (!panelLine?.rowId || !plan) return;
+  const deleteRowConfirmed = async (key: string) => {
+    const target = lines.find((l) => l.key === key);
+    if (!target?.rowId || !plan) return;
     setConfirm(null);
     setPanelSaving(true);
     try {
-      await apiFetch(`/api/calendar-plans/${plan._id}/rows/${panelLine.rowId}`, { method: 'DELETE' });
-      setPanelKey(null);
+      await apiFetch(`/api/calendar-plans/${plan._id}/rows/${target.rowId}`, { method: 'DELETE' });
+      if (panelKey === key) setPanelKey(null);
       await load(keepUnsaved());
       onChanged?.();
     } catch (err) {
@@ -1033,6 +1034,18 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
                 >
                   {verb}
                 </button>
+                {rowCanBeDeleted(row, canEdit) && (
+                  <button
+                    type="button"
+                    className="ui-btn ui-btn-secondary h-11 w-full"
+                    aria-label={`Delete row: ${row!.topic}`}
+                    disabled={panelSaving}
+                    onClick={() => setConfirm({ kind: 'deleteRow', key: line.key })}
+                  >
+                    <Trash2 className="w-4 h-4" aria-hidden="true" />
+                    Delete row
+                  </button>
+                )}
               </li>
             );
           })}
@@ -1148,6 +1161,18 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
                               <PanelRightOpen className="w-4 h-4" aria-hidden="true" />
                             </button>
                           )}
+                          {rowCanBeDeleted(line.saved, canEdit) && (
+                            <button
+                              type="button"
+                              className="ui-icon-btn h-11 w-11 shrink-0"
+                              aria-label={`Delete row: ${line.saved!.topic}`}
+                              title="Delete row"
+                              disabled={saving || panelSaving}
+                              onClick={() => setConfirm({ kind: 'deleteRow', key: line.key })}
+                            >
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
+                            </button>
+                          )}
                         </div>
                       </th>
                       {columns.map((c) => (
@@ -1191,7 +1216,7 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
           isSaving={panelSaving || reviewBusy}
           actionError={notice?.tone === 'error' ? notice.text : null}
           onSave={savePanel}
-          onDelete={() => setConfirm({ kind: 'deleteRow' })}
+          onDelete={() => panelLine && setConfirm({ kind: 'deleteRow', key: panelLine.key })}
           onSubmitRow={submitPanelRow}
           onReview={reviewPanelRow}
           onClose={() => setPanelKey(null)}
@@ -1211,16 +1236,21 @@ export const PlanGrid: React.FC<Props> = ({ initialCalendar, initialMonth, initi
           }}
         />
       )}
-      {confirm?.kind === 'deleteRow' && panelLine?.saved && (
-        <PlanGridConfirmDialog
-          title="Delete this row?"
-          message={`"${panelLine.saved.topic}" will be removed from this plan.`}
-          confirmLabel="Delete row"
-          isBusy={panelSaving}
-          onCancel={() => setConfirm(null)}
-          onConfirm={deletePanelRowConfirmed}
-        />
-      )}
+      {confirm?.kind === 'deleteRow' && (() => {
+        const target = lines.find((l) => l.key === confirm.key)?.saved;
+        if (!target) return null;
+        const approved = target.rowStatus === 'approved';
+        return (
+          <PlanGridConfirmDialog
+            title="Delete this row?"
+            message={`${formatGridDate(target.postingDate)}: "${target.topic}" will be removed from this plan.${approved ? ' None of its steps has started; they will be removed too, and their owners told.' : ''}`}
+            confirmLabel="Delete row"
+            isBusy={panelSaving}
+            onCancel={() => setConfirm(null)}
+            onConfirm={() => deleteRowConfirmed(confirm.key)}
+          />
+        );
+      })()}
     </section>
   );
 };

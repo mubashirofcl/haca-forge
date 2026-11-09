@@ -395,3 +395,57 @@ describe('Grid basics kept from PG-2', () => {
     await waitFor(() => expect(calls.some((c) => c.url === '/api/calendar-plans/plan1/rows/r1/submit' && c.method === 'POST')).toBe(true));
   });
 });
+
+describe('Delete a row', () => {
+  const deleteCalls = () => calls.filter((c) => c.method === 'DELETE');
+
+  it('each deletable row has a delete action; the confirm names its date and title, then deletes', async () => {
+    await renderGrid({ rows: [reel, { ...approvedRow, deletable: true }] });
+    expect(screen.getByRole('button', { name: 'Delete row: Founder reel' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete row: Approved reel' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Delete this row?' });
+    expect(dialog).toHaveTextContent('12 Nov 2031: "Approved reel" will be removed from this plan.');
+    expect(dialog).toHaveTextContent(/None of its steps has started/);
+    expect(deleteCalls()).toHaveLength(0);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete row' }));
+    await waitFor(() => expect(deleteCalls()).toHaveLength(1));
+    expect(deleteCalls()[0].url).toBe('/api/calendar-plans/plan1/rows/r3');
+  });
+
+  it('cancel deletes nothing', async () => {
+    await renderGrid({ rows: [reel] });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete row: Founder reel' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Delete this row?' });
+    expect(dialog).toHaveTextContent('12 Nov 2031: "Founder reel"');
+    expect(dialog).not.toHaveTextContent(/None of its steps/);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog', { name: 'Delete this row?' })).not.toBeInTheDocument();
+    expect(deleteCalls()).toHaveLength(0);
+  });
+
+  it('a row whose steps have started has no delete action, in the grid or the panel', async () => {
+    await renderGrid({ rows: [{ ...approvedRow, deletable: false }] });
+    expect(screen.queryByRole('button', { name: /^Delete row/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Row details: Approved reel' }));
+    const panel = await screen.findByRole('dialog', { name: /Approved reel/ });
+    expect(within(panel).queryByRole('button', { name: 'Delete row' })).not.toBeInTheDocument();
+  });
+
+  it('the side panel of an approved, unstarted row offers delete with the same confirm', async () => {
+    await renderGrid({ rows: [{ ...approvedRow, deletable: true }] });
+    fireEvent.click(screen.getByRole('button', { name: 'Row details: Approved reel' }));
+    const panel = await screen.findByRole('dialog', { name: /Approved reel/ });
+    expect(within(panel).queryByRole('button', { name: 'Save row' })).not.toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Delete row' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Delete this row?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete row' }));
+    await waitFor(() => expect(deleteCalls()).toHaveLength(1));
+    expect(deleteCalls()[0].url).toBe('/api/calendar-plans/plan1/rows/r3');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Approved reel/ })).not.toBeInTheDocument());
+  });
+
+  it('read-only viewers see no delete action', async () => {
+    await renderGrid({ rows: [reel], permissions: { canEdit: false, canReview: false, readOnly: true } });
+    expect(screen.queryByRole('button', { name: /^Delete row/ })).not.toBeInTheDocument();
+  });
+});

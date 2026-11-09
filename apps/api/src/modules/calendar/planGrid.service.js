@@ -33,6 +33,7 @@ import {
 import { CalendarPlan } from './plan.model.js';
 import { ContentPiece } from './contentPiece.model.js';
 import { WorkItem } from '../workItems/model.js';
+import { Submission } from '../submissions/model.js';
 import { Person } from '../people/model.js';
 import { logActivity } from '../activity/service.js';
 import { autofillRowPlan, buildAutofillContext } from './autofill.service.js';
@@ -180,6 +181,8 @@ export function toGridRow(piece, workItems = []) {
     rowId: String(piece._id),
     rowStatus: piece.rowStatus,
     editable: piece.rowStatus !== 'approved',
+    // Delete is allowed until any of the row's steps has started (the API checks again on delete).
+    deletable: !workItems.some((w) => w.started),
     // 18 Excel columns
     postingDate: ymdInAppTz(piece.postingDate),
     topic: piece.topic,
@@ -229,10 +232,15 @@ async function loadGridRows(planId) {
     .sort({ postingDate: 1, createdAt: 1 })
     .lean();
   const workItems = await WorkItem.find({ contentPieceId: { $in: pieces.map((p) => p._id) } })
-    .select('contentPieceId stageKey status isSkipped isLocked approvedAt postedAt')
+    .select('contentPieceId stageKey status isSkipped isLocked approvedAt postedAt startedAt')
     .lean();
+  // Same "started" rule as plan and row delete: left Not Started, has a start time, or has a submission.
+  const submitted = workItems.length
+    ? new Set((await Submission.distinct('workItemId', { workItemId: { $in: workItems.map((w) => w._id) } })).map(String))
+    : new Set();
   const byPiece = new Map();
   for (const w of workItems) {
+    w.started = w.status !== 'Not Started' || Boolean(w.startedAt) || submitted.has(String(w._id));
     const k = String(w.contentPieceId);
     if (!byPiece.has(k)) byPiece.set(k, []);
     byPiece.get(k).push(w);

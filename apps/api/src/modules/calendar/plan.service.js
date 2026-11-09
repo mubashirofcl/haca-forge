@@ -24,6 +24,8 @@ import {
   isMonthKey,
   monthPeriod,
   planMonthKey,
+  istDateKey,
+  formatGridDate,
 } from '@mmp/shared';
 import { recommendAssignee } from '../assignment/service.js';
 import { validatePlanAndRows } from './validation.js';
@@ -705,7 +707,21 @@ function priorityInput(value) {
   return parsed || 'Normal';
 }
 
+export const ROW_STARTED_MESSAGE = "This post has started work and can't be deleted.";
+
+/**
+ * Delete one row (SM Manager and Admin). An unapproved row is simply removed. An approved
+ * row can be removed only while none of its steps has started (same rule as plan delete,
+ * Phase 6): its unstarted steps go with it, and their owners are told the post was removed.
+ */
 export async function deleteRow(planId, rowId, user) {
+  const userRole = normalizeRole(user.role);
+  if (userRole !== 'admin' && userRole !== 'sm_manager') {
+    const error = new Error('Only SM Manager and Admin can delete plan rows.');
+    error.statusCode = 403;
+    error.code = 'FORBIDDEN_ROLE';
+    throw error;
+  }
   const plan = await CalendarPlan.findById(planId);
   if (!plan) {
     const error = new Error('Calendar plan not found');
@@ -718,20 +734,60 @@ export async function deleteRow(planId, rowId, user) {
     error.statusCode = 404;
     throw error;
   }
-  if (piece.rowStatus === 'approved') {
-    const error = new Error('Approved rows cannot be deleted.');
-    error.statusCode = 400;
-    error.code = 'ROW_ALREADY_APPROVED';
+
+  // Steps exist only once a row is approved; checked for every row so none is ever left behind.
+  const work = await planWorkState([piece._id]);
+  if (work.started > 0) {
+    const error = new Error(ROW_STARTED_MESSAGE);
+    error.statusCode = 409;
+    error.code = 'ROW_HAS_STARTED_WORK';
     throw error;
   }
-  await ContentPiece.findByIdAndDelete(rowId);
+  const steps = work.ids.length
+    ? await WorkItem.find({ _id: { $in: work.ids } }).select('_id ownerId stageKey').lean()
+    : [];
+  // Only steps still unstarted are matched, so a step that starts meanwhile is never removed.
+  const removedSteps = work.ids.length
+    ? (await WorkItem.deleteMany({ _id: { $in: work.ids }, ...UNSTARTED_STEP })).deletedCount
+    : 0;
+  await ContentPiece.findByIdAndDelete(piece._id);
+
+  const dateLabel = formatGridDate(istDateKey(piece.postingDate) || '');
   await logActivity({
     entityType: 'calendar_plan',
     entityId: plan._id,
     actor: user,
     action: 'calendar_plan.row_deleted',
-    metadata: { rowId, topic: piece.topic },
+    metadata: {
+      rowId: String(piece._id),
+      topic: piece.topic,
+      postingDate: istDateKey(piece.postingDate),
+      rowStatus: piece.rowStatus,
+      deletedWorkItemsCount: removedSteps,
+    },
   });
+
+  // One notice per owner of a removed step (the person deleting is not notified).
+  const actorId = String(user._id || user.id || user.userId || '');
+  const stepsByOwner = new Map();
+  for (const st of steps) {
+    if (!st.ownerId || String(st.ownerId) === actorId) continue;
+    const k = String(st.ownerId);
+    if (!stepsByOwner.has(k)) stepsByOwner.set(k, []);
+    stepsByOwner.get(k).push(st.stageKey);
+  }
+  for (const [ownerId, stageKeys] of stepsByOwner) {
+    const stepWord = stageKeys.length === 1 ? 'step' : 'steps';
+    await createNotification({
+      recipient: ownerId,
+      type: 'step_removed',
+      title: 'Post removed from the plan',
+      message: `"${piece.topic}" (${dateLabel}) was removed from ${plan.title}. Your ${stageKeys.join(', ')} ${stepWord} for it ${stageKeys.length === 1 ? 'is' : 'are'} no longer needed.`,
+      link: '/my-work',
+      metadata: { planId: plan._id, contentPieceId: piece._id, stageKeys },
+    });
+  }
+
   return getPlanById(planId, user);
 }
 

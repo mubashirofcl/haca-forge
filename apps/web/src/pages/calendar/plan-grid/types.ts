@@ -5,6 +5,8 @@ export interface GridRow {
   rowId: string;
   rowStatus: 'draft' | 'submitted' | 'changes_requested' | 'approved';
   editable: boolean;
+  /** False once any of the row's steps has started; delete is then refused (409). */
+  deletable?: boolean;
   postingDate: string;
   topic: string;
   type: string;
@@ -142,3 +144,9 @@ export const STATUS_STAGE: Partial<Record<PlanGridColumnKey, StageKey>> = {
   editStatus: 'Edit',
   editDoneDate: 'Edit',
 };
+
+/** SM Manager / Admin can delete a saved row until any of its steps has started. */
+export function rowCanBeDeleted(row: GridRow | null | undefined, canEdit: boolean): boolean {
+  if (!row || !canEdit) return false;
+  return row.deletable ?? row.editable;
+}

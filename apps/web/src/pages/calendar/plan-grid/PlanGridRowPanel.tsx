@@ -16,7 +16,7 @@ import {
   type StepLineState,
 } from '../planRowSteps';
 import { OWNER_FIELD_BY_STAGE, STAGE_LABEL } from './columns';
-import type { GridCellInput, GridLine, GridPerson } from './types';
+import { rowCanBeDeleted, type GridCellInput, type GridLine, type GridPerson } from './types';
 
 const ROW_STATUS: Record<string, { tone: string; label: string }> = {
   draft: { tone: 'status-not-started', label: 'Draft' },
@@ -94,6 +94,7 @@ export const PlanGridRowPanel: React.FC<Props> = ({
   useDialogFocus(ref, true, onClose);
   const row = line.saved;
   const editable = canEdit && (!row || row.editable);
+  const canDelete = rowCanBeDeleted(row, canEdit);
   const d = line.draft;
 
   const initial = useMemo(
@@ -423,9 +424,19 @@ export const PlanGridRowPanel: React.FC<Props> = ({
           </fieldset>
         </div>
 
+        {/* An approved row is read-only but can still be deleted until any of its steps has started. */}
+        {!editable && canDelete && (
+          <div className="flex flex-wrap items-center gap-2 p-5 border-t border-ui-line">
+            <button type="button" onClick={onDelete} className="ui-btn ui-btn-secondary h-11 mr-auto" disabled={isSaving}>
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
+              Delete row
+            </button>
+            <button type="button" onClick={onClose} className="ui-btn ui-btn-secondary h-11">Close</button>
+          </div>
+        )}
         {editable && (
           <div className="flex flex-wrap items-center gap-2 p-5 border-t border-ui-line">
-            {row && (
+            {row && canDelete && (
               <button type="button" onClick={onDelete} className="ui-btn ui-btn-secondary h-11 mr-auto" disabled={isSaving}>
                 <Trash2 className="w-4 h-4" aria-hidden="true" />
                 Delete row
