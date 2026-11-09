@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { evaluateSteps } from '../workItems/timeLabels.js';
-import { hasTimeLabel, projectDelivery, projectTimeLabel, workflowLabel } from '@mmp/shared';
+import { hasTimeLabel, projectDelivery, projectTimeLabel, workflowLabel, isMonthKey, monthPeriod, istDateKey } from '@mmp/shared';
+
 import { ContentPiece } from './contentPiece.model.js';
 import { WorkItem } from '../workItems/model.js';
 import { Person } from '../people/model.js';
@@ -10,6 +11,8 @@ import { createNotification } from '../notifications/service.js';
 import { resolveScope } from '../../lib/scope.js';
 import { recommendAssignee } from '../assignment/service.js';
 import { normalizeRole, calculateIndividualWorkMeasures, formatDuration } from '@mmp/shared';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * List Content Pieces (Content Tracker) with stages and metrics
@@ -36,18 +39,18 @@ export async function listContentPieces(filters = {}, user) {
   if (filters.type) {
     query.contentType = filters.type;
   }
-  if (filters.month) {
-    // format YYYY-MM
-    const [year, month] = filters.month.split('-').map(Number);
-    const startOfMonth = new Date(year, month - 1, 1);
-    const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
-    query.postingDate = { $gte: startOfMonth, $lte: endOfMonth };
+  // Month = the IST calendar month of the publish date (same rule as the reports): query a day
+  // wider than the month, then keep the exact IST month.
+  const month = isMonthKey(filters.month) ? filters.month : null;
+  if (month) {
+    const { periodStart, periodEnd } = monthPeriod(month);
+    query.postingDate = { $gte: new Date(periodStart.getTime() - DAY_MS), $lte: new Date(periodEnd.getTime() + DAY_MS) };
   }
 
-  const pieces = await ContentPiece.find(query)
+  const pieces = (await ContentPiece.find(query)
     .populate('planId', 'code title kind')
     .sort({ postingDate: 1 })
-    .lean();
+    .lean()).filter((p) => !month || (istDateKey(p.postingDate) || '').slice(0, 7) === month);
 
   const pieceIds = pieces.map((p) => p._id);
   const allStages = await WorkItem.find({ contentPieceId: { $in: pieceIds } })

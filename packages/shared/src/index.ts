@@ -3416,6 +3416,26 @@ export function istDateKey(value: DateLike): string | null {
   return IST_DATE_FORMAT.format(d);
 }
 
+/**
+ * Short date for screens: "16 Nov", with the year only when it is not the current year
+ * ("3 Jan 2027"). IST calendar day. '' for a missing or invalid date.
+ */
+export function formatShortDate(value: DateLike, now: Date = new Date()): string {
+  const key = istDateKey(value);
+  if (!key) return "";
+  const year = Number(key.slice(0, 4));
+  const currentYear = Number((istDateKey(now) || "").slice(0, 4));
+  return `${Number(key.slice(8, 10))} ${SHORT_MONTHS[Number(key.slice(5, 7)) - 1]}${year !== currentYear ? ` ${year}` : ""}`;
+}
+
+const IST_TIME_FORMAT = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+/** "16 Nov, 14:05" (IST, 24-hour), with the year rule of formatShortDate. '' for a missing date. */
+export function formatShortDateTime(value: DateLike, now: Date = new Date()): string {
+  const day = formatShortDate(value, now);
+  return day ? `${day}, ${IST_TIME_FORMAT.format(new Date(value as string | number | Date))}` : "";
+}
+
 const dayNumber = (key: string) =>
   Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10))) / 86400000;
 
