@@ -244,7 +244,6 @@ export const PlansTab: React.FC<PlansTabProps> = ({
   const [activeMembers, setActiveMembers] = useState<TeamMemberOption[]>([]);
   const [isAddRowOpen, setIsAddRowOpen] = useState(false);
   const [rowPostingDate, setRowPostingDate] = useState('');
-  const [rowPostingTime, setRowPostingTime] = useState('18:00');
   const [rowTopic, setRowTopic] = useState('');
   const [rowBrief, setRowBrief] = useState('');
   const [rowType, setRowType] = useState('Reel A');
@@ -370,7 +369,6 @@ export const PlansTab: React.FC<PlansTabProps> = ({
     setRowTopic(row.topic);
     const postDateStr = row.postingDate ? row.postingDate.substring(0, 10) : '';
     setRowPostingDate(postDateStr);
-    setRowPostingTime(row.postingTime || '18:00');
     const cType = row.contentType || row.type || 'Reel A';
     setRowType(cType);
     setRowBrief(row.brief || '');
@@ -419,7 +417,6 @@ export const PlansTab: React.FC<PlansTabProps> = ({
       ? selectedPlan.periodStart.substring(0, 10)
       : new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10);
     setRowPostingDate(targetDate);
-    setRowPostingTime('18:00');
     setRowType('Reel A');
     setRowNeedsScript(true);
     setRowNeedsShoot(true);
@@ -762,7 +759,6 @@ export const PlansTab: React.FC<PlansTabProps> = ({
     const payload = {
       topic: rowTopic.trim(),
       postingDate: rowPostingDate,
-      postingTime: rowPostingTime || '18:00',
       contentType: rowType,
       type: rowType,
       brief: derivedBrief,
@@ -795,7 +791,6 @@ export const PlansTab: React.FC<PlansTabProps> = ({
       setEditingRowComment(null);
       setRowTopic('');
       setRowPostingDate('');
-      setRowPostingTime('18:00');
       setRowBrief('');
       setRowSourceVideoLink('');
       setRowContentLink('');
@@ -859,7 +854,6 @@ export const PlansTab: React.FC<PlansTabProps> = ({
         body: JSON.stringify({
           topic: rowTopic.trim(),
           postingDate: rowPostingDate,
-          postingTime: rowPostingTime || '18:00',
           contentType: rowType,
           type: rowType,
           brief: derivedBrief,
@@ -882,7 +876,6 @@ export const PlansTab: React.FC<PlansTabProps> = ({
       setEditingRowComment(null);
       setRowTopic('');
       setRowPostingDate('');
-      setRowPostingTime('18:00');
       setRowBrief('');
       setRowSourceVideoLink('');
       setRowContentLink('');
@@ -2140,30 +2133,17 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
-                    {mainDateLabel} (Final F)
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={rowPostingDate}
-                    onChange={(e) => handlePostingDateChange(e.target.value)}
-                    className="ui-input w-full"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
-                    Optional Time
-                  </label>
-                  <input
-                    type="time"
-                    value={rowPostingTime}
-                    onChange={(e) => setRowPostingTime(e.target.value)}
-                    className="ui-input w-full"
-                  />
-                </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  {mainDateLabel} (Final F)
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={rowPostingDate}
+                  onChange={(e) => handlePostingDateChange(e.target.value)}
+                  className="ui-input w-full"
+                />
               </div>
 
               <div>

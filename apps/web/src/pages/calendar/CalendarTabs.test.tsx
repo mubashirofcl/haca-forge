@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { CalendarPage } from './CalendarPage';
 import * as authContext from '../../context/AuthContext';
@@ -311,5 +311,18 @@ describe('CalendarPage 3 Tabs & Role-based Controls (Scope Reset R3)', () => {
     expect(screen.getByText(/Steps & Deadlines/i)).toBeDefined();
     expect(screen.getByText(/Needs script/i)).toBeDefined();
     expect(screen.getByText(/Needs shoot/i)).toBeDefined();
+
+    // No posting time: nothing uses it. Saving an edit sends no time, so the stored one is kept.
+    expect(screen.queryByText(/Optional Time/i)).toBeNull();
+    expect(document.querySelector('input[type="time"]')).toBeNull();
+    const { apiFetch } = await import('../../lib/api');
+    fireEvent.click(screen.getByRole('button', { name: /^Save Changes$/i }));
+    await waitFor(() =>
+      expect((apiFetch as any).mock.calls.some(([u, o]: [string, any]) => u.endsWith('/rows/row-3') && o?.method === 'PATCH')).toBe(true)
+    );
+    const [, patch] = (apiFetch as any).mock.calls.find(([u, o]: [string, any]) => u.endsWith('/rows/row-3') && o?.method === 'PATCH');
+    const body = JSON.parse(patch.body);
+    expect(body.topic).toBe('Sales One-off Reel');
+    expect('postingTime' in body).toBe(false);
   });
 });
