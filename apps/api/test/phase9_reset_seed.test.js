@@ -184,9 +184,19 @@ describe('Phase 9: startup creates only a missing admin and never rewrites users
   });
 
   it('no password is written in the seed or startup source', () => {
-    for (const file of ['src/modules/people/baselineUsers.js', 'src/modules/people/seedUsers.js', 'scripts/reset-and-seed.js']) {
+    // No literal passwords and no fallback values: passwords come only from the env.
+    // When a local .env exists, none of its password values may appear in these files either
+    // (checked without naming any password here).
+    const envFile = path.join(API, '.env');
+    const localValues = fs.existsSync(envFile)
+      ? [...fs.readFileSync(envFile, 'utf8').matchAll(/^(?:SEED_PASSWORD_[A-Z0-9]+|ADMIN_SEED_PASSWORD)=(.*)$/gm)]
+          .map((m) => m[1].trim().replace(/^["']|["']$/g, ''))
+          .filter((v) => v.length >= 6)
+      : [];
+    for (const file of ['src/modules/people/baselineUsers.js', 'src/modules/people/seedUsers.js', 'scripts/reset-and-seed.js', 'test/phase9_reset_seed.test.js']) {
       const text = fs.readFileSync(path.join(API, file), 'utf8');
-      expect([file, /password:\s*['"]|Admin1212|@Test\d{3}|Demo1234/.test(text)]).toEqual([file, false]);
+      expect([file, /password:\s*['"]|PASSWORD\s*\|\|\s*['"]/.test(text)]).toEqual([file, false]);
+      expect([file, localValues.filter((v) => text.includes(v)).length]).toEqual([file, 0]);
     }
     expect(missingSeedPasswords({})).toHaveLength(12);
   });
