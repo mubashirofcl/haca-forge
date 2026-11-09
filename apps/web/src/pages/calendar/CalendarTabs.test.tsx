@@ -246,6 +246,30 @@ describe('CalendarPage 3 Tabs & Role-based Controls (Scope Reset R3)', () => {
     expect(screen.getByText(/Request Changes/i)).toBeDefined();
   });
 
+  it('Create plan, step 1: a plain list of calendars with the standard dot, the current one marked', async () => {
+    (authContext.useAuth as any).mockReturnValue({
+      user: { role: 'sm_manager', name: 'Sam Manager' },
+      hasPermission: () => true,
+    });
+    render(
+      <MemoryRouter initialEntries={['/calendar']}>
+        <CalendarPage />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Add individual work/i }));
+    expect(await screen.findByText('Step 1: Which calendar is this for?')).toBeDefined();
+    const names = ['SM Calendar', 'Sales Calendar', 'Ads Calendar', 'Academics & Management Calendar', 'Other'];
+    const cards = names.map((n) => screen.getByRole('button', { name: n }));
+    // Neutral cards: no per-calendar background colours, no repeated "Creative calendar for …" line.
+    for (const c of cards) {
+      expect(c.getAttribute('style')).toBeNull();
+      expect(c.querySelector('.cal-dot')).not.toBeNull();
+    }
+    expect(screen.queryByText(/Creative calendar for/)).toBeNull();
+    expect(cards[0].getAttribute('aria-pressed')).toBe('true');
+    expect(cards[1].getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('displays Executive in read-only mode without mutation controls', async () => {
     (authContext.useAuth as any).mockReturnValue({
       user: { role: 'executive', name: 'Elena Executive' },

@@ -1806,15 +1806,17 @@ export const PlansTab: React.FC<PlansTabProps> = ({
             {createStep === 1 && (
               <div className="py-4 space-y-3">
                 <p className="text-xs text-ui-muted font-medium">
-                  Select the creative calendar this plan will be associated with:
+                  Choose the calendar for this plan.
                 </p>
-                <div className="grid grid-cols-1 gap-2.5">
+                {/* Same cards as Step 2: neutral, with the calendar's standard dot. */}
+                <div className="grid grid-cols-1 gap-3">
                   {CALENDAR_LIST.map((cal) => {
                     const isSelected = selectedCalendarForPlan === cal.id;
                     return (
                       <button
                         key={cal.id}
                         type="button"
+                        aria-pressed={isSelected}
                         onClick={() => {
                           setSelectedCalendarForPlan(cal.id);
                           if (newKind === 'monthly' && newStart) {
@@ -1826,29 +1828,15 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                           }
                           setCreateStep(newKind === 'individual' ? 3 : 2);
                         }}
-                        className={`p-3.5 rounded-xl border text-left transition-all flex items-center justify-between group hover:scale-[1.01] ${
-                          isSelected ? 'ring-2 ring-ui-ink' : 'hover:border-slate-300'
+                        className={`min-h-[52px] p-4 rounded-xl border text-left transition-all flex items-center justify-between gap-3 group hover:scale-[1.01] ${
+                          isSelected ? 'border-ui-ink bg-white/70' : 'border-slate-200 hover:border-ui-ink/30'
                         }`}
-                        style={{
-                          backgroundColor: cal.bg,
-                          borderColor: cal.border,
-                        }}
                       >
-                        <div className="flex items-center gap-3">
-                          <span
-                            className="w-3.5 h-3.5 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: cal.color }}
-                          />
-                          <div>
-                            <span className="text-xs font-extrabold block" style={{ color: cal.text }}>
-                              {cal.name}
-                            </span>
-                            <span className="text-[11px] text-ui-muted">
-                              Creative calendar for {cal.name}
-                            </span>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-ui-muted group-hover:text-slate-700" />
+                        <span className="flex items-center gap-3 min-w-0">
+                          <span className={`cal-dot cal-${cal.key} flex-shrink-0`} aria-hidden="true" />
+                          <span className="text-xs font-bold text-slate-900 truncate">{cal.name}</span>
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-ui-muted group-hover:text-ui-ink flex-shrink-0" aria-hidden="true" />
                       </button>
                     );
                   })}
@@ -1864,10 +1852,8 @@ export const PlansTab: React.FC<PlansTabProps> = ({
                   {(() => {
                     const cal = getCalendarDefinition(selectedCalendarForPlan);
                     return (
-                      <span
-                        className="text-[11px] font-bold px-2 py-0.5 rounded-full border"
-                        style={{ backgroundColor: cal.bg, borderColor: cal.border, color: cal.text }}
-                      >
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-ui-line bg-white/70 text-ui-ink">
+                        <span className={`cal-dot cal-${cal.key}`} aria-hidden="true" />
                         {cal.name}
                       </span>
                     );
