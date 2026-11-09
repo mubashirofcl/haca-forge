@@ -18,6 +18,7 @@ import {
 } from '@mmp/shared';
 import { Person } from '../people/model.js';
 import { WorkItem } from '../workItems/model.js';
+import { logger } from '../../lib/logger.js';
 
 export const TEMPLATE_COLUMNS = [
   { header: 'Posting Date', key: 'postingDate', width: 16 },
@@ -220,17 +221,38 @@ export function cellText(val) {
   return String(val);
 }
 
-async function loadFirstWorksheet(buffer, mimetype = '') {
+export const UNREADABLE_FILE_MESSAGE =
+  "This file couldn't be read. Download a fresh template and copy your rows into it.";
+
+/**
+ * Read an uploaded Excel or CSV file. ExcelJS throws on files it can't parse (a broken zip,
+ * or comment links written as absolute paths by some tools, e.g. openpyxl); that becomes a
+ * 400 with a plain message, and the original error is logged.
+ */
+async function readWorkbook(buffer, mimetype = '') {
   const workbook = new ExcelJS.Workbook();
   const isCsv = looksLikeCsv(buffer, mimetype);
-  if (isCsv) {
-    const stream = new (await import('stream')).Readable();
-    stream.push(buffer);
-    stream.push(null);
-    await workbook.csv.read(stream);
-  } else {
-    await workbook.xlsx.load(buffer);
+  try {
+    if (isCsv) {
+      const stream = new (await import('stream')).Readable();
+      stream.push(buffer);
+      stream.push(null);
+      await workbook.csv.read(stream);
+    } else {
+      await workbook.xlsx.load(buffer);
+    }
+  } catch (err) {
+    logger.warn({ err, bytes: buffer?.length, mimetype, format: isCsv ? 'csv' : 'xlsx' }, 'Plan upload: file could not be parsed');
+    const error = new Error(UNREADABLE_FILE_MESSAGE);
+    error.statusCode = 400;
+    error.code = 'UNREADABLE_FILE';
+    throw error;
   }
+  return workbook;
+}
+
+async function loadFirstWorksheet(buffer, mimetype = '') {
+  const workbook = await readWorkbook(buffer, mimetype);
   return workbook.worksheets[0] || null;
 }
 
@@ -314,19 +336,7 @@ export async function parseBufferToGridInput(buffer, mimetype = '') {
  * Parses buffer (Excel or CSV) into raw row objects
  */
 export async function parseBufferToRows(buffer, mimetype = '') {
-  const workbook = new ExcelJS.Workbook();
-  const isCsv = looksLikeCsv(buffer, mimetype);
-
-  if (isCsv) {
-    const stream = new (await import('stream')).Readable();
-    stream.push(buffer);
-    stream.push(null);
-    await workbook.csv.read(stream);
-  } else {
-    await workbook.xlsx.load(buffer);
-  }
-
-  const worksheet = workbook.worksheets[0];
+  const worksheet = await loadFirstWorksheet(buffer, mimetype);
   if (!worksheet) return [];
 
   const rows = [];
