@@ -184,8 +184,13 @@ export async function listContentPieces(filters = {}, user) {
       pieceStatus = 'Done';
     }
 
-    const hasNeedsOwner = enrichedStages.some((s) => !s.ownerId || (s.status === 'Not Started' && !s.assigneeConfirmed));
-    const hasWaitingApproval = enrichedStages.some((s) => s.status === 'Feedback');
+    // Needs owner: a step not done or skipped that has no owner. (The old rule also counted every
+    // unstarted step because it read an `assigneeConfirmed` field that is never set.)
+    const stepOpen = (s) => !s.isSkipped && s.status !== 'Approved' && s.status !== 'Published';
+    const hasNeedsOwner = enrichedStages.some((s) => stepOpen(s) && !s.ownerId);
+    // Waiting for approval: a step submitted and waiting for the Creative Head (Pending).
+    // ('Feedback' is changes requested, which the old rule matched by mistake.)
+    const hasWaitingApproval = enrichedStages.some((s) => s.status === 'Pending');
     const hasBlocked = enrichedStages.some((s) => s.status === 'Blocked');
     const hasOverdue = maxLateByDays > 0;
 

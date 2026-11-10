@@ -75,4 +75,22 @@ describe('Tracker list: IST month and role scoping', () => {
       expect((await request(app).get('/api/content-pieces').set(as(who))).status, who).toBe(403);
     }
   });
+
+  it('Needs owner = an open step with no owner; Waiting for approval = a step Pending', async () => {
+    const list = async (q) => mine(await request(app).get('/api/content-pieces').query(q).set(as('admin'))).map((p) => p.topic.split(' ')[0]).sort();
+    // Every seeded step has an owner and none is waiting.
+    expect(await list({ needsOwner: 'true' })).toEqual([]);
+    expect(await list({ waitingApproval: 'true' })).toEqual([]);
+    const [script] = await WorkItem.find({ contentPieceId: pieces.nov30._id, stageKey: 'Script' });
+    await WorkItem.updateOne({ _id: script._id }, { $set: { ownerId: null } });
+    const [edit] = await WorkItem.find({ contentPieceId: pieces.nov1._id });
+    await WorkItem.updateOne({ _id: edit._id }, { $set: { status: 'Pending', submittedAt: new Date() } });
+    expect(await list({ needsOwner: 'true' })).toEqual(['nov30']);
+    expect(await list({ waitingApproval: 'true' })).toEqual(['nov1']);
+    // Changes requested is not waiting for approval; a done step without an owner does not need one.
+    await WorkItem.updateOne({ _id: edit._id }, { $set: { status: 'Feedback' } });
+    await WorkItem.updateOne({ _id: script._id }, { $set: { status: 'Approved', approvedAt: new Date() } });
+    expect(await list({ waitingApproval: 'true' })).toEqual([]);
+    expect(await list({ needsOwner: 'true' })).toEqual([]);
+  });
 });
