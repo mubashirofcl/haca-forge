@@ -1,6 +1,22 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after Phase 10):** 1747 passing, 0 failing: API 1424 (70 files), web 323 (45 files). Typecheck 0 errors; web build clean.
+**Current test count (after Phase 11):** 1765 passing, 0 failing: API 1427 (71 files), web 338 (47 files). Typecheck 0 errors; web build clean.
+
+## Phase 11: Calendar picker, account menu, Content Flow Tracker (Status: COMPLETE; committed locally, not pushed)
+
+Each commit gated in the working tree (typecheck, web build, all tests).
+
+- `375955d` Create plan, Step 1: the calendar list uses the same neutral cards as Step 2 with the standard calendar dot; the repeated "Creative calendar for …" line is gone.
+- `2c85e57` Account menu: no purple; neutral role chip, muted icons, keyboard-only focus ring; Sign out stays red like the side menu.
+- `770dc5e` Shared `formatShortDate` ("16 Nov", year only when not the current year, IST) and `formatShortDateTime`. Tracker month filter = the IST month of the publish date (same rule as the reports).
+- `e63391a` Tracker flags: Needs owner = an open step with no owner (the old rule read a never-set `assigneeConfirmed` field, so every unstarted step counted; Profile's count uses the same flag). Waiting for approval = a Pending step (the old rule matched Feedback, i.e. changes requested).
+- `54dae0d` Tracker redesign (no data rule changes):
+  - Rows in three areas: title and chips (workflow, calendar, plan ID, project label, Urgent); the steps in order with connectors (equal-height chips: status, owner, due date, time labels; current step outlined; locked, skipped and "Not needed" muted; scrolls inside the row); publish date, current state line, live status and icon actions with a ⋯ menu (Skip / Restore step). Details expand into Waiting, Work time, Approval wait, Late by, Approval, Posting owner, Turnaround, Remarks. Phone: cards with vertical steps.
+  - One filter bar: search, Month (built around today), Calendar, Type, Workflow, Current step, Owner, Status (Overdue, Done late, Blocked, On track, Posted, Needs owner, Waiting for approval, Not approved yet), Urgent only; sort by publish date or next due date; removable chips, Clear all, post count. Filters live in the URL; older links (?needsOwner=true, ?stageStatus=) still work, so the Profile "Needs owner" link now applies.
+  - Approved rows by default; rows with no steps only under "Not approved yet". Approval (last creation step's approval date) and Posting owner (Post step owner) filled from existing step data, display only.
+  - Fixes: Turnaround "—" or "N days" (it showed "d" because a stored null passed an `!== undefined` check); one date format; no monospace; "Final Date (F)" renamed "Publish date".
+- Data notes: Approval and Posting owner were always empty because the API never set those fields. "Production Team" as an owner is the seeded shooter account renamed in the app (a data change, not code).
+- Browser check (disposable `marketing_portal_uicheck`, test-only users, throwaway passwords; repo API on :8093 with env overrides, web on :5301): 17/17 at 1440, 1024 and 390 px — approved rows only, one-line pipelines with equal chips, one date format, no monospace, no page scroll at any width, chips and labels, current step, expand details (Turnaround "9 days"), filters combined and kept through a refresh, chips and Clear all, Not approved yet, the Profile link, Waiting for approval, sort by next due, Creative Head view, no page errors. Before and after screenshots taken at desktop and phone width. Disposable DB dropped. The real DB changed during the session only through the owner's own app use (Creative Head approval, rating and step updates, logins); none from the checks.
 
 ## Phase 10: Plan fixes, row delete, calendar names and row workflows (Status: COMPLETE; committed locally, not pushed)
 
