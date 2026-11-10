@@ -1,75 +1,24 @@
-import { TimeLabelChips, type TimeLabel } from '../../components/TimeLabelChips';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Table, Sparkles, X, Check } from 'lucide-react';
+import { formatShortDate, formatShortDateTime, getStepStatusLabel } from '@mmp/shared';
 import { apiFetch } from '../../lib/api';
-import { statusClass, statusTone } from '../../lib/statusTone';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useAuth } from '../../context/AuthContext';
-import {
-  Table,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  UserX,
-  ExternalLink,
-  Sparkles,
-  Lock,
-  X,
-  Check,
-} from 'lucide-react';
-import { getCalendarDefinition, type CalendarKey, type StageKey, type WorkItemStatus } from '@mmp/shared';
-import { Avatar } from '../../components/Avatar';
 import { PersonWorkHistoryDrawer } from '../../components/PersonWorkHistoryDrawer';
+import { TrackerFilterBar } from './tracker/TrackerFilterBar';
+import { TrackerRow } from './tracker/TrackerRow';
+import {
+  apiParams,
+  applyTrackerFilters,
+  filtersFromParams,
+  filtersToParams,
+  ownerOptions,
+  type TrackerFilters,
+  type TrackerPiece,
+} from './tracker/trackerModel';
 
-interface StageSummary {
-  _id: string;
-  stageKey: StageKey;
-  stageOrder: number;
-  status: WorkItemStatus;
-  dueDate: string;
-  isLocked: boolean;
-  isSkipped: boolean;
-  revisions: number;
-  blockerReason?: string;
-  ownerId?: { _id: string; name: string; email: string; jobRole?: string };
-  recommendedOwnerId?: { _id: string; name: string; email: string };
-  deliverableUrl?: string;
-  publishedUrl?: string;
-  /** Phase 7: computed time labels. */
-  timeLabels?: TimeLabel[];
-}
-
-interface ContentPieceTrackerRow {
-  _id: string;
-  planId?: { _id: string; code: string; title: string };
-  postingDate: string;
-  topic: string;
-  calendar?: CalendarKey;
-  contentType: string;
-  /** e.g. "Reel · Edit only" (just the type for types with fixed steps). */
-  workflowLabel?: string;
-  pipeline: string;
-  needsScript: boolean;
-  needsShoot: boolean;
-  contentLink?: string;
-  remarks?: string;
-  rowStatus: string;
-  stagesGenerated: boolean;
-  publishedAt?: string;
-  liveUrl?: string;
-  turnaroundDays?: number;
-  stages: StageSummary[];
-  derivedStatus: string;
-  latestApprovalDate?: string;
-  postingOwner?: { _id: string; name: string; email: string };
-  hasNeedsOwner: boolean;
-  hasWaitingApproval: boolean;
-  hasBlocked: boolean;
-  hasOverdue: boolean;
-  /** Phase 7: a step done late, or the project completed late. */
-  hasDoneLate?: boolean;
-  /** Phase 7: Overdue or Completed late for the project as a whole. */
-  projectLabel?: { kind: string; text: string; days: number } | null;
-}
+type ContentPieceTrackerRow = TrackerPiece;
 
 interface AssignRecommendation {
   workItemId: string;
@@ -86,24 +35,32 @@ interface AssignRecommendation {
   }>;
 }
 
-export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCalendar }) => {
+/**
+ * Content Flow Tracker: one row per post (what it is, its steps in order, where it stands),
+ * one filter bar, filters kept in the URL. Data rules come from the API unchanged.
+ */
+export const TrackerTab: React.FC<{ selectedCalendar?: string }> = () => {
   const { user } = useAuth();
   const isExecutive = user?.role === 'executive';
   const canAssign = user?.role === 'admin' || user?.role === 'creative_head' || user?.role === 'sm_manager';
   const canManageSteps = user?.role === 'admin' || user?.role === 'sm_manager';
+  const showOwnerFilter = user?.role !== 'team_member';
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
+  const apiQuery = apiParams(filters).toString();
 
   const [pieces, setPieces] = useState<ContentPieceTrackerRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Filters State
-  const [selectedMonth, setSelectedMonth] = useState<string>('all');
-  const [selectedType, setSelectedType] = useState<string>('all');
-  const [selectedStageStatus, setSelectedStageStatus] = useState<string>('all');
-  const [filterNeedsOwner, setFilterNeedsOwner] = useState(false);
-  const [filterWaitingApproval, setFilterWaitingApproval] = useState(false);
-  const [filterOverdue, setFilterOverdue] = useState(false);
-  const [filterBlocked, setFilterBlocked] = useState(false);
-  const [filterDoneLate, setFilterDoneLate] = useState(false);
+  const updateFilters = (next: Partial<TrackerFilters>) =>
+    setSearchParams(filtersToParams({ ...filters, ...next }, searchParams), { replace: true });
+  const clearFilters = () =>
+    setSearchParams(
+      filtersToParams({ q: '', month: '', calendar: '', type: '', workflow: '', step: '', owner: '', status: '', urgent: false, sort: filters.sort, stageStatus: '' }, searchParams),
+      { replace: true }
+    );
 
   // Assign Modal State
   const [selectedPieceForAssign, setSelectedPieceForAssign] = useState<ContentPieceTrackerRow | null>(null);
@@ -132,22 +89,13 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
   const fetchTrackerData = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
-      const params = new URLSearchParams();
-      if (selectedMonth !== 'all') params.set('month', selectedMonth);
-      if (selectedType !== 'all') params.set('type', selectedType);
-      if (selectedStageStatus !== 'all') params.set('stageStatus', selectedStageStatus);
-      if (filterNeedsOwner) params.set('needsOwner', 'true');
-      if (filterWaitingApproval) params.set('waitingApproval', 'true');
-      if (filterOverdue) params.set('overdue', 'true');
-      if (filterBlocked) params.set('blocked', 'true');
-      if (filterDoneLate) params.set('doneLate', 'true');
-      if (selectedCalendar && selectedCalendar !== 'all') params.set('calendar', selectedCalendar);
-
-      const res = await apiFetch<{ data: ContentPieceTrackerRow[] }>(`/api/content-pieces?${params.toString()}`);
+      const res = await apiFetch<{ data: ContentPieceTrackerRow[] }>(`/api/content-pieces${apiQuery ? `?${apiQuery}` : ''}`);
       setPieces(res.data || []);
     } catch (err) {
       console.error('Failed to fetch tracker data', err);
+      setLoadError('The tracker could not be loaded. Try again.');
     } finally {
       setIsLoading(false);
     }
@@ -155,19 +103,15 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
   useEffect(() => {
     fetchTrackerData();
-  }, [
-    selectedMonth,
-    selectedType,
-    selectedStageStatus,
-    filterNeedsOwner,
-    filterWaitingApproval,
-    filterOverdue,
-    filterBlocked,
-    filterDoneLate,
-    selectedCalendar,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiQuery]);
+
+  const rows = useMemo(() => applyTrackerFilters(pieces, filters), [pieces, filters]);
+  const owners = useMemo(() => ownerOptions(pieces), [pieces]);
+  const now = new Date();
 
   useEffect(() => {
+    if (!canAssign) return;
     const fetchUsers = async () => {
       try {
         const res = await apiFetch<{ data: any[] }>('/api/people?status=active');
@@ -188,6 +132,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
       }
     };
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Open Assign Modal and fetch recommendations
@@ -320,443 +265,60 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
     }
   };
 
+  const emptyText =
+    filters.status === 'not_approved'
+      ? 'No rows waiting for approval match these filters.'
+      : 'No approved posts match these filters. Rows not approved yet are under Status: Not approved yet.';
+
   return (
     <div className="space-y-4">
-      {/* Filter Cockpit Strip */}
-      <div className="glass-panel rounded-ui-panel p-5 sm:p-6 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-ui-ink flex items-center gap-2">
-              <Table className="w-5 h-5 text-ui-ink" />
-              Content Flow Tracker
-            </h2>
-            <p className="text-[13px] text-ui-muted mt-0.5 max-w-[70ch]">
-              Multi-stage pipeline tracking: stage status, deadlines, intelligent assignments, approvals, and turnaround.
-            </p>
-          </div>
-
-          {/* Quick Filter Toggles */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              onClick={() => setFilterNeedsOwner(!filterNeedsOwner)}
-              aria-pressed={filterNeedsOwner}
-              className={`h-11 px-4 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${
-                filterNeedsOwner ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
-              }`}
-            >
-              <UserX className="w-3.5 h-3.5" />
-              Needs Owner
-            </button>
-
-            <button
-              onClick={() => setFilterWaitingApproval(!filterWaitingApproval)}
-              aria-pressed={filterWaitingApproval}
-              className={`h-11 px-4 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${
-                filterWaitingApproval ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              Waiting Approval
-            </button>
-
-            <button
-              onClick={() => setFilterOverdue(!filterOverdue)}
-              aria-pressed={filterOverdue}
-              className={`h-11 px-4 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${
-                filterOverdue ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
-              }`}
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Overdue
-            </button>
-
-            <button
-              onClick={() => setFilterBlocked(!filterBlocked)}
-              aria-pressed={filterBlocked}
-              className={`h-11 px-4 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${
-                filterBlocked ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
-              }`}
-            >
-              Blocked
-            </button>
-
-            <button
-              onClick={() => setFilterDoneLate(!filterDoneLate)}
-              aria-pressed={filterDoneLate}
-              data-testid="tracker-filter-done-late"
-              className={`h-11 px-4 rounded-full text-[13px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${
-                filterDoneLate ? 'bg-ui-ink text-white border-transparent' : 'bg-white/60 text-ui-text border-ui-line hover:bg-white'
-              }`}
-            >
-              Done late
-            </button>
-          </div>
-        </div>
-
-        {/* Dropdown Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-4 border-t border-ui-line text-xs">
-          <div>
-            <label className="text-[13px] font-medium text-ui-muted block mb-1">
-              Month
-            </label>
-            <select
-              aria-label="Month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="ui-select w-full"
-            >
-              <option value="all">All Months</option>
-              <option value="2026-10">October 2026</option>
-              <option value="2026-11">November 2026</option>
-              <option value="2026-12">December 2026</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-[13px] font-medium text-ui-muted block mb-1">
-              Content Type
-            </label>
-            <select
-              aria-label="Content type"
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="ui-select w-full"
-            >
-              <option value="all">All Content Types</option>
-              <option value="Reel">Reel</option>
-              <option value="Static Post">Static Post</option>
-              <option value="Carousel Post">Carousel Post</option>
-              <option value="Story">Story</option>
-              <option value="Poster">Poster</option>
-              <option value="Brochure">Brochure</option>
-              <option value="Flyer">Flyer</option>
-              <option value="Banner">Banner</option>
-              <option value="Standee">Standee</option>
-              <option value="Certificate">Certificate</option>
-              <option value="ID Card">ID Card</option>
-              <option value="Presentation">Presentation</option>
-              <option value="Newsletter">Newsletter</option>
-              <option value="Merchandise">Merchandise</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-[13px] font-medium text-ui-muted block mb-1">
-              Stage Status
-            </label>
-            <select
-              aria-label="Stage status"
-              value={selectedStageStatus}
-              onChange={(e) => setSelectedStageStatus(e.target.value)}
-              className="ui-select w-full"
-            >
-              <option value="all">All Stage Statuses</option>
-              <option value="Not Started">Not Started</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Feedback">Feedback</option>
-              <option value="Approved">Approved</option>
-              <option value="Published">Published</option>
-              <option value="Blocked">Blocked</option>
-            </select>
-          </div>
-
-          <div className="flex items-end">
-            <span className="text-xs text-ui-muted font-medium">
-              Showing <span className="font-semibold text-ui-ink">{pieces.length}</span> tracker items
-            </span>
-          </div>
+      <div className="flex items-start gap-2 px-1">
+        <Table className="w-5 h-5 text-ui-ink mt-0.5 shrink-0" aria-hidden="true" />
+        <div>
+          <h2 className="text-lg font-bold text-ui-ink">Content Flow Tracker</h2>
+          <p className="text-[13px] text-ui-muted mt-0.5 max-w-[70ch]">Every approved post, its steps in order, and where it stands.</p>
         </div>
       </div>
 
-      {/* Sheet-like Tracker Table */}
-      <div className="glass-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="ui-table w-full text-left text-xs border-collapse">
-            <thead className="bg-slate-50/90 text-slate-600 font-bold border-b border-slate-200">
-              <tr>
-                <th className="p-3 whitespace-nowrap">Content Piece</th>
-                <th className="p-3 whitespace-nowrap">Final Date (F)</th>
-                <th className="p-3 min-w-[340px]">Pipeline Stages & Owners</th>
-                <th className="p-3 whitespace-nowrap">Waiting</th>
-                <th className="p-3 whitespace-nowrap">Work Time</th>
-                <th className="p-3 whitespace-nowrap">Approval Wait</th>
-                <th className="p-3 whitespace-nowrap">Late by</th>
-                <th className="p-3 whitespace-nowrap">Approval</th>
-                <th className="p-3 whitespace-nowrap">Live URL & Date</th>
-                <th className="p-3 whitespace-nowrap">Posting Owner</th>
-                <th className="p-3 whitespace-nowrap">Turnaround</th>
-                <th className="p-3">Remarks</th>
-                {!isExecutive && <th className="p-3 text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {pieces.length === 0 && !isLoading ? (
-                <tr>
-                  <td colSpan={13} className="p-8 text-center text-ui-muted">
-                    No approved content pieces match the selected filters.
-                  </td>
-                </tr>
-              ) : (
-                pieces.map((piece) => {
-                  const cal = getCalendarDefinition(piece.calendar || (piece.planId as any)?.calendar);
-                  return (
-                    <tr
-                      key={piece._id}
-                      onClick={() => setSelectedTimelinePiece(piece)}
-                      className="hover:bg-white transition-colors cursor-pointer"
-                    >
-                      {/* Content Piece Details */}
-                      <td className="p-3 max-w-[200px]">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTimelinePiece(piece);
-                          }}
-                          className="block max-w-full py-[14px] -my-[14px] text-left font-semibold text-ui-ink line-clamp-1 hover:underline underline-offset-2 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-ink focus-visible:ring-offset-2"
-                          title={piece.topic}
-                        >
-                          {piece.topic}
-                        </button>
-                        {piece.projectLabel && (
-                          <span
-                            className={`status-chip ${piece.projectLabel.kind === 'overdue' ? 'status-blocked' : 'status-changes'} text-[10px] font-semibold mt-1 inline-flex`}
-                            data-testid="tracker-project-label"
-                          >
-                            {piece.projectLabel.kind === 'overdue' ? `Project ${piece.projectLabel.text.toLowerCase()}` : piece.projectLabel.text}
-                          </span>
-                        )}
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] font-mono text-ui-ink bg-white/70 px-1 py-0.2 rounded">
-                            {piece.workflowLabel || piece.contentType}
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-white/80 text-ui-text">
-                            <span className={`cal-dot cal-${cal.key}`} />
-                            {cal.name}
-                          </span>
-                          {piece.planId && (
-                            <span className="text-[10px] text-ui-muted">
-                              {piece.planId.code}
-                            </span>
-                          )}
-                        </div>
-                      </td>
+      <TrackerFilterBar
+        filters={filters}
+        owners={owners}
+        showOwner={showOwnerFilter}
+        count={rows.length}
+        onChange={updateFilters}
+        onClear={clearFilters}
+      />
 
-                      {/* Final Posting Date */}
-                      <td className="p-3 whitespace-nowrap font-semibold text-slate-800">
-                        {new Date(piece.postingDate).toLocaleDateString()}
-                      </td>
+      {loadError && (
+        <p role="alert" className="status-tint status-changes rounded-ui-control px-3 py-2 text-sm text-ui-ink">{loadError}</p>
+      )}
 
-                      {/* Stage Chips */}
-                      <td className="p-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {piece.stages.length === 0 ? (
-                            <span className="text-ui-muted italic text-[11px]">No stages generated</span>
-                          ) : (
-                            piece.stages.map((st) => {
-                              const style = statusClass(statusTone(st.status, st.isLocked));
-                              return (
-                                <div
-                                  key={st._id}
-                                  className={`p-2 rounded-xl border flex flex-col gap-1 min-w-[100px] transition-all ${
-                                    st.isLocked
-                                      ? 'bg-white/40 border-dashed border-ui-line'
-                                      : 'bg-white border-ui-line'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between gap-1">
-                                    <span className="font-bold text-[11px] text-slate-800">
-                                      {st.stageKey}
-                                    </span>
-                                    {st.isLocked ? (
-                                      <span title="Locked stage">
-                                        <Lock className="w-3 h-3 text-ui-muted" />
-                                      </span>
-                                    ) : (
-                                      <span className={`w-2 h-2 rounded-full status-dot ${style}`} />
-                                    )}
-                                  </div>
-
-                                  <span className={`status-chip ${style} text-[9px] font-bold px-1.5 py-0.5`}>
-                                    {st.status}
-                                  </span>
-                                  <TimeLabelChips labels={st.timeLabels} showOnTime={false} />
-
-                                  <div className="text-[10px] text-ui-muted truncate" title={st.ownerId?.name || 'Needs owner'}>
-                                    {st.ownerId ? (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setDrawerPersonId(st.ownerId!._id);
-                                        }}
-                                        className="inline-flex items-center gap-1.5 min-h-[44px] -my-3 hover:text-ui-ink transition-colors cursor-pointer text-left group"
-                                      >
-                                        <Avatar
-                                          url={(st.ownerId as any).avatarUrl}
-                                          name={st.ownerId.name}
-                                          userId={st.ownerId._id}
-                                          size="xs"
-                                        />
-                                        <span className="text-slate-700 font-medium group-hover:text-ui-ink truncate max-w-[120px]">
-                                          {st.ownerId.name}
-                                        </span>
-                                      </button>
-                                    ) : (
-                                      <span className="text-amber-700 font-bold">Needs owner</span>
-                                    )}
-                                  </div>
-
-                                  <div className="text-[9px] text-ui-muted font-mono">
-                                    Due: {new Date(st.dueDate).toLocaleDateString()}
-                                  </div>
-
-                                  {canManageSteps && !st.isLocked && st.status === 'Not Started' && (
-                                    <button
-                                      onClick={() => handleToggleSkipStage(piece._id, st._id, st.isSkipped)}
-                                      className="flex items-center min-h-[44px] -my-3 text-[10px] text-ui-muted hover:text-ui-ink hover:underline text-left"
-                                    >
-                                      {st.isSkipped ? 'Restore step' : 'Skip step'}
-                                    </button>
-                                  )}
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Individual Tracking & Timing Columns */}
-                      <td className="p-3 whitespace-nowrap font-medium text-slate-700">
-                        {(piece as any).waitingFormatted || '—'}
-                      </td>
-                      <td className="p-3 whitespace-nowrap font-medium text-slate-700">
-                        {(piece as any).workTimeFormatted || '—'}
-                      </td>
-                      <td className="p-3 whitespace-nowrap font-medium text-slate-700">
-                        {(piece as any).approvalWaitFormatted || '—'}
-                      </td>
-                      <td className="p-3 whitespace-nowrap font-medium text-slate-700">
-                        {(piece as any).lateByFormatted || '—'}
-                      </td>
-
-                      {/* Approval Status */}
-                      <td className="p-3 whitespace-nowrap">
-                        {piece.latestApprovalDate ? (
-                          <div className="flex items-center gap-1 text-emerald-700 font-semibold text-[11px]">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>{new Date(piece.latestApprovalDate).toLocaleDateString()}</span>
-                          </div>
-                        ) : (
-                          <span className="text-ui-muted text-[11px]">—</span>
-                        )}
-                      </td>
-
-                      {/* Published Date & Live Link */}
-                      <td className="p-3 whitespace-nowrap">
-                        {piece.liveUrl ? (
-                          <a
-                            href={piece.liveUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-ui-ink hover:underline flex items-center gap-1 font-semibold text-[11px]"
-                          >
-                            <span>Live Reel/Post</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        ) : (
-                          <span className="text-ui-muted text-[11px]">Unpublished</span>
-                        )}
-                        {piece.publishedAt && (
-                          <div className="text-[10px] text-ui-muted">
-                            {new Date(piece.publishedAt).toLocaleDateString()}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Posting Owner */}
-                      <td className="p-3 whitespace-nowrap text-slate-700 font-medium">
-                        {piece.postingOwner ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDrawerPersonId(piece.postingOwner!._id);
-                            }}
-                            className="inline-flex items-center gap-1.5 min-h-[44px] -my-3 hover:text-ui-ink transition-colors cursor-pointer group"
-                          >
-                            <Avatar
-                              url={(piece.postingOwner as any).avatarUrl}
-                              name={piece.postingOwner.name}
-                              userId={piece.postingOwner._id}
-                              size="xs"
-                            />
-                            <span className="text-slate-700 font-medium group-hover:text-ui-ink">
-                              {piece.postingOwner.name}
-                            </span>
-                          </button>
-                        ) : (
-                          <span className="text-ui-muted">—</span>
-                        )}
-                      </td>
-
-                      {/* Turnaround Days */}
-                      <td className="p-3 whitespace-nowrap">
-                        {piece.turnaroundDays !== undefined ? (
-                          <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
-                            {piece.turnaroundDays}d
-                          </span>
-                        ) : (
-                          <span className="text-ui-muted">—</span>
-                        )}
-                      </td>
-
-                      {/* Remarks */}
-                      <td className="p-3 max-w-[150px] truncate text-ui-muted" title={piece.remarks}>
-                        {piece.remarks || '—'}
-                      </td>
-
-                      {/* Actions */}
-                      {!isExecutive && (
-                        <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                          {/* Row actions open their own dialogs; keep the click from also opening the row timeline. */}
-                          <div className="flex items-center justify-end gap-1.5">
-                            {canAssign && (
-                              <button
-                                onClick={() => handleOpenAssignModal(piece)}
-                                className="ui-btn ui-btn-secondary h-11 px-3"
-                                title="Compute recommendations and assign stages"
-                              >
-                                <Sparkles className="w-3 h-3 text-ui-ink" />
-                                Assign
-                              </button>
-                            )}
-
-                            {canManageSteps && (
-                              <button
-                                onClick={() => {
-                                  setSelectedPieceForReschedule(piece);
-                                  setNewPostingDate(piece.postingDate.substring(0, 10));
-                                  setShiftUnstarted(true);
-                                }}
-                                className="ui-btn ui-btn-secondary h-11 px-3"
-                                title="Change final date and shift stage deadlines"
-                              >
-                                Change date
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {isLoading && pieces.length === 0 ? (
+        <p className="glass-card p-8 text-center text-sm text-ui-muted" aria-busy="true">Loading the tracker…</p>
+      ) : rows.length === 0 ? (
+        <p className="glass-card p-8 text-center text-sm text-ui-muted" data-testid="tracker-empty">{emptyText}</p>
+      ) : (
+        <ul className="space-y-3" aria-label="Posts" aria-busy={isLoading}>
+          {rows.map((piece) => (
+            <TrackerRow
+              key={piece._id}
+              piece={piece}
+              now={now}
+              canAssign={canAssign && !isExecutive}
+              canManageSteps={canManageSteps && !isExecutive}
+              onOpenTimeline={setSelectedTimelinePiece}
+              onAssign={handleOpenAssignModal}
+              onChangeDate={(p) => {
+                setSelectedPieceForReschedule(p);
+                setNewPostingDate(p.postingDate.substring(0, 10));
+                setShiftUnstarted(true);
+              }}
+              onToggleSkip={handleToggleSkipStage}
+              onOpenPerson={setDrawerPersonId}
+            />
+          ))}
+        </ul>
+      )}
 
       {/* Assign Stages Modal */}
       {selectedPieceForAssign && (
@@ -945,7 +507,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
             className="glass-modal max-w-md w-full p-6 animate-scaleUp"
           >
             <div className="flex items-center justify-between pb-3 border-b border-ui-line">
-              <h3 id="tracker-reschedule-title" className="text-base font-bold text-slate-900">Reschedule Final Posting Date</h3>
+              <h3 id="tracker-reschedule-title" className="text-base font-bold text-slate-900">Change publish date</h3>
               <button
                 onClick={() => setSelectedPieceForReschedule(null)}
                 aria-label="Close" className="ui-icon-btn"
@@ -956,7 +518,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
 
             <div className="py-4 space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">New Posting Date (F)</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">New publish date</label>
                 <input
                   type="date"
                   required
@@ -976,7 +538,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                 <div>
                   <span className="font-bold block">Shift unstarted stage deadlines</span>
                   <span className="text-[11px] text-ui-muted">
-                    Automatically recalculates due dates for all unstarted stages backwards from the new final date.
+                    Automatically recalculates due dates for all unstarted stages backwards from the new publish date.
                   </span>
                 </div>
               </label>
@@ -1020,8 +582,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                 </span>
                 <h3 className="text-base font-extrabold text-slate-900">{selectedTimelinePiece.topic}</h3>
                 <p className="text-xs text-ui-muted">
-                  {selectedTimelinePiece.workflowLabel || selectedTimelinePiece.contentType} • Posting Date:{' '}
-                  {new Date(selectedTimelinePiece.postingDate).toLocaleDateString()}
+                  {selectedTimelinePiece.workflowLabel || selectedTimelinePiece.contentType} · Publish date {formatShortDate(selectedTimelinePiece.postingDate)}
                 </p>
               </div>
               <button
@@ -1041,7 +602,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                     <div className="flex items-center gap-2">
                       <span className="font-extrabold text-sm text-slate-900">{st.stageKey}</span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white border text-slate-700">
-                        {st.status}
+                        {getStepStatusLabel(st.status)}
                       </span>
                     </div>
                     <span className="text-xs text-ui-muted font-semibold">
@@ -1054,25 +615,25 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                     <div>
                       <span className="text-ui-muted block text-[10px] font-bold">Due Date</span>
                       <span className="font-semibold text-slate-800">
-                        {st.dueDate ? new Date(st.dueDate).toLocaleDateString() : '—'}
+                        {formatShortDate(st.dueDate) || '—'}
                       </span>
                     </div>
                     <div>
                       <span className="text-ui-muted block text-[10px] font-bold">Started</span>
                       <span className="font-semibold text-slate-800">
-                        {st.startedAt ? new Date(st.startedAt).toLocaleString() : '—'}
+                        {formatShortDateTime(st.startedAt) || '—'}
                       </span>
                     </div>
                     <div>
                       <span className="text-ui-muted block text-[10px] font-bold">Submitted</span>
                       <span className="font-semibold text-slate-800">
-                        {st.submittedAt ? new Date(st.submittedAt).toLocaleString() : '—'}
+                        {formatShortDateTime(st.submittedAt) || '—'}
                       </span>
                     </div>
                     <div>
                       <span className="text-ui-muted block text-[10px] font-bold">Approved</span>
                       <span className="font-semibold text-slate-800">
-                        {st.approvedAt ? new Date(st.approvedAt).toLocaleString() : '—'}
+                        {formatShortDateTime(st.approvedAt) || '—'}
                       </span>
                     </div>
                     <div>
@@ -1098,7 +659,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = ({ selectedCa
                       {st.intervals.map((iv: any, idx: number) => (
                         <div key={idx} className="text-[11px] text-slate-600 bg-white p-2 rounded-lg border border-slate-100 flex items-center justify-between">
                           <span className="font-bold text-rose-700">{iv.kind}</span>
-                          <span>{new Date(iv.startedAt).toLocaleTimeString()} → {iv.endedAt ? new Date(iv.endedAt).toLocaleTimeString() : 'ongoing'}</span>
+                          <span>{formatShortDateTime(iv.startedAt)} → {iv.endedAt ? formatShortDateTime(iv.endedAt) : 'ongoing'}</span>
                           {iv.reason && <span className="text-ui-muted">({iv.reason})</span>}
                         </div>
                       ))}
