@@ -30,10 +30,12 @@ interface Props {
   onChangeDate: (p: TrackerPiece) => void;
   onToggleSkip: (pieceId: string, stageId: string, isSkipped: boolean) => void;
   onOpenPerson: (personId: string) => void;
+  /** Short owner labels for the rows shown (see ownerLabels); first name when missing. */
+  ownerNames?: Map<string, string>;
 }
 
 /** One Tracker row: what it is (left), its steps in order (middle), where it stands and actions (right). */
-export const TrackerRow: React.FC<Props> = ({ piece, now = new Date(), canAssign, canManageSteps, onOpenTimeline, onAssign, onChangeDate, onToggleSkip, onOpenPerson }) => {
+export const TrackerRow: React.FC<Props> = ({ piece, now = new Date(), canAssign, canManageSteps, onOpenTimeline, onAssign, onChangeDate, onToggleSkip, onOpenPerson, ownerNames }) => {
   const [expanded, setExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -111,7 +113,7 @@ export const TrackerRow: React.FC<Props> = ({ piece, now = new Date(), canAssign
             title={st.ownerId.name}
           >
             <Avatar url={st.ownerId.avatarUrl} name={st.ownerId.name} userId={st.ownerId._id} size="xs" />
-            <span className="truncate max-w-[96px]">{firstName(st.ownerId.name)}</span>
+            <span className="truncate max-w-[120px]">{ownerNames?.get(st.ownerId._id) || firstName(st.ownerId.name)}</span>
           </button>
         ) : (
           <span className="status-chip status-changes text-[11px] self-start">Needs owner</span>

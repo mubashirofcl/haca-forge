@@ -13,6 +13,7 @@ import {
   applyTrackerFilters,
   filtersFromParams,
   filtersToParams,
+  ownerLabels,
   ownerOptions,
   type TrackerFilters,
   type TrackerPiece,
@@ -108,6 +109,8 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = () => {
 
   const rows = useMemo(() => applyTrackerFilters(pieces, filters), [pieces, filters]);
   const owners = useMemo(() => ownerOptions(pieces), [pieces]);
+  // Owner labels for the rows shown: first name, or first name + last initial when first names clash.
+  const ownerNames = useMemo(() => ownerLabels(rows.flatMap((p) => p.stages.map((s) => s.ownerId))), [rows]);
   const now = new Date();
 
   useEffect(() => {
@@ -315,6 +318,7 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = () => {
               }}
               onToggleSkip={handleToggleSkipStage}
               onOpenPerson={setDrawerPersonId}
+              ownerNames={ownerNames}
             />
           ))}
         </ul>

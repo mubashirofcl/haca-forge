@@ -371,4 +371,28 @@ export function pipelineSlots(p: TrackerPiece): Array<{ stageKey: StageKey; stag
 
 export const firstName = (name?: string | null) => (name || '').trim().split(/\s+/)[0] || '';
 
+/**
+ * Short owner labels for the people shown: the first name, or first name plus last initial
+ * ("Ravi S.") when two or more different people share that first name. If that still clashes,
+ * the full name. Each person counts once however many steps they own.
+ */
+export function ownerLabels(people: Array<{ _id: string; name: string } | null | undefined>): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const p of people) if (p?._id) names.set(p._id, (p.name || '').trim().replace(/\s+/g, ' '));
+  const key = (s: string) => s.toLowerCase();
+  const firstCount = new Map<string, number>();
+  for (const n of names.values()) firstCount.set(key(firstName(n)), (firstCount.get(key(firstName(n))) || 0) + 1);
+  const labels = new Map<string, string>();
+  for (const [id, n] of names) {
+    const parts = n.split(' ').filter(Boolean);
+    const shared = (firstCount.get(key(firstName(n))) || 0) > 1;
+    labels.set(id, shared && parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.` : firstName(n));
+  }
+  // Still the same label for people with different names: show their full names.
+  const labelCount = new Map<string, Set<string>>();
+  for (const [id, l] of labels) labelCount.set(key(l), (labelCount.get(key(l)) || new Set()).add(key(names.get(id) || '')));
+  for (const [id, l] of labels) if ((labelCount.get(key(l))?.size || 0) > 1) labels.set(id, names.get(id) || l);
+  return labels;
+}
+
 export const dayKey = (v?: string | null) => istDateKey(v || null);

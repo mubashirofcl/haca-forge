@@ -7,6 +7,7 @@ import {
   filtersToParams,
   monthOptions,
   nextDueOf,
+  ownerLabels,
   postingOwnerOf,
   turnaroundText,
   type TrackerPiece,
@@ -84,6 +85,29 @@ describe('Tracker filters', () => {
     expect(opts[0]).toEqual({ value: '2026-05', label: 'May 2026' });
     expect(opts[12]).toEqual({ value: '2027-05', label: 'May 2027' });
     expect(monthOptions(new Date('2026-11-09T10:00:00Z'), '2025-01')[0].value).toBe('2025-01');
+  });
+});
+
+describe('Tracker owner labels', () => {
+  it('first name only, unless two different people share it: then first name + last initial', () => {
+    const l = ownerLabels([
+      { _id: '1', name: 'Ravi Shooter' },
+      { _id: '2', name: 'Ravi Editor' },
+      { _id: '3', name: 'Asha Writer' },
+      { _id: '1', name: 'Ravi Shooter' }, // the same person on another step counts once
+      null,
+    ]);
+    expect(Object.fromEntries(l)).toEqual({ '1': 'Ravi S.', '2': 'Ravi E.', '3': 'Asha' });
+    expect(Object.fromEntries(ownerLabels([{ _id: '1', name: 'Ravi Shooter' }, { _id: '3', name: 'Asha Writer' }]))).toEqual({ '1': 'Ravi', '3': 'Asha' });
+  });
+
+  it('first names compare without case; a one-word name stays as is; a clash after the initial shows full names', () => {
+    expect(Object.fromEntries(ownerLabels([{ _id: '1', name: 'test Writer One' }, { _id: '2', name: 'Test Designer Two' }, { _id: '3', name: 'Production Team' }, { _id: '4', name: 'Production' }]))).toEqual({
+      '1': 'test O.', '2': 'Test T.', '3': 'Production T.', '4': 'Production',
+    });
+    expect(Object.fromEntries(ownerLabels([{ _id: '1', name: 'Test Writer Two' }, { _id: '2', name: 'Test Editor Two' }, { _id: '3', name: 'Test Poster' }]))).toEqual({
+      '1': 'Test Writer Two', '2': 'Test Editor Two', '3': 'Test P.',
+    });
   });
 });
 

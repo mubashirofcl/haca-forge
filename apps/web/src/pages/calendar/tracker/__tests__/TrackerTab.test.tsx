@@ -22,7 +22,7 @@ const PIECES = [
   {
     _id: 'p2', topic: 'Campus walk cutdown', postingDate: '2026-11-22T00:00:00.000Z', contentType: 'Reel', workflowLabel: 'Reel · Edit only', calendar: 'sm',
     needsScript: false, needsShoot: false, pipeline: 'reel_c', rowStatus: 'approved', planId: { _id: 'pl', code: 'PLAN-2026-11-001', title: 'Nov' },
-    stages: [st('Edit', 1, { status: 'Blocked', isLocked: false }), st('Post', 2)],
+    stages: [st('Edit', 1, { status: 'Blocked', isLocked: false, ownerId: { _id: 'u2', name: 'Ravi Editor' } }), st('Post', 2)],
     hasOverdue: false, hasBlocked: true, hasNeedsOwner: false, hasWaitingApproval: false, turnaroundDays: 9,
   },
   {
@@ -81,6 +81,21 @@ describe('Content Flow Tracker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
     await waitFor(() => expect(titles()).toEqual(['Founder story', 'Campus walk cutdown']));
     expect(new URLSearchParams(screen.getByTestId('loc').textContent!).get('workflow')).toBeNull();
+  });
+
+  it('owner names: first name + last initial when first names clash among the rows shown; full name in the tooltip', async () => {
+    show('/calendar?tab=tracker');
+    await waitFor(() => expect(titles()).toHaveLength(2));
+    const [founder, walk] = screen.getAllByTestId('tracker-row');
+    const ownerButton = (scope: HTMLElement, name: string) => within(scope).getAllByTitle(name).find((e) => e.tagName === 'BUTTON')!;
+    expect(ownerButton(founder, 'Ravi Shooter').textContent).toMatch(/Ravi S\.$/);
+    expect(ownerButton(walk, 'Ravi Editor').textContent).toMatch(/Ravi E\.$/);
+    // Only one Ravi shown: first name only.
+    fireEvent.change(screen.getByLabelText('Workflow'), { target: { value: 'edit_only' } });
+    await waitFor(() => expect(titles()).toEqual(['Campus walk cutdown']));
+    const only = ownerButton(screen.getByTestId('tracker-row'), 'Ravi Editor');
+    expect(only.textContent).toMatch(/Ravi$/);
+    expect(only.textContent).not.toMatch(/Ravi E\./);
   });
 
   it('rows with no steps show only under "Not approved yet", labelled that way', async () => {
