@@ -223,6 +223,25 @@ async function withRecordedStepTimes(stages) {
   return plain;
 }
 
+/**
+ * A step saved as 'Feedback' is either waiting on the reviewer (its latest version
+ * is still 'submitted') or sent back for changes. Mark the first kind, so the
+ * workflow does not show "Changes requested" before anyone has reviewed it.
+ */
+async function markStagesAwaitingReview(stages) {
+  const ids = stages.filter((s) => s.status === 'Feedback').map((s) => s._id);
+  if (ids.length === 0) return stages;
+  const submissions = await Submission.find({ workItemId: { $in: ids }, version: { $gt: 0 } })
+    .select('workItemId status version')
+    .sort({ version: 1 })
+    .lean();
+  const latestStatus = new Map(submissions.map((sub) => [String(sub.workItemId), sub.status]));
+  for (const stage of stages) {
+    if (stage.status === 'Feedback' && latestStatus.get(String(stage._id)) === 'submitted') stage.awaitingReview = true;
+  }
+  return stages;
+}
+
 export async function getWorkItemById(id, user) {
   const workItem = await WorkItem.findById(id)
     .populate('departmentId', 'name code')
@@ -249,7 +268,7 @@ export async function getWorkItemById(id, user) {
       .select('stageKey stageOrder status isLocked isSkipped ownerId title deadline deliverableUrl publishedUrl revisions startedAt submittedAt resubmittedAt approvedAt postedAt')
       .populate('ownerId', 'name email role jobRole avatarUrl')
       .sort({ stageOrder: 1 });
-    result.pieceStages = await withRecordedStepTimes(siblingStages);
+    result.pieceStages = await markStagesAwaitingReview(await withRecordedStepTimes(siblingStages));
     // The latest approved outputs of the finished steps before this one (Phase 5).
     result.handoff = await buildHandoff(result, siblingStages);
     // The row's workflow label, and "From the plan" (brief, source video) for a step with no earlier step.

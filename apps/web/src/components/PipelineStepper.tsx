@@ -12,6 +12,8 @@ export interface PipelineStageItem {
   status?: WorkItemStatus | string;
   isLocked?: boolean;
   isSkipped?: boolean;
+  /** Saved as 'Feedback' but its latest version is still with the reviewer. */
+  awaitingReview?: boolean;
   ownerId?: { _id?: string; name?: string; email?: string; jobRole?: string; avatarUrl?: string | null } | null;
   title?: string;
   deadline?: string;
@@ -108,9 +110,11 @@ const Row: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, valu
   </div>
 );
 
-export const PipelineStepper: React.FC<PipelineStepperProps> = ({ stages, currentStageKey, currentStageId, status, blockerReason }) => {
+export const PipelineStepper: React.FC<PipelineStepperProps> = ({ stages: rawStages, currentStageKey, currentStageId, status, blockerReason }) => {
   const navigate = useNavigate();
-  if (!stages || stages.length === 0) return null;
+  if (!rawStages || rawStages.length === 0) return null;
+  // A submitted step that no one has reviewed yet is waiting for approval, not sent back.
+  const stages = rawStages.map((s) => (s.awaitingReview && s.status === 'Feedback' ? { ...s, status: 'Pending' } : s));
 
   const currentIndex = stages.findIndex(
     (s) => (currentStageId && s._id === currentStageId) || (currentStageKey && s.stageKey?.toLowerCase() === currentStageKey?.toLowerCase())

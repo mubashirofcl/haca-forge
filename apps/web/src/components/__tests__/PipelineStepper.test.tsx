@@ -77,6 +77,14 @@ describe('PipelineStepper workflow diagram', () => {
     }
   });
 
+  it('shows a submitted step that is not yet reviewed as waiting for approval', () => {
+    show([shoot, { ...edit, awaitingReview: true }, post]);
+    const [, second] = steps();
+    expect(within(second).getByText('Waiting for approval', { selector: '[data-step-status]' })).toBeInTheDocument();
+    expect(second.querySelector('.flow-node')).toHaveClass('status-waiting');
+    expect(second.querySelector('svg[data-edge]')).toHaveAttribute('data-edge', 'active');
+  });
+
   it('colours each connecting line by the hand-off it shows', () => {
     const edgeOf = (li: HTMLElement) => li.querySelector('svg[data-edge]')!;
     const { unmount } = show([shoot, { ...edit, status: 'In Progress' }, post]);
