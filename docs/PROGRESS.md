@@ -1,6 +1,45 @@
 # HACA Marketing OS — Conversion Progress
 
-**Current test count (after Phase 11):** 1765 passing, 0 failing: API 1427 (71 files), web 338 (47 files). Typecheck 0 errors; web build clean.
+**Current test count (after Phase 12):** 1839 passing, 0 failing: API 1466 (72 files), web 373 (48 files). Typecheck 0 errors; web build clean.
+
+## Phase 12: Locked workspaces, Drive-link submission, Start rework (Status: COMPLETE; committed locally, not pushed)
+
+Each commit gated in the working tree (typecheck, web build, all tests).
+
+- `b9a98ba` Workflow cards: a submitted step shows "Waiting for approval", not "Changes requested". Gate: typecheck 0 errors, web build clean, API 1427/1427, web 342/342.
+- `39bfe5e` Lock workspaces; submit every step with links; Start rework. Gate: typecheck 0 errors, web build clean, API 1466/1466 (72 files), web 373/373 (48 files).
+
+### Decisions applied
+1. Status stays `Feedback` for both a submitted step and a sent-back step; the latest version tells them apart (`stepReviewState` in `@mmp/shared`). Every screen says "Waiting for approval" or "Changes requested" accordingly.
+2. While locked, the API refuses workspace-only writes with 423 `WORKSPACES_LOCKED`: draft save, clip create, edit, replace, delete and reorder, and submit-clips. Reads, clip review, shoot review and Review Studio stay open.
+3. Caption and hashtag fields are removed from the Post workspace too (`PostCaptionFields.tsx` deleted). Captions already saved stay in the database.
+
+### What changed
+- **Switch:** `WORKSPACES_LOCKED = true` in `@mmp/shared`, read through `apps/api/src/lib/workspaceLock.js` and `apps/web/src/lib/workspaceLock.ts` (tests can run the workspace code with it off). All workspace code and data are kept.
+- **Locked screen:** the 7 workspace routes (`writing-studio`, `write`, `workspace`, `shoot`, `edit`, `design`, `post`) render `WorkspaceLockedPage`: lock illustration, "This workspace is locked for now", and "Submit with a link", which opens the submit dialog on Work Detail (`?submit=1`, owner only). No workspace buttons on My Work or Work Detail. No notification links to a workspace route (now covered by a test).
+- **Submit:** `POST /api/work/:id/submit-link` (owner only): one Google Drive or Docs link, or one or more for Design, plus an optional note, using `isDriveLink`; the dialog shows "Make sure the link is shared with HACA reviewers." The version is written first and removed if the step save fails, so a step never waits for review without a version. A saved workspace draft is left unchanged and not attached. One shared `StepSubmitDialog` on My Work and Work Detail.
+- **Old transition path:** submitting a review step through `/transition` is refused while locked (409 `USE_SUBMIT_LINK`). When unlocked, its version is created before the step save and rolled back on failure; the swallowed `try/catch` is gone.
+- **Shoot:** the clip rule applies only to a version with clips (not a link version, on a step that has clips). A link version is approved with the mandatory 1–5 rating and message, or sent back with a message and root cause. Review Studio shows clip review only for clip versions (`clipReview` on the submission). Handoff passes the Shoot link.
+- **Post:** live link only, shared `isLivePostUrl` (https, any host; rejects `http:`, `javascript:`, `data:` and credentials). The caption requirement is removed from the API and caption input is ignored. The live URL is saved on the piece and shown on the Tracker, opening in a new tab.
+- **Rework:** all three revision paths (Review Studio and Work Detail, Shoot clip review, Feedback page) end in the same state through `applyChangesRequested`: status `Feedback`, latest version `changes_requested`, one revision counted, the reviewed round decided, no round running. "Start rework" (owner, `Feedback → In Progress`) starts the new round at the click and is refused with 409 while the latest version waits for review. "Resubmit link" closes the round. Resubmitting before Start rework is refused (409 `REWORK_NOT_STARTED`). The double revision count and the duplicate "revision requested" notification on the owner's move are fixed. Start rework notifies nobody.
+- **Rework time:** shared `reworkTimeMs` (rounds after a changes-requested decision, same blocked and paused rule as work time). Shown on Work Detail ("Rework time: 2h 10m"), profile work history, project KPI step rows and the profile step CSV. No KPI formula changed.
+- **From earlier steps:** Work Detail lists every approved link handed to the step (the Shoot link, every Design link) from the existing handoff, which already applies the Phase 3 visibility rules.
+- **Waiting vs changes requested in lists:** `awaitingReview` is set on read, with nothing written, by `apps/api/src/modules/workItems/reviewState.js` for the Tracker, plan grid, calendar, work list, dashboard, team and profile pages, project report and feedback threads; the "waiting for approval" counts use it too. The reviewer's message and notes for a sent-back step come from the records each revision path already writes.
+
+### Existing items (local DB)
+48 steps. One open step with a workspace draft (Script, Blocked): it can submit a link and the draft stays. No versions awaiting review; no Shoot steps with clips under review. Two posted Post steps keep their saved captions. No data was changed.
+
+### Tests
+- New `apps/api/test/link_submit_locked.test.js` (44): lock refusals; link submission for every step type; invalid links; owner only; version and step saved together; old path refused; drafts kept; Shoot approved directly and sent back; clip rule kept for clip versions; file versions still reviewable; Post live link only and URL rules; Start rework then Resubmit with round times, rework time and revision counts; the same end state from all three revision paths; every workflow (Reel Full, Shoot + Edit, Edit only, With content, Design only, not posted) from start to finish with links and one rework, never stuck; list flags; no workspace links in notifications.
+- New `apps/web/src/__tests__/WorkspacesLocked.test.tsx` (21): every workspace route behind the lock and Review Studio not; the locked screen and its button; no workspace buttons on My Work and Work Detail for any step type; the switch brings them back.
+- Updated for the new rules: review decision integrity, timing, media and shoot, workflow and workspace journeys, Phase 5d (now "live link only"), tracker month roles, Phase 8 CSV (new Rework time column), web review flows and the Post workspace. Older workspace-flow test files run with the switch off.
+- `scope_reset_r4` "Step 3" (approving a whole plan) has its own 30 s limit: it already took 11 s alone at `b9a98ba`, close to the 15 s default, and timed out under full-suite load.
+
+### Browser check
+Disposable `marketing_portal_uicheck` (10 test-only users, throwaway password); repo API on :8093 and web on :5301, proxied only to it. Reel Full and Static Post with links only, one rework on Shoot and one on Design, as writer, shooter, editor, copywriter, designer, poster, Creative Head, SM Manager and Executive, at 1440 and 390 px: **81 of 81 checks passed**, with no page errors, 5xx responses or alert dialogs and no page-level horizontal scroll. Disposable DB dropped and both servers stopped afterwards. Real DB unchanged (48 steps; latest step update before the run).
+
+### Notes
+- The seeded check rows had no workflow flags, so their label read "Reel · Edit only". Test data only.
 
 ## Phase 11: Calendar picker, account menu, Content Flow Tracker (Status: COMPLETE; committed locally, not pushed)
 
