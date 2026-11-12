@@ -19,13 +19,19 @@ import {
   claimSubmission,
   releaseSubmission,
   afterDecision,
+  applyChangesRequested,
+  clipReviewApplies,
+  assertReworkStarted,
   isAwaitingDecision,
 } from './reviewDecision.js';
 import {
   STAGE_PRIMARY_OUTPUT_KIND,
   STAGE_FALLBACK_OUTPUT_KIND,
+  DRIVE_LINK_ERROR,
+  isDriveLink,
   normalizeRole,
   getWorkspaceMode,
+  stepAllowsManyLinks,
 } from '@mmp/shared';
 
 /**
@@ -279,75 +285,167 @@ export async function submitForApproval(workItemId, submitData = {}, user) {
   // Non-empty output check
   validateNonEmptySubmission(kind, workItem.stageKey, sanitizedDoc, files, linkUrl);
 
-  // Compute next version
-  const latestSubmission = await Submission.findOne({ workItemId, version: { $gt: 0 } }).sort({ version: -1 });
-  const nextVersion = (latestSubmission?.version || 0) + 1;
   const fileUrl = submitData.fileUrl || (files && files[0]?.url) || linkUrl || '';
 
+  return saveSubmittedVersion({
+    workItem,
+    user,
+    fields: { kind, document: sanitizedDoc || { json: null, htmlSnapshot: '' }, files, fileUrl, linkUrl, notes },
+  });
+}
+
+/**
+ * The one place a version is created and its step moved to review. Both happen together:
+ * the version is written first, and removed again if the step cannot be saved, so a step
+ * never waits for review without a version and a failed submit changes nothing.
+ * Events and notifications run after both are saved and cannot fail the submission.
+ */
+export async function saveSubmittedVersion({ workItem, user, fields, toStatus = 'Feedback' }) {
+  const userId = (user._id || user.id || user.userId)?.toString();
+  const latestSubmission = await Submission.findOne({ workItemId: workItem._id, version: { $gt: 0 } }).sort({ version: -1 });
+  // Sent back and not started again: the rework round starts when the owner clicks Start rework.
+  assertReworkStarted(workItem, latestSubmission);
+  const nextVersion = (latestSubmission?.version || 0) + 1;
   const submissionDate = new Date();
 
   // Create immutable submission version
   const newSubmission = await Submission.create({
+    ...fields,
     workItemId: workItem._id,
     contentPieceId: workItem.contentPieceId || null,
     stageKey: workItem.stageKey,
     version: nextVersion,
-    kind,
-    document: sanitizedDoc || { json: null, htmlSnapshot: '' },
-    files,
-    fileUrl,
-    linkUrl,
-    notes,
     submittedById: userId,
     submittedAt: submissionDate,
     status: 'submitted',
     versionToken: crypto.randomUUID(),
   });
 
-  // Update workItem status to Feedback (or Pending) and individual tracking timestamps
-  workItem.status = 'Feedback';
-  if (!workItem.submittedAt) {
-    workItem.submittedAt = submissionDate;
-  } else {
-    workItem.resubmittedAt = submissionDate;
+  try {
+    // 'Feedback' with a submitted latest version is "Waiting for approval".
+    workItem.status = toStatus;
+    if (!workItem.startedAt) workItem.startedAt = workItem.createdAt || submissionDate;
+    if (!workItem.submittedAt) {
+      workItem.submittedAt = submissionDate;
+    } else {
+      workItem.resubmittedAt = submissionDate;
+    }
+    recordRoundSubmission(workItem, submissionDate);
+    if (fields.fileUrl || fields.linkUrl) {
+      workItem.deliverableUrl = fields.fileUrl || fields.linkUrl;
+    }
+    await workItem.save();
+  } catch (error) {
+    await Submission.deleteOne({ _id: newSubmission._id });
+    throw error;
   }
 
-  recordRoundSubmission(workItem, submissionDate);
+  await afterDecision('the submission event', () =>
+    logActivity({
+      entityType: 'submission',
+      entityId: newSubmission._id,
+      actor: user,
+      action: 'submission.submitted',
+      toStatus: 'submitted',
+      metadata: {
+        workItemId: workItem._id,
+        stageKey: workItem.stageKey,
+        version: nextVersion,
+        kind: fields.kind,
+      },
+    })
+  );
 
-  if (fileUrl || linkUrl) {
-    workItem.deliverableUrl = fileUrl || linkUrl;
-  }
-  await workItem.save();
-
-  // Log Activity
-  await logActivity({
-    entityType: 'submission',
-    entityId: newSubmission._id,
-    actor: user,
-    action: 'submission.submitted',
-    toStatus: 'submitted',
-    metadata: {
-      workItemId: workItem._id,
-      stageKey: workItem.stageKey,
-      version: nextVersion,
-      kind,
-    },
+  // Notify the reviewers
+  await afterDecision('the submission notification', async () => {
+    const creativeHeads = await Person.find({ role: 'creative_head', status: 'active' });
+    for (const ch of creativeHeads) {
+      await createNotification({
+        recipient: ch._id,
+        type: 'submission_ready',
+        title: 'Deliverable Review Requested',
+        message: `${workItem.title} (${workItem.stageKey || 'Stage'} v${nextVersion}) submitted for review.`,
+        link: `/feedback?tab=stages&workItemId=${workItem._id}&version=${nextVersion}`,
+        metadata: { workItemId: workItem._id, submissionId: newSubmission._id, version: nextVersion },
+      });
+    }
   });
 
-  // Notify Creative Heads
-  const creativeHeads = await Person.find({ role: 'creative_head', status: 'active' });
-  for (const ch of creativeHeads) {
-    await createNotification({
-      recipient: ch._id,
-      type: 'submission_ready',
-      title: 'Deliverable Review Requested',
-      message: `${workItem.title} (${workItem.stageKey || 'Stage'} v${nextVersion}) submitted for review.`,
-      link: `/feedback?tab=stages&workItemId=${workItem._id}&version=${nextVersion}`,
-      metadata: { workItemId: workItem._id, submissionId: newSubmission._id, version: nextVersion },
-    });
-  }
-
   return newSubmission;
+}
+
+function submitError(statusCode, code, message, details) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  err.code = code;
+  if (details) err.details = details;
+  return err;
+}
+
+/** Trimmed, no repeats, Google Drive or Docs only; one link unless the step takes several. */
+export function cleanSubmitLinks(links, stageKey) {
+  const cleaned = [...new Set((Array.isArray(links) ? links : []).map((l) => String(l || '').trim()).filter(Boolean))];
+  if (cleaned.length === 0) throw submitError(400, 'LINK_REQUIRED', 'Enter a link.');
+  if (cleaned.length > 1 && !stepAllowsManyLinks(stageKey)) {
+    throw submitError(400, 'ONE_LINK_ONLY', `A ${stageKey || 'step'} is submitted with one link.`);
+  }
+  cleaned.forEach((url, i) => {
+    if (!isDriveLink(url)) {
+      throw submitError(400, 'INVALID_OUTPUT_URL', `Link ${i + 1}: ${DRIVE_LINK_ERROR}`, { field: `links[${i}]` });
+    }
+  });
+  return cleaned;
+}
+
+/** The fields of a link-only version. */
+export function linkVersionFields(cleaned, note) {
+  return {
+    kind: 'link',
+    document: { json: null, htmlSnapshot: '' },
+    files: cleaned.map((url, i) => ({ url, name: cleaned.length > 1 ? `Link ${i + 1}` : '' })),
+    fileUrl: cleaned[0],
+    linkUrl: cleaned[0],
+    notes: (note || '').trim(),
+  };
+}
+
+/**
+ * Submit a step with Google Drive links (the step owner only): one link, or one or more
+ * for Design. Creates a normal version, so review, rating, revisions and handoff work as
+ * for any other version. A saved workspace draft is left as it is and is not attached.
+ */
+export async function submitStepLinks(workItemId, { links, note }, user) {
+  const workItem = await WorkItem.findById(workItemId);
+  if (!workItem) throw submitError(404, 'NOT_FOUND', 'Work item not found');
+
+  const userId = (user._id || user.id || user.userId)?.toString();
+  const ownerId = (workItem.ownerId?._id || workItem.ownerId)?.toString();
+  if (!userId || ownerId !== userId) {
+    throw submitError(403, 'FORBIDDEN_OWNERSHIP', 'Only the assigned owner can submit this step');
+  }
+  if (workItem.stageKey === 'Post') {
+    throw submitError(400, 'POST_STEP_NOT_SUBMITTED', 'A Post step is marked as posted with its live link.');
+  }
+  if (workItem.isSkipped) throw submitError(409, 'STEP_SKIPPED', 'This step was skipped.');
+  if (workItem.isLocked) throw submitError(409, 'STEP_LOCKED', 'This step is locked until the previous step is approved.');
+
+  if (workItem.status === 'Not Started') {
+    throw submitError(400, 'MUST_START_BEFORE_SUBMIT', 'You must start this work item before submitting deliverables');
+  }
+  if (workItem.status === 'Blocked') {
+    throw submitError(409, 'STEP_BLOCKED', 'This step is blocked. Resolve the blocker before submitting.');
+  }
+  if (workItem.status === 'Approved' || workItem.status === 'Published') {
+    throw submitError(409, 'ALREADY_DECIDED', 'This step has already been approved.');
+  }
+  const latest = await Submission.findOne({ workItemId: workItem._id, version: { $gt: 0 } }).sort({ version: -1 });
+  if (isAwaitingDecision(workItem, latest) || workItem.status === 'Pending') {
+    throw submitError(409, 'SUBMISSION_AWAITING_REVIEW', 'This step is already waiting for approval.');
+  }
+  assertReworkStarted(workItem, latest);
+
+  const cleaned = cleanSubmitLinks(links, workItem.stageKey);
+  return saveSubmittedVersion({ workItem, user, fields: linkVersionFields(cleaned, note) });
 }
 
 // ==========================================
@@ -442,6 +540,8 @@ export async function getSubmissionById(submissionId, user) {
 
   const subObj = submission.toObject ? submission.toObject() : { ...submission };
   subObj.comments = comments;
+  // Review Studio shows clip review only for a Shoot version that has clips.
+  subObj.clipReview = await clipReviewApplies(submission.workItemId, submission);
 
   return subObj;
 }
@@ -707,23 +807,8 @@ export async function requestRevision(submissionId, { comment, rootCause }, user
       });
     }
 
-    // 2. Return workItem to In Progress & increment revisions and track round decision
-    workItem.status = 'In Progress';
-    workItem.revisions = (workItem.revisions || 0) + 1;
-    workItem.changesRequestedAt = now;
-    workItem.decisionAt = now;
-
-    if (workItem.rounds && workItem.rounds.length > 0) {
-      const curRound = workItem.rounds[workItem.rounds.length - 1];
-      curRound.decisionAt = now;
-      curRound.decision = 'changes_requested';
-    }
-    if (!workItem.rounds) workItem.rounds = [];
-    workItem.rounds.push({
-      roundNumber: workItem.rounds.length + 1,
-      startedAt: now,
-      intervals: [],
-    });
+    // 2. The step waits in "Changes requested": no round runs until the owner starts the rework.
+    applyChangesRequested(workItem, now);
     await workItem.save();
   } catch (error) {
     if (commentRecord) await SubmissionComment.deleteOne({ _id: commentRecord._id });

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { markAwaitingReview } from '../workItems/reviewState.js';
 import { evaluateSteps } from '../workItems/timeLabels.js';
 import { hasTimeLabel, projectDelivery, projectTimeLabel, workflowLabel, isMonthKey, monthPeriod, istDateKey } from '@mmp/shared';
 
@@ -57,6 +58,8 @@ export async function listContentPieces(filters = {}, user) {
     .populate('ownerId', 'name email role jobRole workPreferences')
     .sort({ stageOrder: 1 })
     .lean();
+  // 'Feedback' is saved for a submitted step and for one sent back: mark the ones waiting on a reviewer.
+  await markAwaitingReview(allStages);
 
   const stagesByPiece = {};
   for (const st of allStages) {
@@ -120,7 +123,7 @@ export async function listContentPieces(filters = {}, user) {
       let approvalWait = 0;
       if (s.submittedAt) {
         const sub = new Date(s.submittedAt);
-        const approved = s.approvedAt ? new Date(s.approvedAt) : (s.status === 'Feedback' ? now : null);
+        const approved = s.approvedAt ? new Date(s.approvedAt) : (s.awaitingReview ? now : null);
         if (approved && approved > sub) {
           approvalWait = Math.max(0, Math.floor((approved.getTime() - sub.getTime()) / (1000 * 3600 * 24)));
         }
@@ -129,7 +132,7 @@ export async function listContentPieces(filters = {}, user) {
       let stageHolder = 'Done';
       if (s.status === 'Blocked') {
         stageHolder = `Blocked since ${s.updatedAt ? new Date(s.updatedAt).toISOString().slice(0, 10) : 'recent'}`;
-      } else if (s.status === 'Feedback') {
+      } else if (s.awaitingReview) {
         stageHolder = 'Creative Head';
       } else if (!s.ownerId) {
         stageHolder = 'SM Manager';
@@ -154,7 +157,7 @@ export async function listContentPieces(filters = {}, user) {
     if (activeStage) {
       if (activeStage.status === 'Blocked') {
         holder = `Blocked since ${activeStage.updatedAt ? new Date(activeStage.updatedAt).toISOString().slice(0, 10) : 'recent'}`;
-      } else if (activeStage.status === 'Feedback') {
+      } else if (activeStage.awaitingReview) {
         holder = 'Creative Head';
       } else if (!activeStage.ownerId) {
         holder = 'SM Manager';
@@ -188,9 +191,9 @@ export async function listContentPieces(filters = {}, user) {
     // unstarted step because it read an `assigneeConfirmed` field that is never set.)
     const stepOpen = (s) => !s.isSkipped && s.status !== 'Approved' && s.status !== 'Published';
     const hasNeedsOwner = enrichedStages.some((s) => stepOpen(s) && !s.ownerId);
-    // Waiting for approval: a step submitted and waiting for the Creative Head (Pending).
-    // ('Feedback' is changes requested, which the old rule matched by mistake.)
-    const hasWaitingApproval = enrichedStages.some((s) => s.status === 'Pending');
+    // Waiting for approval: a step submitted and waiting for the Creative Head, by its latest
+    // version. A step that was sent back (changes requested) is not waiting.
+    const hasWaitingApproval = enrichedStages.some((s) => s.awaitingReview);
     const hasBlocked = enrichedStages.some((s) => s.status === 'Blocked');
     const hasOverdue = maxLateByDays > 0;
 

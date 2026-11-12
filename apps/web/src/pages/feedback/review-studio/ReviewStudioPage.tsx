@@ -656,15 +656,22 @@ export const ReviewStudioPage: React.FC = () => {
 
   const currentQueueItem = queue[queueIndex];
 
-  const isShootStage = Boolean(
+  // Clip review is for a Shoot version that has clips (the API says so with clipReview).
+  // A Shoot submitted with a link is reviewed like any other step, with the decision bar.
+  const onShootStep = Boolean(
     activeSubmission && (
       activeSubmission.stageKey === 'Shoot' ||
       activeSubmission.workItemId?.stageKey === 'Shoot' ||
       activeSubmission.workItemId?.step === 'Shoot' ||
       currentQueueItem?.workItemId?.stageKey === 'Shoot' ||
-      currentQueueItem?.workItemId?.step === 'Shoot' ||
-      (activeSubmission.metadata?.totalClips && activeSubmission.metadata?.totalClips > 0)
+      currentQueueItem?.workItemId?.step === 'Shoot'
     )
+  );
+  const isShootStage = Boolean(
+    activeSubmission &&
+      (typeof activeSubmission.clipReview === 'boolean'
+        ? activeSubmission.clipReview
+        : onShootStep && activeSubmission.kind !== 'link')
   );
 
   const shootStageItemId =

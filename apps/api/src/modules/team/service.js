@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { countAwaitingReview, markAwaitingReview } from '../workItems/reviewState.js';
 import bcrypt from 'bcryptjs';
 import { Person } from '../people/model.js';
 import { Department } from '../departments/model.js';
@@ -100,6 +101,7 @@ export async function getTeamDirectory(query = {}, actor) {
       })
         .populate('contentPieceId', 'title topic code')
         .lean();
+      await markAwaitingReview(openItems);
 
       const capacity = person.weeklyCapacityHours || 40;
       const allocatedHours = openItems.reduce(
@@ -113,7 +115,7 @@ export async function getTeamDirectory(query = {}, actor) {
       else if (loadPct >= 65) band = 'High';
 
       const inProgress = openItems.filter((it) => it.status === 'In Progress').length;
-      const waitingApproval = openItems.filter((it) => it.status === 'Feedback').length;
+      const waitingApproval = openItems.filter((it) => it.awaitingReview).length;
       const lateItems = openItems.filter((it) => {
         if (!it.deadline) return false;
         return new Date(it.deadline) < now;
@@ -241,6 +243,7 @@ export async function getPersonBaseProfile(targetPersonId, actor) {
     ownerId: person._id,
     status: { $nin: ['Approved', 'Published'] },
   }).lean();
+  await markAwaitingReview(openItems);
 
   const allocatedHours = openItems.reduce(
     (acc, it) => acc + (it.estimatedEffortHrs || 4),
@@ -252,7 +255,7 @@ export async function getPersonBaseProfile(targetPersonId, actor) {
   else if (loadPct >= 65) capacityBand = 'High';
 
   const inProgress = openItems.filter((it) => it.status === 'In Progress').length;
-  const waitingApproval = openItems.filter((it) => it.status === 'Feedback').length;
+  const waitingApproval = openItems.filter((it) => it.awaitingReview).length;
 
   // Completed steps for on-time rate
   const completedItems = await WorkItem.find({
@@ -346,6 +349,7 @@ export async function getPersonOverview(targetPersonId, actor, query = {}) {
     .populate('contentPieceId', 'title topic code calendar channel')
     .sort({ deadline: 1 })
     .lean();
+  await markAwaitingReview(activeItems);
 
   const rightNow = activeItems.map((item) => {
     const measures = calculateIndividualWorkMeasures(item, now);
@@ -354,6 +358,7 @@ export async function getPersonOverview(targetPersonId, actor, query = {}) {
       title: item.title || item.contentPieceId?.title || item.contentPieceId?.topic || 'Deliverable',
       stageKey: item.stageKey || item.workType || 'Stage',
       status: item.status,
+      awaitingReview: Boolean(item.awaitingReview),
       deadline: item.deadline || null,
       calendar: item.calendar || item.contentPieceId?.calendar || item.channel || 'sm',
       measures,
@@ -453,7 +458,7 @@ export async function getPersonOverview(targetPersonId, actor, query = {}) {
   const personRole = normalizeRole(person.role);
 
   if (personRole === 'creative_head') {
-    const pendingReviewsCount = await WorkItem.countDocuments({ status: 'Feedback' });
+    const pendingReviewsCount = await countAwaitingReview();
     const approvedPast30Days = await WorkItem.countDocuments({
       status: { $in: ['Approved', 'Published'] },
       approvedAt: { $gte: new Date(Date.now() - 30 * 86400000) },

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { getStepStatusLabel } from '@mmp/shared';
+import { formatDuration, getStepStatusLabel } from '@mmp/shared';
 import { apiFetch } from '../../lib/api';
 import { NotFoundState } from '../../components/RoleBoundary';
 import { TimeLabelChips } from '../../components/TimeLabelChips';
@@ -20,6 +20,8 @@ interface KpiStep {
   labels: { kind: string; text: string }[];
   elapsedMs: number | null;
   elapsedFromHistory: boolean;
+  /** Time spent on rework rounds (after changes were requested); null when never reworked. */
+  reworkMs?: number | null;
   rating: number | null;
 }
 interface KpiData {
@@ -118,6 +120,9 @@ export const ProjectKpiPage: React.FC = () => {
                   <div>
                     <dt className="text-ui-muted">Elapsed work time</dt>
                     <dd data-testid="kpi-step-hours">{s.elapsedMs === null ? 'No data' : `${fmtHours(s.elapsedMs)}${s.elapsedFromHistory ? ' (partial, from history)' : ''}`}</dd>
+                    {s.reworkMs !== null && s.reworkMs !== undefined && (
+                      <dd className="text-ui-muted" data-testid="kpi-step-rework">Rework time: {formatDuration(s.reworkMs)}</dd>
+                    )}
                   </div>
                   <div><dt className="text-ui-muted">Rating</dt><dd>{s.rating ? `${s.rating} ★` : 'Not rated'}</dd></div>
                 </dl>

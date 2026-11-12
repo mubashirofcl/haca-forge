@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Table, Sparkles, X, Check } from 'lucide-react';
 import { formatShortDate, formatShortDateTime, getStepStatusLabel } from '@mmp/shared';
+import { withDisplayStatus } from '../../lib/statusTone';
 import { apiFetch } from '../../lib/api';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useAuth } from '../../context/AuthContext';
@@ -93,7 +94,8 @@ export const TrackerTab: React.FC<{ selectedCalendar?: string }> = () => {
     setLoadError(null);
     try {
       const res = await apiFetch<{ data: ContentPieceTrackerRow[] }>(`/api/content-pieces${apiQuery ? `?${apiQuery}` : ''}`);
-      setPieces(res.data || []);
+      // A submitted step waiting on the reviewer is shown (and filtered) as Waiting for approval.
+      setPieces((res.data || []).map((p) => ({ ...p, stages: (p.stages || []).map((st) => withDisplayStatus(st as any)) })) as ContentPieceTrackerRow[]);
     } catch (err) {
       console.error('Failed to fetch tracker data', err);
       setLoadError('The tracker could not be loaded. Try again.');

@@ -12,7 +12,6 @@ import { DesignWorkspace } from './DesignWorkspace';
 import { PostWorkspace } from './PostWorkspace';
 import { EarlierOutputsViewer, StageOutput } from './EarlierOutputsViewer';
 import type { AssetItem } from '../../../components/AssetLinks';
-import { PostCaptionFields } from '../../../components/PostCaptionFields';
 import { FromPlanCard } from '../FromPlanCard';
 
 export const MediaWorkspacePage: React.FC = () => {
@@ -304,8 +303,6 @@ export const MediaWorkspacePage: React.FC = () => {
 
   // Posting handler
   const handleMarkAsPosted = async (data: {
-    caption: string;
-    hashtags?: string;
     publishedUrl: string;
     publishedAt: string;
     deliverableUrl?: string;
@@ -318,9 +315,6 @@ export const MediaWorkspacePage: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           toStatus: 'Published',
-          // The poster's caption and hashtags are saved on the Post step.
-          caption: data.caption,
-          hashtags: data.hashtags || '',
           publishedUrl: data.publishedUrl,
           deliverableUrl: data.deliverableUrl,
           comment: data.notes,
@@ -511,14 +505,6 @@ export const MediaWorkspacePage: React.FC = () => {
             </div>
           </div>
 
-          {/* A posted Post step: the caption and hashtags the poster saved, read-only */}
-          {workItem.stageKey === 'Post' && workItem.status === 'Published' && (
-            <div className="p-5 rounded-2xl bg-white/60 border border-ui-line space-y-3" data-testid="posted-caption">
-              <h3 className="text-xs font-bold text-ui-ink">Posted caption & hashtags</h3>
-              <PostCaptionFields caption={workItem.postCaption || ''} hashtags={workItem.postHashtags || ''} readOnly />
-            </div>
-          )}
-
           <FromPlanCard fromPlan={workItem.fromPlan} />
           <EarlierOutputsViewer outputs={earlierOutputs} currentStageKey={workItem.stageKey} />
         </div>
@@ -627,8 +613,6 @@ export const MediaWorkspacePage: React.FC = () => {
               channel: contentPiece?.brief?.channel,
               deliverableUrl: workItem.deliverableUrl,
               publishedUrl: workItem.publishedUrl,
-              postCaption: workItem.postCaption,
-              postHashtags: workItem.postHashtags,
             }}
             finalAssets={finalAssets}
             onMarkAsPosted={handleMarkAsPosted}

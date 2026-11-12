@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { markAwaitingReview } from '../workItems/reviewState.js';
 import {
   CANONICAL_REVISION_ROOT_CAUSES,
   formatDuration,
@@ -17,6 +18,7 @@ import {
   reviewQueueAge,
   reviewStats,
   reviewerStats,
+  reworkTimeMs,
   workerOnTime,
 } from '@mmp/shared';
 import { Person } from '../people/model.js';
@@ -186,13 +188,14 @@ async function workerFigures(allSteps, period, now) {
           id: String(s._id),
           project: s.contentPieceId?.topic || s.title,
           stepType: s.stageKey || s.workType || 'Step',
-          status: s.status,
+          status: s.awaitingReview && s.status === 'Feedback' ? 'Pending' : s.status,
           dueDate: istDateKey(due(s)),
           firstSubmitted: f.firstSubmitted ? istDateKey(f.firstSubmitted) : null,
           firstSubmittedFromHistory: Boolean(f.firstSubmittedFromHistory),
           labels: (f.labels || []).map((l) => l.text),
           elapsedMs: f.elapsed ? f.elapsed.ms : null,
           elapsedFromHistory: Boolean(f.elapsed?.fromHistory),
+          reworkMs: reworkTimeMs(s, now),
           rating: ratings.get(String(s._id))?.score ?? null,
         };
       }),
@@ -216,9 +219,13 @@ async function reviewerFigures(personId, period, now) {
   const legacyApprovals = inPeriodEvents.filter((e) => !withRecord.has(String(e.entityId))).length;
 
   // The team review queue: review steps waiting for a decision, by their latest submission.
-  const waitingSteps = await WorkItem.find({ status: { $in: ['Feedback', 'Pending'] }, stageKey: { $ne: 'Post' }, isSkipped: { $ne: true } })
-    .select('submittedAt resubmittedAt')
-    .lean();
+  const waitingSteps = (
+    await markAwaitingReview(
+      await WorkItem.find({ status: { $in: ['Feedback', 'Pending'] }, stageKey: { $ne: 'Post' }, isSkipped: { $ne: true } })
+        .select('status revisions submittedAt resubmittedAt')
+        .lean()
+    )
+  ).filter((s) => s.awaitingReview);
   const latestSubs = waitingSteps.length
     ? await Submission.aggregate([
         { $match: { workItemId: { $in: waitingSteps.map((s) => s._id) }, version: { $gt: 0 } } },
@@ -277,6 +284,7 @@ export async function getProfileKpis(targetId, actor, query = {}, { withSteps = 
     .select('title workType stageKey stageOrder status isLocked isSkipped reviewRequired dueDate deadline unlockedAt startedAt submittedAt approvedAt postedAt revisions rounds intervals contentPieceId calendar blockerReason')
     .populate('contentPieceId', 'topic calendar')
     .lean();
+  await markAwaitingReview(steps);
   const worker = await workerFigures(steps, period, now);
   if (worker && !withSteps) delete worker.steps;
   const isCreativeHead = normalizeRole(person.role) === 'creative_head';

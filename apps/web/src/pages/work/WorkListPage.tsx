@@ -1,9 +1,10 @@
+import { getStepStatusLabel } from '@mmp/shared';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { TimeLabelChips, type TimeLabel } from '../../components/TimeLabelChips';
 import { hasTimeLabel, normalizePriority } from '@mmp/shared';
-import { statusClass, statusTone } from '../../lib/statusTone';
+import { statusClass, statusTone, withDisplayStatus } from '../../lib/statusTone';
 import {
   WORK_TYPES,
   WORK_ITEM_STATUSES,
@@ -74,7 +75,7 @@ export const WorkListPage: React.FC = () => {
       queryParams.append('allWork', 'true');
 
       const res = await apiFetch<{ data: WorkItemRow[] }>(`/api/work?${queryParams.toString()}`);
-      setItems(res.data || []);
+      setItems((res.data || []).map((it) => withDisplayStatus(it as any)));
     } catch (err) {
       console.error('Failed to load work items', err);
     } finally {
@@ -272,7 +273,7 @@ export const WorkListPage: React.FC = () => {
 
                       <td className="py-4 px-5 align-middle whitespace-nowrap">
                         <span className={`status-chip ${statusClass(statusTone(it.status))} text-[11px]`}>
-                          {it.status}
+                          {getStepStatusLabel(it.status)}
                         </span>
                       </td>
 
@@ -314,7 +315,7 @@ export const WorkListPage: React.FC = () => {
                     <span className="flex flex-wrap items-center justify-between gap-2 mb-2">
                       <span className="status-chip status-not-started text-[11px]">{it.workType}</span>
                       <span className={`status-chip ${statusClass(statusTone(it.status))} text-[11px]`}>
-                        {it.status}
+                        {getStepStatusLabel(it.status)}
                       </span>
                     </span>
                     <span className="block text-base font-bold text-ui-ink group-hover:underline">{it.title}</span>

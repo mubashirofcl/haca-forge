@@ -60,6 +60,36 @@ export async function assertOwnerCanLeaveReview(workItem) {
   }
 }
 
+/**
+ * The one end state of "changes requested", whichever screen asked for it: the step waits in
+ * 'Feedback' with its latest version changes_requested, one revision counted, the reviewed
+ * round decided, and no round running. The next round starts when the owner clicks Start rework.
+ * The caller saves the step.
+ */
+export function applyChangesRequested(workItem, decidedAt = new Date()) {
+  workItem.status = 'Feedback';
+  workItem.revisions = (workItem.revisions || 0) + 1;
+  workItem.changesRequestedAt = decidedAt;
+  workItem.decisionAt = decidedAt;
+  if (workItem.rounds && workItem.rounds.length > 0) {
+    const curRound = workItem.rounds[workItem.rounds.length - 1];
+    curRound.decisionAt = decidedAt;
+    curRound.decision = 'changes_requested';
+  }
+}
+
+/** True when the step was sent back and the owner has not started the rework yet. */
+export function isChangesRequested(workItem, latestSubmission) {
+  return workItem?.status === 'Feedback' && latestSubmission?.status === 'changes_requested';
+}
+
+/** A sent-back step is resubmitted only after Start rework, so its rework round has a real start. */
+export function assertReworkStarted(workItem, latestSubmission) {
+  if (isChangesRequested(workItem, latestSubmission)) {
+    throw decisionError(409, 'REWORK_NOT_STARTED', 'Changes were requested on this step. Click Start rework before you resubmit.');
+  }
+}
+
 /** creative_head and admin decide; nobody decides on their own work. */
 export function assertReviewer(user, workItem, decision = 'approve') {
   const role = normalizeRole(user.role);
@@ -84,6 +114,15 @@ export function assertValidRating(score) {
 
 export const latestRealSubmission = (workItemId) =>
   Submission.findOne({ workItemId, version: { $gt: 0 } }).sort({ version: -1 });
+
+/**
+ * Does clip review apply to this version? Only on a Shoot step that has clips, and never
+ * for a version submitted with links (kind 'link'): that one is reviewed like any other step.
+ */
+export async function clipReviewApplies(workItem, submission) {
+  if (workItem?.stageKey !== 'Shoot' || submission?.kind === 'link') return false;
+  return (await MediaItem.countDocuments({ stageItemId: workItem._id })) > 0;
+}
 
 /**
  * Clip state for a Shoot step. A clip replaced by a newer one no longer counts;
@@ -126,7 +165,9 @@ export async function assertDecisionAllowed({ user, workItem, submissionId = nul
   if (!isAwaitingDecision(workItem, latest)) {
     throw decisionError(409, 'ALREADY_DECIDED', 'This version has already been decided.');
   }
-  if (decision === 'approve' && workItem.stageKey === 'Shoot') {
+  // The clip rule is for versions that contain clips. A Shoot submitted with a link is
+  // reviewed like any other step.
+  if (decision === 'approve' && (await clipReviewApplies(workItem, latest))) {
     const { required, flagged, undecided } = await getRequiredClips(workItem._id);
     if (required.length === 0 || flagged.length > 0 || undecided.length > 0) {
       throw decisionError(400, 'CLIPS_WAITING_REVIEW', 'Every clip must be approved before this Shoot step can be approved.');

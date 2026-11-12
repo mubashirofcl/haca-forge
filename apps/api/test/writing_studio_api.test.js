@@ -8,6 +8,11 @@ import { connectDB } from '../src/config/db.js';
 import { Person } from '../src/modules/people/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { Submission, SubmissionComment, EditorLock } from '../src/modules/submissions/model.js';
+import { setWorkspacesLockedForTests } from '../src/lib/workspaceLock.js';
+
+// These tests cover the workspace flows, which stay in the code behind the one switch
+// (WORKSPACES_LOCKED). They run with it off, as the app will when it is unlocked.
+setWorkspacesLockedForTests(false);
 
 describe('WS2: Writing Studio API & Single-Editor Lock Suite', () => {
   let writerToken;

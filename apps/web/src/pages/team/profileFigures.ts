@@ -1,3 +1,4 @@
+import { formatDuration } from '@mmp/shared';
 import { fmtPct, fmtHours, type ReportColumn } from '../../lib/reportExport';
 
 /**
@@ -78,6 +79,8 @@ export interface ProfileStepRow {
   labels: string[];
   elapsedMs: number | null;
   elapsedFromHistory: boolean;
+  /** Time spent on rework rounds; null when never reworked. */
+  reworkMs?: number | null;
   rating: number | null;
 }
 
@@ -157,6 +160,7 @@ export const STEP_COLUMNS: ReportColumn<ProfileStepRow>[] = [
   { key: 'first', header: 'First submitted', text: (r) => (r.firstSubmitted ? `${r.firstSubmitted}${r.firstSubmittedFromHistory ? ' (from history)' : ''}` : '') },
   { key: 'labels', header: 'Labels', text: (r) => r.labels.join('; ') },
   { key: 'hours', header: 'Elapsed work time', text: (r) => (r.elapsedMs === null ? '' : `${fmtHours(r.elapsedMs)}${r.elapsedFromHistory ? ' (partial)' : ''}`) },
+  { key: 'rework', header: 'Rework time', text: (r) => (r.reworkMs === null || r.reworkMs === undefined ? '' : formatDuration(r.reworkMs)) },
   { key: 'rating', header: 'Rating', text: (r) => (r.rating ? String(r.rating) : '') },
 ];
 

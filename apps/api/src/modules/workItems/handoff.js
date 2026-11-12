@@ -88,6 +88,8 @@ async function entryFor(step) {
         thumbnailUrl: isAppUploadPath(c.thumbnailUrl) ? c.thumbnailUrl : '',
         durationSeconds: c.durationSeconds,
       }));
+    // A Shoot approved on a link version hands over that link, like any other step.
+    if (output?.kind === 'link') entry.items = outputItems(output);
     return entry;
   }
   entry.items = outputItems(output);

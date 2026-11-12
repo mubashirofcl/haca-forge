@@ -249,7 +249,7 @@ describe('Media Workspaces WS3 Component Tests', () => {
       hashtags: '#coffee #espresso #barista #morningroutine #coffeetutorial',
     };
 
-    it('provides deliverable download, caption/hashtag copy buttons, pre-publish checklist, and mark as posted', () => {
+    it('provides deliverable download, pre-publish checklist, and mark as posted with the live link only', () => {
       const onMarkAsPosted = vi.fn();
 
       render(
@@ -267,19 +267,11 @@ describe('Media Workspaces WS3 Component Tests', () => {
       const downloadBtn = screen.getByRole('link', { name: /^download$/i });
       expect(downloadBtn).toHaveAttribute('href', '/uploads/final-cut.mp4');
 
-      // The poster writes the caption and hashtags here
-      fireEvent.change(screen.getByLabelText(/post caption/i), { target: { value: mockWorkItem.caption } });
-      fireEvent.change(screen.getByLabelText(/^hashtags/i), { target: { value: mockWorkItem.hashtags } });
-
-      // Copy caption button
-      const copyCaptionBtn = screen.getByRole('button', { name: /copy caption/i });
-      fireEvent.click(copyCaptionBtn);
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(mockWorkItem.caption);
-
-      // Copy hashtags button
-      const copyHashtagsBtn = screen.getByRole('button', { name: /copy hashtags/i });
-      fireEvent.click(copyHashtagsBtn);
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(mockWorkItem.hashtags);
+      // No caption or hashtag fields: the step is marked posted with its live link only
+      expect(screen.queryByLabelText(/post caption/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^hashtags/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /copy caption/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /copy hashtags/i })).not.toBeInTheDocument();
 
       // Mark as posted should initially be disabled until live URL is entered
       const markPostedBtn = screen.getByRole('button', { name: /mark as posted/i });
@@ -296,10 +288,9 @@ describe('Media Workspaces WS3 Component Tests', () => {
       expect(onMarkAsPosted).toHaveBeenCalledWith(
         expect.objectContaining({
           publishedUrl: 'https://instagram.com/p/ABC123xyz',
-          caption: mockWorkItem.caption,
-          hashtags: mockWorkItem.hashtags,
         })
       );
+      expect(onMarkAsPosted.mock.calls[0][0]).not.toHaveProperty('caption');
     });
 
     it('allows SM Manager / worker to attach post file asset and submit with live social reference link', async () => {
@@ -341,10 +332,8 @@ describe('Media Workspaces WS3 Component Tests', () => {
       const liveUrlInput = screen.getByPlaceholderText(/instagram\.com\/p/i);
       fireEvent.change(liveUrlInput, { target: { value: 'https://instagram.com/reel/C89abcdef' } });
 
-      // A caption is required to post; hashtags are optional
+      // The live link is all that is needed to post
       const markPostedBtn = screen.getByRole('button', { name: /mark as posted/i });
-      expect(markPostedBtn).toBeDisabled();
-      fireEvent.change(screen.getByLabelText(/post caption/i), { target: { value: 'Final post graphic is live' } });
       expect(markPostedBtn).not.toBeDisabled();
       fireEvent.click(markPostedBtn);
 

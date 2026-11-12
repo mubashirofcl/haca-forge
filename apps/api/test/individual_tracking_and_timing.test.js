@@ -10,6 +10,11 @@ import { WorkItem } from '../src/modules/workItems/model.js';
 import { ContentPiece } from '../src/modules/calendar/contentPiece.model.js';
 import { connectDB } from '../src/config/db.js';
 import { formatDuration, calculateIndividualWorkMeasures } from '@mmp/shared';
+import { setWorkspacesLockedForTests } from '../src/lib/workspaceLock.js';
+
+// These tests cover the workspace flows, which stay in the code behind the one switch
+// (WORKSPACES_LOCKED). They run with it off, as the app will when it is unlocked.
+setWorkspacesLockedForTests(false);
 
 describe('INDIVIDUAL TRACKING AND TIMING SUITE', () => {
   let adminUser, smUser, headUser, execUser, workerA, workerB;
@@ -288,12 +293,25 @@ describe('INDIVIDUAL TRACKING AND TIMING SUITE', () => {
       expect(revRes.status).toBe(200);
 
       const revisedItem = await WorkItem.findById(workItem._id);
-      expect(revisedItem.status).toBe('In Progress');
+      // Changes requested: the step waits, and no round runs until the worker starts the rework.
+      expect(revisedItem.status).toBe('Feedback');
       expect(revisedItem.revisions).toBe(1);
       expect(revisedItem.changesRequestedAt).toBeDefined();
-      expect(revisedItem.rounds).toHaveLength(2); // Round 2 started!
+      expect(revisedItem.rounds).toHaveLength(1);
       expect(revisedItem.rounds[0].decision).toBe('changes_requested');
-      expect(revisedItem.rounds[1].roundNumber).toBe(2);
+
+      // 3b. Worker clicks Start rework: Round 2 starts now, and no second revision is counted
+      const reworkRes = await request(app)
+        .post(`/api/work-items/${workItem._id}/transition`)
+        .set('Authorization', `Bearer ${workerAToken}`)
+        .send({ toStatus: 'In Progress' });
+      expect(reworkRes.status).toBe(200);
+      const reworkItem = await WorkItem.findById(workItem._id);
+      expect(reworkItem.status).toBe('In Progress');
+      expect(reworkItem.revisions).toBe(1);
+      expect(reworkItem.rounds).toHaveLength(2); // Round 2 started!
+      expect(reworkItem.rounds[1].roundNumber).toBe(2);
+      expect(reworkItem.rounds[1].startedAt.getTime()).toBeGreaterThanOrEqual(reworkItem.rounds[0].decisionAt.getTime());
 
       // 4. Worker resubmits for Round 2
       const resubmitRes = await request(app)

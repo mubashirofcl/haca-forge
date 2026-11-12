@@ -30,6 +30,15 @@ export async function submitHandler(req, res, next) {
   }
 }
 
+export async function submitLinkHandler(req, res, next) {
+  try {
+    const submission = await submissionService.submitStepLinks(req.params.id, req.body, req.user);
+    res.status(201).json({ data: submission });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function listVersionsHandler(req, res, next) {
   try {
     const versions = await submissionService.listSubmissions(req.params.id, req.user);

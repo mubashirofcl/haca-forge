@@ -9,6 +9,11 @@ import { Person } from '../src/modules/people/model.js';
 import { WorkItem } from '../src/modules/workItems/model.js';
 import { MediaItem } from '../src/modules/media/model.js';
 import { Submission, SubmissionComment, Rating } from '../src/modules/submissions/model.js';
+import { setWorkspacesLockedForTests } from '../src/lib/workspaceLock.js';
+
+// These tests cover the workspace flows, which stay in the code behind the one switch
+// (WORKSPACES_LOCKED). They run with it off, as the app will when it is unlocked.
+setWorkspacesLockedForTests(false);
 
 describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () => {
   let adminUser, creativeHeadUser, executiveUser;
@@ -301,15 +306,25 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
       expect(revRes.status).toBe(200);
       expect(revRes.body.data.submission.status).toBe('changes_requested');
 
-      // Check WorkItem returned to In Progress
+      // The WorkItem waits in "Changes requested" (Feedback, latest version changes_requested)
       const itemRes = await request(app)
         .get(`/api/work-items/${scriptWorkItem._id}`)
         .set('Authorization', `Bearer ${writerToken}`);
-      expect(itemRes.body.data.status).toBe('In Progress');
+      expect(itemRes.body.data.status).toBe('Feedback');
+      expect(itemRes.body.data.latestSubmission.status).toBe('changes_requested');
+      expect(itemRes.body.data.latestFeedback.text).toBe('Please refine the hook stat and resubmit.');
       expect(itemRes.body.data.revisions).toBe(1);
     });
 
     it('Writer resolves comment, updates script, and resubmits v2', async () => {
+      // 0. Writer clicks Start rework: back to In Progress, no second revision counted
+      const reworkRes = await request(app)
+        .post(`/api/work-items/${scriptWorkItem._id}/transition`)
+        .set('Authorization', `Bearer ${writerToken}`)
+        .send({ toStatus: 'In Progress' });
+      expect(reworkRes.status).toBe(200);
+      expect(reworkRes.body.data.revisions).toBe(1);
+
       // 1. Writer updates draft v2
       await request(app)
         .put(`/api/work-items/${scriptWorkItem._id}/draft`)
@@ -452,6 +467,13 @@ describe('Workspaces WS4: End-to-End Journeys Suite (Journeys A through G)', () 
     });
 
     it('Editor resubmits cut v2 and Creative Head approves with 4★ rating', async () => {
+      // 0. Editor clicks Start rework
+      const reworkRes = await request(app)
+        .post(`/api/work-items/${editWorkItem._id}/transition`)
+        .set('Authorization', `Bearer ${editorToken}`)
+        .send({ toStatus: 'In Progress' });
+      expect(reworkRes.status).toBe(200);
+
       // 1. Editor submits cut v2
       const cutV2Res = await request(app)
         .post(`/api/work-items/${editWorkItem._id}/submit`)

@@ -11,6 +11,11 @@ import { Profile } from '../src/modules/referenceData/profile.model.js';
 import { Department } from '../src/modules/departments/model.js';
 import { Submission, Rating } from '../src/modules/submissions/model.js';
 import { MediaItem, MediaMessage } from '../src/modules/media/model.js';
+import { setWorkspacesLockedForTests } from '../src/lib/workspaceLock.js';
+
+// These tests cover the workspace flows, which stay in the code behind the one switch
+// (WORKSPACES_LOCKED). They run with it off, as the app will when it is unlocked.
+setWorkspacesLockedForTests(false);
 
 describe('Media & Shoot Workspace Backend Engine', () => {
   let adminToken, shooterToken, creativeHeadToken, smManagerToken, execToken, otherWorkerToken;
@@ -632,7 +637,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
       expect(res.body.error.code).toBe('CLIPS_WAITING_REVIEW');
     });
 
-    it('returns the step to In Progress when any clip needs reshoot', async () => {
+    it('sends the step back (Changes requested) when any clip needs reshoot', async () => {
       await MediaItem.findByIdAndUpdate(clip1._id, { status: 'approved' });
       await MediaItem.findByIdAndUpdate(clip2._id, { status: 'reshoot_needed' });
 
@@ -645,7 +650,7 @@ describe('Media & Shoot Workspace Backend Engine', () => {
       expect(res.body.data.outcome).toBe('changes_requested');
 
       const updatedStage = await WorkItem.findById(shootStage._id);
-      expect(updatedStage.status).toBe('In Progress');
+      expect(updatedStage.status).toBe('Feedback');
       expect(updatedStage.revisions).toBe(1);
     });
 

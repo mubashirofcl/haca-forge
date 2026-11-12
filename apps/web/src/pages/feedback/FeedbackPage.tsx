@@ -1,6 +1,7 @@
+import { getStepStatusLabel } from '@mmp/shared';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useDialogFocus } from '../../lib/useDialogFocus';
-import { statusClass, statusTone } from '../../lib/statusTone';
+import { displayStatus, statusClass, statusTone } from '../../lib/statusTone';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -608,8 +609,8 @@ export const FeedbackPage: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-[11px] text-ui-muted font-medium block">Status</span>
-                    <span className={`status-chip ${statusClass(statusTone(activeThread.workItem.status))} px-2 py-0.5 font-semibold text-[11px]`}>
-                      {activeThread.workItem.status}
+                    <span className={`status-chip ${statusClass(statusTone(displayStatus({ status: activeThread.workItem.status, awaitingReview: (activeThread as any).awaitingReview })))} px-2 py-0.5 font-semibold text-[11px]`}>
+                      {getStepStatusLabel(displayStatus({ status: activeThread.workItem.status, awaitingReview: (activeThread as any).awaitingReview }))}
                     </span>
                   </div>
                 </div>

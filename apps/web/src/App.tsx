@@ -58,6 +58,7 @@ const WritingStudioPage = React.lazy(() =>
 const ReviewStudioPage = React.lazy(() =>
   import('./pages/feedback/review-studio/ReviewStudioPage').then((m) => ({ default: m.ReviewStudioPage }))
 );
+import { WorkspaceRoute } from './pages/work/workspaces/WorkspaceLockedPage';
 const MediaWorkspacePage = React.lazy(() =>
   import('./pages/work/workspaces/MediaWorkspacePage').then((m) => ({ default: m.MediaWorkspacePage }))
 );
@@ -231,7 +232,7 @@ export const App: React.FC = () => {
                   path="/work/:id/writing-studio"
                   element={
                     <ProtectedRoute>
-                      <WritingStudioPage />
+                      <WorkspaceRoute><WritingStudioPage /></WorkspaceRoute>
                     </ProtectedRoute>
                   }
                 />
@@ -239,7 +240,7 @@ export const App: React.FC = () => {
                   path="/work/:id/write"
                   element={
                     <ProtectedRoute>
-                      <WritingStudioPage />
+                      <WorkspaceRoute><WritingStudioPage /></WorkspaceRoute>
                     </ProtectedRoute>
                   }
                 />
@@ -249,7 +250,7 @@ export const App: React.FC = () => {
                   path="/work/:id/workspace"
                   element={
                     <ProtectedRoute>
-                      <MediaWorkspacePage />
+                      <WorkspaceRoute><MediaWorkspacePage /></WorkspaceRoute>
                     </ProtectedRoute>
                   }
                 />
@@ -257,7 +258,7 @@ export const App: React.FC = () => {
                   path="/work/:id/shoot"
                   element={
                     <ProtectedRoute>
-                      <MediaWorkspacePage />
+                      <WorkspaceRoute><MediaWorkspacePage /></WorkspaceRoute>
                     </ProtectedRoute>
                   }
                 />
@@ -265,7 +266,7 @@ export const App: React.FC = () => {
                   path="/work/:id/edit"
                   element={
                     <ProtectedRoute>
-                      <MediaWorkspacePage />
+                      <WorkspaceRoute><MediaWorkspacePage /></WorkspaceRoute>
                     </ProtectedRoute>
                   }
                 />
@@ -273,7 +274,7 @@ export const App: React.FC = () => {
                   path="/work/:id/design"
                   element={
                     <ProtectedRoute>
-                      <MediaWorkspacePage />
+                      <WorkspaceRoute><MediaWorkspacePage /></WorkspaceRoute>
                     </ProtectedRoute>
                   }
                 />
@@ -281,7 +282,7 @@ export const App: React.FC = () => {
                   path="/work/:id/post"
                   element={
                     <ProtectedRoute>
-                      <MediaWorkspacePage />
+                      <WorkspaceRoute><MediaWorkspacePage /></WorkspaceRoute>
                     </ProtectedRoute>
                   }
                 />

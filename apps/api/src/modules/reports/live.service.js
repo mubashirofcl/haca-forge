@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { reworkTimeMs } from '@mmp/shared';
+import { markAwaitingReview } from '../workItems/reviewState.js';
 import {
   CALENDAR_KEYS,
   CANONICAL_REVISION_ROOT_CAUSES,
@@ -55,6 +57,7 @@ async function loadPieces(pieceFilter, { now }) {
         .populate('ownerId', 'name')
         .lean()
     : [];
+  await markAwaitingReview(steps);
   const stepIds = steps.map((s) => s._id);
   const [facts, ratings, flags] = await Promise.all([
     evaluateSteps(steps, { now }),
@@ -88,6 +91,9 @@ async function loadPieces(pieceFilter, { now }) {
         id: String(s._id),
         stageKey: s.stageKey,
         status: s.status,
+        // What the step row shows: a submitted step waiting on the reviewer reads as Pending.
+        displayStatus: s.awaitingReview && s.status === 'Feedback' ? 'Pending' : s.status,
+        reworkMs: reworkTimeMs(s, now),
         isSkipped: Boolean(s.isSkipped),
         ownerName: ownerName(s),
         dueDate: s.dueDate || s.deadline || null,
@@ -320,7 +326,7 @@ export async function projectKpiReport(id, opts = {}) {
     steps: p.steps.map((s) => ({
       id: s.id,
       stepType: s.stageKey,
-      status: s.status,
+      status: s.displayStatus || s.status,
       isSkipped: s.isSkipped,
       owner: s.ownerName,
       dueDate: iso(s.dueDate),
@@ -329,6 +335,7 @@ export async function projectKpiReport(id, opts = {}) {
       labels: s.labels.map((l) => ({ kind: l.kind, text: l.text })),
       elapsedMs: s.elapsed ? s.elapsed.ms : null,
       elapsedFromHistory: Boolean(s.elapsed?.fromHistory),
+      reworkMs: s.reworkMs ?? null,
       rating: s.rating,
       finished: isFinishedStepStatus(s.status),
     })),

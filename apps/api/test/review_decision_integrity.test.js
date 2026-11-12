@@ -12,6 +12,11 @@ import { Submission, SubmissionComment, Rating } from '../src/modules/submission
 import { MediaItem } from '../src/modules/media/model.js';
 import { FeedbackEntry } from '../src/modules/feedback/model.js';
 import { ActivityEvent } from '../src/modules/activity/model.js';
+import { setWorkspacesLockedForTests } from '../src/lib/workspaceLock.js';
+
+// These tests cover the workspace flows, which stay in the code behind the one switch
+// (WORKSPACES_LOCKED). They run with it off, as the app will when it is unlocked.
+setWorkspacesLockedForTests(false);
 
 const TITLE = 'ReviewDecision';
 const P = {};
@@ -193,7 +198,8 @@ describe('Requesting a revision', () => {
     const s = await makeSub(w);
     expect((await revise(s)).status).toBe(200);
     const after = await state(w);
-    expect(after.step).toMatchObject({ status: 'In Progress', revisions: 1, rounds: 2 });
+    // Changes requested: the step waits, with no new round until the owner starts the rework.
+    expect(after.step).toMatchObject({ status: 'Feedback', revisions: 1, rounds: 1 });
     expect(after.subs.find((x) => x.v === 1).status).toBe('changes_requested');
     expect(after.comments).toBe(1);
     expect(after.ratings).toBe(0);
@@ -325,12 +331,18 @@ describe('Shoot review', () => {
       await expectUnchanged(w, before);
     });
 
-    it('blocked with no clips at all', async () => {
+    it('a Shoot version with no clips is reviewed like any other step', async () => {
       const w = await makeStep('Shoot');
       const s = await makeSub(w);
-      const before = await state(w);
-      expect((await approve(s)).status).toBe(400);
-      await expectUnchanged(w, before);
+      expect((await approve(s)).status).toBe(200);
+      expect((await state(w)).step.status).toBe('Approved');
+    });
+
+    it('a link version is not held by clips left on the step', async () => {
+      const w = await makeStep('Shoot');
+      await makeClip(w, 'reshoot_needed');
+      const s = await makeSub(w, 1, 'submitted', { kind: 'link' });
+      expect((await approve(s)).status).toBe(200);
     });
 
     it('allowed once every clip is approved', async () => {
@@ -371,21 +383,26 @@ describe('Shoot review', () => {
     expect((await MediaItem.findById(clip._id).lean()).status).toBe('approved');
   });
 
-  it('a flagged clip returns the step to In Progress, closes the version and creates no rating', async () => {
+  it('a flagged clip sends the step back (Changes requested), closes the version and creates no rating', async () => {
     const submittedAt = new Date(Date.now() - 60000);
     const w = await makeStep('Shoot', 'Pending', { submittedAt, rounds: [{ roundNumber: 1, startedAt: new Date(Date.now() - 3600000), submittedAt, intervals: [] }] });
     await makeSub(w);
     await makeClip(w, 'reshoot_needed');
     expect((await shoot(w, 'head', { note: 'Reshoot' })).status).toBe(200);
     const after = await state(w);
-    expect(after.step).toMatchObject({ status: 'In Progress', revisions: 1, rounds: 2 });
+    expect(after.step).toMatchObject({ status: 'Feedback', revisions: 1, rounds: 1 });
     expect(after.subs[0].status).toBe('changes_requested');
     expect(after.ratings).toBe(0);
-    const [reviewed, next] = (await WorkItem.findById(w._id).lean()).rounds;
+    const [reviewed] = (await WorkItem.findById(w._id).lean()).rounds;
     expect(reviewed.decision).toBe('changes_requested');
     expect(reviewed.submittedAt.getTime()).toBe(submittedAt.getTime());
-    expect(next.decision ?? null).toBeNull();
-    expect(next.submittedAt ?? null).toBeNull();
+    // The next round starts when the owner clicks Start rework, and counts no second revision.
+    expect((await move(w, 'owner', 'In Progress')).status).toBe(200);
+    const started = await WorkItem.findById(w._id).lean();
+    expect(started.revisions).toBe(1);
+    expect(started.rounds).toHaveLength(2);
+    expect(started.rounds[1].decision ?? null).toBeNull();
+    expect(started.rounds[1].submittedAt ?? null).toBeNull();
   });
 
   it('a flagged clip on a step in Feedback does the same, and counts one revision', async () => {
@@ -394,7 +411,8 @@ describe('Shoot review', () => {
     await makeClip(w, 'reshoot_needed');
     expect((await shoot(w, 'head', { note: 'Reshoot' })).status).toBe(200);
     const after = await state(w);
-    expect(after.step).toMatchObject({ status: 'In Progress', revisions: 1 });
+    expect(after.step).toMatchObject({ status: 'Feedback', revisions: 1 });
+    expect(after.subs.at(-1).status).toBe('changes_requested');
   });
 
   it('after a send back the owner is told to rework, and can resubmit clips for review', async () => {
@@ -406,10 +424,15 @@ describe('Shoot review', () => {
     const { getMyWork } = await import('../src/modules/workItems/service.js');
     const buckets = await getMyWork(P.owner);
     const mine = Object.values(buckets).flat().find((i) => i._id && String(i._id) === String(w._id));
-    expect(mine.status).toBe('In Progress');
+    expect(mine.status).toBe('Feedback');
     expect(mine.latestSubmissionStatus).toBe('changes_requested');
     const { getAvailableActions } = await import('@mmp/shared');
     expect(getAvailableActions(P.owner, mine).actions).toContain('submit_for_approval');
+
+    // Resubmitting waits for Start rework.
+    const early = await call('post', `/api/work/${w._id}/submit-clips`, 'owner');
+    expect(early.status).toBe(400);
+    expect((await move(w, 'owner', 'In Progress')).status).toBe(200);
 
     // A flagged clip must be replaced first.
     expect((await call('post', `/api/work/${w._id}/submit-clips`, 'owner')).status).toBe(400);
@@ -599,14 +622,20 @@ describe('Round timing', () => {
     const w = await makeStep('Edit', 'Feedback', { submittedAt: first, rounds: [{ roundNumber: 1, startedAt: new Date(Date.now() - 900000), submittedAt: first, intervals: [] }] });
     await makeSub(w);
     expect((await feedback(w)).status).toBe(201);
+    // Resubmitting waits for Start rework.
+    const early = await submit(w);
+    expect(early.status).toBe(409);
+    expect(early.body.code).toBe('REWORK_NOT_STARTED');
+    expect((await move(w, 'owner', 'In Progress')).status).toBe(200);
     expect((await submit(w)).status).toBeLessThan(300);
     const after = await rounds(w);
     expect(after).toHaveLength(2);
     expect(after[0].submittedAt.getTime()).toBe(first.getTime());
     expect(after[0].decision).toBe('changes_requested');
-    // The rework runs from the decision to the resubmit.
-    expect(after[1].startedAt.getTime()).toBe(after[0].decisionAt.getTime());
+    // The rework runs from the owner's Start rework to the resubmit, not from the decision.
+    expect(after[1].startedAt.getTime()).toBeGreaterThanOrEqual(after[0].decisionAt.getTime());
     expect(after[1].submittedAt).toBeTruthy();
+    expect((await WorkItem.findById(w._id).lean()).revisions).toBe(1);
   });
 
   it('sending another version with no decision keeps the time and adds no work time', async () => {
@@ -625,6 +654,8 @@ describe('Round timing', () => {
     const w = await makeStep('Edit', 'Feedback', { submittedAt: first, rounds: [{ roundNumber: 1, startedAt: new Date(Date.now() - 900000), submittedAt: first, intervals: [] }] });
     await makeSub(w);
     await feedback(w);
+    expect((await move(w, 'owner', 'Pending')).status).toBe(409);
+    expect((await move(w, 'owner', 'In Progress')).status).toBe(200);
     expect((await move(w, 'owner', 'Pending')).status).toBe(200);
     const after = await rounds(w);
     expect(after[0].submittedAt.getTime()).toBe(first.getTime());

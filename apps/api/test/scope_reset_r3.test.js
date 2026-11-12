@@ -26,6 +26,11 @@ import {
   REVIEW_STAGES,
   STAGE_DUE_OFFSETS,
 } from '@mmp/shared';
+import { setWorkspacesLockedForTests } from '../src/lib/workspaceLock.js';
+
+// These tests cover the workspace flows, which stay in the code behind the one switch
+// (WORKSPACES_LOCKED). They run with it off, as the app will when it is unlocked.
+setWorkspacesLockedForTests(false);
 
 describe('SCOPE RESET R3: Calendar Plans, Creative Head Approval and Assignment Suite', () => {
   let adminUser, headUser, smUser, execUser, writerUser, designerUser, editorUser;

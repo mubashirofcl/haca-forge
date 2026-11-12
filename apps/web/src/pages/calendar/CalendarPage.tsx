@@ -12,7 +12,7 @@ import {
   type Priority,
   type WorkItemStatus,
 } from '@mmp/shared';
-import { statusClass, statusTone } from '../../lib/statusTone';
+import { statusClass, statusTone, withDisplayStatus } from '../../lib/statusTone';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import {
   Calendar as CalendarIcon,
@@ -232,7 +232,7 @@ export const CalendarPage: React.FC = () => {
 
       const res = await apiFetch<{ data: WorkItemCalendar[] }>(`/api/work/calendar?${params.toString()}`);
       // Dates can change quickly: only the latest request may update the list.
-      if (requestId === fetchRequestRef.current) setItems(res.data || []);
+      if (requestId === fetchRequestRef.current) setItems((res.data || []).map((it) => withDisplayStatus(it as any)));
     } catch (err) {
       console.error('Failed to fetch calendar work items', err);
     } finally {

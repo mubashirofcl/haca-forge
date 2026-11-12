@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { countAwaitingReview } from '../workItems/reviewState.js';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
@@ -59,7 +60,7 @@ export async function getProfile(userId) {
       adminMetrics: { pendingAccessRequests, usersByRole },
     };
   } else if (normalizedRole === 'creative_head') {
-    const stagesWaitingApproval = await WorkItem.countDocuments({ status: 'Feedback' }).catch(() => 0);
+    const stagesWaitingApproval = await countAwaitingReview().catch(() => 0);
     const plansWaiting = await CalendarPlan.countDocuments({ status: { $in: ['submitted', 'in_review'] } }).catch(() => 0);
     rolePanelData = {
       creativeMetrics: { stagesWaitingApproval, plansWaiting },

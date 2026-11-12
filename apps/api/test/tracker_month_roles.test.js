@@ -76,7 +76,7 @@ describe('Tracker list: IST month and role scoping', () => {
     }
   });
 
-  it('Needs owner = an open step with no owner; Waiting for approval = a step Pending', async () => {
+  it('Needs owner = an open step with no owner; Waiting for approval = a step waiting on the reviewer', async () => {
     const list = async (q) => mine(await request(app).get('/api/content-pieces').query(q).set(as('admin'))).map((p) => p.topic.split(' ')[0]).sort();
     // Every seeded step has an owner and none is waiting.
     expect(await list({ needsOwner: 'true' })).toEqual([]);
@@ -87,10 +87,17 @@ describe('Tracker list: IST month and role scoping', () => {
     await WorkItem.updateOne({ _id: edit._id }, { $set: { status: 'Pending', submittedAt: new Date() } });
     expect(await list({ needsOwner: 'true' })).toEqual(['nov30']);
     expect(await list({ waitingApproval: 'true' })).toEqual(['nov1']);
-    // Changes requested is not waiting for approval; a done step without an owner does not need one.
+    // Submitted with a link: saved as Feedback with its latest version still with the reviewer.
+    const { Submission } = await import('../src/modules/submissions/model.js');
     await WorkItem.updateOne({ _id: edit._id }, { $set: { status: 'Feedback' } });
+    const v1 = await Submission.create({ workItemId: edit._id, stageKey: edit.stageKey, version: 1, kind: 'link', status: 'submitted', submittedAt: new Date(), linkUrl: 'https://drive.google.com/file/d/t' });
+    expect(await list({ waitingApproval: 'true' })).toEqual(['nov1']);
+    // Changes requested is not waiting for approval; a done step without an owner does not need one.
+    await Submission.updateOne({ _id: v1._id }, { $set: { status: 'changes_requested' } });
+    await WorkItem.updateOne({ _id: edit._id }, { $set: { revisions: 1 } });
     await WorkItem.updateOne({ _id: script._id }, { $set: { status: 'Approved', approvedAt: new Date() } });
     expect(await list({ waitingApproval: 'true' })).toEqual([]);
     expect(await list({ needsOwner: 'true' })).toEqual([]);
+    await Submission.deleteMany({ workItemId: edit._id });
   });
 });

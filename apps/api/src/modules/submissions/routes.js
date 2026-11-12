@@ -4,6 +4,7 @@ import { validate } from '../../middleware/validate.js';
 import {
   submissionDraftSaveSchema,
   submissionSubmitSchema,
+  stepLinkSubmitSchema,
   submissionCommentCreateSchema,
   submissionReviewApproveSchema,
   submissionReviewRevisionSchema,
@@ -11,6 +12,7 @@ import {
 } from '@mmp/shared';
 import * as submissionController from './controller.js';
 
+import { refuseWhenWorkspacesLocked } from '../../lib/workspaceLock.js';
 import { requireCommentAccess, requireRatingAccess, requireSubmissionAccess } from '../workItems/access.js';
 
 const router = Router();
@@ -47,8 +49,10 @@ export default router;
 // WorkItem specific sub-routes helper to mount onto work-items
 export function attachWorkItemSubmissionRoutes(workItemRouter) {
   workItemRouter.get('/:id/draft', submissionController.getDraftHandler);
-  workItemRouter.put('/:id/draft', validate(submissionDraftSaveSchema), submissionController.saveDraftHandler);
+  workItemRouter.put('/:id/draft', refuseWhenWorkspacesLocked, validate(submissionDraftSaveSchema), submissionController.saveDraftHandler);
   workItemRouter.post('/:id/submit', validate(submissionSubmitSchema), submissionController.submitHandler);
+  // Submit a step with Google Drive links (the step owner, from My Work and Work Detail).
+  workItemRouter.post('/:id/submit-link', validate(stepLinkSubmitSchema), submissionController.submitLinkHandler);
   workItemRouter.get('/:id/submissions', submissionController.listVersionsHandler);
   workItemRouter.post('/:id/editor-lock', submissionController.claimEditorLockHandler);
   workItemRouter.delete('/:id/editor-lock', submissionController.releaseEditorLockHandler);

@@ -7,6 +7,7 @@ import { User } from '../people/model.js';
 import { resolveScope } from '../../lib/scope.js';
 import { getWorkspaceMode } from '@mmp/shared';
 import { createNotification } from '../notifications/service.js';
+import { logActivity } from '../activity/service.js';
 import { canSeePrivateReview, canSeeStepOutput, getParticipation, isTeamMember } from '../workItems/access.js';
 import { assertOutputUrl } from '../uploads/outputUrls.js';
 
@@ -884,13 +885,15 @@ export async function submitClipsForApproval(stageItemId, user) {
 
 /**
  * 13. Finish review of shoot step (Creative Head / Admin)
- * If any clip is reshoot_needed -> step returns to In Progress for the owner to reshoot.
+ * If any clip is reshoot_needed -> the step waits in "Changes requested", like any other revision.
  * If all clips are approved -> approve step with 1 to 5 rating.
  * A step cannot be approved while a clip is waiting_review or reshoot_needed.
  */
 export async function finishShootStepReview(stageItemId, reviewData, user) {
   const {
     assertDecisionAllowed,
+    applyChangesRequested,
+    afterDecision,
     assertReviewer,
     assertValidRating,
     approveSubmission,
@@ -922,35 +925,53 @@ export async function finishShootStepReview(stageItemId, reviewData, user) {
     throw error;
   }
 
-  const { transitionWorkItem } = await import('../workItems/transition.service.js');
-
-  // Outcome 1: If any clip is reshoot_needed -> back to In Progress, like a normal revision
+  // Outcome 1: If any clip is reshoot_needed -> changes requested, the same end state as
+  // every other revision path. The rework round starts when the owner clicks Start rework.
   if (flaggedClips.length > 0) {
     const submission = await assertDecisionAllowed({ user, workItem, decision: 'revision' });
     await claimSubmission(submission, 'changes_requested', user);
 
-    let updatedWorkItem;
+    const fromStatus = workItem.status;
+    const comment =
+      reviewData.note ||
+      reviewData.feedback ||
+      `${flaggedClips.length} clip(s) flagged for reshoot`;
     try {
-      updatedWorkItem = await transitionWorkItem(
-        workItem._id,
-        {
-          toStatus: 'In Progress',
-          comment:
-            reviewData.note ||
-            reviewData.feedback ||
-            `${flaggedClips.length} clip(s) flagged for reshoot`,
-        },
-        user,
-        { reviewDecision: true }
-      );
+      applyChangesRequested(workItem);
+      await workItem.save();
     } catch (error) {
       await releaseSubmission(submission);
       throw error;
     }
 
+    // The decision is saved. What follows must not fail it.
+    await afterDecision('the reshoot event', () =>
+      logActivity({
+        entityType: 'work_item',
+        entityId: workItem._id,
+        actor: user,
+        action: 'work_item.status_changed',
+        fromStatus,
+        toStatus: workItem.status,
+        metadata: { title: workItem.title, revisions: workItem.revisions, comment },
+      })
+    );
+    if (workItem.ownerId) {
+      await afterDecision('the reshoot notification', () =>
+        createNotification({
+          recipient: workItem.ownerId?._id || workItem.ownerId,
+          type: 'revision_requested',
+          title: 'Revision Requested on Stage Deliverable',
+          message: `Creative Head requested a revision on ${workItem.title}. Note: ${comment}`,
+          link: `/my-work?id=${workItem._id}`,
+          metadata: { workItemId: workItem._id, comment },
+        })
+      );
+    }
+
     return {
       outcome: 'changes_requested',
-      workItem: updatedWorkItem,
+      workItem: await WorkItem.findById(workItem._id).populate('departmentId', 'name code').populate('ownerId', 'name email role jobRole'),
       flaggedCount: flaggedClips.length,
     };
   }

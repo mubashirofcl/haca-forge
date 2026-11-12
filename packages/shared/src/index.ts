@@ -686,6 +686,65 @@ export function isAllowedOutputUrl(url: unknown): boolean {
 export const OUTPUT_URL_ERROR =
   "Use a file uploaded here, or an https link on drive.google.com or docs.google.com.";
 
+// ==========================================
+// Locked workspaces: submit with links
+// ==========================================
+// The one switch. While true, the production workspaces (Writing Studio, Shoot, Edit, Design,
+// Post) show a locked screen, the API refuses workspace-only writes, and every step is
+// submitted with Google Drive links from My Work and Work Detail. Set to false to unlock.
+export const WORKSPACES_LOCKED = true;
+
+export const DRIVE_LINK_ERROR = "Use an https link on drive.google.com or docs.google.com.";
+export const MAX_SUBMIT_LINKS = 20;
+
+/** Design is submitted as one or more links (one per slide or file); every other step as one. */
+export function stepAllowsManyLinks(stageKey: string | null | undefined): boolean {
+  return stageKey === "Design";
+}
+
+export const stepLinkSubmitSchema = z.object({
+  links: z.array(z.string().trim().min(1, "Enter a link")).min(1, "Enter a link").max(MAX_SUBMIT_LINKS),
+  note: z.string().trim().max(5000).optional(),
+});
+export type StepLinkSubmitInput = z.infer<typeof stepLinkSubmitSchema>;
+
+export const LIVE_URL_ERROR = "Enter the live post link, starting with https://";
+
+/** The live link of a published post: https on any host, with no credentials. */
+export function isLivePostUrl(url: unknown): boolean {
+  if (typeof url !== "string") return false;
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.protocol === "https:" && Boolean(parsed.hostname) && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Where a step stands with its reviewer. 'Feedback' is saved both for a step that was just
+ * submitted and for one that was sent back; the latest version tells them apart.
+ * - awaiting_review: submitted, waiting for the reviewer ("Waiting for approval")
+ * - changes_requested: sent back, rework not started ("Changes requested")
+ * - rework_in_progress: the owner has started the rework
+ */
+export type StepReviewState = "awaiting_review" | "changes_requested" | "rework_in_progress" | null;
+
+export function stepReviewState(
+  status: string | null | undefined,
+  latestSubmissionStatus: string | null | undefined,
+  revisions: number = 0,
+): StepReviewState {
+  if (status === "Pending") return "awaiting_review";
+  if (status === "Feedback") {
+    if (latestSubmissionStatus === "submitted") return "awaiting_review";
+    if (latestSubmissionStatus === "changes_requested") return "changes_requested";
+    return revisions > 0 ? "changes_requested" : "awaiting_review";
+  }
+  if (status === "In Progress" && latestSubmissionStatus === "changes_requested") return "rework_in_progress";
+  return null;
+}
+
 export const UPLOAD_KINDS = ["video", "image", "pdf"] as const;
 export type UploadKind = (typeof UPLOAD_KINDS)[number];
 
@@ -1068,7 +1127,9 @@ export type WorkItemCreateInput = z.infer<typeof workItemCreateSchema>;
 export const workItemUpdateSchema = workItemCreateSchema.partial();
 export type WorkItemUpdateInput = z.infer<typeof workItemUpdateSchema>;
 
-// Post caption and hashtags (Phase 5d): written by the poster when marking a Post step posted.
+// Post caption and hashtags (Phase 5d). No longer asked for or saved: a Post step is marked
+// posted with its live link only. Captions saved earlier stay in the database. The limits
+// are kept for the caption counter component.
 // Counted together, as on the platforms: Instagram allows 2,200 characters, LinkedIn 3,000.
 export const POST_CAPTION_LIMITS = { instagram: 2200, linkedin: 3000 } as const;
 export const POST_CAPTION_MAX = POST_CAPTION_LIMITS.linkedin;
@@ -1085,8 +1146,6 @@ export const workItemTransitionSchema = z.object({
   deliverableUrl: z.string().optional(),
   publishedUrl: z.string().optional(),
   comment: z.string().optional(),
-  caption: z.string().max(POST_CAPTION_MAX).optional(),
-  hashtags: z.string().max(POST_CAPTION_MAX).optional(),
 });
 export type WorkItemTransitionInput = z.infer<typeof workItemTransitionSchema>;
 
@@ -2973,6 +3032,25 @@ export function submittedWorkTimeMs(item: WorkItemTimestamps): number | null {
   }
   if (item.startedAt && item.submittedAt) return calculateIndividualWorkMeasures(item).workTimeMs;
   return null;
+}
+
+/**
+ * Rework time: the work time of every round that follows a "changes requested" decision,
+ * by the same round rule as work time (blocked and paused time taken out). A rework round
+ * starts when the owner clicks Start rework. Null when the step was never reworked.
+ */
+export function reworkTimeMs(item: WorkItemTimestamps, nowDate: Date = new Date()): number | null {
+  const rounds = Array.isArray(item.rounds) ? item.rounds : [];
+  let total: number | null = null;
+  for (let i = 1; i < rounds.length; i++) {
+    const round = rounds[i];
+    if (!round || !round.startedAt || (rounds[i - 1] as any)?.decision !== "changes_requested") continue;
+    // An unsubmitted round that is not the latest is not being worked on any more.
+    if (!round.submittedAt && i !== rounds.length - 1) continue;
+    const ms = calculateIndividualWorkMeasures({ ...item, rounds: [round] }, nowDate).workTimeMs;
+    total = (total || 0) + (ms || 0);
+  }
+  return total;
 }
 
 

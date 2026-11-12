@@ -1,8 +1,9 @@
+import { getStepStatusLabel } from '@mmp/shared';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { overdueLabel } from '../../components/OverdueChip';
-import { statusClass, statusTone, roleClass, bandClass, bandForPct, type StatusTone } from '../../lib/statusTone';
+import { displayStatus, statusClass, statusTone, roleClass, bandClass, bandForPct, type StatusTone } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import { useGlobalFilter } from '../../context/GlobalFilterContext';
 import { GlobalFilterBar } from '../../components/GlobalFilterBar';
@@ -559,10 +560,10 @@ export const TeamDashboardPage: React.FC = () => {
                       <span className="block shrink-0 text-right">
                         <span
                           className={`text-[11px] font-semibold px-2 py-0.5 rounded-full block mb-1 status-tint ${statusClass(
-                            item.isOverdue ? 'blocked' : statusTone(item.status)
+                            item.isOverdue ? 'blocked' : statusTone(displayStatus(item as any))
                           )}`}
                         >
-                          {item.isOverdue ? overdueLabel(item.deadline) : item.status}
+                          {item.isOverdue ? overdueLabel(item.deadline) : getStepStatusLabel(displayStatus(item as any))}
                         </span>
                         <span className="text-[11px] text-ui-muted tabular-nums">
                           {item.deadline ? new Date(item.deadline).toLocaleDateString() : 'No date'}

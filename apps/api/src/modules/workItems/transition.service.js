@@ -1,6 +1,7 @@
 import { WorkItem } from './model.js';
 import { logActivity } from '../activity/service.js';
-import { BLOCKER_REASONS, normalizeRole, getAvailableActions, getWorkspaceMode, POST_CAPTION_MAX, postCaptionLength } from '@mmp/shared';
+import { BLOCKER_REASONS, LIVE_URL_ERROR, normalizeRole, getAvailableActions, getWorkspaceMode, isLivePostUrl } from '@mmp/shared';
+import { workspacesLocked } from '../../lib/workspaceLock.js';
 import { resolveScope } from '../../lib/scope.js';
 import { Person } from '../people/model.js';
 import { logger } from '../../lib/logger.js';
@@ -25,6 +26,10 @@ export const ALLOWED_TRANSITIONS = {
  *   never from a request. It alone may apply a review decision to a step that requires review.
  * @param options.ownerSubmission Set only by submit-clips, never from a request. The owner has just
  *   sent a new version, so this move is the submission itself, not a withdrawal.
+ *
+ * Submitting a review step through this route (toStatus Pending or Feedback) is refused while
+ * the workspaces are locked: the step is submitted with POST /api/work/:id/submit-link. When
+ * unlocked, the version is created before the step is saved and removed if the save fails.
  */
 export async function transitionWorkItem(id, transitionData, user, options = {}) {
   const { toStatus, blockerReason, blockerNote, deliverableUrl, publishedUrl, comment } =
@@ -154,6 +159,17 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
     await assertOwnerCanLeaveReview(workItem);
   }
 
+  const isOwnerSubmission =
+    (toStatus === 'Pending' || toStatus === 'Feedback') && !isReopen && !isReviewerRevision;
+  const needsVersion = isOwnerSubmission && Boolean(workItem.contentPieceId || workItem.reviewRequired);
+  // "Start rework" is the owner's Feedback -> In Progress on a step that was sent back. While
+  // the latest version still waits on a reviewer, assertOwnerCanLeaveReview above refuses it.
+  let latestVersion = null;
+  if (needsVersion) {
+    const { latestRealSubmission } = await import('../submissions/reviewDecision.js');
+    latestVersion = await latestRealSubmission(workItem._id);
+  }
+
   // A step that requires review is decided through the review flow, which needs a rating.
   if (workItem.reviewRequired && !options.reviewDecision) {
     let bypassesReview = toStatus === 'Approved' || isReviewerRevision;
@@ -202,6 +218,19 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
       error.code = 'FORBIDDEN_ACTION';
       throw error;
     }
+  }
+
+  // Who may submit is settled above. How a review step is submitted:
+  if (needsVersion && !options.ownerSubmission) {
+    if (workspacesLocked()) {
+      const error = new Error('Submit this step with a link.');
+      error.statusCode = 409;
+      error.code = 'USE_SUBMIT_LINK';
+      throw error;
+    }
+    // Sent back and not started again: resubmit only after Start rework.
+    const { assertReworkStarted } = await import('../submissions/reviewDecision.js');
+    assertReworkStarted(workItem, latestVersion);
   }
 
   // Precondition: Worker cannot submit without having started
@@ -319,30 +348,23 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
   // A new deliverable link is checked before anything below writes or notifies.
   if (deliverableUrl) assertChangedOutputUrl(deliverableUrl, workItem.deliverableUrl, 'deliverableUrl');
 
-  // Posting a Post step (Phase 5d): the poster writes the caption (required) and hashtags
-  // (optional) here, within the platform limit. They are accepted nowhere else.
-  const postCaption = typeof transitionData.caption === 'string' ? transitionData.caption.trim() : '';
-  const postHashtags = typeof transitionData.hashtags === 'string' ? transitionData.hashtags.trim() : '';
+  // Posting a Post step: the live post link only (https, any host). No caption or hashtags
+  // are asked for or saved; captions saved earlier are left as they are.
   const isPosting = toStatus === 'Published' && workItem.stageKey === 'Post';
-  if (!isPosting && (postCaption || postHashtags)) {
-    const error = new Error('A caption and hashtags are written only when marking a Post step as posted.');
+  const newPublishedUrl = typeof publishedUrl === 'string' ? publishedUrl.trim() : '';
+  if (newPublishedUrl && newPublishedUrl !== (workItem.publishedUrl || '').trim() && !isLivePostUrl(newPublishedUrl)) {
+    const error = new Error(`publishedUrl: ${LIVE_URL_ERROR}`);
     error.statusCode = 400;
-    error.code = 'CAPTION_NOT_ALLOWED';
+    error.code = 'INVALID_LIVE_URL';
+    error.details = { field: 'publishedUrl' };
     throw error;
   }
-  if (isPosting) {
-    if (!postCaption) {
-      const error = new Error('Write the caption before marking this as posted.');
-      error.statusCode = 400;
-      error.code = 'CAPTION_REQUIRED';
-      throw error;
-    }
-    if (postCaptionLength(postCaption, postHashtags) > POST_CAPTION_MAX) {
-      const error = new Error(`Caption and hashtags together are over ${POST_CAPTION_MAX} characters.`);
-      error.statusCode = 400;
-      error.code = 'CAPTION_TOO_LONG';
-      throw error;
-    }
+  if (isPosting && !isLivePostUrl(newPublishedUrl || workItem.publishedUrl)) {
+    const error = new Error(LIVE_URL_ERROR);
+    error.statusCode = 400;
+    error.code = newPublishedUrl || workItem.publishedUrl ? 'INVALID_LIVE_URL' : 'LIVE_URL_REQUIRED';
+    error.details = { field: 'publishedUrl' };
+    throw error;
   }
 
   // Publishing also updates the content piece (step 8, after this step is saved). Validate that
@@ -369,9 +391,11 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
     }
   }
 
-  // 7. Revision Counter: increment on revision request or when restarting work after feedback & notify owner
+  // 7. Revision Counter: one revision per reviewer decision, and the owner is told once.
+  // The owner's own move back to In Progress (Start rework) is not a revision: the decision
+  // that sent the step back already counted it and already notified them.
   if (
-    ((fromStatus === 'Feedback' || fromStatus === 'Pending') && toStatus === 'In Progress') ||
+    ((fromStatus === 'Feedback' || fromStatus === 'Pending') && toStatus === 'In Progress' && !isOwner) ||
     (fromStatus === 'Pending' && toStatus === 'Feedback')
   ) {
     workItem.revisions = (workItem.revisions || 0) + 1;
@@ -404,7 +428,7 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
 
   // 9. Submissions, Approvals and Publishing
   // A reviewer's decision or a reopen is not a submission, so it records no submit time.
-  const isNewSubmission = (toStatus === 'Pending' || toStatus === 'Feedback') && !isReopen && !isReviewerRevision;
+  const isNewSubmission = isOwnerSubmission;
   if (isReopen && toStatus === 'Feedback') {
     // The reopened work is a new round; the next submit must not overwrite the decided one.
     if (!workItem.rounds) workItem.rounds = [];
@@ -441,10 +465,6 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
 
   if (toStatus === 'Published') {
     workItem.postedAt = now;
-    if (isPosting) {
-      workItem.postCaption = postCaption;
-      workItem.postHashtags = postHashtags;
-    }
     if (!workItem.approvedAt) workItem.approvedAt = now;
     if (Array.isArray(workItem.intervals)) {
       for (const iv of workItem.intervals) {
@@ -458,8 +478,47 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
     }
   }
 
+  // A worker's submission must end up with a real version for the reviewer to decide. It is
+  // created before the step is saved, and removed again if the save fails, so the step never
+  // waits for review without a version.
+  let createdVersion = null;
+  if (needsVersion) {
+    const { Submission } = await import('../submissions/model.js');
+    // A reopened step never reuses a version from before its last decision.
+    const lastDecision = Math.max(...[workItem.decisionAt, workItem.approvedAt, workItem.changesRequestedAt].filter(Boolean).map((d) => new Date(d).getTime()), 0);
+    const stillAwaiting =
+      latestVersion?.status === 'submitted' && (!latestVersion.submittedAt || new Date(latestVersion.submittedAt).getTime() > lastDecision);
+    if (!stillAwaiting) {
+      const kind =
+        workItem.stageKey === 'Shoot' || workItem.stageKey === 'Edit' ? 'video' : 'document';
+      const url = deliverableUrl || workItem.deliverableUrl || '';
+      createdVersion = await Submission.create({
+        workItemId: workItem._id,
+        contentPieceId: workItem.contentPieceId || null,
+        stageKey: workItem.stageKey,
+        version: (latestVersion?.version || 0) + 1,
+        kind,
+        linkUrl: url,
+        notes: comment || '',
+        files: url ? [{ name: 'deliverable', url }] : [],
+        submittedById: userId,
+        submittedAt: new Date(),
+        status: 'submitted',
+        versionToken: (await import('crypto')).randomUUID(),
+      });
+    }
+  }
+
   workItem.status = toStatus;
-  await workItem.save();
+  try {
+    await workItem.save();
+  } catch (error) {
+    if (createdVersion) {
+      const { Submission } = await import('../submissions/model.js');
+      await Submission.deleteOne({ _id: createdVersion._id });
+    }
+    throw error;
+  }
 
   // Blocking always leaves a blocker record (remembering the status before), and leaving
   // Blocked closes it, whichever screen did it.
@@ -481,43 +540,6 @@ export async function transitionWorkItem(id, transitionData, user, options = {})
   // the decision stands, and a failure here is logged. A missed unlock is repaired by
   // reconcileContentPieceStageLocks the next time the step is opened.
   const afterStatusSaved = async () => {
-  // A worker's submission must end up with a real version for the reviewer to decide.
-  if (isNewSubmission && (workItem.contentPieceId || workItem.reviewRequired)) {
-    try {
-      const { Submission } = await import('../submissions/model.js');
-      const latestSub = await Submission.findOne({
-        workItemId: workItem._id,
-        version: { $gt: 0 },
-      }).sort({ version: -1 });
-      // A reopened step never reuses a version from before its last decision.
-      const lastDecision = Math.max(...[workItem.decisionAt, workItem.approvedAt, workItem.changesRequestedAt].filter(Boolean).map((d) => new Date(d).getTime()), 0);
-      const stillAwaiting =
-        latestSub?.status === 'submitted' && (!latestSub.submittedAt || new Date(latestSub.submittedAt).getTime() > lastDecision);
-      if (!stillAwaiting) {
-        const nextVersion = (latestSub?.version || 0) + 1;
-        const kind =
-          workItem.stageKey === 'Shoot' || workItem.stageKey === 'Edit' ? 'video' : 'document';
-        const url = deliverableUrl || workItem.deliverableUrl || '';
-        await Submission.create({
-          workItemId: workItem._id,
-          contentPieceId: workItem.contentPieceId || null,
-          stageKey: workItem.stageKey,
-          version: nextVersion,
-          kind,
-          linkUrl: url,
-          notes: comment || '',
-          files: url ? [{ name: 'deliverable', url }] : [],
-          submittedById: userId,
-          submittedAt: new Date(),
-          status: 'submitted',
-          versionToken: (await import('crypto')).randomUUID(),
-        });
-      }
-    } catch (subErr) {
-      // Non-blocking
-    }
-  }
-
   // 8. Scope Reset R3: Content Flow Hand-offs & Stage Unlocking
   if (workItem.contentPieceId) {
     const { ContentPiece } = await import('../calendar/contentPiece.model.js');

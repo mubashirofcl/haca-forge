@@ -13,6 +13,7 @@ import {
   claimSubmission,
   releaseSubmission,
   afterDecision,
+  applyChangesRequested,
 } from '../submissions/reviewDecision.js';
 
 /**
@@ -199,16 +200,8 @@ export async function createFeedbackEntry(data, user) {
 
     // Update WorkItem state based on entry
     if (!isResponse) {
-      const decidedAt = new Date();
-      workItem.status = 'Feedback';
-      workItem.revisions = (workItem.revisions || 0) + 1;
-      workItem.changesRequestedAt = decidedAt;
-      workItem.decisionAt = decidedAt;
-      if (workItem.rounds && workItem.rounds.length > 0) {
-        const curRound = workItem.rounds[workItem.rounds.length - 1];
-        curRound.decisionAt = decidedAt;
-        curRound.decision = 'changes_requested';
-      }
+      // The same end state as every other revision path.
+      applyChangesRequested(workItem);
       await workItem.save();
     }
   } catch (error) {
@@ -472,6 +465,10 @@ export async function listFeedbackThreads(filters = {}, user) {
     .sort({ updatedAt: -1 })
     .limit(filters.limit ? Number(filters.limit) : 50);
 
+  // Which of them wait on a reviewer (the rest in 'Feedback' were sent back for changes).
+  const { awaitingReviewIds } = await import('../workItems/reviewState.js');
+  const awaiting = await awaitingReviewIds(workItems);
+
   // For each work item, fetch latest feedback round and check if flagged
   const results = await Promise.all(
     workItems.map(async (item) => {
@@ -484,6 +481,7 @@ export async function listFeedbackThreads(filters = {}, user) {
 
       return {
         workItem: item,
+        awaitingReview: awaiting.has(String(item._id)),
         latestEntry: normalizeRole(user.role) === 'executive' ? null : latestEntry,
         totalEntries,
         revisions: item.revisions || 0,

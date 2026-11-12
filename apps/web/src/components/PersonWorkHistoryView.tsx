@@ -7,9 +7,9 @@ import {
   History,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
-import { statusClass, statusTone } from '../lib/statusTone';
+import { displayStatus, statusClass, statusTone } from '../lib/statusTone';
 import { Avatar } from './Avatar';
-import type { WorkItemIndividualMeasures } from '@mmp/shared';
+import { formatDuration, getStepStatusLabel, reworkTimeMs, type WorkItemIndividualMeasures } from '@mmp/shared';
 
 export interface PersonWorkHistoryData {
   person: {
@@ -112,9 +112,9 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
                 {item.stageKey || item.workType || 'Stage'}
               </span>
               <span
-                className={`status-chip ${statusClass(statusTone(item.status))} text-[10px] font-bold px-2 py-0.5`}
+                className={`status-chip ${statusClass(statusTone(displayStatus(item)))} text-[10px] font-bold px-2 py-0.5`}
               >
-                {item.status}
+                {getStepStatusLabel(displayStatus(item))}
               </span>
               {measures.isLate && (
                 <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded bg-rose-600 text-white">
@@ -159,6 +159,11 @@ export const PersonWorkHistoryView: React.FC<PersonWorkHistoryViewProps> = ({
                 ? `Working for ${measures.workTimeFormatted}`
                 : measures.workTimeFormatted || '—'}
             </span>
+            {reworkTimeMs(item) !== null && (
+              <span className="block text-[10px] text-slate-500" data-testid="step-rework-time">
+                Rework time: {formatDuration(reworkTimeMs(item))}
+              </span>
+            )}
           </div>
           <div>
             <span className="text-slate-400 block text-[10px] uppercase font-bold">Approval Wait</span>

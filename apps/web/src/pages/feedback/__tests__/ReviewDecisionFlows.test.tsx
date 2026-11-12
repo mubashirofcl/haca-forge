@@ -191,50 +191,123 @@ describe('My Work submit button', () => {
     render(<MemoryRouter><MyWorkPage /></MemoryRouter>);
   };
 
-  it('after a Shoot send-back the owner sees Rework and goes to the workspace to resubmit', async () => {
+  const DRIVE = 'https://drive.google.com/file/d/cut/view';
+  const fillAndSend = async (value: string) => {
+    const dialog = await screen.findByTestId('step-submit-dialog');
+    fireEvent.change(within(dialog).getAllByRole('textbox')[0], { target: { value } });
+    fireEvent.submit(dialog.querySelector('form')!);
+    return dialog;
+  };
+
+  it('after a Shoot send-back, rework in progress is resubmitted with a link, not in the workspace', async () => {
     showItem({ stageKey: 'Shoot', title: 'Shoot step', status: 'In Progress', revisions: 1, latestSubmissionStatus: 'changes_requested' });
-    fireEvent.click(await screen.findByRole('button', { name: /Resubmit \(Rev 2\)/ }));
-    expect(mockNavigate).toHaveBeenCalledWith('/work/w1/shoot');
-    expect(screen.getByText('Rework')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Resubmit link' }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(screen.getByText('Rework in progress')).toBeInTheDocument();
+    await fillAndSend(DRIVE);
+    await waitFor(() => expect(posts('/submit-link')).toHaveLength(1));
+    expect(JSON.parse(posts('/submit-link')[0][1].body).links).toEqual([DRIVE]);
+    expect(posts('/transition')).toHaveLength(0);
   });
 
-  it('a resubmitted step shows as under review, with nothing to submit or block', async () => {
+  it('a resubmitted step shows as waiting for approval, with nothing to submit or block', async () => {
     showItem({ status: 'Feedback', revisions: 1, latestSubmissionStatus: 'submitted' });
-    expect(await screen.findByText('Waiting for approval')).toBeInTheDocument();
+    expect((await screen.findAllByText('Waiting for approval')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Changes requested')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Resubmit/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Submit link/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start rework/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Mark blocked/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Request help/ })).not.toBeInTheDocument();
   });
 
-  it('resubmitting from Feedback sends a real move, not a same-status request', async () => {
-    showItem({ status: 'Feedback', revisions: 1, latestSubmissionStatus: 'changes_requested' });
-    fireEvent.click(await screen.findByRole('button', { name: /Resubmit/ }));
-    const submit = await screen.findByRole('button', { name: 'Submit to Creative Head' });
-    const form = submit.closest('form')!;
-    fireEvent.change(within(form).getAllByRole('textbox')[0], { target: { value: 'https://example.test/cut' } });
-    fireEvent.submit(form);
+  it('changes requested shows the reviewer note and Start rework, which moves the step to In Progress', async () => {
+    showItem({ status: 'Feedback', revisions: 1, latestSubmissionStatus: 'changes_requested', latestFeedback: { text: 'Trim the intro', reviewer: 'Head' } });
+    expect(await screen.findByText('Changes requested')).toBeInTheDocument();
+    expect(screen.getByText(/Trim the intro/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Resubmit/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Submit link/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start rework' }));
     await waitFor(() => expect(posts('/transition')).toHaveLength(1));
-    expect(JSON.parse(posts('/transition')[0][1].body).toStatus).toBe('Pending');
+    expect(JSON.parse(posts('/transition')[0][1].body).toStatus).toBe('In Progress');
+    expect(posts('/submit-link')).toHaveLength(0);
   });
 
-  it('a Shoot owner goes to the Shoot workspace; nothing is approved', async () => {
+  it('a Shoot owner submits with a link; there is no workspace button and nothing is approved', async () => {
     show('Shoot');
-    fireEvent.click(await screen.findByRole('button', { name: /Submit for approval/ }));
-    expect(mockNavigate).toHaveBeenCalledWith('/work/w1/shoot');
+    expect(await screen.findByRole('button', { name: 'Submit link' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Workspace/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Submit link' }));
+    await fillAndSend('https://drive.google.com/drive/folders/footage');
+    await waitFor(() => expect(posts('/submit-link')).toHaveLength(1));
+    expect(mockNavigate).not.toHaveBeenCalled();
     expect(posts('/transition')).toHaveLength(0);
     expect(screen.queryByText(/Done and forward/)).not.toBeInTheDocument();
   });
 
-  it('other steps still open the submit form and go to review, not approved', async () => {
+  it('an invalid link is refused in the dialog and nothing is sent', async () => {
     show('Edit');
-    fireEvent.click(await screen.findByRole('button', { name: /Submit for approval/ }));
-    const submit = await screen.findByRole('button', { name: 'Submit to Creative Head' });
-    expect(mockNavigate).not.toHaveBeenCalled();
-    const form = submit.closest('form')!;
-    fireEvent.change(within(form).getAllByRole('textbox')[0], { target: { value: 'https://example.test/cut' } });
-    fireEvent.submit(form);
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit link' }));
+    const dialog = await fillAndSend('https://example.test/cut');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('drive.google.com');
+    expect(within(dialog).getByText(/shared with HACA reviewers/)).toBeInTheDocument();
+    expect(posts('/submit-link')).toHaveLength(0);
+    fireEvent.change(within(dialog).getAllByRole('textbox')[0], { target: { value: DRIVE } });
+    fireEvent.change(within(dialog).getByLabelText(/Note to the reviewer/), { target: { value: 'First cut' } });
+    fireEvent.submit(dialog.querySelector('form')!);
+    await waitFor(() => expect(posts('/submit-link')).toHaveLength(1));
+    expect(JSON.parse(posts('/submit-link')[0][1].body)).toEqual({ links: [DRIVE], note: 'First cut' });
+  });
+
+  it('Design takes several links; other steps take one', async () => {
+    show('Design');
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit link' }));
+    const dialog = await screen.findByTestId('step-submit-dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add another link' }));
+    const boxes = within(dialog).getAllByRole('textbox');
+    fireEvent.change(boxes[0], { target: { value: 'https://drive.google.com/file/d/slide-1/view' } });
+    fireEvent.change(boxes[1], { target: { value: 'https://drive.google.com/file/d/slide-2/view' } });
+    fireEvent.submit(dialog.querySelector('form')!);
+    await waitFor(() => expect(posts('/submit-link')).toHaveLength(1));
+    expect(JSON.parse(posts('/submit-link')[0][1].body).links).toEqual(['https://drive.google.com/file/d/slide-1/view', 'https://drive.google.com/file/d/slide-2/view']);
+  });
+
+  it('a step other than Design has no way to add a second link', async () => {
+    show('Script');
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit link' }));
+    const dialog = await screen.findByTestId('step-submit-dialog');
+    expect(within(dialog).queryByRole('button', { name: 'Add another link' })).not.toBeInTheDocument();
+  });
+
+  it('a Post step is marked posted with only the live link: no caption, no file upload', async () => {
+    show('Post');
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark as posted' }));
+    const dialog = await screen.findByTestId('step-submit-dialog');
+    expect(within(dialog).queryByText(/caption/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/hashtag/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/Note to the reviewer/)).not.toBeInTheDocument();
+    expect(within(dialog).getAllByRole('textbox')).toHaveLength(1);
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'http://instagram.com/p/x' } });
+    fireEvent.submit(dialog.querySelector('form')!);
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('https://');
+    expect(posts('/transition')).toHaveLength(0);
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'https://www.instagram.com/reel/abc/' } });
+    fireEvent.submit(dialog.querySelector('form')!);
     await waitFor(() => expect(posts('/transition')).toHaveLength(1));
-    expect(JSON.parse(posts('/transition')[0][1].body).toStatus).toBe('Feedback');
+    expect(JSON.parse(posts('/transition')[0][1].body)).toEqual({ toStatus: 'Published', publishedUrl: 'https://www.instagram.com/reel/abc/' });
+  });
+
+  it('a failed submit keeps the dialog open and shows the error', async () => {
+    asOwner();
+    apiFetch.mockImplementation(async (url: string, opts?: any) => {
+      if (opts?.method === 'POST') throw Object.assign(new Error('This step is already waiting for approval.'), { statusCode: 409 });
+      return url.includes('/my-work') ? myWork('Edit') : { data: {} };
+    });
+    render(<MemoryRouter><MyWorkPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit link' }));
+    await fillAndSend(DRIVE);
+    expect(await screen.findByTestId('step-submit-error')).toHaveTextContent('already waiting for approval');
+    expect(screen.getByTestId('step-submit-dialog')).toBeInTheDocument();
   });
 });
 
@@ -275,16 +348,132 @@ describe('Work Detail', () => {
   it('an owner under review has no blocked or help actions', async () => {
     asOwner();
     show(item({ status: 'Feedback', isLocked: false, latestSubmission: { _id: 's1', status: 'submitted', version: 1 } }));
-    expect(await screen.findByText(/Under Review by Creative Head/)).toBeInTheDocument();
+    expect(await screen.findByTestId('owner-waiting')).toHaveTextContent('Waiting for approval (version 1)');
+    expect(screen.queryByText('Changes requested')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Submit link|Resubmit link|Start rework/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Mark blocked/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Request help/ })).not.toBeInTheDocument();
   });
 
-  it('a Shoot owner goes to the Shoot workspace to submit', async () => {
+  it('a Shoot owner submits with a link on Work Detail; no workspace buttons are shown', async () => {
     asOwner();
     show(item({ status: 'In Progress', stageKey: 'Shoot', isLocked: false }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Submit for approval' }));
-    expect(mockNavigate).toHaveBeenCalledWith('/work/w1/shoot');
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit link' }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    const dialog = await screen.findByTestId('step-submit-dialog');
+    expect(screen.queryByRole('button', { name: /Workspace|Writing Studio/ })).not.toBeInTheDocument();
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Google Drive link' }), { target: { value: 'https://drive.google.com/drive/folders/footage' } });
+    fireEvent.submit(dialog.querySelector('form')!);
+    await waitFor(() => expect(posts('/submit-link')).toHaveLength(1));
     expect(posts('/transition')).toHaveLength(0);
+  });
+
+  it('changes requested: the reviewer message and notes, then Start rework, then Resubmit link', async () => {
+    asOwner();
+    const sentBack = item({
+      status: 'Feedback',
+      stageKey: 'Edit',
+      isLocked: false,
+      revisions: 1,
+      latestSubmission: { _id: 's1', status: 'changes_requested', version: 1 },
+      latestFeedback: { text: 'Trim the intro', reviewer: 'Head', rootCause: 'Brief unclear', notes: [{ text: 'Logo is too small', author: 'Head' }] },
+    });
+    show(sentBack);
+    const note = await screen.findByTestId('changes-requested-note');
+    expect(note).toHaveTextContent('Changes requested by Head');
+    expect(note).toHaveTextContent('Trim the intro');
+    expect(note).toHaveTextContent('Cause: Brief unclear');
+    expect(note).toHaveTextContent('Logo is too small');
+    expect(screen.queryByRole('button', { name: /Submit link|Resubmit link/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start rework' }));
+    await waitFor(() => expect(posts('/transition')).toHaveLength(1));
+    expect(JSON.parse(posts('/transition')[0][1].body)).toEqual({ toStatus: 'In Progress' });
+  });
+
+  it('rework in progress offers Resubmit link and shows the rework time', async () => {
+    asOwner();
+    const start = Date.now() - 3 * 3600000;
+    show(
+      item({
+        status: 'In Progress',
+        stageKey: 'Edit',
+        isLocked: false,
+        revisions: 1,
+        startedAt: new Date(start).toISOString(),
+        latestSubmission: { _id: 's1', status: 'changes_requested', version: 1 },
+        rounds: [
+          { roundNumber: 1, startedAt: new Date(start).toISOString(), submittedAt: new Date(start + 3600000).toISOString(), decision: 'changes_requested', decisionAt: new Date(start + 2 * 3600000).toISOString(), intervals: [] },
+          { roundNumber: 2, startedAt: new Date(Date.now() - 130 * 60000).toISOString(), intervals: [] },
+        ],
+      })
+    );
+    expect(await screen.findByRole('button', { name: 'Resubmit link' })).toBeInTheDocument();
+    expect(screen.getAllByText('Rework in progress').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Start rework' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('rework-time')).toHaveTextContent('Rework time');
+    expect(screen.getByTestId('rework-time')).toHaveTextContent('2h 10m');
+  });
+
+  it('a step never sent back shows no rework time', async () => {
+    asOwner();
+    show(item({ status: 'In Progress', stageKey: 'Edit', isLocked: false, rounds: [{ roundNumber: 1, startedAt: new Date(Date.now() - 3600000).toISOString(), intervals: [] }] }));
+    await screen.findByRole('button', { name: 'Submit link' });
+    expect(screen.queryByTestId('rework-time')).not.toBeInTheDocument();
+  });
+
+  it('From earlier steps lists every approved link, including the Shoot link and every Design link', async () => {
+    asOwner();
+    show(
+      item({
+        status: 'In Progress',
+        stageKey: 'Post',
+        isLocked: false,
+        handoff: [
+          { workItemId: 'a', stageKey: 'Shoot', ownerName: 'Shooter', version: 2, items: [{ url: 'https://drive.google.com/drive/folders/footage', kind: 'drive' }], clips: [] },
+          { workItemId: 'b', stageKey: 'Design', ownerName: 'Designer', version: 1, items: [{ url: 'https://drive.google.com/file/d/s1/view', name: 'Link 1', kind: 'drive' }, { url: 'https://drive.google.com/file/d/s2/view', name: 'Link 2', kind: 'drive' }], clips: [] },
+        ],
+      })
+    );
+    const panel = await screen.findByTestId('earlier-steps-panel');
+    expect(within(panel).getByText('From earlier steps')).toBeInTheDocument();
+    const hrefs = within(panel).getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(['https://drive.google.com/drive/folders/footage', 'https://drive.google.com/file/d/s1/view', 'https://drive.google.com/file/d/s2/view']);
+    for (const link of within(panel).getAllByRole('link')) expect(link).toHaveAttribute('target', '_blank');
+    expect(within(panel).getByText(/approved version 2/)).toBeInTheDocument();
+  });
+
+  it('with no handoff from the API (a viewer not allowed to see it), the panel is not shown', async () => {
+    asOwner();
+    show(item({ status: 'In Progress', stageKey: 'Edit', isLocked: false }));
+    await screen.findByRole('button', { name: 'Submit link' });
+    expect(screen.queryByTestId('earlier-steps-panel')).not.toBeInTheDocument();
+  });
+
+  it('?submit=1 from the locked workspace screen opens the submit dialog for the owner', async () => {
+    asOwner();
+    apiFetch.mockImplementation(async (url: string) => (url === '/api/work/w1' ? { data: item({ status: 'In Progress', stageKey: 'Edit', isLocked: false }) } : { data: [] }));
+    render(
+      <MemoryRouter initialEntries={['/work/w1?submit=1']}>
+        <Routes>
+          <Route path="/work/:id" element={<WorkDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(await screen.findByTestId('step-submit-dialog')).toBeInTheDocument();
+  });
+
+  it('?submit=1 opens nothing for someone who is not the owner', async () => {
+    asHead();
+    apiFetch.mockImplementation(async (url: string) => (url === '/api/work/w1' ? { data: item({ status: 'In Progress', stageKey: 'Edit', isLocked: false }) } : { data: [] }));
+    render(
+      <MemoryRouter initialEntries={['/work/w1?submit=1']}>
+        <Routes>
+          <Route path="/work/:id" element={<WorkDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await screen.findAllByText('Detail step');
+    expect(screen.queryByTestId('step-submit-dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Submit link/ })).not.toBeInTheDocument();
   });
 });

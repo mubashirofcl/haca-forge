@@ -598,6 +598,10 @@ export async function getPersonWorkHistory(targetPersonId, user) {
     }
   }
 
+  // Mark the steps waiting on a reviewer, so the history says "Waiting for approval" for them.
+  const { markAwaitingReview } = await import('../workItems/reviewState.js');
+  await markAwaitingReview(nowItems);
+
   // Done items: last 30 completed, sorted descending by completion date
   doneItems.sort((a, b) => {
     const timeA = new Date(a.postedAt || a.approvedAt || a.updatedAt).getTime();

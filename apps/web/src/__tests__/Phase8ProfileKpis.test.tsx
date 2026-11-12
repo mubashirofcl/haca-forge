@@ -125,7 +125,9 @@ describe('Download report', () => {
       expect(lines.some((l) => l.includes(card))).toBe(true);
     }
     expect(captured[1].name).toBe('haca_profile_asha-worker_steps_2025-05-01_2025-05-31.csv');
-    expect(captured[1].text).toContain('Reel A,Script,Approved,2025-05-05,2025-05-04,Done on time,3.0 h,5');
+    // The Rework time column is empty for a step that was never sent back.
+    expect(captured[1].text).toContain('Reel A,Script,Approved,2025-05-05,2025-05-04,Done on time,3.0 h,,5');
+    expect(captured[1].text).toContain('Elapsed work time,Rework time,Rating');
     expect(captured.map((c) => c.text).join('')).not.toMatch(/@|\+91|phone|whatsapp/i);
   });
 });

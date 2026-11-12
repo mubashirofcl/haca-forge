@@ -14,7 +14,7 @@ import {
 import { ResumableUploadTask } from '../../../lib/uploadManager';
 import { AssetLinks, AssetItem } from '../../../components/AssetLinks';
 import { DriveLinkInput, driveLinkError } from '../../../components/DriveLinkInput';
-import { PostCaptionFields, isCaptionTooLong } from '../../../components/PostCaptionFields';
+import { LIVE_URL_ERROR, isLivePostUrl } from '@mmp/shared';
 
 interface PostWorkspaceProps {
   workItem: {
@@ -25,15 +25,10 @@ interface PostWorkspaceProps {
     channel?: string;
     deliverableUrl?: string;
     publishedUrl?: string;
-    /** Saved when the step was marked posted. */
-    postCaption?: string;
-    postHashtags?: string;
   };
   /** The approved final cut or design files handed over from the Edit or Design step. */
   finalAssets?: AssetItem[];
   onMarkAsPosted: (data: {
-    caption: string;
-    hashtags?: string;
     publishedUrl: string;
     publishedAt: string;
     deliverableUrl?: string;
@@ -51,11 +46,8 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
   isPosting = false,
 }) => {
   const isPending = isSubmitting || isPosting;
-  // The poster writes the caption (required to post) and hashtags (optional) here.
+  // A Post step is marked posted with its live link only.
   const isPosted = workItem.status === 'Published';
-  const [caption, setCaption] = useState('');
-  const [hashtags, setHashtags] = useState('');
-  const captionOk = Boolean(caption.trim()) && !isCaptionTooLong(caption, hashtags);
 
   // Platform checklist
   const [checklist, setChecklist] = useState<{ [key: string]: boolean }>({
@@ -124,26 +116,14 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
       setErrorMsg('Please enter the live published social post URL / reference link.');
       return;
     }
-    try {
-      new URL(publishedUrl.trim());
-    } catch {
-      setErrorMsg('Please enter a valid URL (starting with https://).');
-      return;
-    }
-
-    if (!caption.trim()) {
-      setErrorMsg('Write the caption before marking this as posted.');
-      return;
-    }
-    if (isCaptionTooLong(caption, hashtags)) {
-      setErrorMsg('The caption and hashtags are over the 3,000 character limit.');
+    // The shared live link rule (the same function the API uses).
+    if (!isLivePostUrl(publishedUrl.trim())) {
+      setErrorMsg(LIVE_URL_ERROR);
       return;
     }
 
     setErrorMsg(null);
     await onMarkAsPosted({
-      caption: caption.trim(),
-      hashtags: hashtags.trim(),
       publishedUrl: publishedUrl.trim(),
       publishedAt: new Date(publishedAt).toISOString(),
       deliverableUrl: uploadedFileUrl.trim() || undefined,
@@ -168,7 +148,7 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
             )}
           </div>
           <p className="text-xs text-ui-muted mt-0.5">
-            Download master creative, upload post asset, copy caption & hashtags, and mark published with live reference link.
+            Download master creative, upload post asset, and mark published with the live post link.
           </p>
         </div>
       </div>
@@ -318,16 +298,6 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
           )}
         </div>
 
-        {/* 2. Caption & Hashtags: written by the poster */}
-        <div className="p-5 rounded-2xl bg-white/60 border border-ui-line space-y-3">
-          <h3 className="text-xs font-bold text-ui-ink">Caption & Hashtags</h3>
-          {isPosted ? (
-            <PostCaptionFields caption={workItem.postCaption || ''} hashtags={workItem.postHashtags || ''} readOnly />
-          ) : (
-            <PostCaptionFields caption={caption} hashtags={hashtags} onCaptionChange={setCaption} onHashtagsChange={setHashtags} />
-          )}
-        </div>
-
         {/* 3. Platform Pre-Publish Checklist */}
         <div className="p-5 rounded-2xl bg-white/60 border border-ui-line space-y-3">
           <h3 className="text-xs font-bold text-ui-text flex items-center gap-1.5">
@@ -453,7 +423,7 @@ export const PostWorkspace: React.FC<PostWorkspaceProps> = ({
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              disabled={isPending || isPosted || !publishedUrl.trim() || !captionOk}
+              disabled={isPending || isPosted || !publishedUrl.trim()}
               className="min-h-[44px] px-7 py-2.5 rounded-xl bg-ui-ink hover:bg-black disabled:opacity-40 text-white font-bold text-sm transition-all shadow-lg flex items-center gap-2 cursor-pointer"
             >
               <CheckCircle className="w-4 h-4" />

@@ -171,6 +171,7 @@ export async function listWorkItems(filters = {}, user) {
   // Phase 7: each item carries its computed time labels; Overdue, Done late and Blocked
   // filters use them.
   const items = docs.map((doc) => doc.toJSON());
+  await markAwaitingReview(items);
   await attachTimeLabels(items);
   const labelFilter = wantOverdue ? 'overdue' : ['done_late', 'blocked'].includes(filters.timeLabel) ? filters.timeLabel : null;
   return labelFilter ? items.filter((it) => hasTimeLabel(it.timeLabels, labelFilter)) : items;
@@ -223,25 +224,6 @@ async function withRecordedStepTimes(stages) {
   return plain;
 }
 
-/**
- * A step saved as 'Feedback' is either waiting on the reviewer (its latest version
- * is still 'submitted') or sent back for changes. Mark the first kind, so the
- * workflow does not show "Changes requested" before anyone has reviewed it.
- */
-async function markStagesAwaitingReview(stages) {
-  const ids = stages.filter((s) => s.status === 'Feedback').map((s) => s._id);
-  if (ids.length === 0) return stages;
-  const submissions = await Submission.find({ workItemId: { $in: ids }, version: { $gt: 0 } })
-    .select('workItemId status version')
-    .sort({ version: 1 })
-    .lean();
-  const latestStatus = new Map(submissions.map((sub) => [String(sub.workItemId), sub.status]));
-  for (const stage of stages) {
-    if (stage.status === 'Feedback' && latestStatus.get(String(stage._id)) === 'submitted') stage.awaitingReview = true;
-  }
-  return stages;
-}
-
 export async function getWorkItemById(id, user) {
   const workItem = await WorkItem.findById(id)
     .populate('departmentId', 'name code')
@@ -268,7 +250,8 @@ export async function getWorkItemById(id, user) {
       .select('stageKey stageOrder status isLocked isSkipped ownerId title deadline deliverableUrl publishedUrl revisions startedAt submittedAt resubmittedAt approvedAt postedAt')
       .populate('ownerId', 'name email role jobRole avatarUrl')
       .sort({ stageOrder: 1 });
-    result.pieceStages = await markStagesAwaitingReview(await withRecordedStepTimes(siblingStages));
+    // Mark the steps waiting on a reviewer, so the workflow never shows "Changes requested" for them.
+    result.pieceStages = await markAwaitingReview(await withRecordedStepTimes(siblingStages));
     // The latest approved outputs of the finished steps before this one (Phase 5).
     result.handoff = await buildHandoff(result, siblingStages);
     // The row's workflow label, and "From the plan" (brief, source video) for a step with no earlier step.
@@ -344,6 +327,9 @@ export async function getWorkItemById(id, user) {
       .lean();
     if (latestSub) {
       result.latestSubmission = latestSub;
+      // Sent back: the reviewer's message and notes (kept from executives and non-owners by the viewer rules).
+      const note = await revisionNoteFor(result, latestSub);
+      if (note) result.latestFeedback = note;
     }
 
     const draftSub = await Submission.findOne({
@@ -489,7 +475,18 @@ export async function updateWorkItem(id, data, user) {
     assertChangedOutputUrl(data.deliverableUrl, workItem.deliverableUrl, 'deliverableUrl');
     workItem.deliverableUrl = data.deliverableUrl;
   }
-  if (data.publishedUrl !== undefined) workItem.publishedUrl = data.publishedUrl;
+  if (data.publishedUrl !== undefined) {
+    const next = String(data.publishedUrl || '').trim();
+    // A new live link must be https; a value saved earlier may be sent back unchanged.
+    if (next && next !== (workItem.publishedUrl || '').trim() && !isLivePostUrl(next)) {
+      const error = new Error(`publishedUrl: ${LIVE_URL_ERROR}`);
+      error.statusCode = 400;
+      error.code = 'INVALID_LIVE_URL';
+      error.details = { field: 'publishedUrl' };
+      throw error;
+    }
+    workItem.publishedUrl = data.publishedUrl;
+  }
 
   // Content Flow stage fields (Phase 3 delta)
   if (data.contentPieceId !== undefined) workItem.contentPieceId = data.contentPieceId;
@@ -660,8 +657,13 @@ export async function getMyWork(user) {
       }
     }
 
-    // Attach latest reviewer feedback if item is in Feedback status
-    if (item.status === 'Feedback') {
+    // Sent back (waiting for Start rework, or rework in progress): the reviewer's message.
+    if (item.latestSubmissionStatus === 'changes_requested' && (item.status === 'Feedback' || item.status === 'In Progress')) {
+      const sentBack = await Submission.findOne({ workItemId: item._id, version: { $gt: 0 } }).sort({ version: -1 }).lean();
+      const note = await revisionNoteFor(item, sentBack);
+      if (note) item.latestFeedback = { ...note, reviewer: note.reviewer || 'Creative Head' };
+    } else if (item.status === 'Feedback' && !item.latestSubmissionStatus) {
+      // A step sent back before versions existed: the feedback entry is all there is.
       try {
         const { FeedbackEntry } = await import('../feedback/model.js');
         const latestEntry = await FeedbackEntry.findOne({ workItemId: item._id, isResponse: false })
@@ -739,12 +741,13 @@ export async function getMyWork(user) {
 
 import { ContentPiece } from '../calendar/contentPiece.model.js';
 import { CalendarPlan } from '../calendar/plan.model.js';
-import { isPostableWorkType } from '@mmp/shared';
+import { isPostableWorkType, isLivePostUrl, LIVE_URL_ERROR } from '@mmp/shared';
 import { assertChangedOutputUrl } from '../uploads/outputUrls.js';
 import { buildFromPlan, buildHandoff, buildHandover, outputItems } from './handoff.js';
 import { canReopen } from './reopen.js';
 import { approvedOutputOf } from './access.js';
 import { attachTimeLabels } from './timeLabels.js';
+import { markAwaitingReview, revisionNoteFor } from './reviewState.js';
 import { hasTimeLabel, compareUrgentThenDue } from '@mmp/shared';
 
 /** Same rule as the WorkItem isOverdue virtual, which .lean() results do not carry. */
@@ -797,6 +800,7 @@ export async function getCalendarWorkItems(filters = {}, user) {
     .populate('ownerId', 'name email role jobRole avatarUrl')
     .sort({ deadline: 1 })
     .lean();
+  await markAwaitingReview(workItems);
 
   // Individual work: from an individual plan, or not part of any plan.
   const stepPieces = await ContentPiece.find({ _id: { $in: workItems.map((w) => w.contentPieceId).filter(Boolean) } })

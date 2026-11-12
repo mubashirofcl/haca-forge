@@ -1,12 +1,11 @@
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { POST_CAPTION_MAX } from '@mmp/shared';
+import { LIVE_URL_ERROR } from '@mmp/shared';
 import { PostWorkspace } from '../pages/work/workspaces/PostWorkspace';
 
-beforeEach(() => {
-  Object.assign(navigator, { clipboard: { writeText: vi.fn() } });
-});
+// Phase 5d asked the poster for a caption. A Post step is now marked posted with its live
+// link only, so the Post workspace has no caption or hashtag fields at all.
 
 const livePost = (onMarkAsPosted = vi.fn(), extra = {}) =>
   render(
@@ -17,50 +16,47 @@ const livePost = (onMarkAsPosted = vi.fn(), extra = {}) =>
     />
   );
 
-describe('Post caption and hashtags', () => {
-  it('cannot be marked posted without a caption; hashtags are optional', () => {
+describe('Post workspace: the live link only', () => {
+  it('has no caption or hashtag fields', () => {
+    livePost();
+    expect(screen.queryByLabelText(/caption/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/hashtags/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/caption/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/hashtag/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('post-caption-fields')).not.toBeInTheDocument();
+  });
+
+  it('is marked posted with only the live link', () => {
     const onMarkAsPosted = vi.fn();
     livePost(onMarkAsPosted);
-    fireEvent.change(screen.getByPlaceholderText(/instagram\.com\/p/i), { target: { value: 'https://instagram.com/p/x' } });
     const button = screen.getByRole('button', { name: /mark as posted/i });
     expect(button).toBeDisabled();
-    fireEvent.change(screen.getByLabelText(/post caption/i), { target: { value: '   ' } });
-    expect(button).toBeDisabled();
-    fireEvent.change(screen.getByLabelText(/post caption/i), { target: { value: 'We are live' } });
+    fireEvent.change(screen.getByPlaceholderText(/instagram\.com\/p/i), { target: { value: 'https://instagram.com/p/x' } });
     expect(button).not.toBeDisabled();
     fireEvent.click(button);
-    expect(onMarkAsPosted).toHaveBeenCalledWith(expect.objectContaining({ caption: 'We are live', hashtags: '' }));
+    expect(onMarkAsPosted).toHaveBeenCalledTimes(1);
+    const sent = onMarkAsPosted.mock.calls[0][0];
+    expect(sent.publishedUrl).toBe('https://instagram.com/p/x');
+    expect(sent).not.toHaveProperty('caption');
+    expect(sent).not.toHaveProperty('hashtags');
   });
 
-  it('shows the Instagram and LinkedIn counters for caption and hashtags together', () => {
-    livePost();
-    fireEvent.change(screen.getByLabelText(/post caption/i), { target: { value: 'abc' } });
-    fireEvent.change(screen.getByLabelText(/^hashtags/i), { target: { value: '#x' } });
-    expect(screen.getByText('7 / 2,200')).toBeInTheDocument();
-    expect(screen.getByText('7 / 3,000')).toBeInTheDocument();
+  it('rejects a live link that is not https, with the shared message', () => {
+    for (const bad of ['http://instagram.com/p/x', 'javascript:alert(1)', 'data:text/html,x', 'instagram.com/p/x']) {
+      const onMarkAsPosted = vi.fn();
+      const { unmount } = livePost(onMarkAsPosted);
+      fireEvent.change(screen.getByPlaceholderText(/instagram\.com\/p/i), { target: { value: bad } });
+      fireEvent.submit(screen.getByRole('button', { name: /mark as posted/i }).closest('form')!);
+      expect(onMarkAsPosted).not.toHaveBeenCalled();
+      expect(screen.getByText(LIVE_URL_ERROR)).toBeInTheDocument();
+      unmount();
+    }
   });
 
-  it('copies what the poster wrote', () => {
-    livePost();
-    fireEvent.change(screen.getByLabelText(/post caption/i), { target: { value: 'Copy me' } });
-    fireEvent.click(screen.getByRole('button', { name: /copy caption/i }));
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Copy me');
-  });
-
-  it(`cannot post when caption and hashtags together are over ${POST_CAPTION_MAX} characters`, () => {
-    livePost();
-    fireEvent.change(screen.getByPlaceholderText(/instagram\.com\/p/i), { target: { value: 'https://instagram.com/p/x' } });
-    fireEvent.change(screen.getByLabelText(/post caption/i), { target: { value: 'a'.repeat(2000) } });
-    fireEvent.change(screen.getByLabelText(/^hashtags/i), { target: { value: `#${'b'.repeat(1100)}` } });
-    expect(screen.getByRole('button', { name: /mark as posted/i })).toBeDisabled();
-  });
-
-  it('after posting, shows the saved caption and hashtags read-only', () => {
+  it('a posted step shows no saved caption either', () => {
     livePost(vi.fn(), { status: 'Published', postCaption: 'Saved caption', postHashtags: '#saved' });
-    expect(screen.getByTestId('post-caption-saved')).toHaveTextContent('Saved caption');
-    expect(screen.getByTestId('post-hashtags-saved')).toHaveTextContent('#saved');
-    expect(document.querySelector('textarea#post-caption')).toBeNull();
-    expect(document.querySelector('input#post-hashtags')).toBeNull();
+    expect(screen.queryByText('Saved caption')).not.toBeInTheDocument();
+    expect(screen.queryByText('#saved')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /mark as posted/i })).toBeDisabled();
   });
 });

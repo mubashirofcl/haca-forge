@@ -17,6 +17,11 @@ import { ReportDefinition } from '../src/modules/reports/model.js';
 import { AutomationRule } from '../src/modules/automation/model.js';
 import { ensureAutomationRules, executeAutomationRule } from '../src/modules/automation/runner.js';
 import { connectDB } from '../src/config/db.js';
+import { setWorkspacesLockedForTests } from '../src/lib/workspaceLock.js';
+
+// These tests cover the workspace flows, which stay in the code behind the one switch
+// (WORKSPACES_LOCKED). They run with it off, as the app will when it is unlocked.
+setWorkspacesLockedForTests(false);
 
 
 describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table Walk Suite', () => {
@@ -240,7 +245,9 @@ describe('SCOPE RESET R4: Dashboard, Reports, Automation, Journey & Route-Table 
       expect(submitRes.body.data.status).toBe('Submitted');
     });
 
-    it('Step 3: Creative Head reviews and approves plan; stages are created', async () => {
+    // Approving a whole plan creates every step; it took 9 to 11 seconds alone on this machine
+    // before the link-submission change, close to the 15 s default, so it has its own limit.
+    it('Step 3: Creative Head reviews and approves plan; stages are created', { timeout: 30000 }, async () => {
       const reviewRes = await request(app)
         .post(`/api/calendar-plans/${createdPlanId}/review`)
         .set('Authorization', `Bearer ${headToken}`)

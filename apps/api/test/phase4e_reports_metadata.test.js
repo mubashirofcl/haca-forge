@@ -12,6 +12,11 @@ import { WorkItem } from '../src/modules/workItems/model.js';
 import { Submission, Rating } from '../src/modules/submissions/model.js';
 import { Blocker } from '../src/modules/blockers/model.js';
 import { MediaItem } from '../src/modules/media/model.js';
+import { setWorkspacesLockedForTests } from '../src/lib/workspaceLock.js';
+
+// These tests cover the workspace flows, which stay in the code behind the one switch
+// (WORKSPACES_LOCKED). They run with it off, as the app will when it is unlocked.
+setWorkspacesLockedForTests(false);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOADS = path.resolve(__dirname, '../uploads');

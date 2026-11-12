@@ -1,4 +1,5 @@
 import { WorkItem } from '../workItems/model.js';
+import { markAwaitingReview } from '../workItems/reviewState.js';
 import { Person } from '../people/model.js';
 import { Department } from '../departments/model.js';
 import { Blocker } from '../blockers/model.js';
@@ -116,6 +117,8 @@ export async function getDashboardOverview(filters = {}, user) {
   const allScopedWorkItems = await WorkItem.find(workItemQuery)
     .select('status deadline estimatedEffortHrs workType revisions departmentId updatedAt createdAt')
     .lean();
+  // Pending approval = waiting on a reviewer by the latest version; a step sent back is with its owner.
+  await markAwaitingReview(allScopedWorkItems);
 
   let inProgressCount = 0;
   let inFeedbackCount = 0;
@@ -132,13 +135,13 @@ export async function getDashboardOverview(filters = {}, user) {
     const isOverdue = !isTerminal && item.deadline && new Date(item.deadline) < now;
     const isAtRisk =
       !isTerminal &&
-      item.status !== 'Feedback' &&
+      !item.awaitingReview &&
       item.deadline &&
       new Date(item.deadline) <= in72h &&
       new Date(item.deadline) >= now;
 
-    if (item.status === 'In Progress') inProgressCount++;
-    else if (item.status === 'Feedback') inFeedbackCount++;
+    if (item.awaitingReview) inFeedbackCount++;
+    else if (item.status === 'In Progress' || item.status === 'Feedback') inProgressCount++;
     else if (item.status === 'Blocked') blockedCount++;
     else if (item.status === 'Approved') approvedCount++;
     else if (item.status === 'Published') publishedCount++;
@@ -184,6 +187,7 @@ export async function getDashboardOverview(filters = {}, user) {
     .sort({ deadline: 1 })
     .limit(8)
     .lean();
+  await markAwaitingReview(prioritiesItems);
 
   const priorities = prioritiesItems.map((item) => ({
     ...item,
@@ -380,14 +384,19 @@ export async function getDashboardOverview(filters = {}, user) {
       createdByName: p.createdById?.name || 'SM Manager',
     }));
 
-  const pendingApprovalStages = await WorkItem.find({
-    ...workItemQuery,
-    status: 'Feedback',
-  })
-    .populate('ownerId', 'name email jobRole')
-    .sort({ updatedAt: -1 })
-    .limit(8)
-    .lean();
+  const pendingApprovalStages = (
+    await markAwaitingReview(
+      await WorkItem.find({
+        ...workItemQuery,
+        status: { $in: ['Feedback', 'Pending'] },
+      })
+        .populate('ownerId', 'name email jobRole')
+        .sort({ updatedAt: -1 })
+        .lean()
+    )
+  )
+    .filter((s) => s.awaitingReview)
+    .slice(0, 8);
 
   const waitingApproval = {
     plansCount: pendingApprovalPlans.length,

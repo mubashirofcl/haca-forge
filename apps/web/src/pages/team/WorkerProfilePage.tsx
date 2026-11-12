@@ -1,3 +1,4 @@
+import { getStepStatusLabel } from '@mmp/shared';
 import React, { useState, useEffect, useRef } from 'react';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
@@ -31,7 +32,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { apiFetch } from '../../lib/api';
-import { statusClass, statusTone, roleClass, bandClass } from '../../lib/statusTone';
+import { displayStatus, statusClass, statusTone, roleClass, bandClass } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import { TimeLabelChips } from '../../components/TimeLabelChips';
 import { Avatar } from '../../components/Avatar';
@@ -1054,8 +1055,8 @@ export const WorkerProfilePage: React.FC = () => {
                         <span className="text-[10px] font-black px-2 py-0.5 rounded bg-white/70 text-ui-ink">
                           {item.stageKey}
                         </span>
-                        <span className={`status-chip ${statusClass(statusTone(item.status))} text-[10px] font-bold px-2 py-0.5`}>
-                          {item.status}
+                        <span className={`status-chip ${statusClass(statusTone(displayStatus(item)))} text-[10px] font-bold px-2 py-0.5`}>
+                          {getStepStatusLabel(displayStatus(item))}
                         </span>
                       </div>
                       <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{item.title}</h4>
@@ -1064,8 +1065,10 @@ export const WorkerProfilePage: React.FC = () => {
                         <span className="font-semibold text-slate-700">
                           {item.status === 'In Progress' && item.measures?.workTimeFormatted !== '—'
                             ? `Working for ${item.measures.workTimeFormatted}`
+                            : displayStatus(item) === 'Pending'
+                            ? `Waiting for approval (${item.measures?.approvalWaitFormatted || '—'})`
                             : item.status === 'Feedback'
-                            ? `In Review (${item.measures?.approvalWaitFormatted || '—'})`
+                            ? 'Changes requested'
                             : '—'}
                         </span>
                       </div>

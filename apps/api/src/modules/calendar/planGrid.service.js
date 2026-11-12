@@ -36,6 +36,7 @@ import {
   defaultWorkflowFor,
   ROW_WORKFLOW_LABELS,
 } from '@mmp/shared';
+import { markAwaitingReview } from '../workItems/reviewState.js';
 import { CalendarPlan } from './plan.model.js';
 import { ContentPiece } from './contentPiece.model.js';
 import { WorkItem } from '../workItems/model.js';
@@ -135,6 +136,8 @@ function stepStatus(stageKey, stages, piece, workItem) {
   if (!workItem) return '';
   if (workItem.isSkipped) return 'Skipped';
   if (workItem.isLocked && (!workItem.status || workItem.status === 'Not Started')) return 'Locked';
+  // A submitted step waiting on the reviewer reads as Pending ("Waiting for approval").
+  if (workItem.awaitingReview && workItem.status === 'Feedback') return 'Pending';
   return workItem.status || '';
 }
 
@@ -172,7 +175,7 @@ export function toGridRow(piece, workItems = []) {
   // Same wording as the rest of the app (getStepStatusLabel): Pending = waiting, Feedback = changes requested.
   let approvalStatus = '';
   if (finalWi?.status === 'Approved' || finalWi?.status === 'Published') approvalStatus = 'Approved';
-  else if (finalWi?.status === 'Pending') approvalStatus = 'Waiting for approval';
+  else if (finalWi?.status === 'Pending' || finalWi?.awaitingReview) approvalStatus = 'Waiting for approval';
   else if (finalWi?.status === 'Feedback') approvalStatus = 'Changes requested';
 
   const stepDeadlines = {};
@@ -243,8 +246,9 @@ async function loadGridRows(planId) {
     .sort({ postingDate: 1, createdAt: 1 })
     .lean();
   const workItems = await WorkItem.find({ contentPieceId: { $in: pieces.map((p) => p._id) } })
-    .select('contentPieceId stageKey status isSkipped isLocked approvedAt postedAt startedAt')
+    .select('contentPieceId stageKey status revisions isSkipped isLocked approvedAt postedAt startedAt')
     .lean();
+  await markAwaitingReview(workItems);
   // Same "started" rule as plan and row delete: left Not Started, has a start time, or has a submission.
   const submitted = workItems.length
     ? new Set((await Submission.distinct('workItemId', { workItemId: { $in: workItems.map((w) => w._id) } })).map(String))

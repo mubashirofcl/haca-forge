@@ -15,6 +15,11 @@ import { WorkItem } from '../src/modules/workItems/model.js';
 import { Blocker } from '../src/modules/blockers/model.js';
 import { Notification } from '../src/modules/notifications/model.js';
 import { connectDB } from '../src/config/db.js';
+import { setWorkspacesLockedForTests } from '../src/lib/workspaceLock.js';
+
+// These tests cover the workspace flows, which stay in the code behind the one switch
+// (WORKSPACES_LOCKED). They run with it off, as the app will when it is unlocked.
+setWorkspacesLockedForTests(false);
 
 
 describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', () => {
@@ -537,8 +542,16 @@ describe('Workflow V2 Role Journeys Verification Suite (Journeys A through G)', 
       expect(revisionRes.status).toBe(200);
 
       const afterRevisionItem = await WorkItem.findById(contentStage._id);
-      expect(afterRevisionItem.status).toBe('In Progress');
+      expect(afterRevisionItem.status).toBe('Feedback'); // Changes requested: waits for Start rework
       expect(afterRevisionItem.revisions).toBe(1); // Revision count incremented
+
+      // Worker clicks Start rework: back to In Progress, and no second revision is counted
+      const reworkRes = await request(app)
+        .post(`/api/work/${contentStage._id}/transition`)
+        .set('Authorization', `Bearer ${writerToken}`)
+        .send({ toStatus: 'In Progress' });
+      expect(reworkRes.status).toBe(200);
+      expect((await WorkItem.findById(contentStage._id)).revisions).toBe(1);
 
       // Worker updates deliverable and resubmits
       await request(app)

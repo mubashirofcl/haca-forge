@@ -11,15 +11,17 @@ import {
 } from '@mmp/shared';
 import * as mediaController from './controller.js';
 import { clipParam } from '../workItems/access.js';
+import { refuseWhenWorkspacesLocked as locked } from '../../lib/workspaceLock.js';
 
 // Router for clip-specific actions (/api/clips/...)
+// `locked` refuses clip uploads and edits while the workspaces are locked; clip review stays open.
 export const clipsRouter = Router();
 clipsRouter.use(authenticate);
 clipsRouter.param('id', clipParam);
 
-clipsRouter.patch('/:id', validate(mediaItemUpdateSchema), mediaController.updateClipHandler);
-clipsRouter.post('/:id/replace', mediaController.replaceClipHandler);
-clipsRouter.delete('/:id', mediaController.deleteClipHandler);
+clipsRouter.patch('/:id', locked, validate(mediaItemUpdateSchema), mediaController.updateClipHandler);
+clipsRouter.post('/:id/replace', locked, mediaController.replaceClipHandler);
+clipsRouter.delete('/:id', locked, mediaController.deleteClipHandler);
 clipsRouter.post('/:id/review', validate(mediaItemReviewSchema), mediaController.reviewClipHandler);
 
 // Thread messages
@@ -30,10 +32,10 @@ clipsRouter.patch('/:id/messages/:messageId/toggle-done', mediaController.toggle
 
 // Helper to attach clip routes directly to workItemRouter
 export function attachWorkItemMediaRoutes(workItemRouter) {
-  workItemRouter.post('/:stageItemId/clips', validate(mediaItemCreateSchema), mediaController.createClipHandler);
+  workItemRouter.post('/:stageItemId/clips', locked, validate(mediaItemCreateSchema), mediaController.createClipHandler);
   workItemRouter.get('/:stageItemId/clips', mediaController.listClipsHandler);
-  workItemRouter.put('/:stageItemId/clips/reorder', validate(reorderClipsSchema), mediaController.reorderClipsHandler);
-  workItemRouter.post('/:stageItemId/submit-clips', mediaController.submitClipsHandler);
+  workItemRouter.put('/:stageItemId/clips/reorder', locked, validate(reorderClipsSchema), mediaController.reorderClipsHandler);
+  workItemRouter.post('/:stageItemId/submit-clips', locked, mediaController.submitClipsHandler);
   workItemRouter.post(
     '/:stageItemId/shoot-review',
     validate(shootStepFinishReviewSchema),

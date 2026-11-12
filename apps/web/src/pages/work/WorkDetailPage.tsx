@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useDialogFocus } from '../../lib/useDialogFocus';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { TimeLabelChips, type TimeLabel } from '../../components/TimeLabelChips';
-import { hasTimeLabel } from '@mmp/shared';
+import { hasTimeLabel, formatDuration, reworkTimeMs, stepReviewState } from '@mmp/shared';
+import { workspacesLocked } from '../../lib/workspaceLock';
+import { StepSubmitDialog } from '../../components/StepSubmitDialog';
 import { statusClass, statusTone } from '../../lib/statusTone';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -160,6 +162,18 @@ interface WorkItemDetail {
     createdAt: string;
   };
   latestSubmission?: any;
+  /** The reviewer's message and notes on the version that was sent back (owner and leadership only). */
+  latestFeedback?: { text?: string; reviewer?: string; rootCause?: string | null; createdAt?: string; notes?: Array<{ text: string; author?: string }> } | null;
+  /** Approved outputs of the finished steps before this one, for people allowed to see them. */
+  handoff?: Array<{
+    workItemId: string;
+    stageKey: string;
+    ownerName?: string | null;
+    version?: number | null;
+    items?: Array<{ url: string; name?: string | null; kind?: 'upload' | 'drive' | 'link' }>;
+    clips?: Array<{ _id: string; title?: string; url: string; kind?: 'upload' | 'drive' | 'link' }>;
+  }>;
+  rounds?: any[];
   draftSubmission?: any;
   scriptContent?: string;
   approvedClips?: any[];
@@ -197,9 +211,7 @@ export const WorkDetailPage: React.FC = () => {
 
   // Submit / Done / Post Modal
   const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [submitAction, setSubmitAction] = useState<'submit_for_approval' | 'mark_as_posted'>('submit_for_approval');
-  const [submitUrl, setSubmitUrl] = useState('');
-  const [submitComment, setSubmitComment] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Approve Deliverable Modal (Creative Head / Admin)
@@ -245,14 +257,12 @@ export const WorkDetailPage: React.FC = () => {
   const [ratingActionError, setRatingActionError] = useState<string | null>(null);
 
   // Modal keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
-  const submitDialogRef = useRef<HTMLDivElement>(null);
   const revisionDialogRef = useRef<HTMLDivElement>(null);
   const approveDialogRef = useRef<HTMLDivElement>(null);
   const blockerDialogRef = useRef<HTMLDivElement>(null);
   const deleteDialogRef = useRef<HTMLDivElement>(null);
   const editDialogRef = useRef<HTMLDivElement>(null);
   const editRatingDialogRef = useRef<HTMLDivElement>(null);
-  useDialogFocus(submitDialogRef, showSubmitModal, () => setShowSubmitModal(false));
   useDialogFocus(revisionDialogRef, showRevisionModal, () => setShowRevisionModal(false));
   useDialogFocus(approveDialogRef, showApproveModal, () => setShowApproveModal(false));
   useDialogFocus(blockerDialogRef, showBlockerModal, () => setShowBlockerModal(false));
@@ -356,6 +366,21 @@ export const WorkDetailPage: React.FC = () => {
     fetchItemData();
   }, [id]);
 
+  // "Submit with a link" on the locked workspace screen lands here with ?submit=1.
+  useEffect(() => {
+    if (!item || searchParams.get('submit') !== '1') return;
+    const { actions: mine, isOwner: owns } = getAvailableActions(user, item);
+    const state = stepReviewState(item.status, item.latestSubmission?.status, item.revisions || 0);
+    const canSubmitNow =
+      owns &&
+      (mine.includes('mark_as_posted') ||
+        (item.stageKey !== 'Post' && item.status === 'In Progress' && state !== 'awaiting_review'));
+    if (canSubmitNow) setShowSubmitModal(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('submit');
+    setSearchParams(next, { replace: true });
+  }, [item, searchParams]);
+
   const handleTransition = async (toStatus: WorkItemStatus, extraPayload: Record<string, any> = {}) => {
     if (!item) return;
     try {
@@ -412,41 +437,6 @@ export const WorkDetailPage: React.FC = () => {
       alert(err.message || 'Failed to mark blocked');
     } finally {
       setIsBlocking(false);
-    }
-  };
-
-  const handleOutputSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!item) return;
-    setIsSubmitting(true);
-    try {
-      let toStatus: WorkItemStatus = 'Pending';
-      let deliverableUrl: string | undefined = submitUrl.trim();
-      let publishedUrl: string | undefined;
-
-      if (submitAction === 'mark_as_posted') {
-        toStatus = 'Published';
-        publishedUrl = submitUrl.trim();
-        deliverableUrl = undefined;
-      }
-
-      await apiFetch(`/api/work/${item._id}/transition`, {
-        method: 'POST',
-        body: JSON.stringify({
-          toStatus,
-          deliverableUrl,
-          publishedUrl,
-          comment: submitComment.trim() || undefined,
-        }),
-      });
-      setShowSubmitModal(false);
-      setSubmitUrl('');
-      setSubmitComment('');
-      await fetchItemData();
-    } catch (err: any) {
-      alert(err.message || 'Submission failed');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -645,6 +635,8 @@ export const WorkDetailPage: React.FC = () => {
             stageKey: item.stageKey || 'Content',
             stageOrder: item.stageOrder || 1,
             status: item.status,
+            // A submitted step with no sibling steps: still "Waiting for approval", not "Changes requested".
+            awaitingReview: stepReviewState(item.status, item.latestSubmission?.status, item.revisions || 0) === 'awaiting_review',
             isLocked: item.isLocked,
             isSkipped: item.isSkipped,
             ownerId: item.ownerId,
@@ -673,13 +665,16 @@ export const WorkDetailPage: React.FC = () => {
     item.scriptContent ||
     item.approvedClips?.length
   );
-  const isUnderReview =
-    item.status === 'Pending' ||
-    (item.status === 'Feedback' && item.latestSubmission?.status === 'submitted');
-  const isReworkRequested =
-    (item.status === 'Feedback' && item.latestSubmission?.status === 'changes_requested') ||
-    (item.status === 'In Progress' && (item.revisions || 0) > 0 && item.latestSubmission?.status === 'changes_requested') ||
-    (item.status === 'Feedback' && !item.latestSubmission && (item.revisions || 0) > 0);
+  // 'Feedback' is saved for a submitted step and for one that was sent back; the latest
+  // version tells them apart, so the page always says which it is.
+  const locked = workspacesLocked();
+  const reviewState = stepReviewState(item.status, item.latestSubmission?.status, item.revisions || 0);
+  const isUnderReview = reviewState === 'awaiting_review';
+  const isChangesRequested = reviewState === 'changes_requested';
+  const isReworkInProgress = reviewState === 'rework_in_progress';
+  const isReworkRequested = isChangesRequested || isReworkInProgress;
+  const reworkMs = reworkTimeMs(item as never);
+  const handoffEntries = (item.handoff || []).filter((entry) => entry && entry.stageKey);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -718,7 +713,13 @@ export const WorkDetailPage: React.FC = () => {
               {isReworkRequested && <RotateCcw className="w-3.5 h-3.5" />}
               {!isUnderReview && !isReworkRequested && item.status === 'In Progress' && <CheckCircle2 className="w-3.5 h-3.5" />}
               {!isUnderReview && !isReworkRequested && item.status === 'Blocked' && <AlertTriangle className="w-3.5 h-3.5" />}
-              {isUnderReview ? 'Waiting for approval' : isReworkRequested ? 'Changes requested' : getStepStatusLabel(item.status)}
+              {isUnderReview
+                ? 'Waiting for approval'
+                : isChangesRequested
+                ? 'Changes requested'
+                : isReworkInProgress
+                ? 'Rework in progress'
+                : getStepStatusLabel(item.status)}
             </span>
 
             <TimeLabelChips labels={item.timeLabels} />
@@ -775,6 +776,8 @@ export const WorkDetailPage: React.FC = () => {
         {/* Action Triggers Bar (Driven strictly by getAvailableActions) */}
         <div className="pt-3 border-t border-ui-line flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
+            {!locked && (
+              <>
             {(item.stageKey === 'Content' || item.stageKey === 'Script') && (
               <button
                 onClick={() => navigate(`/work/${item._id}/writing-studio`)}
@@ -824,6 +827,8 @@ export const WorkDetailPage: React.FC = () => {
                 Open Posting Workspace
               </button>
             )}
+              </>
+            )}
 
             {/* Reviewer Actions: Creative Head & Admin direct approval cockpit */}
             {isReviewer && !isOwner && (isUnderReview || item.status === 'Pending' || (item.status === 'Feedback' && item.latestSubmission?.status === 'submitted')) && (
@@ -852,60 +857,42 @@ export const WorkDetailPage: React.FC = () => {
               </>
             )}
 
-            {/* Worker Start Action */}
+            {/* Worker flow, shown to the owner only: one next action for each state. */}
             {actions.includes('start') && (
               <button
                 onClick={() => handleTransition('In Progress')}
                 className="ui-btn ui-btn-primary h-11 gap-1.5"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
-                Start
+                Start work
               </button>
             )}
 
-            {/* Worker Submission Flow */}
             {isOwner && (
               <>
                 {isUnderReview ? (
-                  <div className="status-chip status-waiting min-h-[44px] px-3.5 gap-2 text-xs font-semibold">
+                  <div className="status-chip status-waiting min-h-[44px] px-3.5 gap-2 text-xs font-semibold" data-testid="owner-waiting">
                     <span className="w-2 h-2 rounded-full status-dot motion-safe:animate-pulse" aria-hidden="true" />
                     <span>
-                      Under Review by Creative Head {item.latestSubmission?.version ? `(v${item.latestSubmission.version})` : ''}
+                      Waiting for approval {item.latestSubmission?.version ? `(version ${item.latestSubmission.version})` : ''}
                     </span>
                   </div>
-                ) : isReworkRequested ? (
+                ) : isChangesRequested && !item.isLocked ? (
                   <button
-                    onClick={() => {
-                      if (item.stageKey === 'Shoot') {
-                        navigate(`/work/${item._id}/shoot`);
-                        return;
-                      }
-                      setSubmitAction('submit_for_approval');
-                      setSubmitUrl(item.deliverableUrl || item.latestSubmission?.fileUrl || item.latestSubmission?.linkUrl || '');
-                      setShowSubmitModal(true);
-                    }}
+                    onClick={() => handleTransition('In Progress')}
                     className="ui-btn ui-btn-primary h-11 gap-1.5"
                   >
-                    <Send className="w-3.5 h-3.5" />
-                    Resubmit for approval {item.latestSubmission?.version ? `(v${item.latestSubmission.version + 1})` : ''}
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Start rework
                   </button>
                 ) : (
-                  actions.includes('submit_for_approval') && (
+                  actions.includes('submit_for_approval') && !isChangesRequested && (
                     <button
-                      onClick={() => {
-                        // Shoot is submitted as clips, from its workspace, so it can go through clip review.
-                        if (item.stageKey === 'Shoot') {
-                          navigate(`/work/${item._id}/shoot`);
-                          return;
-                        }
-                        setSubmitAction('submit_for_approval');
-                        setSubmitUrl(item.deliverableUrl || '');
-                        setShowSubmitModal(true);
-                      }}
+                      onClick={() => setShowSubmitModal(true)}
                       className="ui-btn ui-btn-primary h-11 gap-1.5"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      Submit for approval
+                      {isReworkInProgress ? 'Resubmit link' : 'Submit link'}
                     </button>
                   )
                 )}
@@ -914,11 +901,7 @@ export const WorkDetailPage: React.FC = () => {
 
             {actions.includes('mark_as_posted') && (
               <button
-                onClick={() => {
-                  setSubmitAction('mark_as_posted');
-                  setSubmitUrl(item.publishedUrl || item.deliverableUrl || '');
-                  setShowSubmitModal(true);
-                }}
+                onClick={() => setShowSubmitModal(true)}
                 className="ui-btn ui-btn-primary h-11 gap-1.5"
               >
                 <Globe className="w-3.5 h-3.5" />
@@ -1046,28 +1029,43 @@ export const WorkDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Rework Feedback Alert Banner if changes requested */}
-          {isReworkRequested && (item.latestSubmission?.feedback || item.blockerReason) && (
-            <div className="p-4 rounded-ui-card status-tint status-changes space-y-2">
+          {/* Changes requested: the reviewer's message and notes */}
+          {isReworkRequested && (
+            <div className="p-4 rounded-ui-card status-tint status-changes space-y-2" data-testid="changes-requested-note">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <AlertTriangle className="w-4 h-4" aria-hidden="true" />
                   <span className="text-[13px] font-semibold">
-                    Rework Feedback
+                    Changes requested{item.latestFeedback?.reviewer ? ` by ${item.latestFeedback.reviewer}` : ''}
                   </span>
-                  {item.latestSubmission?.rootCause && (
+                  {item.latestFeedback?.rootCause && (
                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/70 text-ui-ink">
-                      Cause: {item.latestSubmission.rootCause}
+                      Cause: {item.latestFeedback.rootCause}
                     </span>
                   )}
                 </div>
                 <span className="text-[11px] font-semibold">
-                  Revision #{item.revisions || 1}
+                  Revision {item.revisions || 1}
                 </span>
               </div>
-              <p className="text-xs text-ui-text leading-relaxed font-medium bg-white/70 p-3 rounded-xl">
-                {item.latestSubmission?.feedback || 'Please review the requested changes and resubmit.'}
+              <p className="text-xs text-ui-text leading-relaxed font-medium bg-white/70 p-3 rounded-xl whitespace-pre-wrap">
+                {item.latestFeedback?.text || 'Please review the requested changes and resubmit.'}
               </p>
+              {(item.latestFeedback?.notes?.length || 0) > 0 && (
+                <ul className="space-y-1.5" aria-label="Reviewer notes">
+                  {item.latestFeedback!.notes!.map((note, i) => (
+                    <li key={i} className="text-xs text-ui-text bg-white/70 p-2.5 rounded-xl whitespace-pre-wrap">
+                      {note.author && <span className="font-semibold">{note.author}: </span>}
+                      {note.text}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {isOwner && (
+                <p className="text-[11px] font-semibold">
+                  {isChangesRequested ? 'Click Start rework when you begin. The rework time starts then.' : 'Rework in progress. Resubmit with a new link when it is ready.'}
+                </p>
+              )}
             </div>
           )}
 
@@ -1131,12 +1129,14 @@ export const WorkDetailPage: React.FC = () => {
                     : item.stageKey === 'Content' || item.stageKey === 'Script'
                     ? item.scriptContent
                       ? `${item.scriptContent.slice(0, 80)}...`
+                      : locked
+                      ? `Stage: ${item.stageKey}`
                       : 'Script in writing studio'
                     : item.publishedUrl
                     ? `Live URL: ${item.publishedUrl}`
                     : `Stage: ${item.stageKey || 'Production'}`}
                 </span>
-                {(item.stageKey === 'Content' || item.stageKey === 'Script') && (
+                {!locked && (item.stageKey === 'Content' || item.stageKey === 'Script') && (
                   <button
                     onClick={() => navigate(`/work/${item._id}/writing-studio`)}
                     type="button"
@@ -1145,7 +1145,7 @@ export const WorkDetailPage: React.FC = () => {
                     View Studio →
                   </button>
                 )}
-                {item.stageKey === 'Shoot' && (
+                {!locked && item.stageKey === 'Shoot' && (
                   <button
                     onClick={() => navigate(`/work/${item._id}/workspace`)}
                     type="button"
@@ -1361,6 +1361,35 @@ export const WorkDetailPage: React.FC = () => {
                 </div>
               )}
 
+              {/* From earlier steps: every approved link handed to this step (the API has
+                  already kept only the steps this viewer may see). */}
+              {handoffEntries.length > 0 && (
+                <div className="p-5 rounded-ui-card bg-white/60 space-y-4" data-testid="earlier-steps-panel">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-ui-ink" aria-hidden="true" />
+                    <h3 className="text-[13px] font-semibold text-ui-ink">From earlier steps</h3>
+                  </div>
+                  {handoffEntries.map((entry) => {
+                    const links = [
+                      ...(entry.items || []),
+                      ...(entry.clips || []).map((clip) => ({ url: clip.url, name: clip.title || 'Clip', kind: clip.kind })),
+                    ];
+                    return (
+                      <div key={entry.workItemId} className="space-y-2" data-testid={`earlier-step-${entry.stageKey}`}>
+                        <p className="text-xs text-ui-muted">
+                          <span className="font-semibold text-ui-ink">{entry.stageKey}</span>
+                          {entry.ownerName ? ` by ${entry.ownerName}` : ''}
+                          {entry.version ? `, approved version ${entry.version}` : ''}
+                        </p>
+                        <AssetLinks items={links} emptyText="No links on the approved version." testId={`earlier-links-${entry.stageKey}`} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {!locked && (
+                <>
               {/* Writing Studio Launch Card for Content and Script stages */}
               {(item.stageKey === 'Content' || item.stageKey === 'Script') && (
                 <div className="p-5 rounded-ui-card bg-white/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1499,7 +1528,7 @@ export const WorkDetailPage: React.FC = () => {
                       Publish to Live Social Channels
                     </h3>
                     <p className="text-xs text-ui-muted max-w-md">
-                      Download approved master, copy caption & hashtags, platform pre-publish checklist, mark as posted.
+                      Download approved master, platform pre-publish checklist, mark as posted.
                     </p>
                   </div>
 
@@ -1514,6 +1543,8 @@ export const WorkDetailPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
+              )}
+                </>
               )}
 
               {/* Shot List for Videographer & Shooter (WS2 Acceptance Criteria) */}
@@ -1788,6 +1819,13 @@ export const WorkDetailPage: React.FC = () => {
               </div>
             )}
 
+            {reworkMs !== null && (
+              <div className="flex justify-between items-center text-xs" data-testid="rework-time">
+                <span className="text-ui-muted">Rework time</span>
+                <span className="font-bold text-ui-ink">{formatDuration(reworkMs)}</span>
+              </div>
+            )}
+
             {measures.approvalWaitFormatted !== '—' && (
               <div className="flex justify-between items-center text-xs">
                 <span className="text-ui-muted">Approval Wait</span>
@@ -1808,121 +1846,17 @@ export const WorkDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Submit / Done / Post Modal */}
+      {/* The one submit dialog: links for review steps, the live link for Post */}
       {showSubmitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim">
-          <div
-            ref={submitDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="wd-submit-title"
-            className="glass-modal w-full max-w-lg max-h-[92vh] overflow-y-auto p-6 space-y-4"
-          >
-            <div className="flex items-center justify-between border-b border-ui-line pb-3">
-              <h3 id="wd-submit-title" className="text-base font-bold text-ui-ink">
-                {submitAction === 'submit_for_approval'
-                  ? 'Submit for approval'
-                  : 'Mark as posted'}
-              </h3>
-              <button
-                onClick={() => setShowSubmitModal(false)}
-                type="button"
-              aria-label="Close"
-              className="ui-icon-btn shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Workspace recommendation for media stages */}
-            {['Shoot', 'Edit', 'Design', 'Post', 'Script', 'Content'].includes(item.stageKey || '') && (
-              <div className="p-4 rounded-ui-card bg-white/60 flex flex-col gap-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-ui-ink">
-                    Recommended: {item.stageKey} Workspace
-                  </span>
-                  <span className="text-[11px] bg-white text-ui-text px-2 py-0.5 rounded-full font-semibold">
-                    Direct Upload & Verification
-                  </span>
-                </div>
-                <p className="text-xs text-ui-muted">
-                  Upload raw files, verify checks, and submit directly within your specialized workspace.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSubmitModal(false);
-                    if (item.stageKey === 'Content' || item.stageKey === 'Script') {
-                      navigate(`/work/${item._id}/writing-studio`);
-                    } else {
-                      navigate(`/work/${item._id}/workspace`);
-                    }
-                  }}
-                  className="ui-btn ui-btn-secondary h-11 mt-1 gap-1.5"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Launch {item.stageKey} Workspace
-                </button>
-              </div>
-            )}
-
-            <form onSubmit={handleOutputSubmit} className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[13px] font-medium text-ui-muted">
-                    {submitAction === 'mark_as_posted'
-                      ? 'Live Published Post URL *'
-                      : 'Output URL (Fallback Cloud Link) *'}
-                  </label>
-                  {['Shoot', 'Edit', 'Design', 'Post', 'Script', 'Content'].includes(item.stageKey || '') && (
-                    <span className="text-[11px] text-ui-muted">Link Fallback</span>
-                  )}
-                </div>
-                <input
-                  type="url"
-                  required
-                  placeholder={
-                    submitAction === 'mark_as_posted'
-                      ? 'https://instagram.com/reel/...'
-                      : 'https://drive.google.com/...'
-                  }
-                  value={submitUrl}
-                  onChange={(e) => setSubmitUrl(e.target.value)}
-                  className="ui-input w-full"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="wd-field-1" className="block text-[13px] font-medium text-ui-muted mb-1.5">Notes / Comments</label>
-                <textarea
-                  id="wd-field-1"
-                  rows={2}
-                  placeholder="Optional notes..."
-                  value={submitComment}
-                  onChange={(e) => setSubmitComment(e.target.value)}
-                  className="ui-input ui-textarea w-full"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowSubmitModal(false)}
-                  className="ui-btn ui-btn-secondary h-11"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="ui-btn ui-btn-primary h-11"
-                >
-                  {isSubmitting ? 'Submitting...' : 'Confirm'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <StepSubmitDialog
+          step={item}
+          resubmit={isReworkInProgress}
+          onClose={() => setShowSubmitModal(false)}
+          onDone={async () => {
+            setShowSubmitModal(false);
+            await fetchItemData();
+          }}
+        />
       )}
 
       {/* Revision / Rework Request Modal */}

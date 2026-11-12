@@ -2,11 +2,12 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../lib/api';
 import { TimeLabelChips, type TimeLabel } from '../../components/TimeLabelChips';
-import { hasTimeLabel, normalizePriority } from '@mmp/shared';
+import { hasTimeLabel, normalizePriority, stepReviewState } from '@mmp/shared';
+import { workspacesLocked } from '../../lib/workspaceLock';
+import { StepSubmitDialog } from '../../components/StepSubmitDialog';
 import { statusClass, statusTone } from '../../lib/statusTone';
 import { useDialogFocus } from '../../lib/useDialogFocus';
 import { useAuth } from '../../context/AuthContext';
-import { ResumableUploadTask } from '../../lib/uploadManager';
 import { resolveStepBlocker } from '../../lib/blockers';
 import {
   BLOCKER_REASONS,
@@ -43,7 +44,6 @@ import {
   Video,
   Film,
   Palette,
-  Upload,
   RotateCcw,
 } from 'lucide-react';
 
@@ -153,19 +153,7 @@ export const MyWorkPage: React.FC = () => {
   const [selectedItemForSubmit, setSelectedItemForSubmit] = useState<WorkItemSummary | null>(null);
   // Modal keyboard behaviour: focus in on open, Escape closes, Tab stays inside, focus returns.
   const blockDialogRef = useRef<HTMLDivElement>(null);
-  const submitDialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(blockDialogRef, Boolean(selectedItemForBlock), () => setSelectedItemForBlock(null));
-  useDialogFocus(submitDialogRef, Boolean(selectedItemForSubmit), () => setSelectedItemForSubmit(null));
-  const [deliverableUrl, setDeliverableUrl] = useState('');
-  const [socialReferenceUrl, setSocialReferenceUrl] = useState('');
-  const [uploadedFileUrl, setUploadedFileUrl] = useState('');
-  const [uploadFileName, setUploadFileName] = useState('');
-  const [isUploadingFile, setIsUploadingFile] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [submitComment, setSubmitComment] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const submitFileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchMyWork = async () => {
     setIsLoading(true);
@@ -187,33 +175,6 @@ export const MyWorkPage: React.FC = () => {
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const handleModalFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0 || !selectedItemForSubmit) return;
-    const file = e.target.files[0];
-    setIsUploadingFile(true);
-    setUploadProgress(0);
-    setUploadFileName(file.name);
-    setUploadError(null);
-
-    const task = new ResumableUploadTask({
-      file,
-      workItemId: selectedItemForSubmit._id,
-      onProgress: (p) => setUploadProgress(p.percentage),
-      onError: (err) => {
-        setIsUploadingFile(false);
-        setUploadError(err.message || 'Failed to upload file');
-      },
-      onComplete: (res) => {
-        setIsUploadingFile(false);
-        setUploadedFileUrl(res.fileUrl);
-        setDeliverableUrl(res.fileUrl);
-        setUploadProgress(100);
-      },
-    });
-
-    task.start();
   };
 
   // Quick State Transitions
@@ -256,64 +217,6 @@ export const MyWorkPage: React.FC = () => {
       setBlockError(err.message || 'Failed to mark blocked');
     } finally {
       setIsBlocking(false);
-    }
-  };
-
-  const submitDeliverable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedItemForSubmit) return;
-    setIsSubmitting(true);
-
-    try {
-      const isPost = selectedItemForSubmit.stageKey === 'Post';
-      // From Feedback, a move to the same status would change nothing and save nothing.
-      const toStatus = isPost ? 'Published' : selectedItemForSubmit.status === 'Feedback' ? 'Pending' : 'Feedback';
-
-      if (isPost) {
-        const linkToValidate = socialReferenceUrl.trim() || deliverableUrl.trim();
-        if (!linkToValidate) {
-          alert('Please enter the live social reference link.');
-          setIsSubmitting(false);
-          return;
-        }
-        try {
-          new URL(linkToValidate);
-        } catch {
-          alert('Please enter a valid social reference link (e.g. https://instagram.com/p/...).');
-          setIsSubmitting(false);
-          return;
-        }
-      }
-
-      const finalDeliverableUrl = isPost
-        ? (uploadedFileUrl || deliverableUrl || '').trim() || undefined
-        : (uploadedFileUrl || deliverableUrl || '').trim() || undefined;
-
-      const finalPublishedUrl = isPost
-        ? (socialReferenceUrl.trim() || deliverableUrl.trim())
-        : undefined;
-
-      await apiFetch(`/api/work/${selectedItemForSubmit._id}/transition`, {
-        method: 'POST',
-        body: JSON.stringify({
-          toStatus,
-          deliverableUrl: finalDeliverableUrl,
-          publishedUrl: finalPublishedUrl,
-          comment: submitComment.trim(),
-        }),
-      });
-      setSelectedItemForSubmit(null);
-      setDeliverableUrl('');
-      setSocialReferenceUrl('');
-      setUploadedFileUrl('');
-      setUploadFileName('');
-      setUploadError(null);
-      setSubmitComment('');
-      await fetchMyWork();
-    } catch (err: any) {
-      alert(err.message || 'Failed to submit deliverable');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -448,13 +351,11 @@ export const MyWorkPage: React.FC = () => {
 
     // The latest version decides: a resubmitted step is under review, even after earlier revisions.
     const latestStatus = (item as any).latestSubmissionStatus as string | null | undefined;
-    const isWaitingApproval =
-      item.status === 'Pending' ||
-      (item.status === 'Feedback' && (latestStatus ? latestStatus === 'submitted' : item.revisions === 0));
-    const isFeedbackRework =
-      !isWaitingApproval &&
-      item.revisions > 0 &&
-      (item.status === 'Feedback' || (item.status === 'In Progress' && latestStatus === 'changes_requested'));
+    const reviewState = stepReviewState(item.status, latestStatus, item.revisions);
+    const isWaitingApproval = reviewState === 'awaiting_review';
+    const isChangesRequested = reviewState === 'changes_requested';
+    const isReworkInProgress = reviewState === 'rework_in_progress';
+    const isFeedbackRework = isChangesRequested || isReworkInProgress;
     const measures = calculateIndividualWorkMeasures(item);
 
     return (
@@ -495,7 +396,7 @@ export const MyWorkPage: React.FC = () => {
               )}
               <span
                 className={`status-chip ${statusClass(
-                  item.status === 'In Progress' || item.status === 'Blocked'
+                  item.status === 'Blocked' || (item.status === 'In Progress' && !isReworkInProgress)
                     ? statusTone(item.status)
                     : isFeedbackRework
                     ? 'changes'
@@ -504,7 +405,7 @@ export const MyWorkPage: React.FC = () => {
                     : statusTone(item.status)
                 )} px-2.5 py-0.5 text-[10px] font-extrabold`}
               >
-                {isFeedbackRework ? 'Rework' : isWaitingApproval ? 'In Review' : item.status}
+                {isWaitingApproval ? 'Waiting for approval' : isChangesRequested ? 'Changes requested' : isReworkInProgress ? 'Rework in progress' : item.status}
               </span>
             </div>
           </div>
@@ -694,7 +595,7 @@ export const MyWorkPage: React.FC = () => {
             <div className="mt-3 p-3 rounded-xl text-xs status-tint status-changes">
               <div className="font-semibold flex items-center gap-1.5 mb-1">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>Revision Requested by {item.latestFeedback?.reviewer || 'Creative Head'}</span>
+                <span>Changes requested by {item.latestFeedback?.reviewer || 'Creative Head'}</span>
               </div>
               <p className="text-xs font-medium pl-3 ml-1 border-l-2 border-ui-coral">
                 "{item.latestFeedback?.text || 'Review comments on file. Please refine and submit next revision.'}"
@@ -742,38 +643,33 @@ export const MyWorkPage: React.FC = () => {
                       className="ui-btn ui-btn-primary h-11 px-4"
                     >
                       <Play className="w-3 h-3 fill-current" />
-                      Start
+                      Start work
                     </button>
                   )}
 
-                  {!isWaitingApproval && actions.includes('submit_for_approval') && (
+                  {isChangesRequested && actions.includes('submit_for_approval') && (
                     <button
-                      onClick={() => {
-                        // Shoot is submitted as clips, from its workspace, so it can go through clip review.
-                        if (item.stageKey === 'Shoot') {
-                          navigate(`/work/${item._id}/shoot`);
-                          return;
-                        }
-                        setSelectedItemForSubmit(item);
-                        setDeliverableUrl(item.deliverableUrl || '');
-                      }}
+                      onClick={() => handleTransition(item, 'In Progress')}
+                      className="ui-btn ui-btn-primary h-11 px-4"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Start rework
+                    </button>
+                  )}
+
+                  {!isWaitingApproval && !isChangesRequested && actions.includes('submit_for_approval') && (
+                    <button
+                      onClick={() => setSelectedItemForSubmit(item)}
                       className="ui-btn ui-btn-primary h-11 px-4"
                     >
                       <Send className="w-3 h-3" />
-                      {isFeedbackRework ? `Resubmit (Rev ${item.revisions + 1})` : 'Submit for approval'}
+                      {isReworkInProgress ? 'Resubmit link' : 'Submit link'}
                     </button>
                   )}
 
                   {actions.includes('mark_as_posted') && (
                     <button
-                      onClick={() => {
-                        setSelectedItemForSubmit(item);
-                        setDeliverableUrl(item.deliverableUrl || '');
-                        setSocialReferenceUrl(item.publishedUrl || '');
-                        setUploadedFileUrl(item.deliverableUrl || '');
-                        setUploadFileName('');
-                        setUploadError(null);
-                      }}
+                      onClick={() => setSelectedItemForSubmit(item)}
                       className="ui-btn ui-btn-primary h-11 px-4"
                     >
                       <Globe className="w-3 h-3" />
@@ -781,7 +677,7 @@ export const MyWorkPage: React.FC = () => {
                     </button>
                   )}
 
-                  {['Shoot', 'Edit', 'Design', 'Post'].includes(item.stageKey || '') && (
+                  {!workspacesLocked() && ['Shoot', 'Edit', 'Design', 'Post'].includes(item.stageKey || '') && (
                     <button
                       onClick={() => navigate(`/work/${item._id}/workspace`)}
                       className="ui-btn ui-btn-secondary h-11 px-4"
@@ -1237,173 +1133,23 @@ export const MyWorkPage: React.FC = () => {
         </div>
       )}
 
-      {/* 5. Submit Output for Review / Publish Modal */}
+      {/* 5. The one submit dialog: links for review steps, the live link for Post */}
       {selectedItemForSubmit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ui-scrim backdrop-blur-sm animate-fade-in">
-          <div
-            ref={submitDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="mywork-submit-title"
-            className="glass-modal w-full max-w-md p-6 sm:p-7 space-y-5"
-          >
-            <div className="flex items-center justify-between border-b border-ui-line pb-3">
-              <div className="flex items-center gap-2">
-                {selectedItemForSubmit.stageKey === 'Post' ? (
-                  <Globe className="w-5 h-5 text-teal-600" />
-                ) : (
-                  <Send className="w-5 h-5 text-ui-ink" />
-                )}
-                <h3 id="mywork-submit-title" className="text-base font-extrabold text-slate-900">
-                  {selectedItemForSubmit.stageKey === 'Post'
-                    ? 'Mark as posted & add social link'
-                    : 'Submit for approval'}
-                </h3>
-              </div>
-              <button
-                onClick={() => setSelectedItemForSubmit(null)}
-                aria-label="Close" className="ui-icon-btn"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={submitDeliverable} className="space-y-4">
-              {/* Optional Post File / Asset Upload */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {selectedItemForSubmit.stageKey === 'Post'
-                    ? 'Upload Post Asset / Creative File (Optional)'
-                    : 'Upload Output Deliverable File (Optional)'}
-                </label>
-                <input
-                  type="file"
-                  ref={submitFileInputRef}
-                  onChange={handleModalFileUpload}
-                  accept="image/*,video/*,application/pdf"
-                  className="hidden"
-                />
-
-                <div className="space-y-2">
-                  {uploadedFileUrl ? (
-                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs text-emerald-900">
-                      <div className="flex items-center gap-2 truncate">
-                        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="font-semibold truncate">{uploadFileName || uploadedFileUrl}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => submitFileInputRef.current?.click()}
-                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline shrink-0 cursor-pointer"
-                      >
-                        Change
-                      </button>
-                    </div>
-                  ) : isUploadingFile ? (
-                    <div className="p-2.5 rounded-xl bg-white/70 border border-ui-line text-xs space-y-1">
-                      <div className="flex justify-between text-ui-ink font-semibold text-[11px]">
-                        <span>Uploading {uploadFileName}...</span>
-                        <span>{uploadProgress}%</span>
-                      </div>
-                      <div className="w-full bg-ui-line rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="bg-ui-blue h-full rounded-full transition-all"
-                          style={{ width: `${uploadProgress}%` }}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => submitFileInputRef.current?.click()}
-                      className="w-full py-2 px-3 border border-dashed border-slate-300 hover:border-ui-ink/30 rounded-xl text-xs text-slate-600 hover:text-ui-ink flex items-center justify-center gap-1.5 transition cursor-pointer"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>{selectedItemForSubmit.stageKey === 'Post' ? 'Attach post image / video / proof' : 'Attach deliverable file'}</span>
-                    </button>
-                  )}
-                  {uploadError && <p className="text-[11px] text-rose-600">{uploadError}</p>}
-                </div>
-              </div>
-
-              {/* URL input: Social Reference link for Post, or asset link for others */}
-              {selectedItemForSubmit.stageKey === 'Post' ? (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Live Social Reference URL (Instagram, LinkedIn, YouTube, TikTok) *
-                  </label>
-                  <input
-                    type="url"
-                    required
-                    placeholder="https://instagram.com/reel/... or https://linkedin.com/posts/..."
-                    value={socialReferenceUrl || deliverableUrl}
-                    onChange={(e) => {
-                      setSocialReferenceUrl(e.target.value);
-                      setDeliverableUrl(e.target.value);
-                    }}
-                    className="ui-input w-full font-mono"
-                  />
-                  <p className="text-[10px] text-ui-muted mt-1">
-                    Paste the live published URL from the social platform as reference.
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Output Link / Asset URL (Google Drive, Figma, Frame.io)
-                  </label>
-                  <input
-                    type="url"
-                    placeholder="https://drive.google.com/... or Figma link"
-                    value={deliverableUrl}
-                    onChange={(e) => setDeliverableUrl(e.target.value)}
-                    className="ui-input w-full"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {selectedItemForSubmit.stageKey === 'Post'
-                    ? 'Posting Notes (Optional)'
-                    : 'Notes for Reviewer (Optional)'}
-                </label>
-                <textarea
-                  rows={3}
-                  value={submitComment}
-                  onChange={(e) => setSubmitComment(e.target.value)}
-                  placeholder={
-                    selectedItemForSubmit.stageKey === 'Post'
-                      ? 'e.g. Published as Reel with pinned comment, audio sync verified...'
-                      : 'Summarize key outputs, raw footage drive link, or review context...'
-                  }
-                  className="ui-input ui-textarea w-full"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedItemForSubmit(null)}
-                  className="ui-btn ui-btn-secondary h-11"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || isUploadingFile}
-                  className="ui-btn ui-btn-primary h-11"
-                >
-                  {isSubmitting
-                    ? 'Submitting...'
-                    : selectedItemForSubmit.stageKey === 'Post'
-                    ? 'Mark as Posted'
-                    : 'Submit to Creative Head'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <StepSubmitDialog
+          step={selectedItemForSubmit}
+          resubmit={
+            stepReviewState(
+              selectedItemForSubmit.status,
+              (selectedItemForSubmit as any).latestSubmissionStatus,
+              selectedItemForSubmit.revisions
+            ) === 'rework_in_progress'
+          }
+          onClose={() => setSelectedItemForSubmit(null)}
+          onDone={async () => {
+            setSelectedItemForSubmit(null);
+            await fetchMyWork();
+          }}
+        />
       )}
     </div>
   );

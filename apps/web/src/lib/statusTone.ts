@@ -77,3 +77,18 @@ export function bandForPct(pct: number): 'Healthy' | 'High' | 'Overloaded' {
   if (pct >= 65) return 'High';
   return 'Healthy';
 }
+
+/**
+ * The status a list should show for a step. 'Feedback' is saved both for a submitted step and
+ * for one that was sent back; the API marks the first kind with `awaitingReview`, and it is
+ * shown as Pending ("Waiting for approval"). Everything else is shown as saved.
+ */
+export function displayStatus(step?: { status?: string | null; awaitingReview?: boolean } | null): string {
+  if (!step) return '';
+  return step.awaitingReview && step.status === 'Feedback' ? 'Pending' : step.status || '';
+}
+
+/** A copy of the step with its display status, for read-only lists. */
+export function withDisplayStatus<T extends { status?: string | null; awaitingReview?: boolean }>(step: T): T {
+  return step && step.awaitingReview && step.status === 'Feedback' ? { ...step, status: 'Pending' } : step;
+}
